@@ -1,0 +1,6 @@
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+
+thread 'main' (100336) panicked at /home/reficul/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-2.11.5/src/app.rs:1425:11:
+Failed to setup app: error encountered during setup hook: file is not a database
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

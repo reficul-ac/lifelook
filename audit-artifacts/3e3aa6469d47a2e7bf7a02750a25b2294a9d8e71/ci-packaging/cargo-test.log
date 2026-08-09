@@ -1,0 +1,25 @@
+Script started on 2026-08-08 18:07:14-07:00 [COMMAND="cargo test --manifest-path src-tauri/Cargo.toml" <not executed on terminal>]
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.41s
+     Running unittests src/lib.rs (src-tauri/target/debug/deps/lifelook_lib-204bfceee7a00a33)
+
+running 3 tests
+test tests::migrations_are_repeatable ... [32mok(B[m
+test tests::transfers_are_balanced ... [32mok(B[m
+test tests::backup_round_trip ... [32mok(B[m
+
+test result: [32mok(B[m. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/main.rs (src-tauri/target/debug/deps/lifelook-fb533ab465277990)
+
+running 0 tests
+
+test result: [32mok(B[m. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests lifelook_lib
+
+running 0 tests
+
+test result: [32mok(B[m. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+Script done on 2026-08-08 18:07:15-07:00 [COMMAND_EXIT_CODE="0"]

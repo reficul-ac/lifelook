@@ -1,0 +1,27 @@
+Script started on 2026-08-08 18:07:19-07:00 [COMMAND="npm run appimage" <not executed on terminal>]
+
+> lifelook@0.1.0 appimage
+> tauri build --bundles appimage
+
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm run build`
+
+> lifelook@0.1.0 build
+> tsc -b && vite build
+
+vite v6.4.3 building for production...
+[2K[1G[2K[1G[2K[1G[2K[1G[2K[1G[2K[1G[2K[1G[2K[1G[2K[1G✓ 1584 modules transformed.
+[2K[1G[2K[1G[2K[1G[2K[1G[2K[1G[2K[1G[2K[1Gdist/index.html                   0.44 kB │ gzip:  0.29 kB
+dist/assets/index-5k_gLjSi.css   10.04 kB │ gzip:  2.80 kB
+dist/assets/index-tA99NcQY.js   178.77 kB │ gzip: 56.34 kB
+✓ built in 2.47s
+⠙[1G[0K   Compiling lifelook v0.1.0 (/home/reficul/github/lifelook/src-tauri)
+    Finished `release` profile [optimized] target(s) in 34.98s
+       Built application at: /home/reficul/github/lifelook/src-tauri/target/release/lifelook
+        Info Patching /home/reficul/github/lifelook/src-tauri/target/release/lifelook with bundle type information: appimage
+thread '<unnamed>' panicked at crates/tauri-bundler/src/bundle/linux/appimage/linuxdeploy.rs:101:6:
+couldn't find a square icon to use as AppImage icon
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Aborted (core dumped)
+⠙[1G[0K
+Script done on 2026-08-08 18:08:06-07:00 [COMMAND_EXIT_CODE="134"]

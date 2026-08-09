@@ -1,0 +1,29 @@
+Script started on 2026-08-08 18:08:17-07:00 [COMMAND="cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings" <not executed on terminal>]
+    Checking lifelook v0.1.0 (/home/reficul/github/lifelook/src-tauri)
+error: this `repeat().take()` can be written more concisely
+   --> src/lib.rs:261:28
+    |
+261 |           let placeholders = std::iter::repeat("?")
+    |  ____________________________^
+262 | |             .take(ids.len())
+    | |____________________________^ help: consider using `repeat_n()` instead: `std::iter::repeat_n("?", ids.len())`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#manual_repeat_n
+    = note: `-D clippy::manual-repeat-n` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_repeat_n)]`
+
+error: this `repeat().take()` can be written more concisely
+   --> src/lib.rs:286:28
+    |
+286 |           let placeholders = std::iter::repeat("?")
+    |  ____________________________^
+287 | |             .take(ids.len())
+    | |____________________________^ help: consider using `repeat_n()` instead: `std::iter::repeat_n("?", ids.len())`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#manual_repeat_n
+
+error: could not compile `lifelook` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `lifelook` (lib test) due to 2 previous errors
+
+Script done on 2026-08-08 18:08:20-07:00 [COMMAND_EXIT_CODE="101"]

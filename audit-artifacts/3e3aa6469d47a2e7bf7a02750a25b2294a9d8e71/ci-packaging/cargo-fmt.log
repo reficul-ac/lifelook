@@ -1,0 +1,15 @@
+Script started on 2026-08-08 18:08:17-07:00 [COMMAND="cargo fmt --manifest-path src-tauri/Cargo.toml -- --check" <not executed on terminal>]
+Diff in /home/reficul/github/lifelook/src-tauri/build.rs:1:
+[31m-fn main() { tauri_build::build() }
+(B[m[32m+fn main() {
+(B[m[32m+    tauri_build::build()
+(B[m[32m+}
+(B[m 
+Diff in /home/reficul/github/lifelook/src-tauri/src/main.rs:1:
+[31m-fn main() { lifelook_lib::run(); }
+(B[m[32m+fn main() {
+(B[m[32m+    lifelook_lib::run();
+(B[m[32m+}
+(B[m 
+
+Script done on 2026-08-08 18:08:17-07:00 [COMMAND_EXIT_CODE="1"]

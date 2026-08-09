@@ -1,0 +1,312 @@
+Script started on 2026-08-08 18:07:05-07:00 [COMMAND="npm test" <not executed on terminal>]
+
+> lifelook@0.1.0 test
+> vitest run
+
+
+ RUN  v2.1.9 /home/reficul/github/lifelook
+
+[?25l · src/domain/projection.test.ts (6)
+[?25l[?25l[2K[1A[2K[G ✓ src/domain/projection.test.ts (6)
+[?25l[?25l[?25l[?25l[?25l[?25l[2K[1A[2K[G · src/App.test.tsx (6)
+ ✓ src/domain/projection.test.ts (6)
+[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[?25l[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ⠙ navigates with accessible buttons
+     · toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ⠹ navigates with accessible buttons
+     · toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ⠸ navigates with accessible buttons
+     · toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ⠼ navigates with accessible buttons
+     · toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ⠴ navigates with accessible buttons
+     · toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ⠦ navigates with accessible buttons
+     · toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ⠧ navigates with accessible buttons
+     · toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ⠇ navigates with accessible buttons
+     · toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ⠏ navigates with accessible buttons
+     · toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ⠋ navigates with accessible buttons
+     · toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ⠙ navigates with accessible buttons
+     · toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ⠙ toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ⠹ toggles theme
+     · shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ⠙ shows onboarding for a new workspace
+     · saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠙ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠹ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠸ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠼ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠴ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠦ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠧ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠇ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠏ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠋ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠙ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠹ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠸ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ⠼ saves multiple people and typed accounts against the stable household id
+     · rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ✓ saves multiple people and typed accounts against the stable household id
+     ⠙ rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ✓ saves multiple people and typed accounts against the stable household id
+     ⠹ rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ✓ saves multiple people and typed accounts against the stable household id
+     ⠸ rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ❯ src/App.test.tsx (6)
+   ❯ LifeLook shell (6)
+     ✓ navigates with accessible buttons
+     ✓ toggles theme
+     ✓ shows onboarding for a new workspace
+     ✓ saves multiple people and typed accounts against the stable household id
+     ⠼ rejects an invalid birth date typed as text
+     · restores onboarding data and lets the user go back without losing it
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G ✓ src/App.test.tsx (6) 695ms
+ ✓ src/domain/projection.test.ts (6)
+[?25l[2K[1A[2K[1A[2K[G ✓ src/App.test.tsx (6) 695ms
+ ✓ src/domain/projection.test.ts (6)
+
+ Test Files  2 passed (2)
+      Tests  12 passed (12)
+   Start at  18:07:05
+   Duration  2.34s (transform 380ms, setup 417ms, collect 548ms, tests 713ms, environment 1.13s, prepare 204ms)
+
+[?25h[?25h⠙[1G[0K
+Script done on 2026-08-08 18:07:08-07:00 [COMMAND_EXIT_CODE="0"]

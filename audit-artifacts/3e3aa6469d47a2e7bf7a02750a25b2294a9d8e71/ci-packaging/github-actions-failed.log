@@ -1,0 +1,324 @@
+Script started on 2026-08-08 18:09:23-07:00 [COMMAND="gh run view 31287128922 --log-failed" <not executed on terminal>]
+[?25l[K⣾[K⣽[K⣻[?25h[K[?25l[K⣾[K⣽[K⣻[?25h[K[?25l[?25h[Kverify-and-package	Run npm run appimage	﻿2026-08-09T00:56:07.0846117Z ##[group]Run npm run appimage
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.0846411Z [36;1mnpm run appimage[0m
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.0906532Z shell: /usr/bin/bash -e {0}
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.0906794Z env:
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.0906995Z   CARGO_HOME: /home/runner/.cargo
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.0907251Z   CARGO_INCREMENTAL: 0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.0907465Z   CARGO_TERM_COLOR: always
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.0907683Z ##[endgroup]
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.2112921Z 
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.2113611Z > lifelook@0.1.0 appimage
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.2114180Z > tauri build --bundles appimage
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.2114370Z 
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.3632535Z         Info Looking up installed tauri packages to check mismatched versions...
+verify-and-package	Run npm run appimage	2026-08-09T00:56:07.8412456Z      Running beforeBuildCommand `npm run build`
+verify-and-package	Run npm run appimage	2026-08-09T00:56:08.0034918Z 
+verify-and-package	Run npm run appimage	2026-08-09T00:56:08.0035437Z > lifelook@0.1.0 build
+verify-and-package	Run npm run appimage	2026-08-09T00:56:08.0035790Z > tsc -b && vite build
+verify-and-package	Run npm run appimage	2026-08-09T00:56:08.0035959Z 
+verify-and-package	Run npm run appimage	2026-08-09T00:56:10.4856431Z [36mvite v6.4.3 [32mbuilding for production...[36m[39m
+verify-and-package	Run npm run appimage	2026-08-09T00:56:10.5597360Z transforming...
+verify-and-package	Run npm run appimage	2026-08-09T00:56:12.4794070Z [32m✓[39m 1584 modules transformed.
+verify-and-package	Run npm run appimage	2026-08-09T00:56:12.5905691Z rendering chunks...
+verify-and-package	Run npm run appimage	2026-08-09T00:56:12.5968714Z computing gzip size...
+verify-and-package	Run npm run appimage	2026-08-09T00:56:12.6044201Z [2mdist/[22m[32mindex.html                 [39m[1m[2m  0.44 kB[22m[1m[22m[2m │ gzip:  0.29 kB[22m
+verify-and-package	Run npm run appimage	2026-08-09T00:56:12.6045644Z [2mdist/[22m[2massets/[22m[35mindex-5k_gLjSi.css  [39m[1m[2m 10.04 kB[22m[1m[22m[2m │ gzip:  2.80 kB[22m
+verify-and-package	Run npm run appimage	2026-08-09T00:56:12.6047048Z [2mdist/[22m[2massets/[22m[36mindex-tA99NcQY.js   [39m[1m[2m178.77 kB[22m[1m[22m[2m │ gzip: 56.34 kB[22m
+verify-and-package	Run npm run appimage	2026-08-09T00:56:12.6048096Z [32m✓ built in 2.09s[39m
+verify-and-package	Run npm run appimage	2026-08-09T00:56:13.1158316Z [1m[92m   Compiling[0m proc-macro2 v1.0.107
+verify-and-package	Run npm run appimage	2026-08-09T00:56:13.1161166Z [1m[92m   Compiling[0m unicode-ident v1.0.24
+verify-and-package	Run npm run appimage	2026-08-09T00:56:13.1161959Z [1m[92m   Compiling[0m quote v1.0.47
+verify-and-package	Run npm run appimage	2026-08-09T00:56:13.1162682Z [1m[92m   Compiling[0m serde_core v1.0.229
+verify-and-package	Run npm run appimage	2026-08-09T00:56:13.1913079Z [1m[92m   Compiling[0m serde v1.0.229
+verify-and-package	Run npm run appimage	2026-08-09T00:56:13.2873365Z [1m[92m   Compiling[0m smallvec v1.15.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:13.3749648Z [1m[92m   Compiling[0m hashbrown v0.17.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:13.4524872Z [1m[92m   Compiling[0m equivalent v1.0.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:13.4933955Z [1m[92m   Compiling[0m pkg-config v0.3.33
+verify-and-package	Run npm run appimage	2026-08-09T00:56:13.9419701Z [1m[92m   Compiling[0m indexmap v2.14.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:14.1047187Z [1m[92m   Compiling[0m syn v3.0.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:14.1414759Z [1m[92m   Compiling[0m syn v2.0.119
+verify-and-package	Run npm run appimage	2026-08-09T00:56:14.6039732Z [1m[92m   Compiling[0m libc v0.2.189
+verify-and-package	Run npm run appimage	2026-08-09T00:56:14.8529780Z [1m[92m   Compiling[0m heck v0.5.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:15.0024384Z [1m[92m   Compiling[0m winnow v0.5.40
+verify-and-package	Run npm run appimage	2026-08-09T00:56:15.5129274Z [1m[92m   Compiling[0m target-lexicon v0.12.16
+verify-and-package	Run npm run appimage	2026-08-09T00:56:16.1159710Z [1m[92m   Compiling[0m cfg-expr v0.15.8
+verify-and-package	Run npm run appimage	2026-08-09T00:56:16.4909855Z [1m[92m   Compiling[0m serde_derive v1.0.229
+verify-and-package	Run npm run appimage	2026-08-09T00:56:16.5775765Z [1m[92m   Compiling[0m version-compare v0.2.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:16.7210307Z [1m[92m   Compiling[0m version_check v0.9.5
+verify-and-package	Run npm run appimage	2026-08-09T00:56:17.1439605Z [1m[92m   Compiling[0m displaydoc v0.2.7
+verify-and-package	Run npm run appimage	2026-08-09T00:56:17.6684128Z [1m[92m   Compiling[0m synstructure v0.13.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:18.1069612Z [1m[92m   Compiling[0m thiserror v1.0.69
+verify-and-package	Run npm run appimage	2026-08-09T00:56:18.2709701Z [1m[92m   Compiling[0m siphasher v1.0.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:18.4159665Z [1m[92m   Compiling[0m phf_shared v0.13.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:18.6212528Z [1m[92m   Compiling[0m icu_normalizer_data v2.2.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:18.7189782Z [1m[92m   Compiling[0m icu_properties_data v2.2.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:18.8179539Z [1m[92m   Compiling[0m fastrand v2.5.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:18.9229822Z [1m[92m   Compiling[0m phf_generator v0.13.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:19.0082491Z [1m[92m   Compiling[0m zerofrom-derive v0.1.7
+verify-and-package	Run npm run appimage	2026-08-09T00:56:19.0519774Z [1m[92m   Compiling[0m yoke-derive v0.8.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:19.8998765Z [1m[92m   Compiling[0m toml_datetime v0.6.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:19.9992674Z [1m[92m   Compiling[0m serde_spanned v0.6.9
+verify-and-package	Run npm run appimage	2026-08-09T00:56:20.0616615Z [1m[92m   Compiling[0m toml_edit v0.20.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:20.0789643Z [1m[92m   Compiling[0m zerovec-derive v0.11.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:20.0919497Z [1m[92m   Compiling[0m thiserror-impl v1.0.69
+verify-and-package	Run npm run appimage	2026-08-09T00:56:20.9669867Z [1m[92m   Compiling[0m stable_deref_trait v1.2.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:20.9980203Z [1m[92m   Compiling[0m cfg-if v1.0.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:21.0128769Z [1m[92m   Compiling[0m zmij v1.0.23
+verify-and-package	Run npm run appimage	2026-08-09T00:56:21.0401623Z [1m[92m   Compiling[0m zerofrom v0.1.8
+verify-and-package	Run npm run appimage	2026-08-09T00:56:21.1167182Z [1m[92m   Compiling[0m memchr v2.8.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:21.1245147Z [1m[92m   Compiling[0m autocfg v1.5.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:21.4419528Z [1m[92m   Compiling[0m yoke v0.8.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:21.5899740Z [1m[92m   Compiling[0m semver v1.0.28
+verify-and-package	Run npm run appimage	2026-08-09T00:56:21.8449635Z [1m[92m   Compiling[0m toml v0.8.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:22.1319692Z [1m[92m   Compiling[0m parking_lot_core v0.9.12
+verify-and-package	Run npm run appimage	2026-08-09T00:56:22.2809791Z [1m[92m   Compiling[0m system-deps v6.2.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:22.7329505Z [1m[92m   Compiling[0m zerovec v0.11.6
+verify-and-package	Run npm run appimage	2026-08-09T00:56:22.8879262Z [1m[92m   Compiling[0m phf_macros v0.13.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:22.9149543Z [1m[92m   Compiling[0m typeid v1.0.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:22.9699580Z [1m[92m   Compiling[0m glib-sys v0.18.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:23.0725901Z [1m[92m   Compiling[0m gobject-sys v0.18.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:23.2383342Z [1m[92m   Compiling[0m gio-sys v0.18.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:23.2729814Z [1m[92m   Compiling[0m time-core v0.1.9
+verify-and-package	Run npm run appimage	2026-08-09T00:56:23.4366561Z [1m[92m   Compiling[0m once_cell v1.21.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:23.4542981Z [1m[92m   Compiling[0m num-conv v0.2.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:23.5679884Z [1m[92m   Compiling[0m thiserror v2.0.20
+verify-and-package	Run npm run appimage	2026-08-09T00:56:23.7959770Z [1m[92m   Compiling[0m tinystr v0.8.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:23.8869616Z [1m[92m   Compiling[0m gdk-sys v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:23.9486065Z [1m[92m   Compiling[0m phf_codegen v0.13.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.0281144Z [1m[92m   Compiling[0m proc-macro-error-attr v1.0.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.0623730Z [1m[92m   Compiling[0m syn v1.0.109
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.0863556Z [1m[92m   Compiling[0m itoa v1.0.18
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.1330724Z [1m[92m   Compiling[0m litemap v0.8.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.2189903Z [1m[92m   Compiling[0m erased-serde v0.4.10
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.2370007Z [1m[92m   Compiling[0m strsim v0.11.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.2729826Z [1m[92m   Compiling[0m ident_case v1.0.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.3381615Z [1m[92m   Compiling[0m writeable v0.6.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.3879501Z [1m[92m   Compiling[0m darling_core v0.23.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.4765589Z [1m[92m   Compiling[0m icu_locale_core v2.2.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.5549923Z [1m[92m   Compiling[0m potential_utf v0.1.5
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.6519574Z [1m[92m   Compiling[0m zerotrie v0.2.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.8959555Z [1m[92m   Compiling[0m proc-macro-error v1.0.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:24.9979715Z [1m[92m   Compiling[0m thiserror-impl v2.0.20
+verify-and-package	Run npm run appimage	2026-08-09T00:56:25.5461148Z [1m[92m   Compiling[0m utf8_iter v1.0.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:25.6330494Z [1m[92m   Compiling[0m icu_collections v2.2.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:26.0384372Z [1m[92m   Compiling[0m icu_provider v2.2.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:26.4300208Z [1m[92m   Compiling[0m scopeguard v1.2.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:26.4849983Z [1m[92m   Compiling[0m new_debug_unreachable v1.0.6
+verify-and-package	Run npm run appimage	2026-08-09T00:56:26.5229655Z [1m[92m   Compiling[0m anyhow v1.0.104
+verify-and-package	Run npm run appimage	2026-08-09T00:56:26.6979664Z [1m[92m   Compiling[0m pin-project-lite v0.2.17
+verify-and-package	Run npm run appimage	2026-08-09T00:56:26.7450806Z [1m[92m   Compiling[0m futures-core v0.3.33
+verify-and-package	Run npm run appimage	2026-08-09T00:56:26.8359563Z [1m[92m   Compiling[0m lock_api v0.4.14
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.0562472Z [1m[92m   Compiling[0m phf v0.13.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.0929694Z [1m[92m   Compiling[0m darling_macro v0.23.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.1239705Z [1m[92m   Compiling[0m rustc_version v0.4.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.1899691Z [1m[92m   Compiling[0m bitflags v2.13.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.2274659Z [1m[92m   Compiling[0m futures-macro v0.3.33
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.3349503Z [1m[92m   Compiling[0m darling v0.23.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.3551709Z [1m[92m   Compiling[0m string_cache_codegen v0.6.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.3830540Z [1m[92m   Compiling[0m serde_json v1.0.151
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.4887677Z [1m[92m   Compiling[0m slab v0.4.12
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.5163556Z [1m[92m   Compiling[0m getrandom v0.4.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.6369675Z [1m[92m   Compiling[0m winnow v1.0.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.6411478Z [1m[92m   Compiling[0m futures-task v0.3.33
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.7209693Z [1m[92m   Compiling[0m precomputed-hash v0.1.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.7625814Z [1m[92m   Compiling[0m web_atoms v0.2.5
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.7848606Z [1m[92m   Compiling[0m serde_with_macros v3.21.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.8549778Z [1m[92m   Compiling[0m futures-util v0.3.33
+verify-and-package	Run npm run appimage	2026-08-09T00:56:27.9529794Z [1m[92m   Compiling[0m toml_parser v1.1.3+spec-1.1.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:28.3759720Z [1m[92m   Compiling[0m parking_lot v0.12.5
+verify-and-package	Run npm run appimage	2026-08-09T00:56:28.5249658Z [1m[92m   Compiling[0m icu_properties v2.2.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:28.6439770Z [1m[92m   Compiling[0m icu_normalizer v2.2.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:28.6729528Z [1m[92m   Compiling[0m gdk-pixbuf-sys v0.18.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:28.8219844Z [1m[92m   Compiling[0m atk-sys v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:28.9849705Z [1m[92m   Compiling[0m cairo-sys-rs v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:29.1171170Z [1m[92m   Compiling[0m pango-sys v0.18.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:29.1309713Z [1m[92m   Compiling[0m proc-macro-crate v2.0.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:29.3577051Z [1m[92m   Compiling[0m serde_spanned v1.1.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:29.4769748Z [1m[92m   Compiling[0m heck v0.4.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:29.5119605Z [1m[92m   Compiling[0m ctor-proc-macro v0.0.7
+verify-and-package	Run npm run appimage	2026-08-09T00:56:29.6155440Z [1m[92m   Compiling[0m toml_writer v1.1.2+spec-1.1.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:29.6849708Z [1m[92m   Compiling[0m idna_adapter v1.2.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:29.7667449Z [1m[92m   Compiling[0m glib-macros v0.18.5
+verify-and-package	Run npm run appimage	2026-08-09T00:56:29.8226078Z [1m[92m   Compiling[0m futures-executor v0.3.33
+verify-and-package	Run npm run appimage	2026-08-09T00:56:29.9880120Z [1m[92m   Compiling[0m string_cache v0.9.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:30.3108736Z [1m[92m   Compiling[0m futures-channel v0.3.33
+verify-and-package	Run npm run appimage	2026-08-09T00:56:30.4946762Z [1m[92m   Compiling[0m log v0.4.33
+verify-and-package	Run npm run appimage	2026-08-09T00:56:30.5060028Z [1m[92m   Compiling[0m percent-encoding v2.3.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:30.6161071Z [1m[92m   Compiling[0m dtoa v1.0.11
+verify-and-package	Run npm run appimage	2026-08-09T00:56:30.6199699Z [1m[92m   Compiling[0m form_urlencoded v1.2.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:30.7049666Z [1m[92m   Compiling[0m dtoa-short v0.3.5
+verify-and-package	Run npm run appimage	2026-08-09T00:56:30.7809836Z [1m[92m   Compiling[0m uuid v1.24.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:31.2939827Z [1m[92m   Compiling[0m idna v1.1.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:31.3670267Z [1m[92m   Compiling[0m tendril v0.5.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:31.6179979Z [1m[92m   Compiling[0m selectors v0.36.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:31.8404804Z [1m[92m   Compiling[0m aho-corasick v1.1.5
+verify-and-package	Run npm run appimage	2026-08-09T00:56:31.8459373Z [1m[92m   Compiling[0m indexmap v1.9.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:31.8503722Z [1m[92m   Compiling[0m cssparser-macros v0.6.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:31.9529887Z [1m[92m   Compiling[0m derive_more-impl v2.1.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:32.1297866Z [1m[92m   Compiling[0m toml_datetime v1.1.1+spec-1.1.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:32.3719582Z [1m[92m   Compiling[0m camino v1.2.5
+verify-and-package	Run npm run appimage	2026-08-09T00:56:32.6166153Z [1m[92m   Compiling[0m glib v0.18.5
+verify-and-package	Run npm run appimage	2026-08-09T00:56:32.7060216Z [1m[92m   Compiling[0m unic-common v0.9.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:32.7620100Z [1m[92m   Compiling[0m byteorder v1.5.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:32.7721581Z [1m[92m   Compiling[0m alloc-no-stdlib v2.0.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:32.8394912Z [1m[92m   Compiling[0m regex-syntax v0.8.11
+verify-and-package	Run npm run appimage	2026-08-09T00:56:32.9469338Z [1m[92m   Compiling[0m unic-char-range v0.9.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:33.0117868Z [1m[92m   Compiling[0m unic-char-property v0.9.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:33.0687009Z [1m[92m   Compiling[0m alloc-stdlib v0.2.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:33.1409929Z [1m[92m   Compiling[0m derive_more v2.1.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:33.2129911Z [1m[92m   Compiling[0m unic-ucd-version v0.9.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:33.2889666Z [1m[92m   Compiling[0m toml v1.1.4+spec-1.1.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:33.5799465Z [1m[92m   Compiling[0m cssparser v0.36.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:34.4464422Z [1m[92m   Compiling[0m markup5ever v0.38.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:34.5619490Z [1m[92m   Compiling[0m regex-automata v0.4.18
+verify-and-package	Run npm run appimage	2026-08-09T00:56:34.6159847Z [1m[92m   Compiling[0m url v2.5.8
+verify-and-package	Run npm run appimage	2026-08-09T00:56:35.4690156Z [1m[92m   Compiling[0m gtk-sys v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:35.6295549Z [1m[92m   Compiling[0m servo_arc v0.4.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:35.7877658Z [1m[92m   Compiling[0m serde_derive_internals v0.29.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:35.9026362Z [1m[92m   Compiling[0m rustc-hash v2.1.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:36.1379462Z [1m[92m   Compiling[0m schemars v0.8.22
+verify-and-package	Run npm run appimage	2026-08-09T00:56:36.2469794Z [1m[92m   Compiling[0m hashbrown v0.12.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:36.6610906Z [1m[92m   Compiling[0m deranged v0.5.8
+verify-and-package	Run npm run appimage	2026-08-09T00:56:36.7170040Z [1m[92m   Compiling[0m powerfmt v0.2.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:36.8619705Z [1m[92m   Compiling[0m fnv v1.0.7
+verify-and-package	Run npm run appimage	2026-08-09T00:56:36.9139906Z [1m[92m   Compiling[0m bit-vec v0.8.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:37.0969846Z [1m[92m   Compiling[0m bit-set v0.8.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:37.2109740Z [1m[92m   Compiling[0m cfb v0.7.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:37.7279505Z [1m[92m   Compiling[0m time v0.3.55
+verify-and-package	Run npm run appimage	2026-08-09T00:56:37.8339677Z [1m[92m   Compiling[0m schemars_derive v0.8.22
+verify-and-package	Run npm run appimage	2026-08-09T00:56:38.1199756Z [1m[92m   Compiling[0m regex v1.13.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:39.5739764Z [1m[92m   Compiling[0m html5ever v0.38.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:39.9560229Z [1m[92m   Compiling[0m unic-ucd-ident v0.9.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:40.1429777Z [1m[92m   Compiling[0m brotli-decompressor v5.0.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:40.6289526Z [1m[92m   Compiling[0m jsonptr v0.6.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:41.0451651Z [1m[92m   Compiling[0m quick-xml v0.41.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:41.0673029Z [1m[92m   Compiling[0m cargo-platform v0.1.9
+verify-and-package	Run npm run appimage	2026-08-09T00:56:41.0829609Z [1m[92m   Compiling[0m shlex v2.0.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:41.2089932Z [1m[92m   Compiling[0m foldhash v0.2.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:41.2437400Z [1m[92m   Compiling[0m dunce v1.0.5
+verify-and-package	Run npm run appimage	2026-08-09T00:56:41.2929818Z [1m[92m   Compiling[0m bytes v1.12.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:41.3409564Z [1m[92m   Compiling[0m same-file v1.0.6
+verify-and-package	Run npm run appimage	2026-08-09T00:56:41.4306290Z [1m[92m   Compiling[0m base64 v0.22.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:41.7019617Z [1m[92m   Compiling[0m gio v0.18.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:41.7959811Z [1m[92m   Compiling[0m dyn-clone v1.0.20
+verify-and-package	Run npm run appimage	2026-08-09T00:56:41.8602488Z [1m[92m   Compiling[0m find-msvc-tools v0.1.10
+verify-and-package	Run npm run appimage	2026-08-09T00:56:42.0150446Z [1m[92m   Compiling[0m cc v1.4.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:42.0499723Z [1m[92m   Compiling[0m http v1.5.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:43.0129473Z [1m[92m   Compiling[0m plist v1.10.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:43.2609615Z [1m[92m   Compiling[0m walkdir v2.5.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:43.3619866Z [1m[92m   Compiling[0m dom_query v0.27.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:43.4889601Z [1m[92m   Compiling[0m cargo_metadata v0.19.2
+verify-and-package	Run npm run appimage	2026-08-09T00:56:44.1239616Z [1m[92m   Compiling[0m json-patch v3.0.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:44.5359693Z [1m[92m   Compiling[0m brotli v8.0.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:44.8339621Z [1m[92m   Compiling[0m urlpattern v0.3.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:44.9829353Z [1m[92m   Compiling[0m serde-untagged v0.1.9
+verify-and-package	Run npm run appimage	2026-08-09T00:56:45.1959677Z [1m[92m   Compiling[0m infer v0.19.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:45.5639842Z [1m[92m   Compiling[0m ctor v0.8.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:45.6139415Z [1m[92m   Compiling[0m serde_with v3.21.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:45.8308570Z [1m[92m   Compiling[0m futures-io v0.3.33
+verify-and-package	Run npm run appimage	2026-08-09T00:56:45.9589782Z [1m[92m   Compiling[0m glob v0.3.4
+verify-and-package	Run npm run appimage	2026-08-09T00:56:47.4898539Z [1m[92m   Compiling[0m tauri-utils v2.9.3
+verify-and-package	Run npm run appimage	2026-08-09T00:56:50.5845996Z [1m[92m   Compiling[0m memoffset v0.9.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:51.0786149Z [1m[92m   Compiling[0m cairo-rs v0.18.5
+verify-and-package	Run npm run appimage	2026-08-09T00:56:52.9479574Z [1m[92m   Compiling[0m field-offset v0.3.6
+verify-and-package	Run npm run appimage	2026-08-09T00:56:53.0619540Z [1m[92m   Compiling[0m toml_edit v0.19.15
+verify-and-package	Run npm run appimage	2026-08-09T00:56:55.7103296Z [1m[92m   Compiling[0m toml_datetime v0.7.5+spec-1.1.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:56.1689611Z [1m[92m   Compiling[0m winnow v0.7.15
+verify-and-package	Run npm run appimage	2026-08-09T00:56:57.2982941Z [1m[92m   Compiling[0m option-ext v0.2.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:57.5009505Z [1m[92m   Compiling[0m proc-macro-crate v1.3.1
+verify-and-package	Run npm run appimage	2026-08-09T00:56:57.7499709Z [1m[92m   Compiling[0m toml v0.9.12+spec-1.1.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:57.7939768Z [1m[92m   Compiling[0m dirs-sys v0.5.0
+verify-and-package	Run npm run appimage	2026-08-09T00:56:59.8559695Z [1m[92m   Compiling[0m pango v0.18.3
+verify-and-package	Run npm run appimage	2026-08-09T00:57:00.3870862Z [1m[92m   Compiling[0m gdk-pixbuf v0.18.5
+verify-and-package	Run npm run appimage	2026-08-09T00:57:01.7669643Z [1m[92m   Compiling[0m gdk v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:02.4829779Z [1m[92m   Compiling[0m embed-resource v3.0.11
+verify-and-package	Run npm run appimage	2026-08-09T00:57:02.6939774Z [1m[92m   Compiling[0m soup3-sys v0.5.0
+verify-and-package	Run npm run appimage	2026-08-09T00:57:02.8480002Z [1m[92m   Compiling[0m javascriptcore-rs-sys v1.1.1
+verify-and-package	Run npm run appimage	2026-08-09T00:57:03.0295742Z [1m[92m   Compiling[0m generic-array v0.14.7
+verify-and-package	Run npm run appimage	2026-08-09T00:57:03.1329810Z [1m[92m   Compiling[0m gtk v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:04.0506051Z [1m[92m   Compiling[0m tauri-winres v0.3.6
+verify-and-package	Run npm run appimage	2026-08-09T00:57:04.3546481Z [1m[92m   Compiling[0m cargo_toml v0.22.3
+verify-and-package	Run npm run appimage	2026-08-09T00:57:04.4880214Z [1m[92m   Compiling[0m dirs v6.0.0
+verify-and-package	Run npm run appimage	2026-08-09T00:57:04.5538469Z [1m[92m   Compiling[0m gtk3-macros v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:04.9336590Z [1m[92m   Compiling[0m atk v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:07.4806937Z [1m[92m   Compiling[0m time-macros v0.2.32
+verify-and-package	Run npm run appimage	2026-08-09T00:57:08.3169784Z [1m[92m   Compiling[0m webkit2gtk-sys v2.0.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:08.4060010Z [1m[92m   Compiling[0m x11 v2.21.0
+verify-and-package	Run npm run appimage	2026-08-09T00:57:08.4726812Z [1m[92m   Compiling[0m crc32fast v1.5.0
+verify-and-package	Run npm run appimage	2026-08-09T00:57:08.7289427Z [1m[92m   Compiling[0m typenum v1.20.1
+verify-and-package	Run npm run appimage	2026-08-09T00:57:08.8026882Z [1m[92m   Compiling[0m simd-adler32 v0.3.10
+verify-and-package	Run npm run appimage	2026-08-09T00:57:09.6442680Z [1m[92m   Compiling[0m tauri-build v2.6.3
+verify-and-package	Run npm run appimage	2026-08-09T00:57:12.5515561Z [1m[92m   Compiling[0m gdkx11-sys v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:14.8040125Z [1m[92m   Compiling[0m bitflags v1.3.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:14.9089716Z [1m[92m   Compiling[0m adler2 v2.0.1
+verify-and-package	Run npm run appimage	2026-08-09T00:57:16.0529815Z [1m[92m   Compiling[0m crossbeam-utils v0.8.22
+verify-and-package	Run npm run appimage	2026-08-09T00:57:19.3616665Z [1m[92m   Compiling[0m miniz_oxide v0.8.9
+verify-and-package	Run npm run appimage	2026-08-09T00:57:23.3658286Z [1m[92m   Compiling[0m dpi v0.1.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:23.7310976Z [1m[92m   Compiling[0m cookie v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:23.8276517Z [1m[92m   Compiling[0m x11-dl v2.21.0
+verify-and-package	Run npm run appimage	2026-08-09T00:57:23.9549811Z [1m[92m   Compiling[0m libdbus-sys v0.2.7
+verify-and-package	Run npm run appimage	2026-08-09T00:57:24.5009835Z [1m[92m   Compiling[0m raw-window-handle v0.6.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:27.5979721Z [1m[92m   Compiling[0m flate2 v1.1.9
+verify-and-package	Run npm run appimage	2026-08-09T00:57:31.3375233Z [1m[92m   Compiling[0m javascriptcore-rs v1.1.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:32.1609326Z [1m[92m   Compiling[0m soup3 v0.5.0
+verify-and-package	Run npm run appimage	2026-08-09T00:57:33.3809662Z [1m[92m   Compiling[0m tauri v2.11.5
+verify-and-package	Run npm run appimage	2026-08-09T00:57:33.9825153Z [1m[92m   Compiling[0m crypto-common v0.1.7
+verify-and-package	Run npm run appimage	2026-08-09T00:57:34.0539948Z [1m[92m   Compiling[0m block-buffer v0.10.4
+verify-and-package	Run npm run appimage	2026-08-09T00:57:34.1190252Z [1m[92m   Compiling[0m fdeflate v0.3.7
+verify-and-package	Run npm run appimage	2026-08-09T00:57:34.3178342Z [1m[92m   Compiling[0m tauri-plugin v2.6.3
+verify-and-package	Run npm run appimage	2026-08-09T00:57:36.7869761Z [1m[92m   Compiling[0m png v0.17.16
+verify-and-package	Run npm run appimage	2026-08-09T00:57:37.8929688Z [1m[92m   Compiling[0m webkit2gtk v2.0.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:39.8319747Z [1m[92m   Compiling[0m digest v0.10.7
+verify-and-package	Run npm run appimage	2026-08-09T00:57:41.9180021Z [1m[92m   Compiling[0m crossbeam-channel v0.5.16
+verify-and-package	Run npm run appimage	2026-08-09T00:57:49.5409805Z [1m[92m   Compiling[0m dlopen2_derive v0.4.3
+verify-and-package	Run npm run appimage	2026-08-09T00:57:50.9632346Z [1m[92m   Compiling[0m zerocopy v0.8.56
+verify-and-package	Run npm run appimage	2026-08-09T00:57:51.2153366Z [1m[92m   Compiling[0m tauri-runtime v2.11.3
+verify-and-package	Run npm run appimage	2026-08-09T00:57:51.3839738Z [1m[92m   Compiling[0m cpufeatures v0.2.17
+verify-and-package	Run npm run appimage	2026-08-09T00:57:51.4189460Z [1m[92m   Compiling[0m wry v0.55.1
+verify-and-package	Run npm run appimage	2026-08-09T00:57:51.6219587Z [1m[92m   Compiling[0m sha2 v0.10.9
+verify-and-package	Run npm run appimage	2026-08-09T00:57:51.7904516Z [1m[92m   Compiling[0m dlopen2 v0.8.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:51.9892385Z [1m[92m   Compiling[0m dbus v0.9.12
+verify-and-package	Run npm run appimage	2026-08-09T00:57:53.0999532Z [1m[92m   Compiling[0m ico v0.5.0
+verify-and-package	Run npm run appimage	2026-08-09T00:57:53.6836427Z [1m[92m   Compiling[0m tauri-plugin-fs v2.5.1
+verify-and-package	Run npm run appimage	2026-08-09T00:57:54.3719690Z [1m[92m   Compiling[0m gdkx11 v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:55.4229538Z [1m[92m   Compiling[0m gdkwayland-sys v0.18.2
+verify-and-package	Run npm run appimage	2026-08-09T00:57:55.5150292Z [1m[92m   Compiling[0m ahash v0.8.12
+verify-and-package	Run npm run appimage	2026-08-09T00:57:55.6239756Z [1m[92m   Compiling[0m getrandom v0.3.4
+verify-and-package	Run npm run appimage	2026-08-09T00:57:55.8129914Z [1m[92m   Compiling[0m unicode-segmentation v1.13.3
+verify-and-package	Run npm run appimage	2026-08-09T00:57:55.9869703Z [1m[92m   Compiling[0m tauri-runtime-wry v2.11.4
+verify-and-package	Run npm run appimage	2026-08-09T00:57:56.1409884Z [1m[92m   Compiling[0m tao v0.35.3
+verify-and-package	Run npm run appimage	2026-08-09T00:57:56.3919872Z [1m[92m   Compiling[0m keyboard-types v0.7.0
+verify-and-package	Run npm run appimage	2026-08-09T00:58:01.1679885Z [1m[92m   Compiling[0m tauri-codegen v2.6.3
+verify-and-package	Run npm run appimage	2026-08-09T00:58:04.4970029Z [1m[92m   Compiling[0m serialize-to-javascript-impl v0.1.2
+verify-and-package	Run npm run appimage	2026-08-09T00:58:04.7567355Z [1m[92m   Compiling[0m vcpkg v0.2.15
+verify-and-package	Run npm run appimage	2026-08-09T00:58:05.3465878Z [1m[92m   Compiling[0m libsqlite3-sys v0.30.1
+verify-and-package	Run npm run appimage	2026-08-09T00:58:05.5590062Z [1m[92m   Compiling[0m serialize-to-javascript v0.1.2
+verify-and-package	Run npm run appimage	2026-08-09T00:58:05.7053588Z [1m[92m   Compiling[0m tauri-macros v2.6.3
+verify-and-package	Run npm run appimage	2026-08-09T00:58:06.8299683Z [1m[92m   Compiling[0m muda v0.19.3
+verify-and-package	Run npm run appimage	2026-08-09T00:58:07.0539769Z [1m[92m   Compiling[0m tauri-plugin-dialog v2.7.2
+verify-and-package	Run npm run appimage	2026-08-09T00:58:07.4799779Z [1m[92m   Compiling[0m tokio v1.53.1
+verify-and-package	Run npm run appimage	2026-08-09T00:58:08.5329824Z [1m[92m   Compiling[0m serde_repr v0.1.21
+verify-and-package	Run npm run appimage	2026-08-09T00:58:08.8485195Z [1m[92m   Compiling[0m rfd v0.16.0
+verify-and-package	Run npm run appimage	2026-08-09T00:58:08.9566173Z [1m[92m   Compiling[0m mime v0.3.17
+verify-and-package	Run npm run appimage	2026-08-09T00:58:10.4318960Z [1m[92m   Compiling[0m hashbrown v0.14.5
+verify-and-package	Run npm run appimage	2026-08-09T00:58:16.5049299Z [1m[92m   Compiling[0m hashlink v0.9.1
+verify-and-package	Run npm run appimage	2026-08-09T00:58:18.6460109Z [1m[92m   Compiling[0m lifelook v0.1.0 (/home/runner/work/lifelook/lifelook/src-tauri)
+verify-and-package	Run npm run appimage	2026-08-09T00:58:20.4346415Z [1m[92m   Compiling[0m fallible-streaming-iterator v0.1.9
+verify-and-package	Run npm run appimage	2026-08-09T00:58:20.5419342Z [1m[92m   Compiling[0m fallible-iterator v0.3.0
+verify-and-package	Run npm run appimage	2026-08-09T00:58:56.5481547Z [1m[92m   Compiling[0m rusqlite v0.32.1
+verify-and-package	Run npm run appimage	2026-08-09T00:59:31.1795412Z [1m[92m    Finished[0m `release` profile [optimized] target(s) in 3m 18s
+verify-and-package	Run npm run appimage	2026-08-09T00:59:31.2170880Z        Built application at: /home/runner/work/lifelook/lifelook/src-tauri/target/release/lifelook
+verify-and-package	Run npm run appimage	2026-08-09T00:59:31.2282587Z         Info Patching /home/runner/work/lifelook/lifelook/src-tauri/target/release/lifelook with bundle type information: appimage
+verify-and-package	Run npm run appimage	2026-08-09T00:59:31.2513901Z  Downloading https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64
+verify-and-package	Run npm run appimage	2026-08-09T00:59:31.5273715Z  Downloading https://github.com/tauri-apps/binary-releases/releases/download/linuxdeploy/linuxdeploy-x86_64.AppImage
+verify-and-package	Run npm run appimage	2026-08-09T00:59:31.7112955Z  Downloading https://raw.githubusercontent.com/tauri-apps/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh
+verify-and-package	Run npm run appimage	2026-08-09T00:59:31.7281601Z  Downloading https://raw.githubusercontent.com/tauri-apps/linuxdeploy-plugin-gstreamer/master/linuxdeploy-plugin-gstreamer.sh
+verify-and-package	Run npm run appimage	2026-08-09T00:59:31.7435954Z  Downloading https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/continuous/linuxdeploy-plugin-appimage-x86_64.AppImage
+verify-and-package	Run npm run appimage	2026-08-09T00:59:32.0108788Z thread '<unnamed>' panicked at crates/tauri-bundler/src/bundle/linux/appimage/linuxdeploy.rs:101:6:
+verify-and-package	Run npm run appimage	2026-08-09T00:59:32.0109654Z couldn't find a square icon to use as AppImage icon
+verify-and-package	Run npm run appimage	2026-08-09T00:59:32.0110188Z note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+verify-and-package	Run npm run appimage	2026-08-09T00:59:32.4596355Z Aborted (core dumped)
+verify-and-package	Run npm run appimage	2026-08-09T00:59:32.4691598Z ##[error]Process completed with exit code 134.
+
+Script done on 2026-08-08 18:09:24-07:00 [COMMAND_EXIT_CODE="0"]

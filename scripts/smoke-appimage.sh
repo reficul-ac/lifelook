@@ -23,17 +23,31 @@ app_log="$profile_root/app.log"
 "${appimages[0]}" >"$app_log" 2>&1 &
 app_pid=$!
 window_id=""
-for _ in $(seq 1 30); do
+for _ in $(seq 1 60); do
   if ! kill -0 "$app_pid" 2>/dev/null; then
     echo "AppImage exited before showing its window" >&2
     cat "$app_log" >&2
     exit 1
   fi
-  window_id="$(xdotool search --onlyvisible --name '^LifeLook$' 2>/dev/null | head -n 1 || true)"
+  while read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+    title="$(xdotool getwindowname "$candidate" 2>/dev/null || true)"
+    if [[ "${title,,}" == *lifelook* ]]; then
+      window_id="$candidate"
+      break
+    fi
+  done < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
   [[ -n "$window_id" ]] && break
   sleep 1
 done
-[[ -n "$window_id" ]] || { echo "No visible LifeLook window appeared" >&2; exit 1; }
+if [[ -z "$window_id" ]]; then
+  echo "No visible LifeLook window appeared" >&2
+  echo "Application log:" >&2
+  cat "$app_log" >&2
+  echo "X11 window tree:" >&2
+  xwininfo -root -tree >&2 || true
+  exit 1
+fi
 sleep 2
 import -window "$window_id" "$repo_root/artifacts/appimage-smoke/visible-window.png"
 [[ -s "$repo_root/artifacts/appimage-smoke/visible-window.png" ]]

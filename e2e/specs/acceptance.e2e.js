@@ -28,8 +28,8 @@ function rgbToHex(rgb) {
   return `#${values.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 }
 
-describe("LifeLook native accessibility", () => {
-  it("completes onboarding and verifies controls, contrast, focus, and minimum viewport", async () => {
+describe("LifeLook native acceptance", () => {
+  it("persists onboarding, member edits, appearance, and exercises supported layouts", async () => {
     await browser.setWindowSize(920, 650);
     const household = await $("aria/Household name");
     try {
@@ -39,8 +39,8 @@ describe("LifeLook native accessibility", () => {
       console.error(await browser.getPageSource());
       throw error;
     }
-    await household.setValue("Native E2E Household");
-    await $('[aria-label="Person 1 name"]').setValue("Native Tester");
+    await household.setValue("Native E2E Household With A Deliberately Long Name");
+    await $('[aria-label="Person 1 name"]').setValue("Native Tester With A Deliberately Long Name");
     await $("aria/Save & Continue").click();
 
     const accountName = await $('[aria-label="Account 1 name"]');
@@ -68,6 +68,7 @@ describe("LifeLook native accessibility", () => {
     const monthPanel = await $(`#${monthPanelId}`);
     assert.equal(await monthPanel.getAttribute("role"), "region");
     assert.ok((await monthPanel.getAttribute("aria-label")).includes("monthly detail"));
+    await browser.saveScreenshot(artifact("02-plan-expanded-920x650.png"));
 
     await $("aria/Settings").click();
     const switches = await $$('button[role="switch"]');
@@ -81,7 +82,31 @@ describe("LifeLook native accessibility", () => {
     assert.equal(await dark.isSelected(), false);
     await dark.click();
     assert.equal(await dark.isSelected(), true);
-    await browser.saveScreenshot(artifact("02-dark-settings-920x650.png"));
+    const member = await $("aria/Member 1 name");
+    await member.setValue("Persisted Member With A Deliberately Long Name");
+    await $("aria/Save members").click();
+    await $("aria/Household members saved.").waitForDisplayed();
+    await reducedMotion.click();
+    await browser.waitUntil(async () => (await reducedMotion.getAttribute("aria-checked")) === "true");
+    await browser.saveScreenshot(artifact("03-dark-settings-920x650.png"));
+
+    await browser.reloadSession();
+    await $("aria/Overview").waitForDisplayed();
+    await $("aria/Settings").click();
+    assert.equal(await $("aria/Dark").isSelected(), true);
+    assert.equal(await $('button[role="switch"]').getAttribute("aria-checked"), "true");
+    assert.equal(await $("aria/Member 1 name").getValue(), "Persisted Member With A Deliberately Long Name");
+    await $("aria/Net Worth").click();
+    assert.equal(await $('//*[normalize-space()="Everyday checking"]').isExisting(), true);
+
+    for (const [width, height] of [[1024, 768], [1280, 820]]) {
+      await browser.setWindowSize(width, height);
+      await $("aria/Plan").click();
+      const row = await $(".year-row[aria-expanded]");
+      if ((await row.getAttribute("aria-expanded")) === "false") await row.click();
+      assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+      await browser.saveScreenshot(artifact(`layout-plan-expanded-${width}x${height}.png`));
+    }
 
     const activityNav = await $("nav button:nth-child(2)");
     await activityNav.addValue("\uE007");
@@ -117,6 +142,6 @@ describe("LifeLook native accessibility", () => {
       return getComputedStyle(container).boxShadow;
     });
     assert.notEqual(focusStyle, "none");
-    await browser.saveScreenshot(artifact("03-dark-activity-search-focus-920x650.png"));
+    await browser.saveScreenshot(artifact("06-dark-activity-search-focus-1280x820.png"));
   });
 });

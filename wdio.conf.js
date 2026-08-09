@@ -3,13 +3,14 @@ import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
 let driver;
+const scenario = process.env.LIFELOOK_E2E_SCENARIO ?? "acceptance";
 const application = resolve(
   process.env.LIFELOOK_E2E_BINARY ?? "src-tauri/target/release/lifelook",
 );
 
 export const config = {
   runner: "local",
-  specs: ["./e2e/specs/**/*.e2e.js"],
+  specs: [`./e2e/specs/${scenario}.e2e.js`],
   maxInstances: 1,
   capabilities: [
     {

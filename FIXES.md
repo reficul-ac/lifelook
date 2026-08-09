@@ -30,7 +30,7 @@ No P0 defect was found. “Passed” is limited to the behavior named; component
 | Appearance | Immediate theme toggles Passed | Switch names/states Passed (native) | Theme/motion persistence Defect | N/A | Light/dark Passed | Passed at 920×650 | Confirmed |
 | Backup/restore | Defect: buttons are no-ops | Defect | Blocked | Blocked | N/A | Blocked | Confirmed |
 | Corrupt/unwritable startup | N/A; app exits | N/A | Defect | Defect | N/A | N/A | Confirmed |
-| AppImage/CI | Local visible launch Passed | Native keyboard suite Passed | Packaged persistence/export still Blocked | Hosted run pending | Light/dark evidence Passed | Passed at 920×650 | Awaiting hosted CI |
+| AppImage/CI | Hosted visible launch Passed | Native keyboard suite Passed | Packaged persistence/export still Blocked | Packaging gates Passed | Light/dark evidence Passed | Passed at 920×650 | Passed |
 
 ## Complete interaction and claim inventory
 
@@ -38,7 +38,7 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 
 | ID | Screen/flow and item | Disposition | Evidence or blocker |
 |---|---|---|---|
-| I-001 | Fresh launch/household step | Passed (release path) | `WF-01`; AppImage Blocked by F-001 |
+| I-001 | Fresh launch/household step | Passed (release and AppImage paths) | `WF-01`; hosted CI run 31290319956 |
 | I-002 | Household name input and required validation | Passed component/implementation; native validation Blocked | `ONB` ONB-02 |
 | I-003 | Person name and required validation | Passed component/implementation; native validation Blocked | `ONB` ONB-03 |
 | I-004 | Typed optional birth date and invalid-date alert | Passed component | `ONB` ONB-04 |
@@ -101,7 +101,7 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 | I-061 | Corrupt profile startup | Defect | Exit 101; F-016; `corrupt-profile.log` |
 | I-062 | Unwritable profile startup | Defect | Exit 101; F-016; `unwritable-profile.log` |
 | I-063 | Offline launch | Blocked | No strict network namespace test |
-| I-064 | AppImage build/launch/upload | Local build/metadata/icon/visible launch Passed; hosted upload pending | F-001; `artifacts/appimage-smoke/visible-window.png` |
+| I-064 | AppImage build/launch/upload | Passed | Hosted CI run 31290319956; `artifacts/appimage-smoke/visible-window.png` |
 | I-065 | `npm ci`, 12 frontend tests, web build, 3 Rust tests | Passed | CI logs |
 | I-066 | Rust format and strict Clippy | Passed | Exact all-target/all-feature commands pass locally and gate CI before packaging |
 | I-067 | Production npm audit | Passed (0); full audit policy Defect; Rust status Blocked | F-018 |
@@ -110,18 +110,6 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 | I-070 | README imperative quick-start/feature claims for unavailable flows | Defect (documentation truth) | F-020 |
 
 ## Deduplicated defects
-
-### F-001 — AppImage packaging awaits hosted CI confirmation
-
-- **Status:** Fix implemented; awaiting hosted GitHub Actions · **Severity:** P1 · **Area/type:** Packaging, release blocker
-- **Intended behavior:** README documents `npm run appimage`; PLAN requires an x86_64 AppImage that launches under a virtual display.
-- **Reproduction:** The audited checkout aborted after compiling because it had no configured square bundle icon. The current worktree builds exactly one nonempty executable AppImage locally.
-- **Evidence/relaunch:** Original failure: `ci-packaging/npm-appimage.log`, `github-actions-failed.log`, and Actions run 31287128922. Current local validation checks desktop metadata/icon and captures a visible launched window at `artifacts/appimage-smoke/visible-window.png`.
-- **Impact/frequency:** Local release packaging is unblocked; hosted artifact production remains unproven until the updated workflow passes.
-- **Root cause:** Fixed by configuring the existing square Linux PNGs in `src-tauri/tauri.conf.json`.
-- **Fix/order/dependencies:** Keep active until the updated Ubuntu 22.04 hosted workflow validates and uploads the artifact.
-- **Regression/acceptance:** Local and CI builds exit 0; exactly one nonempty executable AppImage exists; desktop metadata/icon validate; smoke and upload steps run.
-- **Tester/reviewer:** Local packaging/native verification **Passed**; hosted Actions confirmation pending.
 
 ### F-002 — Enabled navigation and creation controls silently do nothing
 
@@ -308,10 +296,10 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 - **Status:** Confirmed · **Severity:** P2 · **Area/type:** CI release validation
 - **Intended behavior:** PLAN requires AppImage render, first-launch persistence and export validation.
 - **Reproduction:** Inspect `.github/workflows/ci.yml`: a 20-second timeout is accepted as success. It does not assert a window/UI marker, mutation/relaunch, accessibility, export, or clean shutdown; upload lacks an explicit missing-file error/uniqueness check.
-- **Evidence/relaunch:** Workflow line 21; currently Blocked by F-001.
+- **Evidence/relaunch:** Hosted CI run 31290319956 proves packaged render and native accessibility, but not persistence/relaunch or export.
 - **Impact/frequency:** A blank, hung, nonpersistent or non-exporting package can pass after packaging is fixed.
 - **Root cause:** Liveness-only shell smoke.
-- **Fix/order/dependencies:** After F-001. Drive packaged UI on a clean profile, assert render, mutate, relaunch, verify persistence/export, then validate exactly one nonempty executable artifact.
+- **Fix/order/dependencies:** Extend the passing packaged suite to mutate, relaunch, verify persistence, and exercise export.
 - **Regression/acceptance:** Deliberate blank/crash/missing/persistence/export failures each fail CI; artifact upload uses `if-no-files-found: error`.
 - **Tester/reviewer:** CI agent; reproduction reviewer — **Confirmed**.
 
@@ -329,11 +317,11 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 
 ## Prioritized repair sequence
 
-1. **Packaging and CI blockers:** Confirm F-001 in hosted Actions, then F-018–F-019.
+1. **Packaging and CI blockers:** F-018–F-019.
 2. **Data loss and misleading output:** F-016, F-003, F-004, F-005, F-006, F-007. Preserve corrupt data and remove fabricated/current-looking finance results first.
 3. **Dead primary interactions:** F-002, F-009, F-011. Hide/disable unavailable affordances only as a short-term honest state; implement their actual flows.
 4. **Persistence and error handling:** F-008, F-010, F-013, then backup/restore completion in F-009.
 5. **Accessibility and responsive verification:** F-014, F-015, followed by packaged tests at 1024×768, 1280×820, large desktop, long names, extreme values and expanded tables.
 6. **Product polish/documentation:** F-020 and remaining intentional-unavailable v1 work, keeping current behavior and vision clearly separated.
 
-Completion of a fix requires its observable acceptance criteria, immediate-state check, and post-relaunch check where mutation is involved. Previously blocked AppImage, viewport, keyboard/AT, offline, corrupt/unwritable, cancellation, and failure rows must be rerun after F-001; they cannot be converted to passes by source inspection alone.
+Completion of a fix requires its observable acceptance criteria, immediate-state check, and post-relaunch check where mutation is involved. Remaining blocked viewport, offline, corrupt/unwritable, cancellation, failure, persistence/relaunch, and export rows cannot be converted to passes by source inspection alone.

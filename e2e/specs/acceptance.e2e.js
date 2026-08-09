@@ -3,6 +3,90 @@ import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 
 const artifact = (name) => resolve("artifacts/native-e2e", name);
+const currentYear = String(new Date().getFullYear());
+const priorYear = String(new Date().getFullYear() - 1);
+const currentDate = `${currentYear}-02-15`;
+const priorDate = `${priorYear}-12-15`;
+
+async function setReactInput(field, value) {
+  await browser.execute((element, nextValue) => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    setter.call(element, nextValue);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  }, field, value);
+}
+
+async function setLabeledValue(label, value) {
+  const field = await $(`aria/${label}`);
+  if (label === "Date") {
+    await setReactInput(field, value);
+  } else {
+    await field.setValue(value);
+  }
+}
+
+async function selectLabeled(label, visibleText) {
+  const field = await $(`//label[starts-with(normalize-space(.),"${label}")]//select`);
+  await field.selectByVisibleText(visibleText);
+}
+
+async function saveDialog() {
+  await $("aria/Save").click();
+  await browser.waitUntil(async () => !(await browser.execute(() => Boolean(document.querySelector('[role="dialog"]')))));
+  // The workspace refresh starts after persistence and is intentionally fire-and-forget.
+  await browser.pause(250);
+}
+
+async function openAdd(kind) {
+  await $("aria/Add").click();
+  await $(`aria/${kind}`).click();
+}
+
+async function addTransaction(kind, { date, amount, account, description }) {
+  await openAdd(kind);
+  await setLabeledValue("Date", date);
+  await setLabeledValue("Amount (USD)", amount);
+  if (account) await selectLabeled("Account", account);
+  await setLabeledValue("Description", description);
+  await saveDialog();
+}
+
+async function activityTotal() {
+  return $(".card-title strong").getText();
+}
+
+async function metricValue(title) {
+  return $(`//*[contains(concat(" ",normalize-space(@class)," ")," metric ")][.//*[normalize-space()="${title}"]]//strong`).getText();
+}
+
+async function accountBalance(name) {
+  return $(`//*[contains(@class,"account")][.//strong[normalize-space()="${name}"]]//b`).getText();
+}
+
+const entryButton = (name) => $(`button[aria-label="Edit ${name}"]`);
+
+async function assertActivity({ total, rows, present = [], absent = [] }) {
+  await browser.waitUntil(async () => (await activityTotal()) === total, { timeout: 3_000, timeoutMsg: `Activity total did not become ${total}` });
+  assert.equal(await activityTotal(), total);
+  assert.equal((await $$(".transaction-action")).length, rows);
+  for (const name of present) assert.equal(await entryButton(name).isExisting(), true, `${name} should be visible`);
+  for (const name of absent) assert.equal(await entryButton(name).isExisting(), false, `${name} should be filtered out`);
+}
+
+async function assertDerivedViews() {
+  await $("aria/Overview").click();
+  assert.equal(await metricValue("Income"), "$2,000.00");
+  assert.equal(await metricValue("Spending"), "$150.00");
+  assert.equal(await metricValue("Saved"), "$1,850.00");
+  assert.equal(await $(".hero h2").getText(), "$3,610.00");
+
+  await $("aria/Net Worth").click();
+  assert.equal(await metricValue("Total assets"), "$3,610.00");
+  assert.equal(await metricValue("Net worth"), "$3,610.00");
+  assert.equal(await accountBalance("Everyday checking"), "$2,810.00");
+  assert.equal(await accountBalance("Rainy day savings"), "$800.00");
+}
 
 function channel(hex, offset) {
   return Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
@@ -44,7 +128,7 @@ async function chooseNativeFile(path, confirmSelection = false) {
 }
 
 describe("LifeLook native acceptance", () => {
-  it("persists onboarding, member edits, appearance, and exercises supported layouts", async () => {
+  it("persists onboarding, ledger, accounts, member edits, appearance, and supported layouts", async () => {
     await browser.setWindowSize(920, 650);
     const household = await $("aria/Household name");
     try {
@@ -78,6 +162,66 @@ describe("LifeLook native acceptance", () => {
     }
     await $("aria/Cancel").click();
     await browser.saveScreenshot(artifact("01-light-920x650.png"));
+
+    await openAdd("Account");
+    await setLabeledValue("Account name", "Temporary savings");
+    await selectLabeled("Account type", "Savings");
+    await setLabeledValue("Opening balance (USD)", "500.00");
+    await saveDialog();
+
+    await $("aria/Net Worth").click();
+    const temporaryAccount = await $('//*[contains(@class,"account")][.//strong[normalize-space()="Temporary savings"]]');
+    await temporaryAccount.$("aria/Edit").click();
+    await setLabeledValue("Account name", "Rainy day savings");
+    await saveDialog();
+
+    await addTransaction("Income", { date: currentDate, amount: "2000.00", account: "Everyday checking", description: "Native salary" });
+    await addTransaction("Expense", { date: currentDate, amount: "125.00", account: "Everyday checking", description: "Native groceries" });
+
+    await openAdd("Transfer");
+    await setLabeledValue("Date", currentDate);
+    await setLabeledValue("Amount (USD)", "300.00");
+    await selectLabeled("From account", "Everyday checking");
+    await selectLabeled("To account", "Rainy day savings");
+    await saveDialog();
+
+    await addTransaction("Expense", { date: priorDate, amount: "40.00", account: "Everyday checking", description: "Prior year parking" });
+
+    await $("aria/Activity").click();
+    await entryButton("Native groceries").click();
+    await setLabeledValue("Amount (USD)", "150.00");
+    await setLabeledValue("Description", "Edited groceries");
+    await saveDialog();
+    await entryButton("Transfer").click();
+    await setLabeledValue("Amount (USD)", "250.00");
+    await saveDialog();
+
+    await $("aria/Net Worth").click();
+    const savingsAccount = await $('//*[contains(@class,"account")][.//strong[normalize-space()="Rainy day savings"]]');
+    await savingsAccount.$("aria/Reconcile").click();
+    await setLabeledValue("Date", currentDate);
+    await setLabeledValue("Target current balance (USD)", "800.00");
+    await saveDialog();
+
+    await $("aria/Activity").click();
+    await assertActivity({ total: "$1,900.00", rows: 4, present: ["Native salary", "Edited groceries", "Transfer", "Balance reconciliation"], absent: ["Prior year parking"] });
+    assert.equal((await $$('button[aria-label="Edit Transfer"]')).length, 1, "the two transfer postings should render as one row");
+    await browser.saveScreenshot(artifact("04-native-activity-ledger-920x650.png"));
+
+    const searchActivity = await $("aria/Search activity");
+    await searchActivity.setValue("groceries");
+    await assertActivity({ total: "-$150.00", rows: 1, present: ["Edited groceries"], absent: ["Native salary", "Transfer"] });
+    await setReactInput(searchActivity, "");
+    await $("#activity-account").selectByVisibleText("Rainy day savings");
+    await assertActivity({ total: "$50.00", rows: 2, present: ["Transfer", "Balance reconciliation"], absent: ["Native salary", "Edited groceries"] });
+    await $("#activity-account").selectByVisibleText("All accounts");
+    await $("#activity-year").selectByVisibleText(priorYear);
+    await assertActivity({ total: "-$40.00", rows: 1, present: ["Prior year parking"], absent: ["Native salary", "Transfer"] });
+    await $("#activity-year").selectByVisibleText("All years");
+    await assertActivity({ total: "$1,860.00", rows: 5, present: ["Native salary", "Edited groceries", "Transfer", "Prior year parking", "Balance reconciliation"] });
+
+    await assertDerivedViews();
+    await browser.saveScreenshot(artifact("05-native-net-worth-920x650.png"));
 
     const planNav = await $("nav button:nth-child(3)");
     await planNav.click();
@@ -114,6 +258,10 @@ describe("LifeLook native acceptance", () => {
 
     await browser.reloadSession();
     await $("aria/Overview").waitForDisplayed();
+    await assertDerivedViews();
+    await $("aria/Activity").click();
+    await assertActivity({ total: "$1,900.00", rows: 4, present: ["Native salary", "Edited groceries", "Transfer", "Balance reconciliation"], absent: ["Prior year parking"] });
+    assert.equal((await $$('button[aria-label="Edit Transfer"]')).length, 1);
     await $("aria/Settings").click();
     assert.equal(await $("aria/Dark").isSelected(), true);
     assert.equal(await $('button[role="switch"]').getAttribute("aria-checked"), "true");

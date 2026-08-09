@@ -53,7 +53,7 @@ No P0 defect is known. Native acceptance now covers onboarding through relaunch,
 | I-015 | Settings member save, rejection, retained draft, retry | Implemented/component-tested | Successful member edit survives native relaunch |
 | I-016 | Theme and reduced motion | Native accepted | Both persisted through process relaunch |
 | I-017 | Search/add/profile controls | Honestly unavailable | Disabled-state regression coverage |
-| I-018 | Backup and restore | Still blocked | Backend backup inspection does not provide a usable UI or restore replacement |
+| I-018 | Backup and restore | Native accepted | Staged atomic backup/restore, confirmation, recovery, immediate refresh, dialogs, and relaunch persistence are covered |
 | I-019 | Keyboard focus, switch/radio/nav/disclosure semantics | Native accepted | Chart alternative remains tracked below |
 | I-020 | Long names and responsive layouts | Native accepted | 920×650, 1024×768, and 1280×820 screenshots |
 | I-021 | Corrupt-profile startup | Native accepted | Recovery UI displayed; SHA-256 unchanged |
@@ -106,8 +106,8 @@ No P0 defect is known. Native acceptance now covers onboarding through relaunch,
 
 ### F-009 — Backup/restore is incomplete
 
-- **Status:** Still blocked (P1).
-- Snapshot and inspection primitives exist, but file selection and safe atomic restore replacement do not. Disabled controls are truthful; they are not a recovery strategy.
+- **Status:** Native accepted.
+- Settings provides filtered save/open dialogs, silent cancellation, busy protection, explicit destructive confirmation, announced/focused errors, and immediate workspace refresh. Native restore validates and migrates a staging copy, preserves the selected source, atomically replaces the live profile with rollback recovery, and returns the restored snapshot. Release-binary acceptance proves backup A, mutation B, immediate restore A, and persistence after relaunch.
 
 ### F-010 — Appearance reset on relaunch
 
@@ -146,21 +146,20 @@ No P0 defect is known. Native acceptance now covers onboarding through relaunch,
 
 ### F-019 — Packaged smoke proved only liveness
 
-- **Status:** Narrowed; still open for packaged persistence/export.
-- CI validates AppImage contents, a visible window, native accessibility/recovery, and required artifact presence. The persistent-profile suite currently targets the release binary, not the AppImage, and export/file dialogs remain blocked.
+- **Status:** Narrowed; still open for packaged persistence/dialog acceptance.
+- CI validates AppImage contents, a visible window, native accessibility/recovery, and required artifact presence. The release-binary suite covers backup/restore file dialogs and persistence, but the same dialog round trip is not yet exercised through the AppImage; export remains future work.
 
 ### F-020 — README mixed shipped and future flows
 
 - **Status:** Reconciled.
-- The quick start describes reachable onboarding/current-balance/activity/appearance behavior, while creation/editing, CSV, scenarios, and backup/restore are explicitly marked unavailable.
+- The quick start describes reachable onboarding/current-balance/activity/appearance and backup/restore behavior, while creation/editing, CSV, and scenarios are explicitly marked unavailable.
 
 ## Prioritized repair sequence
 
-1. Implement safe restore plus backup/restore file selection and cancellation (F-009).
-2. Add transaction creation/editing and account editing, then native seeded Activity/current-balance relaunch coverage (F-003/F-005).
-3. Implement scenario selection/editing and expose the remaining planning inputs (F-005/F-008).
-4. Replace the Net Worth dead-end with a usable account action (F-015).
-5. Add the chart nonvisual alternative, strict offline test, and remaining native failure/calendar variants (F-013/F-014).
-6. Extend AppImage acceptance to mutation/relaunch and export/file-dialog behavior (F-019).
+1. Add transaction creation/editing and account editing, then native seeded Activity/current-balance relaunch coverage (F-003/F-005).
+2. Implement scenario selection/editing and expose the remaining planning inputs (F-005/F-008).
+3. Replace the Net Worth dead-end with a usable account action (F-015).
+4. Add the chart nonvisual alternative, strict offline test, and remaining native failure/calendar variants (F-013/F-014).
+5. Extend AppImage acceptance to mutation/relaunch and export/file-dialog behavior (F-019).
 
 A finding is complete only when its observable acceptance criteria pass at the appropriate layer. Source inspection and component tests are never labeled as native persistence or packaged-runtime evidence.

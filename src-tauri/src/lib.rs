@@ -40,6 +40,10 @@ enum AppError {
     Io(#[from] std::io::Error),
     #[error("backup is not a valid or compatible LifeLook database")]
     InvalidBackup,
+    #[error("this backup was created by a newer version of LifeLook")]
+    IncompatibleBackup,
+    #[error("restore failed; the original profile was recovered: {0}")]
+    RestoreFailed(String),
     #[error("database is currently busy")]
     Busy,
     #[error("{0}")]
@@ -68,6 +72,8 @@ impl Serialize for AppError {
             Self::Database(_) => ("database", None),
             Self::Io(_) => ("io", None),
             Self::InvalidBackup => ("invalid_backup", None),
+            Self::IncompatibleBackup => ("incompatible_backup", None),
+            Self::RestoreFailed(_) => ("restore_failed", None),
             Self::Busy => ("busy", None),
             Self::Validation(_) => ("validation", None),
             Self::Conflict => ("conflict", None),
@@ -780,9 +786,61 @@ fn backup_to(source: &Connection, destination: &Path) -> Result<(), AppError> {
     )?;
     Ok(())
 }
+
+fn unique_sibling(path: &Path, label: &str) -> PathBuf {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("lifelook");
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    parent.join(format!(".{name}.{label}-{}-{nonce}", std::process::id()))
+}
+
+fn resolved_path(path: &Path) -> Result<PathBuf, AppError> {
+    if path.exists() {
+        return fs::canonicalize(path).map_err(AppError::Io);
+    }
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let parent = fs::canonicalize(parent)?;
+    Ok(parent.join(
+        path.file_name()
+            .ok_or_else(|| AppError::Validation("select a file path".into()))?,
+    ))
+}
+
+fn reject_active_path(selected: &Path, active: &Path) -> Result<(), AppError> {
+    if resolved_path(selected)? == resolved_path(active)? {
+        return Err(AppError::Validation(
+            "the active LifeLook profile cannot be used as a backup file".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn safe_backup(source: &Connection, active: &Path, destination: &Path) -> Result<(), AppError> {
+    reject_active_path(destination, active)?;
+    let staging = unique_sibling(destination, "staging");
+    let result = (|| {
+        backup_to(source, &staging)?;
+        validate_backup(&staging)?;
+        fs::rename(&staging, destination)?;
+        Ok(())
+    })();
+    if staging.exists() {
+        let _ = fs::remove_file(&staging);
+    }
+    result
+}
+
 #[tauri::command]
 fn backup_database(destination: PathBuf, database: tauri::State<Database>) -> Result<(), AppError> {
-    with_db(&database, |db| backup_to(db, &destination))
+    with_db(&database, |db| {
+        safe_backup(db, &database.path, &destination)
+    })
 }
 #[tauri::command]
 fn inspect_backup(source: PathBuf) -> Result<(), AppError> {
@@ -799,10 +857,160 @@ fn validate_backup(path: &Path) -> Result<(), AppError> {
             r.get(0)
         })
         .map_err(|_| AppError::InvalidBackup)?;
-    if integrity != "ok" || version.unwrap_or(0) > SCHEMA_VERSION || version.unwrap_or(0) < 1 {
+    if version.unwrap_or(0) > SCHEMA_VERSION {
+        return Err(AppError::IncompatibleBackup);
+    }
+    if integrity != "ok" || version.unwrap_or(0) < 1 {
         return Err(AppError::InvalidBackup);
     }
     Ok(())
+}
+
+fn prepare_restore(source: &Path, active: &Path) -> Result<PathBuf, AppError> {
+    reject_active_path(source, active)?;
+    validate_backup(source)?;
+    let staging = unique_sibling(active, "restore-staging");
+    let result = (|| {
+        fs::copy(source, &staging)?;
+        let mut candidate = Connection::open(&staging).map_err(|_| AppError::InvalidBackup)?;
+        migrate(&mut candidate).map_err(|_| AppError::InvalidBackup)?;
+        let integrity: String = candidate
+            .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+            .map_err(|_| AppError::InvalidBackup)?;
+        if integrity != "ok" {
+            return Err(AppError::InvalidBackup);
+        }
+        bootstrap(&candidate).map_err(|_| AppError::InvalidBackup)?;
+        candidate
+            .pragma_update(None, "journal_mode", "DELETE")
+            .map_err(|_| AppError::InvalidBackup)?;
+        drop(candidate);
+        Ok(staging.clone())
+    })();
+    if result.is_err() && staging.exists() {
+        let _ = fs::remove_file(&staging);
+    }
+    result
+}
+
+fn restore_database_impl(
+    database: &Database,
+    source: &Path,
+) -> Result<WorkspaceSnapshot, AppError> {
+    restore_database_impl_with_failure(database, source, false)
+}
+
+fn restore_database_impl_with_failure(
+    database: &Database,
+    source: &Path,
+    force_reopen_failure: bool,
+) -> Result<WorkspaceSnapshot, AppError> {
+    let staging = prepare_restore(source, &database.path)?;
+    let rollback = unique_sibling(&database.path, "restore-rollback");
+    let mut state = database.state.lock().map_err(|_| AppError::Busy)?;
+    let prior = std::mem::replace(
+        &mut *state,
+        DatabaseState::Unavailable(startup_failure(
+            "startup_failed",
+            "Restore is in progress.",
+            &database.path,
+            true,
+        )),
+    );
+    let connection = match prior {
+        DatabaseState::Ready(connection) => connection,
+        DatabaseState::Unavailable(failure) => {
+            *state = DatabaseState::Unavailable(failure.clone());
+            let _ = fs::remove_file(&staging);
+            return Err(AppError::Startup(failure));
+        }
+    };
+    let checkpoint = connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)");
+    drop(connection);
+    if let Err(error) = checkpoint {
+        let reopened = open_profile(&database.path)
+            .map(DatabaseState::Ready)
+            .unwrap_or_else(DatabaseState::Unavailable);
+        *state = reopened;
+        let _ = fs::remove_file(&staging);
+        return Err(AppError::RestoreFailed(error.to_string()));
+    }
+
+    let replace_result = (|| -> Result<(), std::io::Error> {
+        fs::rename(&database.path, &rollback)?;
+        if let Err(error) = fs::rename(&staging, &database.path) {
+            let _ = fs::rename(&rollback, &database.path);
+            return Err(error);
+        }
+        Ok(())
+    })();
+    if let Err(error) = replace_result {
+        let reopened = open_profile(&database.path)
+            .map(DatabaseState::Ready)
+            .unwrap_or_else(DatabaseState::Unavailable);
+        *state = reopened;
+        let _ = fs::remove_file(&staging);
+        return Err(AppError::RestoreFailed(error.to_string()));
+    }
+
+    let opened = if force_reopen_failure {
+        Err(startup_failure(
+            "startup_failed",
+            "simulated restore reopen failure",
+            &database.path,
+            true,
+        ))
+    } else {
+        open_profile(&database.path)
+    };
+    match opened {
+        Ok(restored) => match bootstrap(&restored) {
+            Ok(snapshot) => {
+                *state = DatabaseState::Ready(restored);
+                let _ = fs::remove_file(&rollback);
+                Ok(snapshot)
+            }
+            Err(error) => {
+                drop(restored);
+                let _ = fs::remove_file(&database.path);
+                let _ = fs::rename(&rollback, &database.path);
+                *state = reopen_rollback(&database.path);
+                Err(AppError::RestoreFailed(error.to_string()))
+            }
+        },
+        Err(error) => {
+            let _ = fs::remove_file(&database.path);
+            let _ = fs::rename(&rollback, &database.path);
+            *state = reopen_rollback(&database.path);
+            Err(AppError::RestoreFailed(error.message))
+        }
+    }
+}
+
+fn reopen_rollback(path: &Path) -> DatabaseState {
+    match Connection::open(path) {
+        Ok(connection) if bootstrap(&connection).is_ok() => DatabaseState::Ready(connection),
+        Ok(_) => DatabaseState::Unavailable(startup_failure(
+            "startup_failed",
+            "LifeLook restored the original profile but could not verify it.",
+            path,
+            true,
+        )),
+        Err(error) => DatabaseState::Unavailable(startup_failure(
+            "startup_failed",
+            &format!("LifeLook restored the original profile but could not reopen it: {error}"),
+            path,
+            true,
+        )),
+    }
+}
+
+#[tauri::command]
+fn restore_database(
+    source: PathBuf,
+    database: tauri::State<Database>,
+) -> Result<WorkspaceSnapshot, AppError> {
+    restore_database_impl(&database, &source)
 }
 
 fn startup_failure(
@@ -1000,6 +1208,7 @@ pub fn run() {
             update_settings,
             backup_database,
             inspect_backup,
+            restore_database,
             retry_startup
         ])
         .run(tauri::generate_context!())
@@ -1038,6 +1247,24 @@ mod tests {
             [],
         )
         .unwrap();
+        c
+    }
+    fn seeded_at(path: &Path, household_name: &str) -> Connection {
+        let mut c = Connection::open(path).unwrap();
+        migrate(&mut c).unwrap();
+        c.execute(
+            "INSERT INTO households(id,name,state,onboarding_step,onboarding_complete) VALUES('h',?1,'CA',8,1)",
+            [household_name],
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO people(id,household_id,name) VALUES('p','h','Person')",
+            [],
+        )
+        .unwrap();
+        c.execute("INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,liquid) VALUES('a','h','A','checking',10000,1)", []).unwrap();
+        c.execute("INSERT INTO settings(household_id) VALUES('h')", [])
+            .unwrap();
         c
     }
     #[test]
@@ -1079,6 +1306,141 @@ mod tests {
         assert_eq!(name, "Home");
         drop(restored);
         fs::remove_file(path).unwrap()
+    }
+    #[test]
+    fn safe_backup_rejects_active_profile_and_preserves_existing_destination_on_failure() {
+        let dir = test_dir("safe-backup");
+        let active = dir.join("active.db");
+        let c = seeded_at(&active, "Current");
+        assert!(matches!(
+            safe_backup(&c, &active, &active),
+            Err(AppError::Validation(_))
+        ));
+
+        let destination = dir.join("existing.lifelook");
+        fs::create_dir(&destination).unwrap();
+        fs::write(destination.join("marker"), b"keep me").unwrap();
+        assert!(safe_backup(&c, &active, &destination).is_err());
+        assert_eq!(fs::read(destination.join("marker")).unwrap(), b"keep me");
+        drop(c);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn restore_is_staged_migrated_and_does_not_modify_source() {
+        let dir = test_dir("restore-success");
+        let active = dir.join("lifelook.db");
+        let source = dir.join("backup.lifelook");
+        let current = seeded_at(&active, "Current");
+        let backup = seeded_at(&source, "Backup");
+        backup
+            .execute("DELETE FROM schema_migrations WHERE version>1", [])
+            .unwrap();
+        drop(backup);
+        let source_before = fs::read(&source).unwrap();
+        let database = Database {
+            path: active.clone(),
+            state: Mutex::new(DatabaseState::Ready(current)),
+        };
+
+        let snapshot = restore_database_impl(&database, &source).unwrap();
+        assert_eq!(snapshot.household.unwrap().name, "Backup");
+        assert_eq!(fs::read(&source).unwrap(), source_before);
+        let version = with_db(&database, |connection| {
+            Ok(
+                connection.query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                    row.get::<_, i64>(0)
+                })?,
+            )
+        })
+        .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        drop(database);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn restore_rejects_invalid_future_and_active_sources() {
+        let dir = test_dir("restore-invalid");
+        let active = dir.join("lifelook.db");
+        let current = seeded_at(&active, "Current");
+        let database = Database {
+            path: active.clone(),
+            state: Mutex::new(DatabaseState::Ready(current)),
+        };
+        assert!(matches!(
+            prepare_restore(&active, &active),
+            Err(AppError::Validation(_))
+        ));
+
+        let corrupt = dir.join("corrupt.lifelook");
+        fs::write(&corrupt, b"not sqlite").unwrap();
+        assert!(matches!(
+            prepare_restore(&corrupt, &active),
+            Err(AppError::InvalidBackup)
+        ));
+        let unrelated = dir.join("unrelated.lifelook");
+        Connection::open(&unrelated)
+            .unwrap()
+            .execute("CREATE TABLE other(value)", [])
+            .unwrap();
+        assert!(matches!(
+            prepare_restore(&unrelated, &active),
+            Err(AppError::InvalidBackup)
+        ));
+        let future = dir.join("future.lifelook");
+        let future_db = seeded_at(&future, "Future");
+        future_db
+            .execute(
+                "INSERT INTO schema_migrations(version) VALUES(?1)",
+                [SCHEMA_VERSION + 1],
+            )
+            .unwrap();
+        drop(future_db);
+        assert!(matches!(
+            prepare_restore(&future, &active),
+            Err(AppError::IncompatibleBackup)
+        ));
+        drop(database);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn failed_restore_reopens_byte_identical_original_profile() {
+        let dir = test_dir("restore-rollback");
+        let active = dir.join("lifelook.db");
+        let source = dir.join("backup.lifelook");
+        let current = seeded_at(&active, "Current");
+        current
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")
+            .unwrap();
+        let backup = seeded_at(&source, "Backup");
+        drop(backup);
+        let original = fs::read(&active).unwrap();
+        let database = Database {
+            path: active.clone(),
+            state: Mutex::new(DatabaseState::Ready(current)),
+        };
+        assert!(matches!(
+            restore_database_impl_with_failure(&database, &source, true),
+            Err(AppError::RestoreFailed(_))
+        ));
+        assert_eq!(
+            with_db(&database, |connection| Ok(bootstrap(connection)?
+                .household
+                .unwrap()
+                .name))
+            .unwrap(),
+            "Current"
+        );
+        with_db(&database, |connection| {
+            connection.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")?;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(fs::read(&active).unwrap(), original);
+        drop(database);
+        fs::remove_dir_all(dir).unwrap();
     }
     #[test]
     fn transaction_sign_comes_from_category() {

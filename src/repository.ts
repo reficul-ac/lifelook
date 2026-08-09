@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
 
 export type Theme = "system" | "light" | "dark";
 export type AccountKind = "checking" | "savings" | "investment" | "retirement" | "credit";
@@ -32,8 +33,14 @@ export interface Repository {
   createTransaction?(input:TransactionInput):Promise<void>;
   createTransfer?(input:{id:string;occurredOn:string;fromAccountId:string;toAccountId:string;amountCents:number}):Promise<void>;
   updateSettings?(input:{theme:Theme;reducedMotion:boolean;expectedRevision:number}):Promise<Settings>;
+  selectBackupDestination?():Promise<string|null>;
+  selectRestoreSource?():Promise<string|null>;
   backupDatabase?(destination:string):Promise<void>;
+  restoreDatabase?(source:string):Promise<BootstrapInput>;
 }
+
+const backupFilters=[{name:"LifeLook backup",extensions:["lifelook"]}];
+const backupFilename=()=>`LifeLook-backup-${new Date().toISOString().slice(0,10)}.lifelook`;
 
 export const tauriRepository:Repository = {
   bootstrap:()=>invoke("get_bootstrap"),
@@ -43,12 +50,20 @@ export const tauriRepository:Repository = {
   createTransaction:(input)=>invoke("create_transaction",{input}),
   createTransfer:(input)=>invoke("create_transfer",input),
   updateSettings:(input)=>invoke("update_settings",{input}),
+  selectBackupDestination:()=>save({defaultPath:backupFilename(),filters:backupFilters}),
+  selectRestoreSource:async()=>{
+    const selected=await open({multiple:false,directory:false,filters:backupFilters});
+    return typeof selected==="string"?selected:null;
+  },
   backupDatabase:(destination)=>invoke("backup_database",{destination}),
+  restoreDatabase:(source)=>invoke("restore_database",{source}),
 };
 
 export const emptySettings:Settings={theme:"system",reducedMotion:false,revision:1};
 export const testRepository:Repository = {
   async bootstrap(){return {onboardingStep:8,onboardingComplete:true,household:{id:"test",name:"Test household",state:"CA"},people:[{id:"person",householdId:"test",name:"Test Person"}],taxProfile:null,settings:emptySettings,accounts:[{id:"cash",householdId:"test",name:"Test checking",kind:"checking",openingBalanceCents:0,balanceCents:0,annualReturnBps:0,liquid:true,revision:1}],categories:[],activity:[],recurring:[],assets:[],liabilities:[],scenarios:[]}},
   async retryStartup(){return this.bootstrap()}, async saveOnboardingStep(){}, async completeOnboarding(){}, async createTransaction(){}, async createTransfer(){},
-  async updateSettings(input){return {...input,revision:input.expectedRevision+1}}, async backupDatabase(){}
+  async updateSettings(input){return {...input,revision:input.expectedRevision+1}},
+  async selectBackupDestination(){return null}, async selectRestoreSource(){return null},
+  async backupDatabase(){}, async restoreDatabase(){return this.bootstrap()}
 };

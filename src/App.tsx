@@ -131,6 +131,7 @@ export function App({
       bootstrap={bootstrap}
       repository={repository}
       onRefresh={() => repository.bootstrap().then((value)=>setBootstrap(normalizeBootstrap(value)))}
+      onRestore={(value) => setBootstrap(normalizeBootstrap(value))}
     />
   );
 }
@@ -153,13 +154,16 @@ function Workspace({
   bootstrap,
   repository,
   onRefresh,
+  onRestore,
 }: {
   bootstrap: Bootstrap;
   repository: Repository;
   onRefresh: () => void;
+  onRestore: (value: BootstrapInput) => void;
 }) {
   const [view, setView] = useState<View>("Overview");
   const [settings, setSettings] = useState(bootstrap.settings);
+  useEffect(()=>setSettings(bootstrap.settings),[bootstrap.settings]);
   const systemDark=()=>typeof matchMedia==="function"&&matchMedia("(prefers-color-scheme: dark)").matches;
   const [osDark,setOsDark]=useState(systemDark);
   useEffect(()=>{if(typeof matchMedia!=="function")return;const media=matchMedia("(prefers-color-scheme: dark)");const change=()=>setOsDark(media.matches);media.addEventListener("change",change);return()=>media.removeEventListener("change",change)},[]);
@@ -269,6 +273,7 @@ function Workspace({
             bootstrap={bootstrap}
             repository={repository}
             onSaved={onRefresh}
+            onRestore={onRestore}
           />
         )}
       </main>
@@ -1004,12 +1009,14 @@ function SettingsView({
   bootstrap,
   repository,
   onSaved,
+  onRestore,
 }: {
   settings: Bootstrap["settings"];
   setSettings: (x:Bootstrap["settings"]|((old:Bootstrap["settings"])=>Bootstrap["settings"])) => void;
   bootstrap: Bootstrap;
   repository: Repository;
   onSaved: () => void;
+  onRestore: (value: BootstrapInput) => void;
 }) {
   const [people, setPeople] = useState<BootstrapPerson[]>(
     bootstrap.people.map((person) => ({
@@ -1018,10 +1025,50 @@ function SettingsView({
     })),
   );
   const [message, setMessage] = useState("");
+  const [backupBusy,setBackupBusy]=useState(false);
+  const [restoreBusy,setRestoreBusy]=useState(false);
+  const [confirmRestore,setConfirmRestore]=useState(false);
+  const [dataResult,setDataResult]=useState<{kind:"error"|"success";message:string}|null>(null);
+  const dataAlert=useRef<HTMLParagraphElement>(null);
+  const restoreCancel=useRef<HTMLButtonElement>(null);
   const [appearanceSaving,setAppearanceSaving]=useState(false);
   const [memberSaving,setMemberSaving]=useState(false);
   const [memberResult,setMemberResult]=useState<{kind:"error"|"success";message:string}|null>(null);
   const memberAlert=useRef<HTMLParagraphElement>(null);
+  useEffect(()=>setPeople(bootstrap.people.map(person=>({...person,birthDate:displayBirthDate(person.birthDate)}))),[bootstrap.people]);
+  async function createBackup(){
+    if(backupBusy||restoreBusy)return;
+    setBackupBusy(true);setDataResult(null);
+    try{
+      if(!repository.selectBackupDestination||!repository.backupDatabase)throw new Error("Backup is unavailable.");
+      const destination=await repository.selectBackupDestination();
+      if(destination===null)return;
+      await repository.backupDatabase(destination);
+      setDataResult({kind:"success",message:"Backup created successfully."});
+    }catch(error){
+      setDataResult({kind:"error",message:errorMessage(error,"Could not create the backup.")});
+      queueMicrotask(()=>dataAlert.current?.focus());
+    }finally{setBackupBusy(false)}
+  }
+  async function restoreBackup(){
+    if(backupBusy||restoreBusy)return;
+    setConfirmRestore(false);setRestoreBusy(true);setDataResult(null);
+    try{
+      if(!repository.selectRestoreSource||!repository.restoreDatabase)throw new Error("Restore is unavailable.");
+      const source=await repository.selectRestoreSource();
+      if(source===null)return;
+      const restored=await repository.restoreDatabase(source);
+      onRestore(restored);
+      setDataResult({kind:"success",message:"Backup restored successfully."});
+    }catch(error){
+      const value=error as {code?:string};
+      const fallback=value?.code==="invalid_backup"||value?.code==="incompatible_backup"
+        ?"That file is not a compatible LifeLook backup."
+        :"Could not restore the backup. Your current data is still available.";
+      setDataResult({kind:"error",message:errorMessage(error,fallback)});
+      queueMicrotask(()=>dataAlert.current?.focus());
+    }finally{setRestoreBusy(false)}
+  }
   async function saveAppearance(patch:Partial<Bootstrap["settings"]>){
     const next={...settings,...patch};setAppearanceSaving(true);setMessage("");
     try{if(!repository.updateSettings)throw new Error("Settings persistence is unavailable.");const saved=await repository.updateSettings({theme:next.theme,reducedMotion:next.reducedMotion,expectedRevision:settings.revision});setSettings(saved);setMessage("Appearance saved.")}catch(e){setMessage((e as {message?:string}).message??"Could not save appearance.")}finally{setAppearanceSaving(false)}
@@ -1140,16 +1187,19 @@ function SettingsView({
             <strong>Local database</strong>
             <p>Your financial data stays on this device.</p>
           </div>
-          <button disabled title="Backup file selection is not yet available">Back up data (unavailable)</button>
+          <button disabled={backupBusy||restoreBusy} onClick={createBackup}>{backupBusy?"Backing up…":"Back up data"}</button>
         </div>
         <div className="setting">
           <div>
             <strong>Restore</strong>
             <p>Replace local data from a LifeLook backup.</p>
           </div>
-          <button disabled title="Restore is not yet available">Choose backup (unavailable)</button>
+          <button disabled={backupBusy||restoreBusy} onClick={()=>{setConfirmRestore(true);queueMicrotask(()=>restoreCancel.current?.focus())}}>Choose backup</button>
         </div>
+        {dataResult?.kind==="error"&&<p ref={dataAlert} tabIndex={-1} role="alert" className="negative">{dataResult.message}</p>}
+        {dataResult?.kind==="success"&&<p role="status">{dataResult.message}</p>}
       </section>
+      {confirmRestore&&<div className="modal-backdrop"><section className="card modal" role="alertdialog" aria-modal="true" aria-labelledby="restore-title" aria-describedby="restore-warning"><h2 id="restore-title">Replace all current data?</h2><p id="restore-warning">Restoring a backup replaces all data in this workspace and cannot be undone.</p><div className="actions"><button ref={restoreCancel} onClick={()=>setConfirmRestore(false)}>Cancel</button><button className="primary" onClick={restoreBackup}>Choose backup and restore</button></div></section></div>}
     </div>
   );
 }

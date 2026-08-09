@@ -744,3 +744,14 @@ main.standalone {
   white-space: nowrap;
   border: 0;
 }
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(20 24 18 / 55%);
+}
+.modal { width: min(480px, 100%); }
+.modal .actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
+import { execFileSync } from "node:child_process";
 
 const artifact = (name) => resolve("artifacts/native-e2e", name);
 
@@ -26,6 +27,20 @@ function contrast(foreground, background) {
 function rgbToHex(rgb) {
   const values = rgb.match(/\d+/g).slice(0, 3).map(Number);
   return `#${values.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+async function chooseNativeFile(path, confirmSelection = false) {
+  await browser.pause(500);
+  const title = confirmSelection ? "^Open File$" : "^Save File$";
+  const windowId = execFileSync("xdotool", ["search", "--name", title], { encoding: "utf8" }).trim().split("\n").at(-1);
+  execFileSync("xdotool", ["windowfocus", "--sync", windowId]);
+  execFileSync("xdotool", ["key", "--window", windowId, "--clearmodifiers", "ctrl+l"]);
+  execFileSync("xdotool", ["type", "--window", windowId, "--clearmodifiers", "--delay", "1", path]);
+  execFileSync("xdotool", ["key", "--window", windowId, "--clearmodifiers", "Return"]);
+  if (confirmSelection) {
+    await browser.pause(300);
+    execFileSync("xdotool", ["key", "--window", windowId, "--clearmodifiers", "alt+o"]);
+  }
 }
 
 describe("LifeLook native acceptance", () => {
@@ -95,6 +110,27 @@ describe("LifeLook native acceptance", () => {
     await $("aria/Settings").click();
     assert.equal(await $("aria/Dark").isSelected(), true);
     assert.equal(await $('button[role="switch"]').getAttribute("aria-checked"), "true");
+    assert.equal(await $("aria/Member 1 name").getValue(), "Persisted Member With A Deliberately Long Name");
+    const backupPath = process.env.LIFELOOK_E2E_BACKUP;
+    assert.ok(backupPath);
+    await $("aria/Back up data").click();
+    await chooseNativeFile(backupPath);
+    await $("aria/Backup created successfully.").waitForDisplayed();
+    const restoredMember = await $("aria/Member 1 name");
+    await restoredMember.setValue("Mutated after backup");
+    await $("aria/Save members").click();
+    await $("aria/Household members saved.").waitForDisplayed();
+    await $("aria/Choose backup").click();
+    await $('[role="alertdialog"]').waitForDisplayed();
+    await $("aria/Choose backup and restore").click();
+    await chooseNativeFile(backupPath, true);
+    await browser.waitUntil(async () => (await browser.execute(() => [...document.querySelectorAll('[role="status"], [role="alert"]')].map(element => element.textContent))).some(message => message?.includes("backup") || message?.includes("Backup")), { timeout: 10_000 });
+    const restoreMessages = await browser.execute(() => [...document.querySelectorAll('[role="status"], [role="alert"]')].map(element => element.textContent ?? ""));
+    assert.ok(restoreMessages.some(message => message.includes("Backup restored successfully")), `Restore feedback: ${restoreMessages.join(" | ")}`);
+    assert.equal(await $("aria/Member 1 name").getValue(), "Persisted Member With A Deliberately Long Name");
+    await browser.reloadSession();
+    await $("aria/Overview").waitForDisplayed();
+    await $("aria/Settings").click();
     assert.equal(await $("aria/Member 1 name").getValue(), "Persisted Member With A Deliberately Long Name");
     await $("aria/Net Worth").click();
     assert.equal(await $('//*[normalize-space()="Everyday checking"]').isExisting(), true);

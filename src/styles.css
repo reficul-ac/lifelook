@@ -19,7 +19,7 @@ body {
   min-height: 100vh;
 }
 button,
-input {
+input,select,textarea {
   font: inherit;
 }
 button {
@@ -755,3 +755,15 @@ main.standalone {
 }
 .modal { width: min(480px, 100%); }
 .modal .actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+.entry-modal { max-height:calc(100vh - 48px); overflow:auto; }
+.entry-modal form { display:grid; gap:13px; }
+.entry-modal label { display:grid; gap:6px; font-size:12px; font-weight:650; }
+.entry-modal input,.entry-modal select,.entry-modal textarea { width:100%; border:1px solid var(--line); background:var(--surface); color:var(--text); border-radius:8px; padding:9px 10px; }
+.entry-modal textarea { min-height:70px; resize:vertical; }
+.entry-modal .primary { background:#66715f; color:white; border:0; border-radius:9px; padding:9px 14px; }
+.add-choices { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.add-choices button { padding:18px; border:1px solid var(--line); border-radius:10px; background:var(--surface2); cursor:pointer; }
+.form-error { color:var(--negative); border-left:3px solid currentColor; padding:8px 10px; }
+.transaction-action { width:100%; border-left:0;border-right:0;border-bottom:0;background:transparent;color:inherit;text-align:left;cursor:pointer; }
+.transaction-action:hover { background:var(--surface2); }
+.account>button { border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:7px;padding:5px 7px; }

@@ -6,14 +6,14 @@ This is a current-branch backlog, not a snapshot of the original audit. `PLAN.md
 
 - Reconciled branch: current worktree based on `d81bbf1855dfcc694f8970898f40db4d780b8314`.
 - Reconciliation date: 2026-08-09 America/Los_Angeles.
-- Current automated baseline: 19 frontend tests, 9 Rust tests, and 3 native WebDriver scenarios.
+- Current automated baseline: 27 frontend tests, 15 Rust tests, and 3 native WebDriver scenarios.
 - Native evidence: `artifacts/native-e2e/`, generated from the release binary with isolated profiles.
 - Terms used below:
   - **Implemented/component-tested** means code or an injected-repository test passed; it is not persistence evidence.
   - **Native accepted** means the release process and real SQLite profile were exercised.
   - **Still blocked** means the UI or required end-to-end evidence does not exist yet.
 
-No P0 defect is known. Native acceptance now covers onboarding through relaunch, member edits, appearance preferences, supported viewport sizes, and startup recovery. AppImage-specific file dialogs, strict offline isolation, restore, and unavailable editing flows remain blocked.
+No P0 defect is known. Native acceptance covers onboarding through relaunch, member edits, appearance preferences, backup/restore, supported viewport sizes, and startup recovery. Manual ledger/account flows are implemented and component-tested; expanded native mutation/relaunch coverage remains to be recorded.
 
 ## Coverage matrix
 
@@ -22,12 +22,12 @@ No P0 defect is known. Native acceptance now covers onboarding through relaunch,
 | Onboarding | Household, members, filing status, typed accounts, exact money parsing, and credit signs are implemented/component-tested | Account and household data survive process relaunch | Native add/remove/back/error interruption variants |
 | Shell/navigation | All five destinations and honest disabled controls are implemented | Navigation, current state, focus, and 920×650 minimum accepted | Profile/search/add implementations |
 | Overview | Current balances/activity totals are derived; projections require a saved tax profile | Opening/current account presentation exercised | Transaction-entry-driven reconciliation and broader planning inputs |
-| Activity | Persisted postings, empty state, search, account/year filters, and transfer-neutral total are implemented | Search focus and empty persisted ledger exercised | Transaction creation/editing UI and seeded native filter fixture |
+| Activity | Manual income/expense/transfer creation and editing, grouped transfers, filters, and transfer-neutral totals are implemented/component-tested | Search focus and empty persisted ledger exercised | Expanded native mutation/filter/relaunch fixture |
 | Plan | Saved tax/current domain snapshot feeds deterministic projection; disclosure semantics implemented | Expanded rows accepted at 920×650, 1024×768, and 1280×820 with long names | Scenario selection/editing and full domain-entry UI |
-| Net Worth | Current account balances, assets, liabilities, and credit signs are derived | Current onboarded account survives relaunch | Usable zero-state action and account/asset/liability editing |
+| Net Worth | Account creation, metadata editing, signed credit balances, and adjustment-based reconciliation are implemented/component-tested | Current onboarded account survives relaunch | Expanded native account mutation/relaunch coverage; asset/liability editing |
 | Settings members | Save busy/error/retry behavior is component-tested | Edited long member name survives relaunch | Native write-failure injection and calendar coverage |
 | Appearance | System/light/dark and reduced motion persist | Dark and reduced motion survive process relaunch | Native OS preference-change simulation |
-| Backup/restore | Backup/inspection Rust primitives exist | None | File selection, restore replacement, cancellation, and round trip |
+| Backup/restore | Staged atomic backup/restore, confirmation, error recovery, and refresh are implemented | Native accepted, including relaunch persistence | AppImage-specific dialog round trip |
 | Startup recovery | Structured corrupt/unwritable recovery and Retry are component/Rust-tested | Corrupt bytes retain the same SHA-256; repaired permissions reopen the same profile | Packaged/AppImage recovery variant |
 | Supply chain/CI | Production npm, policy-aware full npm, and pinned Rust audits gate CI | Not applicable | Temporary WebDriver-only exception tracked in `SECURITY.md` |
 | AppImage | Build, content validation, visible-window smoke, and artifact upload gate CI | Prior hosted visible launch | Packaged mutation/relaunch and export/file-dialog validation |
@@ -45,14 +45,14 @@ No P0 defect is known. Native acceptance now covers onboarding through relaunch,
 | I-007 | Credit-card amount owed reduces net worth | Implemented/component/Rust-tested | Positive input normalizes to signed debt; migration repairs old positive credit balances |
 | I-008 | Interrupted onboarding/relaunch | Partially native accepted | Completed onboarding survives relaunch; mid-step interruption remains blocked |
 | I-009 | Overview current net worth/cash flow/tax labels | Implemented/component-tested | Derived from bootstrap; tax output withheld without profile |
-| I-010 | Activity persisted rows, search, account/year filters | Implemented/component-tested | Native creation is blocked because entry UI is absent |
+| I-010 | Activity creation/editing, grouped transfers, search, account/year filters | Implemented/component-tested | Expanded native mutation/filter/relaunch coverage remains |
 | I-011 | Plan expanders and monthly regions | Native accepted | Three supported viewports, including expanded rows |
 | I-012 | Scenario comparison | Honestly unavailable | Selection/editing remains open |
 | I-013 | Net Worth current balances and credit/liability sections | Implemented/component-tested | Account editing remains open |
-| I-014 | Net Worth zero-account action | Still blocked | Empty copy exists, but Add account is intentionally disabled |
+| I-014 | Net Worth zero-account action | Implemented/component-tested | Add account opens the shared account dialog |
 | I-015 | Settings member save, rejection, retained draft, retry | Implemented/component-tested | Successful member edit survives native relaunch |
 | I-016 | Theme and reduced motion | Native accepted | Both persisted through process relaunch |
-| I-017 | Search/add/profile controls | Honestly unavailable | Disabled-state regression coverage |
+| I-017 | Search/add/profile controls | Add implemented; search/profile honestly unavailable | Add modal component coverage; search/profile remain disabled |
 | I-018 | Backup and restore | Native accepted | Staged atomic backup/restore, confirmation, recovery, immediate refresh, dialogs, and relaunch persistence are covered |
 | I-019 | Keyboard focus, switch/radio/nav/disclosure semantics | Native accepted | Chart alternative remains tracked below |
 | I-020 | Long names and responsive layouts | Native accepted | 920×650, 1024×768, and 1280×820 screenshots |
@@ -73,9 +73,8 @@ No P0 defect is known. Native acceptance now covers onboarding through relaunch,
 
 ### F-003 — Activity used static mock data
 
-- **Status:** Implemented/component-tested; native seeded-entry acceptance still blocked.
-- Activity now reads bootstrap postings, derives the badge and total, filters by text/account/year, treats transfers as balance-neutral, and shows an honest empty state.
-- Native entry creation cannot be accepted until transaction UI exists.
+- **Status:** Implemented/component-tested; expanded native mutation/relaunch acceptance remains.
+- Activity reads persisted postings, groups transfer postings, supports manual creation/editing, derives totals, and filters by text/account/year.
 
 ### F-004 — Overview presented fabricated guidance
 
@@ -131,8 +130,13 @@ No P0 defect is known. Native acceptance now covers onboarding through relaunch,
 
 ### F-015 — Net Worth empty state has no usable action
 
-- **Status:** Still blocked (P2).
-- The empty state is honest, but the Add account action is disabled because account editing is not implemented.
+- **Status:** Implemented/component-tested.
+- Add account uses the shared account dialog; existing account rows expose metadata editing and adjustment-based reconciliation.
+
+### F-021 — Transaction and account deletion
+
+- **Status:** Not implemented (explicit backlog).
+- Manual transaction and account creation/editing do not include deletion. No deletion commands are exposed.
 
 ### F-016 — Startup corruption/permissions terminated before recovery
 
@@ -156,9 +160,9 @@ No P0 defect is known. Native acceptance now covers onboarding through relaunch,
 
 ## Prioritized repair sequence
 
-1. Add transaction creation/editing and account editing, then native seeded Activity/current-balance relaunch coverage (F-003/F-005).
-2. Implement scenario selection/editing and expose the remaining planning inputs (F-005/F-008).
-3. Replace the Net Worth dead-end with a usable account action (F-015).
+1. Extend native acceptance across manual ledger/account mutation, filters, balances, and process relaunch (F-003/F-005).
+2. Add transaction and account deletion (F-021) and CSV import workflows.
+3. Implement scenario selection/editing and expose the remaining planning inputs (F-005/F-008).
 4. Add the chart nonvisual alternative, strict offline test, and remaining native failure/calendar variants (F-013/F-014).
 5. Extend AppImage acceptance to mutation/relaunch and export/file-dialog behavior (F-019).
 

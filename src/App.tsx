@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowDownRight,
@@ -36,6 +36,7 @@ import {
   type StartupError,
   type Theme,
   type ActivityPosting,
+  type AccountKind,
   emptySettings,
 } from "./repository";
 
@@ -169,6 +170,10 @@ function Workspace({
   useEffect(()=>{if(typeof matchMedia!=="function")return;const media=matchMedia("(prefers-color-scheme: dark)");const change=()=>setOsDark(media.matches);media.addEventListener("change",change);return()=>media.removeEventListener("change",change)},[]);
   const dark=settings.theme==="dark"||(settings.theme==="system"&&osDark);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [dialog,setDialog]=useState<DialogState|null>(null);
+  const addButton=useRef<HTMLButtonElement>(null);
+  const openDialog=(state:DialogState,invoker?:HTMLElement|null)=>setDialog({...state,invoker:invoker??document.activeElement as HTMLElement});
+  const closeDialog=()=>setDialog(null);
   const snapshot = useMemo<FinancialSnapshot>(
     () => ({
       household: {
@@ -250,13 +255,13 @@ function Workspace({
             >
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <button className="add" disabled title="Creation forms are not yet available in this build">
-              <Plus size={17} /> Add (unavailable)
+            <button ref={addButton} className="add" onClick={()=>openDialog({type:"chooser"},addButton.current)}>
+              <Plus size={17} /> Add
             </button>
           </div>
         </header>
         {view === "Overview" && <Overview bootstrap={bootstrap} projections={projections} navigate={setView} />}
-        {view === "Activity" && <ActivityView activity={bootstrap.activity} accounts={bootstrap.accounts} />}
+        {view === "Activity" && <ActivityView activity={bootstrap.activity} accounts={bootstrap.accounts} onEdit={(entry)=>openDialog({type:entry[0].kind==="transfer"?"transfer":"transaction",entry})} />}
         {view === "Plan" && projections && (
           <PlanView
             projections={projections}
@@ -265,7 +270,7 @@ function Workspace({
           />
         )}
         {view === "Plan" && !projections && <div className="content"><section className="card"><h2>Complete your tax profile</h2><p>Projected plan values are hidden until a filing status and supported tax year are saved.</p><button onClick={()=>setView("Settings")}>Open Settings</button></section></div>}
-        {view === "Net Worth" && <NetWorth snapshot={snapshot} />}
+        {view === "Net Worth" && <NetWorth snapshot={snapshot} accounts={bootstrap.accounts} onAdd={(el)=>openDialog({type:"account"},el)} onEdit={(account,el)=>openDialog({type:"account",account},el)} onReconcile={(account,el)=>openDialog({type:"reconcile",account},el)} />}
         {view === "Settings" && (
           <SettingsView
             settings={settings}
@@ -277,8 +282,42 @@ function Workspace({
           />
         )}
       </main>
+      {dialog&&<EntryDialog key={`${dialog.type}-${dialog.kind??""}-${dialog.entry?.[0]?.entryId??dialog.account?.id??"new"}`} state={dialog} bootstrap={bootstrap} repository={repository} close={closeDialog} refresh={onRefresh} open={(state)=>setDialog({...state,invoker:dialog.invoker})}/>}
     </div>
   );
+}
+
+type DialogState={type:"chooser"|"transaction"|"transfer"|"account"|"reconcile";kind?:"income"|"expense";entry?:ActivityPosting[];account?:BootstrapAccount;invoker?:HTMLElement|null};
+
+const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`};
+function EntryDialog({state,bootstrap,repository,close,refresh,open}:{state:DialogState;bootstrap:Bootstrap;repository:Repository;close:()=>void;refresh:()=>void;open:(s:DialogState)=>void}){
+  const modal=useRef<HTMLElement>(null),errorRef=useRef<HTMLParagraphElement>(null);const [busy,setBusy]=useState(false),[error,setError]=useState("");
+  const entry=state.entry?.[0],isTransfer=state.type==="transfer",isAccount=state.type==="account",isReconcile=state.type==="reconcile";
+  const transferRows=state.entry??[];const debit=transferRows.find(x=>x.amountCents<0),credit=transferRows.find(x=>x.amountCents>0);
+  const [kind,setKind]=useState<"income"|"expense">(state.kind??(entry?.kind==="income"?"income":"expense"));
+  const [date,setDate]=useState(entry?.occurredOn??today()),[amount,setAmount]=useState(entry?String(Math.abs(entry.amountCents)/100):""),[accountId,setAccountId]=useState(entry?.accountId??bootstrap.accounts[0]?.id??""),[categoryId,setCategoryId]=useState(entry?.categoryId??""),[description,setDescription]=useState(entry?.description??""),[note,setNote]=useState(entry?.note??"");
+  const [from,setFrom]=useState(debit?.accountId??bootstrap.accounts[0]?.id??""),[to,setTo]=useState(credit?.accountId??bootstrap.accounts[1]?.id??"");
+  const [name,setName]=useState(state.account?.name??""),[accountKind,setAccountKind]=useState<AccountKind>(state.account?.kind??"checking"),[balance,setBalance]=useState(state.account?String(Math.abs(state.account.balanceCents)/100):"");
+  const categories=bootstrap.categories.filter(c=>c.kind===kind);
+  useEffect(()=>{if(!categories.some(c=>c.id===categoryId))setCategoryId(categories[0]?.id??"")},[kind,bootstrap.categories]);
+  useEffect(()=>{const node=modal.current;const initial=node?.querySelector<HTMLElement>("button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])");initial?.focus();return()=>state.invoker?.focus()},[]);
+  useEffect(()=>{if(error)queueMicrotask(()=>errorRef.current?.focus())},[error]);
+  function keyDown(e:KeyboardEvent){if(e.key==="Escape"&&!busy){e.preventDefault();close()}if(e.key==="Tab"&&modal.current){const f=[...modal.current.querySelectorAll<HTMLElement>("button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])")];if(!f.length)return;const first=f[0],last=f[f.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}}
+  async function submit(e:FormEvent){e.preventDefault();if(busy)return;setError("");const cents=parseMoney(amount);if((state.type==="transaction"||isTransfer)&&(cents===undefined||cents<=0)){setError("Enter a positive USD amount with no more than two decimal places.");return}if(!isAccount&&!isReconcile&&!date){setError("Choose a valid date.");return}if(isTransfer&&from===to){setError("Choose two different accounts for a transfer.");return}if(state.type==="transaction"&&!description.trim()){setError("Description is required.");return}setBusy(true);try{
+    if(state.type==="transaction"){const input={id:entry?.entryId??crypto.randomUUID(),occurredOn:date,accountId,categoryId,amountCents:cents!,description:description.trim(),note:note.trim()||null};if(entry)await repository.updateTransaction?.({...input,expectedRevision:entry.revision});else await repository.createTransaction?.(input)}
+    else if(state.type==="transfer"){const input={id:entry?.entryId??crypto.randomUUID(),occurredOn:date,fromAccountId:from,toAccountId:to,amountCents:cents!};if(entry)await repository.updateTransfer?.({...input,expectedRevision:entry.revision});else await repository.createTransfer?.(input)}
+    else if(state.type==="account"){if(!name.trim())throw {message:"Account name is required."};if(state.account)await repository.updateAccount?.({id:state.account.id,name:name.trim(),kind:accountKind,expectedRevision:state.account.revision});else{const opening=parseMoney(balance);if(opening===undefined)throw {message:"Enter an exact USD opening balance."};await repository.createAccount?.({id:crypto.randomUUID(),name:name.trim(),kind:accountKind,openingBalanceCents:accountKind==="credit"?Math.abs(opening):opening})}}
+    else if(state.type==="reconcile"){const target=parseMoney(balance);if(target===undefined)throw {message:"Enter an exact USD current balance."};await repository.reconcileAccount?.({id:state.account!.id,occurredOn:date,targetBalanceCents:state.account!.kind==="credit"?-Math.abs(target):target,expectedBalanceCents:state.account!.balanceCents})}
+    await Promise.resolve(refresh());close();
+  }catch(x){setError(errorMessage(x,"Could not save your changes."))}finally{setBusy(false)}}
+  if(state.type==="chooser")return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)close()}}><section ref={modal} className="card modal" role="dialog" aria-modal="true" aria-labelledby="add-title" onKeyDown={keyDown}><h2 id="add-title">What would you like to add?</h2><div className="add-choices"><button onClick={()=>open({type:"transaction",kind:"income"})}>Income</button><button onClick={()=>open({type:"transaction",kind:"expense"})}>Expense</button><button onClick={()=>open({type:"transfer"})}>Transfer</button><button onClick={()=>open({type:"account"})}>Account</button></div><div className="actions"><button onClick={close}>Cancel</button></div></section></div>;
+  const title=isTransfer?(entry?"Edit transfer":"Add transfer"):isAccount?(state.account?"Edit account":"Add account"):isReconcile?`Reconcile ${state.account?.name}`:(entry?"Edit transaction":`Add ${kind}`);
+  return <div className="modal-backdrop"><section ref={modal} className="card modal entry-modal" role="dialog" aria-modal="true" aria-labelledby="entry-title" onKeyDown={keyDown}><h2 id="entry-title">{title}</h2>{error&&<p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}<form onSubmit={submit}>
+    {(state.type==="transaction")&&<><label>Type<select value={kind} onChange={e=>setKind(e.target.value as "income"|"expense")}><option value="income">Income</option><option value="expense">Expense</option></select></label><label>Date<input type="date" required value={date} onChange={e=>setDate(e.target.value)}/></label><label>Amount (USD)<input inputMode="decimal" required value={amount} onChange={e=>setAmount(e.target.value)}/></label><label>Account<select value={accountId} onChange={e=>setAccountId(e.target.value)}>{bootstrap.accounts.map(a=><option value={a.id} key={a.id}>{a.name}</option>)}</select></label><label>Category<select value={categoryId} required onChange={e=>setCategoryId(e.target.value)}>{categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label><label>Description<input required value={description} onChange={e=>setDescription(e.target.value)}/></label><label>Note <span className="optional">optional</span><textarea value={note??""} onChange={e=>setNote(e.target.value)}/></label></>}
+    {isTransfer&&<><label>Date<input type="date" required value={date} onChange={e=>setDate(e.target.value)}/></label><label>Amount (USD)<input inputMode="decimal" required value={amount} onChange={e=>setAmount(e.target.value)}/></label><label>From account<select value={from} onChange={e=>setFrom(e.target.value)}>{bootstrap.accounts.map(a=><option value={a.id} key={a.id}>{a.name}</option>)}</select></label><label>To account<select value={to} onChange={e=>setTo(e.target.value)}>{bootstrap.accounts.map(a=><option value={a.id} key={a.id}>{a.name}</option>)}</select></label></>}
+    {isAccount&&<><label>Account name<input required value={name} onChange={e=>setName(e.target.value)}/></label><label>Account type<select value={accountKind} onChange={e=>setAccountKind(e.target.value as AccountKind)}>{accountKinds.map(k=><option value={k.value} key={k.value}>{k.label}</option>)}</select></label>{!state.account&&<label>{accountKind==="credit"?"Amount owed (USD)":"Opening balance (USD)"}<input inputMode="decimal" required value={balance} onChange={e=>setBalance(e.target.value)}/></label>}</>}
+    {isReconcile&&<><p className="muted">Current recorded balance: {money(state.account!.kind==="credit"?-state.account!.balanceCents:state.account!.balanceCents)}</p><label>Date<input type="date" required value={date} onChange={e=>setDate(e.target.value)}/></label><label>{state.account!.kind==="credit"?"Target amount owed (USD)":"Target current balance (USD)"}<input inputMode="decimal" required value={balance} onChange={e=>setBalance(e.target.value)}/></label></>}
+    <div className="actions"><button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy?"Saving…":"Save"}</button></div></form></section></div>
 }
 
 function Onboarding({
@@ -805,10 +844,11 @@ function Transaction({
   );
 }
 
-function ActivityView({activity,accounts}:{activity:ActivityPosting[];accounts:BootstrapAccount[]}) {
+function ActivityView({activity,accounts,onEdit}:{activity:ActivityPosting[];accounts:BootstrapAccount[];onEdit:(entry:ActivityPosting[])=>void}) {
   const [query,setQuery]=useState(""); const [account,setAccount]=useState("all"); const [year,setYear]=useState(String(new Date().getFullYear()));
-  const rows=activity.filter(x=>(account==="all"||x.accountId===account)&&(year==="all"||x.occurredOn.startsWith(year))&&`${x.description} ${x.accountName} ${x.categoryName??""}`.toLowerCase().includes(query.toLowerCase()));
-  const total=rows.filter(x=>x.kind!=="transfer").reduce((sum,x)=>sum+x.amountCents,0);
+  const grouped=[...activity.reduce((map,row)=>map.set(row.entryId,[...(map.get(row.entryId)??[]),row]),new Map<string,ActivityPosting[]>()).values()];
+  const rows=grouped.filter(group=>(account==="all"||group.some(x=>x.accountId===account))&&(year==="all"||group[0].occurredOn.startsWith(year))&&group.some(x=>`${x.description} ${x.accountName} ${x.categoryName??""}`.toLowerCase().includes(query.toLowerCase())));
+  const total=rows.filter(x=>x[0].kind!=="transfer").reduce((sum,x)=>sum+x[0].amountCents,0);
   const years=[...new Set(activity.map(x=>x.occurredOn.slice(0,4)))].sort().reverse();
   return (
     <div className="content">
@@ -832,15 +872,7 @@ function ActivityView({activity,accounts}:{activity:ActivityPosting[];accounts:B
           </div>
           <strong className={total<0?"negative":"positive"}>{money(total)}</strong>
         </div>
-        {rows.map((row) => (
-          <Transaction
-            key={`${row.entryId}-${row.postingId}`}
-            icon={row.kind==="income"?ArrowDownRight:row.kind==="transfer"?WalletCards:ArrowUpRight}
-            name={row.description||row.kind}
-            detail={`${row.accountName} · ${row.categoryName??"Transfer"} · ${row.occurredOn}`}
-            amount={money(row.amountCents)} positive={row.amountCents>0}
-          />
-        ))}
+        {rows.map((group) => {const row=group[0],transfer=row.kind==="transfer",from=group.find(x=>x.amountCents<0),to=group.find(x=>x.amountCents>0);return <button className="transaction transaction-action" key={row.entryId} onClick={()=>onEdit(group)} aria-label={`Edit ${row.description||row.kind}`}><span className="transaction-icon">{row.kind==="income"?<ArrowDownRight size={17}/>:transfer?<WalletCards size={17}/>:<ArrowUpRight size={17}/>}</span><div><strong>{row.description||row.kind}</strong><small>{transfer?`${from?.accountName} to ${to?.accountName}`:`${row.accountName} · ${row.categoryName}`} · {row.occurredOn}</small></div><b className={row.amountCents>0&&!transfer?"positive":""}>{transfer?money(Math.abs(from?.amountCents??0)):money(row.amountCents)}</b></button>})}
         {!rows.length&&<p className="empty">{activity.length?"No activity matches these filters.":"No transactions have been recorded."}</p>}
       </section>
     </div>
@@ -928,7 +960,7 @@ function PlanView({
     </div>
   );
 }
-function NetWorth({ snapshot }: { snapshot: FinancialSnapshot }) {
+function NetWorth({ snapshot,accounts,onAdd,onEdit,onReconcile }: { snapshot: FinancialSnapshot;accounts:BootstrapAccount[];onAdd:(el:HTMLElement)=>void;onEdit:(a:BootstrapAccount,el:HTMLElement)=>void;onReconcile:(a:BootstrapAccount,el:HTMLElement)=>void }) {
   const assets =
       snapshot.accounts.reduce((s, a) => s + Math.max(0,a.balanceCents), 0) +
       snapshot.assets.reduce((s, a) => s + a.valueCents, 0),
@@ -964,8 +996,8 @@ function NetWorth({ snapshot }: { snapshot: FinancialSnapshot }) {
             <span className="label actual">Current balance</span>
             <h3>Accounts & assets</h3>
           </div>
-          <button disabled title="Account editing is not yet available">
-            <Plus size={14} /> Add account (unavailable)
+          <button onClick={e=>onAdd(e.currentTarget)}>
+            <Plus size={14} /> Add account
           </button>
         </div>
         {snapshot.accounts.filter(a=>a.balanceCents>=0).map((a) => (
@@ -978,6 +1010,7 @@ function NetWorth({ snapshot }: { snapshot: FinancialSnapshot }) {
               <small>{a.kind}</small>
             </div>
             <b>{money(a.balanceCents)}</b>
+            <button onClick={e=>onEdit(accounts.find(x=>x.id===a.id)!,e.currentTarget)}>Edit</button><button onClick={e=>onReconcile(accounts.find(x=>x.id===a.id)!,e.currentTarget)}>Reconcile</button>
           </div>
         ))}
         {snapshot.assets.map((a) => (
@@ -994,7 +1027,7 @@ function NetWorth({ snapshot }: { snapshot: FinancialSnapshot }) {
         ))}
         {!snapshot.accounts.length&&!snapshot.assets.length&&<p className="empty">No accounts or assets yet.</p>}
       </section>
-      {(debt>0)&&<section className="card wide"><div className="card-title"><div><span className="label actual">Current balance</span><h3>Credit & liabilities</h3></div></div>{snapshot.accounts.filter(a=>a.balanceCents<0).map(a=><div className="account" key={a.id}><span className="transaction-icon"><WalletCards size={17}/></span><div><strong>{a.name}</strong><small>Credit balance</small></div><b>{money(-a.balanceCents)}</b></div>)}{snapshot.liabilities.map(l=><div className="account" key={l.id}><span className="transaction-icon"><Building2 size={17}/></span><div><strong>{l.name}</strong><small>Liability</small></div><b>{money(l.balanceCents)}</b></div>)}</section>}
+      {(debt>0)&&<section className="card wide"><div className="card-title"><div><span className="label actual">Current balance</span><h3>Credit & liabilities</h3></div></div>{snapshot.accounts.filter(a=>a.balanceCents<0).map(a=><div className="account" key={a.id}><span className="transaction-icon"><WalletCards size={17}/></span><div><strong>{a.name}</strong><small>Credit balance</small></div><b>{money(-a.balanceCents)}</b><button onClick={e=>onEdit(accounts.find(x=>x.id===a.id)!,e.currentTarget)}>Edit</button><button onClick={e=>onReconcile(accounts.find(x=>x.id===a.id)!,e.currentTarget)}>Reconcile</button></div>)}{snapshot.liabilities.map(l=><div className="account" key={l.id}><span className="transaction-icon"><Building2 size={17}/></span><div><strong>{l.name}</strong><small>Liability</small></div><b>{money(l.balanceCents)}</b></div>)}</section>}
     </div>
   );
 }

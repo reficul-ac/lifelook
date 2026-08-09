@@ -20,4 +20,28 @@ if [[ ! -x "$LIFELOOK_E2E_BINARY" ]]; then
 fi
 
 cd "$repo_root"
-xvfb-run -a --server-args="-screen 0 1280x820x24" npm exec wdio run ./wdio.conf.js
+
+run_scenario() {
+  LIFELOOK_E2E_SCENARIO="$1" xvfb-run -a --server-args="-screen 0 1280x820x24" npm exec wdio run ./wdio.conf.js
+}
+
+# The acceptance session deliberately relaunches against one isolated profile.
+run_scenario acceptance
+
+app_data="$XDG_DATA_HOME/com.lifelook.desktop"
+profile="$app_data/lifelook.db"
+
+rm -rf -- "$XDG_DATA_HOME"
+mkdir -p "$app_data"
+printf 'LifeLook corrupt profile fixture\000\377' > "$profile"
+export LIFELOOK_E2E_PROFILE="$profile"
+export LIFELOOK_E2E_CORRUPT_SHA256="$(sha256sum "$profile" | cut -d ' ' -f 1)"
+run_scenario corrupt-profile
+test "$(sha256sum "$profile" | cut -d ' ' -f 1)" = "$LIFELOOK_E2E_CORRUPT_SHA256"
+
+rm -rf -- "$XDG_DATA_HOME"
+mkdir -p "$app_data"
+chmod 0555 "$app_data"
+export LIFELOOK_E2E_PROFILE="$profile"
+run_scenario unwritable-profile
+test -f "$profile"

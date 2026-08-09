@@ -1,327 +1,166 @@
 # LifeLook Fixes and Usability Backlog
 
-This file tracks concrete problems found while using the application. It complements `PLAN.md`: the plan describes the intended product, while this list records observed gaps that need implementation and verification.
+This is a current-branch backlog, not a snapshot of the original audit. `PLAN.md` describes product intent; this file records shipped, accepted, and still-blocked behavior.
 
-## Audit record
+## Verification record
 
-- Audited commit: `3e3aa6469d47a2e7bf7a02750a25b2294a9d8e71` (`Complete onboarding and local persistence`)
-- Audit date: 2026-08-08 America/Los_Angeles
-- Local environment: Ubuntu 24.04, Linux 6.17 x86_64, Node 22.22.2, npm 11.15.0, rustc/cargo 1.97.1
-- CI environment: Ubuntu 22.04, Node 20, Rust stable; Actions run [31287128922](https://github.com/reficul-ac/lifelook/actions/runs/31287128922)
-- Artifacts: [`audit-artifacts/3e3aa6469d47a2e7bf7a02750a25b2294a9d8e71/`](audit-artifacts/3e3aa6469d47a2e7bf7a02750a25b2294a9d8e71/)
-- Tested artifact: native release binary with isolated `XDG_DATA_HOME` and Xvfb. The AppImage could not be produced; all AppImage-only launch, integration, file-dialog, persistence, and export behavior is **Blocked**.
-- Initial worktree: no tracked changes; pre-existing untracked `CLAUDE.md`. The audit changed only this file and `audit-artifacts/`.
-- Limitations: one debug run was contaminated by Snap `core20` libraries and failed before React. Independent release-binary screenshots supersede that blanket native blocker for the ordinary onboarding/workspace path. Calendar use, assistive-technology exposure, all requested viewport sizes, offline isolation, many failure paths, and mutation/relaunch checks without a reachable UI remain explicitly blocked below.
+- Reconciled branch: current worktree based on `d81bbf1855dfcc694f8970898f40db4d780b8314`.
+- Reconciliation date: 2026-08-09 America/Los_Angeles.
+- Current automated baseline: 19 frontend tests, 9 Rust tests, and 3 native WebDriver scenarios.
+- Native evidence: `artifacts/native-e2e/`, generated from the release binary with isolated profiles.
+- Terms used below:
+  - **Implemented/component-tested** means code or an injected-repository test passed; it is not persistence evidence.
+  - **Native accepted** means the release process and real SQLite profile were exercised.
+  - **Still blocked** means the UI or required end-to-end evidence does not exist yet.
 
-No P0 defect was found. “Passed” is limited to the behavior named; component tests with mock repositories do not prove SQLite persistence or relaunch behavior.
+No P0 defect is known. Native acceptance now covers onboarding through relaunch, member edits, appearance preferences, supported viewport sizes, and startup recovery. AppImage-specific file dialogs, strict offline isolation, restore, and unavailable editing flows remain blocked.
 
 ## Coverage matrix
 
-| Screen or flow | Pointer | Keyboard | Persistence/relaunch | Error paths | Light/dark | 920×650 | Adversarial review |
-|---|---|---|---|---|---|---|---|
-| Fresh onboarding | Passed ordinary release path | Native radio semantics component-tested | Ordinary account appeared in workspace; interruption/relaunch Blocked | Validation component-tested; native DB failures Blocked | N/A | Blocked | Confirmed/Narrowed |
-| Account onboarding | Passed ordinary checking path; other kinds component/source | Native labelled radio group component-tested | Account visible after completion; process relaunch Blocked | Boundary/sign Defects | N/A | Blocked | Confirmed |
-| Shell/navigation | Passed all five destinations | Native buttons supported; detailed focus Blocked | View not expected to persist | N/A | Immediate toggle Passed; persistence Defect | Blocked | Confirmed |
-| Overview | Pointer rendered | Chart alternative Defect | Uses persisted opening balance only | Misleading-output Defect | Rendered both; contrast Defect | Blocked | Confirmed |
-| Activity | Navigation/input entry Passed | Search focus Passed (native) | Defect: ignores database | Empty/filters Defect | Dark semantic contrast Passed | Passed at 920×650 | Confirmed |
-| Plan | Year expand/collapse Passed | Disclosure state/relationships Passed native | Defect: ignores persisted scenarios/domain | Edge warnings absent/outstanding v1 | Rendered | Passed at 920×650 | Confirmed |
-| Net Worth | Navigation Passed | Native button semantics supported | Defect: opening balances only | Empty state Defect | Rendered | Blocked | Confirmed |
-| Settings members | Save/retry component-tested | Focused alert and busy controls component-tested; calendar native Blocked | Successful refresh component-tested; real relaunch Blocked | Rejection/retry/retained drafts Passed component | Rendered | Blocked | Narrowed |
-| Appearance | Immediate theme toggles Passed | Switch names/states Passed (native) | Theme/motion persistence Defect | N/A | Light/dark Passed | Passed at 920×650 | Confirmed |
-| Backup/restore | Defect: buttons are no-ops | Defect | Blocked | Blocked | N/A | Blocked | Confirmed |
-| Corrupt/unwritable startup | Recovery/retry component-tested; native launch pending | Recovery announcements component-tested | Byte preservation and permission repair Passed in Rust; native relaunch Blocked | Structured failure/repeated retry Passed in component/Rust | N/A | N/A | Remediated; native acceptance pending |
-| AppImage/CI | Hosted visible launch Passed | Native keyboard suite Passed | Packaged persistence/export still Blocked | Packaging gates Passed | Light/dark evidence Passed | Passed at 920×650 | Passed |
-
-## Complete interaction and claim inventory
-
-Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-features/native/`; `ONB` is `onboarding-persistence/report.md`; `EDGE` is `edge-usability/report.md`; `APR` and `ADV` are the two adversarial reports; `CI` is `ci-packaging/SUMMARY.md` and its adjacent logs.
-
-| ID | Screen/flow and item | Disposition | Evidence or blocker |
+| Screen or flow | Current implementation | Native acceptance | Still blocked |
 |---|---|---|---|
-| I-001 | Fresh launch/household step | Passed (release and AppImage paths) | `WF-01`; hosted CI run 31290319956 |
-| I-002 | Household name input and required validation | Passed component/implementation; native validation Blocked | `ONB` ONB-02 |
-| I-003 | Person name and required validation | Passed component/implementation; native validation Blocked | `ONB` ONB-03 |
-| I-004 | Typed optional birth date and invalid-date alert | Passed component | `ONB` ONB-04 |
-| I-005 | Calendar birth-date control | Blocked | No successful native activation; `ONB` ONB-05 |
-| I-006 | Add person | Passed component; native persistence Blocked | `ONB` ONB-06 |
-| I-007 | Remove person | Blocked | Source-wired, not exercised; `ONB` ONB-07 |
-| I-008 | Disabled California display | Passed as display only | `WF-01`; `ONB` ONB-08 |
-| I-009 | Filing-status/residency selection | Defect | F-008; `ADV` confirms |
-| I-010 | Save & Continue | Passed ordinary path | `WF-01`→`WF-02`; component contract |
-| I-011 | Checking account radio | Passed ordinary pointer path; native group semantics component-tested | `WF-02`; F-014 remediation test |
-| I-012 | Savings account radio | Passed component; native Blocked | `ONB` ONB-12 |
-| I-013 | Credit-card radio | Passed component; sign semantics Defect | `ONB` ONB-13; F-006 |
-| I-014 | Investment account radio | Implementation-supported; native Blocked | `ONB` ONB-14 |
-| I-015 | Retirement account radio | Passed restored component; native Blocked | `ONB` ONB-15 |
-| I-016 | Account name/opening balance | Passed ordinary value; Defect at sign/boundaries | `WF-02`–`WF-04`; F-006/F-007 |
-| I-017 | Add account during onboarding | Passed component; native multi-account Blocked | `ONB` ONB-19 |
-| I-018 | Remove account during onboarding | Blocked | `ONB` ONB-20 |
-| I-019 | Back from accounts | Passed synthetic component; native Blocked | `ONB` ONB-21 |
-| I-020 | Finish setup | Passed ordinary release path | `WF-03`–`WF-04` |
-| I-021 | Rapid/duplicate finish | Blocked, not a confirmed defect | Button disables while saving; `ADV` |
-| I-022 | Onboarding save error alert | Implementation-supported; native Blocked | `ONB` ONB-23 |
-| I-023 | Interrupted onboarding and relaunch | Blocked | No real visible mutation/relaunch evidence |
-| I-024 | Overview navigation | Passed | `WF-04`; `APR` PC-001 |
-| I-025 | Activity navigation | Passed; badge content Defect | `WF-05`; F-003 |
-| I-026 | Plan navigation | Passed | `WF-06` |
-| I-027 | Net Worth navigation | Passed | `WF-07` |
-| I-028 | Settings navigation | Passed | `WF-08` |
-| I-029 | Profile/ellipsis menu | Honestly unavailable | Disabled-state regression; F-002 remediation |
-| I-030 | Global Search | Honestly unavailable | Disabled-state regression; F-002 remediation |
-| I-031 | Header/Settings dark-theme toggles | Passed immediate; Defect after relaunch | Component test; F-010 |
-| I-032 | Global Add menu | Honestly unavailable | Disabled-state regression; F-002 remediation |
-| I-033 | Overview net-worth ending amount | Passed only for fresh opening balance | `WF-04`; becomes false after postings, F-005 |
-| I-034 | Overview date, yearly gain, trend, deltas, assumptions and 92% guidance | Defect | Hard-coded/current-looking; F-004 |
-| I-035 | Overview View all | Passed component | Navigates to Activity |
-| I-036 | Overview Open plan | Passed component | Navigates to Plan |
-| I-037 | Activity search input | Defect | Accepts text but never filters; F-003 |
-| I-038 | Activity account filter | Defect | Enabled no-op; F-003 |
-| I-039 | Activity year filter | Defect | Enabled no-op; F-003 |
-| I-040 | Activity badge, total and four “Actual” rows | Defect | Fresh DB still shows literals; `WF-05`; F-003 |
-| I-041 | Compare scenarios | Honestly unavailable | Disabled; persisted scenarios remain F-005 |
-| I-042 | Ten Plan annual row expanders | Passed disclosure only | `WF-06`; `APR` PC-016 |
-| I-043 | Plan annual/monthly values | Defect as household truth | Hard-coded/incomplete snapshot; F-005 |
-| I-044 | Net Worth totals/accounts | Passed fresh opening-only display; Defect as current balance | `WF-07`; F-005/F-006 |
-| I-045 | Net Worth Add account and zero-account state | Add honestly unavailable; empty guidance remains incomplete | Disabled-state regression; F-015 |
-| I-046 | Settings member text/date editing | Passed immediate/component; relaunch Blocked | `APR` PC-018/019 |
-| I-047 | Settings member calendar/add/remove/save | Save rejection/retry Passed component; native/relaunch Blocked | Focused alert, retained draft, duplicate-write and retry regression; F-013 |
-| I-048 | Reduced-motion switch | Defect | No handler or state; F-011 |
-| I-049 | Back up data | Defect | Enabled no-op despite backend command; F-009 |
-| I-050 | Choose backup/restore | Defect | Enabled no-op; no replacement command; F-009 |
-| I-051 | Loading/error/validation announcements | Passed implementation only | Roles at `src/App.tsx:80-91,490-493` |
-| I-052 | Switch accessible names | Passed | Native WebDriver role/name/state assertions; `artifacts/native-e2e/02-dark-settings-920x650.png` |
-| I-053 | Activity-search focus indicator | Passed | Native keyboard focus assertion; `artifacts/native-e2e/03-dark-activity-search-focus-920x650.png` |
-| I-054 | Radio arrow keys/roving tab stop | Passed implementation/native | Native labelled radio groups retain browser keyboard behavior; F-014 |
-| I-055 | Current nav and Plan disclosure state | Passed native | `aria-current`, `aria-expanded`, `aria-controls`, labelled region assertions; F-014 |
-| I-056 | Chart nonvisual alternative | Defect | F-014 |
-| I-057 | Dark semantic text contrast | Passed | Native computed-style contrast assertions ≥4.5:1 |
-| I-058 | OS reduced-motion media query | Implementation-supported; native Blocked | `EDGE` |
-| I-059 | 920×650, 1024×768, 1280×820, large desktop | Partial | Native onboarding/Settings/Activity passed at 920×650; remaining viewport wave Blocked |
-| I-060 | Long names, extreme/negative currency, expanded table clipping | Blocked except monetary Defect | `EDGE`; F-007 |
-| I-061 | Corrupt profile startup | Remediated in Rust/component; native acceptance Blocked | Original bytes unchanged; recovery/retry UI; F-016 |
-| I-062 | Unwritable profile startup | Remediated in Rust/component; native acceptance Blocked | No replacement; repaired permissions reopen idempotently; F-016 |
-| I-063 | Offline launch | Blocked | No strict network namespace test |
-| I-064 | AppImage build/launch/upload | Passed | Hosted CI run 31290319956; `artifacts/appimage-smoke/visible-window.png` |
-| I-065 | Frontend tests/web build and Rust tests | Passed locally (19 frontend, 9 Rust); prior CI baseline passed | Current fix-batch verification plus CI logs |
-| I-066 | Rust format and strict Clippy | Passed | Exact all-target/all-feature commands pass locally and gate CI before packaging |
-| I-067 | Production npm audit | Passed (0); full audit policy Defect; Rust status Blocked | F-018 |
-| I-068 | Packaged render/persistence/accessibility/export CI | Defect/Blocked | F-019 |
-| I-069 | CSV/import/scenarios/tax fixtures and other unchecked PLAN phases with no enabled UI | Intentional unavailable/outstanding v1 | `PLAN.md` checklist; not silently counted as defects |
-| I-070 | README imperative quick-start/feature claims for unavailable flows | Defect (documentation truth) | F-020 |
+| Onboarding | Household, members, filing status, typed accounts, exact money parsing, and credit signs are implemented/component-tested | Account and household data survive process relaunch | Native add/remove/back/error interruption variants |
+| Shell/navigation | All five destinations and honest disabled controls are implemented | Navigation, current state, focus, and 920×650 minimum accepted | Profile/search/add implementations |
+| Overview | Current balances/activity totals are derived; projections require a saved tax profile | Opening/current account presentation exercised | Transaction-entry-driven reconciliation and broader planning inputs |
+| Activity | Persisted postings, empty state, search, account/year filters, and transfer-neutral total are implemented | Search focus and empty persisted ledger exercised | Transaction creation/editing UI and seeded native filter fixture |
+| Plan | Saved tax/current domain snapshot feeds deterministic projection; disclosure semantics implemented | Expanded rows accepted at 920×650, 1024×768, and 1280×820 with long names | Scenario selection/editing and full domain-entry UI |
+| Net Worth | Current account balances, assets, liabilities, and credit signs are derived | Current onboarded account survives relaunch | Usable zero-state action and account/asset/liability editing |
+| Settings members | Save busy/error/retry behavior is component-tested | Edited long member name survives relaunch | Native write-failure injection and calendar coverage |
+| Appearance | System/light/dark and reduced motion persist | Dark and reduced motion survive process relaunch | Native OS preference-change simulation |
+| Backup/restore | Backup/inspection Rust primitives exist | None | File selection, restore replacement, cancellation, and round trip |
+| Startup recovery | Structured corrupt/unwritable recovery and Retry are component/Rust-tested | Corrupt bytes retain the same SHA-256; repaired permissions reopen the same profile | Packaged/AppImage recovery variant |
+| Supply chain/CI | Production npm, policy-aware full npm, and pinned Rust audits gate CI | Not applicable | Temporary WebDriver-only exception tracked in `SECURITY.md` |
+| AppImage | Build, content validation, visible-window smoke, and artifact upload gate CI | Prior hosted visible launch | Packaged mutation/relaunch and export/file-dialog validation |
 
-## Deduplicated defects
+## Interaction inventory
 
-### F-002 — Enabled navigation and creation controls silently do nothing
+| ID | Interaction or claim | Status | Evidence or remaining work |
+|---|---|---|---|
+| I-001 | Fresh launch and household setup | Native accepted | `acceptance.e2e.js` |
+| I-002 | Household/member validation and birth-date parsing | Implemented/component-tested | `App.test.tsx` |
+| I-003 | Add/remove members during onboarding | Implemented/component-tested | Native variants still blocked |
+| I-004 | Filing status and California profile | Implemented/component-tested | Saved in onboarding payload and bootstrap |
+| I-005 | Account-kind radios and typed balances | Native accepted for checking; component-tested across kinds | Multi-account native variant blocked |
+| I-006 | Exact USD parsing and supported maximum | Implemented/component/Rust-tested | Decimal strings use integer/BigInt cents; backend limit enforced |
+| I-007 | Credit-card amount owed reduces net worth | Implemented/component/Rust-tested | Positive input normalizes to signed debt; migration repairs old positive credit balances |
+| I-008 | Interrupted onboarding/relaunch | Partially native accepted | Completed onboarding survives relaunch; mid-step interruption remains blocked |
+| I-009 | Overview current net worth/cash flow/tax labels | Implemented/component-tested | Derived from bootstrap; tax output withheld without profile |
+| I-010 | Activity persisted rows, search, account/year filters | Implemented/component-tested | Native creation is blocked because entry UI is absent |
+| I-011 | Plan expanders and monthly regions | Native accepted | Three supported viewports, including expanded rows |
+| I-012 | Scenario comparison | Honestly unavailable | Selection/editing remains open |
+| I-013 | Net Worth current balances and credit/liability sections | Implemented/component-tested | Account editing remains open |
+| I-014 | Net Worth zero-account action | Still blocked | Empty copy exists, but Add account is intentionally disabled |
+| I-015 | Settings member save, rejection, retained draft, retry | Implemented/component-tested | Successful member edit survives native relaunch |
+| I-016 | Theme and reduced motion | Native accepted | Both persisted through process relaunch |
+| I-017 | Search/add/profile controls | Honestly unavailable | Disabled-state regression coverage |
+| I-018 | Backup and restore | Still blocked | Backend backup inspection does not provide a usable UI or restore replacement |
+| I-019 | Keyboard focus, switch/radio/nav/disclosure semantics | Native accepted | Chart alternative remains tracked below |
+| I-020 | Long names and responsive layouts | Native accepted | 920×650, 1024×768, and 1280×820 screenshots |
+| I-021 | Corrupt-profile startup | Native accepted | Recovery UI displayed; SHA-256 unchanged |
+| I-022 | Unwritable-profile startup and Retry | Native accepted | No database before repair; same path opens after chmod and Retry |
+| I-023 | Offline launch | Still blocked | No strict network-namespace test |
+| I-024 | npm/Rust advisory gates | Implemented | CI plus `SECURITY.md`; full npm report remains visible |
+| I-025 | AppImage render/build/upload | Implemented in CI | Packaged persistence/export remains open |
+| I-026 | README current-vs-future accuracy | Reconciled | Current quick start and unavailable features are explicitly separated |
 
-- **Status:** Remediated (honest-disabled/component-tested) · **Severity:** P1 · **Area/type:** Shell/Overview/Net Worth, dead primary interactions
-- **Intended behavior:** PLAN's progressive-disclosure/Add-menu principle and the visible labels themselves promise navigation or creation.
-- **Reproduction:** Complete setup; activate profile, global Search, global Add, Overview View all/Open plan, or Net Worth Add account. Expected the named menu/view/flow. Actual: no visible or persisted change.
-- **Evidence/relaunch:** `WF-04`, `WF-07`; `src/App.tsx:181-212,691-707,955-957`. Relaunch not applicable because no mutation occurs.
-- **Impact/frequency:** Common primary actions strand every user; the Overview empty state explicitly points to dead Add.
-- **Root cause:** Enabled buttons have no handlers.
-- **Fix/order/dependencies:** After truthful financial output. Implement reachable flows/navigation or render controls disabled with honest unavailable copy until their flows exist.
-- **Regression/acceptance:** Pointer and keyboard activation opens the correct surface; cancellation is safe; successful mutations update immediately and survive relaunch.
-- **Tester/reviewer:** Workspace agent; product-truth and reproduction reviewers — unavailable controls now have disabled-state regression coverage; native recheck pending.
+## Deduplicated findings
 
-### F-003 — Activity is a realistic static mock, not a persisted ledger
+### F-002 — Unimplemented global and creation controls
 
-- **Status:** Confirmed · **Severity:** P1 · **Area/type:** Activity, misleading output/dead controls
-- **Intended behavior:** README says Activity stores and filters actual transactions; “Actual” must be persisted user data.
-- **Reproduction:** Finish a fresh profile with no transactions; open Activity, type a nonexistent term, and activate both filters. Expected an honest empty ledger and working query/filter behavior. Actual: badge `12`, four merchant/payroll/mortgage rows, August 2025 total `−$4,916.80`; search merely accepts text and filters do nothing.
-- **Evidence/relaunch:** `WF-05`; literal UI at `src/App.tsx:176,787-834`; no transaction read method in `src/repository.ts`. Same literals appear for every launch.
-- **Impact/frequency:** Every user sees fictional financial history labeled as their actual activity.
-- **Root cause:** Literal array/total/badge and uncontrolled search; repository exposes no ledger query.
-- **Fix/order/dependencies:** Immediately after packaging. Read normalized entries/postings, derive totals/badge, wire query/account/date filters, and show an honest empty state.
-- **Regression/acceptance:** Fresh DB shows zero rows/badge; created income/expense/transfer rows filter correctly; transfers do not affect income/spend; state remains correct after relaunch.
-- **Tester/reviewer:** Workspace agent; both adversarial reviewers — **Confirmed**.
+- **Status:** Narrowed; honestly disabled and component-tested.
+- Profile, Search, Add, Add account, and backup/restore selection no longer masquerade as working actions.
+- Implementing the underlying flows remains product work; see F-009 and F-015.
 
-### F-004 — Overview fabricates personalized financial guidance
+### F-003 — Activity used static mock data
 
-- **Status:** Confirmed · **Severity:** P1 · **Area/type:** Overview, misleading financial output
-- **Intended behavior:** README/PLAN require actuals, assumptions, and projections to be distinct and explainable.
-- **Reproduction:** Finish with one $1,234.56 checking account and no income/activity; open Overview. Expected only derivable values/empty guidance. Actual includes stale `Projected · Dec 2025`, `$29,482 this year`, static rising chart, fixed 3.2%/1.8%/24.6%, retirement 2048, return 6.5%, and “on track…92%”.
-- **Evidence/relaunch:** `WF-04`; literals/static SVG at `src/App.tsx:621-725`. Deterministic across profiles/relaunch.
-- **Impact/frequency:** Every user can mistake invented numbers for individualized financial advice.
-- **Root cause:** Presentation mock values are mixed with one computed ending balance without sample labeling or data prerequisites.
-- **Fix/order/dependencies:** With F-003, before dead-control polish. Derive every claim from persisted, dated inputs; otherwise suppress it and show missing-input guidance.
-- **Regression/acceptance:** Zero-data fixture contains no gain/percent/on-track claim; seeded fixtures reconcile each label/chart point to repository/domain output and current date.
-- **Tester/reviewer:** Workspace agent; product-truth and reproduction reviewers — **Confirmed**.
+- **Status:** Implemented/component-tested; native seeded-entry acceptance still blocked.
+- Activity now reads bootstrap postings, derives the badge and total, filters by text/account/year, treats transfers as balance-neutral, and shows an honest empty state.
+- Native entry creation cannot be accepted until transaction UI exists.
 
-### F-005 — Plan and current balances ignore persisted domain state
+### F-004 — Overview presented fabricated guidance
 
-- **Status:** Confirmed · **Severity:** P1 · **Area/type:** Projection/Net Worth, misleading/incomplete calculation
-- **Intended behavior:** PLAN requires scenarios, tax profile, transactions, assets/liabilities, recurring data, and current balances to drive projections and balance sheet.
-- **Reproduction:** Inspect Plan/Net Worth after a persisted mutation or compare source inputs. Expected the household's current normalized state. Actual snapshot hardcodes single/CA/2025 and a module baseline, forces recurring/assets/liabilities empty, ignores stored scenarios and `account_balances`, and uses opening balances.
-- **Evidence/relaunch:** `src/App.tsx:122-156,838-980`; backend view at `src-tauri/src/lib.rs`; `WF-06`/`WF-07`. True post-transaction UI check is Blocked because creation is unreachable, but the missing read path is deterministic.
-- **Impact/frequency:** Projections, taxes, debt, and current net worth become wrong as soon as data extends beyond opening accounts.
-- **Root cause:** Bootstrap/repository boundary exposes only onboarding records; Workspace constructs a partial synthetic `FinancialSnapshot`.
-- **Fix/order/dependencies:** After F-003/F-008. Expose one consistent persisted snapshot/current-balance query, load tax/scenarios/domain rows, and version/date assumptions.
-- **Regression/acceptance:** Seeded postings/assets/debts/recurring/tax/scenarios reconcile Overview, Plan, and Net Worth before and after relaunch; scenario clones remain isolated.
-- **Tester/reviewer:** Workspace agent; product-truth reviewer — **Confirmed** as source-backed truth defect.
+- **Status:** Implemented/component-tested.
+- Overview derives current net worth and current-year activity, distinguishes projected tax, and suppresses projection claims when the tax profile is missing.
+- Future guidance remains bounded by the planning inputs currently exposed.
 
-### F-006 — Credit-card sign handling can increase net worth
+### F-005 — Plan and balances ignored persisted domain state
 
-- **Status:** Confirmed · **Severity:** P1 · **Area/type:** Onboarding/Net Worth, validation and financial correctness
-- **Intended behavior:** UI says owed credit balance is negative; debt should reduce net worth.
-- **Reproduction:** Choose Credit card, enter `125.40`, finish. Expected rejection or normalization to `−$125.40`. Actual regex accepts it, stores `+12540`, and account aggregation treats it as wealth.
-- **Evidence/relaunch:** `src/App.tsx:462-464,550-555,922`; backend has no sign constraint. Persisted sign is returned unchanged.
-- **Impact/frequency:** A common interpretation overstates wealth by $250.80 relative to the correct sign for a $125.40 debt.
-- **Root cause:** Generic signed balance parser plus all-accounts-as-assets aggregation.
-- **Fix/order/dependencies:** Before expanding account editing. Model “amount owed” explicitly or enforce/normalize sign in frontend and backend.
-- **Regression/acceptance:** Positive/negative/zero/decimal/relaunch cases prove $125.40 owed reduces net worth by exactly $125.40.
-- **Tester/reviewer:** Onboarding agent; reproduction reviewer — **Confirmed**.
+- **Status:** Implemented/component-tested; partially native accepted.
+- Bootstrap includes current account balances, tax profile, activity, recurring items, assets, liabilities, and scenarios. Overview/Plan/Net Worth consume that snapshot.
+- Scenario selection/editing and UI-driven seeded mutations remain blocked.
 
-### F-007 — Large accepted USD values silently mutate cents
+### F-006 — Credit-card sign handling increased net worth
 
-- **Status:** Confirmed (narrowed example) · **Severity:** P1 · **Area/type:** Money input, data integrity
-- **Intended behavior:** Decimal USD is persisted as exact integer cents or rejected with a stated limit.
-- **Reproduction:** Enter `90071992547409.90`. Expected exact `9007199254740990` cents or a field error. Actual `Number(value) * 100` yields `9007199254740991`. `.93` and `.99` also mutate. The original `.91` example is counter-evidence and must not be used.
-- **Evidence/relaunch:** `adversarial-reproduction/money-boundaries.log`; `src/App.tsx:550-555`. Mutation occurs before persistence.
-- **Impact/frequency:** Rare boundary input, but silent alteration of financial data.
-- **Root cause:** Binary floating-point conversion beyond `Number.MAX_SAFE_INTEGER`; backend expects i64.
-- **Fix/order/dependencies:** Define supported range and parse decimal strings/BigInt cents exactly on both sides.
-- **Regression/acceptance:** Exact tests at maximum, maximum+0.01, `.90/.91/.93/.99`, very long and negative inputs; stored/displayed cents match after relaunch.
-- **Tester/reviewer:** Onboarding agent; reproduction reviewer — **Narrowed**, defect confirmed with corrected values.
+- **Status:** Implemented/component/Rust-tested.
+- Credit input is explicitly an amount owed, normalized to negative cents in frontend and backend, displayed as debt, and repaired by schema migration for older positive values.
 
-### F-008 — Current onboarding omits promised tax profile and broader inputs
+### F-007 — Large USD values silently changed cents
 
-- **Status:** Confirmed documentation/current-flow mismatch · **Severity:** P2 (filing status blocks correct tax input and should be scheduled with F-005) · **Area/type:** Onboarding/product truth
-- **Intended behavior:** README quick start says choose filing status and California residency; PLAN describes income, expenses, assets and debts onboarding.
-- **Reproduction:** Complete both setup steps. Expected those controls or explicit skip/unavailable states. Actual: people and accounts only; California is disabled; payload/backend never writes `tax_profiles`.
-- **Evidence/relaunch:** `src/App.tsx:333-510`; `src-tauri/src/lib.rs` onboarding payload/save; README line 32 and PLAN line 19. README status and unchecked phases explicitly admit guided onboarding is incomplete, narrowing this from an unconditional shipped-feature failure.
-- **Impact/frequency:** Every household finishes setup without inputs used by visible tax/plan output.
-- **Root cause:** Two-step vertical slice and documentation that mixes current instructions with future v1 scope.
-- **Fix/order/dependencies:** Add/persist/restore tax choices first; implement remaining guided steps or clearly mark them unavailable in current-facing docs.
-- **Regression/acceptance:** Every supported filing status survives relaunch and affects calculation; every additional class has add/remove/back/error/interruption tests or honest deferral copy.
-- **Tester/reviewer:** Onboarding agent; both reviewers — filing/status **Confirmed**, broader scope **Narrowed**.
+- **Status:** Implemented/component/Rust-tested.
+- Decimal strings are parsed exactly with a 12-digit-dollar limit and converted only after the cents value is safe; the backend enforces the matching maximum.
 
-### F-009 — Backup and restore controls are dead; restore replacement is absent
+### F-008 — Filing status and onboarding scope mismatch
 
-- **Status:** Confirmed · **Severity:** P1 · **Area/type:** Data safety, dead flow
-- **Intended behavior:** Visible Settings copy and README describe snapshot backup and validated restore.
-- **Reproduction:** Settings → Back up data or Choose backup. Expected file selection plus safe operation. Actual: nothing. Backend has `backup_database` and `inspect_backup`, but repository/UI invoke neither; no restore-replacement command exists.
-- **Evidence/relaunch:** `src/App.tsx:1102-1118`, `src/repository.ts`, `src-tauri/src/lib.rs`. AppImage file-dialog behavior Blocked.
-- **Impact/frequency:** Users cannot use the only presented recovery mechanism for local financial data.
-- **Root cause:** Backend foundation is disconnected and incomplete.
-- **Fix/order/dependencies:** After startup recovery. Wire snapshot creation; implement staged integrity/schema validation and atomic replacement with pre-restore backup.
-- **Regression/acceptance:** Backup/relaunch round trip; corrupt/newer/wrong files leave bytes unchanged and show actionable errors; cancellation is non-mutating.
-- **Tester/reviewer:** Workspace agent; both reviewers — **Confirmed**.
+- **Status:** Narrowed.
+- Filing status and the supported California tax profile are implemented and persisted. Income, expenses, assets, and debts are still not editable during onboarding and remain explicit pre-release work.
 
-### F-010 — Appearance choice resets on relaunch and ignores system preference
+### F-009 — Backup/restore is incomplete
 
-- **Status:** Confirmed · **Severity:** P2 · **Area/type:** Appearance persistence
-- **Intended behavior:** Settings and PLAN promise light/dark themes; troubleshooting implies settings normally persist.
-- **Reproduction:** Enable dark, quit/relaunch. Expected stored dark/system/light selection. Actual `dark` initializes `false`; bootstrap has no settings and no settings command is called.
-- **Evidence/relaunch:** `src/App.tsx:120`, `src/repository.ts`; component test proves only immediate class change.
-- **Impact/frequency:** Every dark-theme user repeats the choice each launch; system preference is ignored.
-- **Root cause:** Local component state is disconnected from the existing settings table.
-- **Fix/order/dependencies:** Add typed settings bootstrap/update and system/light/dark model.
-- **Regression/acceptance:** Both toggles stay synchronized; explicit and system modes survive relaunch and respond correctly to OS changes.
-- **Tester/reviewer:** Workspace/edge agents; reviewers — immediate pass **Narrowed**, persistence defect **Confirmed**.
+- **Status:** Still blocked (P1).
+- Snapshot and inspection primitives exist, but file selection and safe atomic restore replacement do not. Disabled controls are truthful; they are not a recovery strategy.
 
-### F-011 — Reduced-motion switch is an enabled no-op
+### F-010 — Appearance reset on relaunch
 
-- **Status:** Confirmed · **Severity:** P1 · **Area/type:** Accessibility/dead setting
-- **Intended behavior:** PLAN promises reduced-motion support and Settings offers a switch.
-- **Reproduction:** Activate Reduced motion with pointer, Space, or Enter. Expected checked state and suppressed motion, persisted. Actual no handler/state; `aria-checked` remains false. OS media-query support is separate.
-- **Evidence/relaunch:** `src/App.tsx:1093-1100`; `src/styles.css:555-562`.
-- **Impact/frequency:** Users who need reduced motion are given false assurance.
-- **Root cause:** Presentational switch not connected to preference/state.
-- **Fix/order/dependencies:** Implement with F-010; combine stored choice with OS preference and a root class.
-- **Regression/acceptance:** Named switch toggles by pointer/keyboard, disables every transition immediately, and survives relaunch.
-- **Tester/reviewer:** Edge/workspace agents; product-truth reviewer — **Confirmed**.
+- **Status:** Native accepted.
+- System/light/dark settings are stored in SQLite; explicit dark survives process relaunch and system mode observes the OS media query.
 
-### F-013 — Settings member-save failures are unhandled and unannounced
+### F-011 — Reduced motion was a no-op
 
-- **Status:** Remediated in component tests; native/relaunch acceptance pending · **Severity:** P2 · **Area/type:** Persistence/error handling
-- **Intended behavior:** Local write failures should retain edits and produce actionable announced errors.
-- **Reproduction:** Make repository save reject; activate Save members. Expected busy protection then `role=alert` with retry. Actual unhandled promise; success status is never set and no failure status exists.
-- **Evidence/relaunch:** `src/App.tsx:1007-1029,1071-1075`; ordinary native failure injection/relaunch Blocked.
-- **Impact/frequency:** Any disk/database failure looks like an ignored save and risks mistaken trust.
-- **Root cause:** `savePeople` has no try/catch/finally or saving state.
-- **Fix/order/dependencies:** Add busy state, caught structured errors, retained drafts, alert/focus behavior and retry.
-- **Regression/acceptance:** Rejection is announced, duplicate activation disabled, edits retained, retry persists and survives relaunch.
-- **Tester/reviewer:** Edge agent; reproduction reviewer — **Confirmed**.
+- **Status:** Native accepted.
+- The named switch updates persisted settings, sets the application motion state, and survives process relaunch.
 
-### F-014 — Custom radio, navigation, disclosure and chart semantics are incomplete
+### F-013 — Member-save failures were unhandled
 
-- **Status:** Remaining radio/nav/disclosure items remediated and native-tested · **Severity:** P2 · **Area/type:** Keyboard/accessibility
-- **Intended behavior:** Standard radio/disclosure/current-page patterns and a chart data alternative.
-- **Reproduction:** Keyboard through account types and inspect the accessibility tree for nav/year/chart. Actual: five radios are all tab stops with no arrow handling; nav has no `aria-current`; year rows lack `aria-expanded/controls`; generic chart div has no role or underlying data alternative.
-- **Evidence/relaunch:** `src/App.tsx:167-177,411-430,621-654,875-913`; `EDGE`.
-- **Impact/frequency:** Keyboard and nonvisual users receive inefficient or missing state/data.
-- **Root cause:** Visual controls without complete ARIA interaction patterns.
-- **Fix/order/dependencies:** Prefer native radio inputs; add roving behavior only if necessary, stateful nav/disclosures, and one meaningful chart object plus text/table values.
-- **Regression/acceptance:** Arrow/Home/End/Space tests; one tab stop per radio group; role/name/state snapshots; chart values available nonvisually.
-- **Tester/reviewer:** Edge agent; reproduction reviewer confirms radio gap — **Confirmed**.
+- **Status:** Implemented/component-tested; successful persistence native accepted.
+- Busy protection, announced/focused errors, draft retention, retry, and success refresh have regression coverage. Native disk-failure injection remains blocked.
 
-### F-015 — Empty Net Worth gives no usable next step
+### F-014 — Accessibility semantics were incomplete
 
-- **Status:** Confirmed by source; zero-account native state Blocked · **Severity:** P2 · **Area/type:** Empty state/usability
-- **Intended behavior:** Empty views guide users to a working action.
-- **Reproduction:** Open Net Worth for a zero-account completed/seeded profile. Expected explanation and account flow. Actual blank Accounts & assets card plus dead Add account.
-- **Evidence/relaunch:** `src/App.tsx:949-983`; overlaps F-002 for the button.
-- **Impact/frequency:** Edge profile or future deletion leaves a confusing empty primary screen.
-- **Root cause:** Unconditional list container and placeholder action.
-- **Fix/order/dependencies:** Implement add flow, then render conditional guidance.
-- **Regression/acceptance:** Zero/many account fixtures at minimum size; keyboard action creates and persists an account.
-- **Tester/reviewer:** Edge agent; product-truth reviewer — **Confirmed** source risk, native seed **Blocked**.
+- **Status:** Narrowed; radio/nav/disclosure/focus/contrast native accepted.
+- Native tests cover labelled controls, current navigation, disclosure relationships, keyboard focus, and semantic text contrast. A complete nonvisual chart alternative remains open.
 
-### F-016 — Corrupt or unwritable profiles panic before recovery UI
+### F-015 — Net Worth empty state has no usable action
 
-- **Status:** Remediated in Rust/component tests; native release acceptance pending · **Severity:** P1 · **Area/type:** Startup/data recovery
-- **Intended behavior:** Startup failures preserve data and show actionable recovery, retry, or safe exit.
-- **Reproduction:** Put invalid bytes at `lifelook.db` in a fresh XDG profile, or make the app-data path unwritable; launch release binary. Expected recovery UI. Actual exit 101/panic (`file is not a database` or `Permission denied`) before React loads.
-- **Evidence/relaunch:** `adversarial-reproduction/corrupt-profile.log`, `unwritable-profile.log`; setup and `.expect` at `src-tauri/src/lib.rs:450-469`.
-- **Impact/frequency:** Users with disk/permission/corruption trouble cannot open the app or reach the displayed Try again flow.
-- **Root cause:** Database open/migration fails inside Tauri setup and is converted to process termination; React load error is too late.
-- **Fix/order/dependencies:** Before backup/restore UI. Preserve original bytes; expose managed startup error or a native recovery surface without auto-replacement.
-- **Regression/acceptance:** Both profiles show actionable error, original bytes stay identical, fixed-permission/recovered relaunch succeeds, no panic text is the user interface.
-- **Tester/reviewer:** Reproduction reviewer — **Confirmed** with independent profiles.
+- **Status:** Still blocked (P2).
+- The empty state is honest, but the Add account action is disabled because account editing is not implemented.
 
-### F-018 — Dependency-advisory coverage and policy are incomplete
+### F-016 — Startup corruption/permissions terminated before recovery
 
-- **Status:** Confirmed/Narrowed · **Severity:** P2 · **Area/type:** CI supply-chain gate
-- **Intended behavior:** Production and Rust dependencies have blocking audit coverage; dev exceptions are reviewed.
-- **Reproduction:** `npm audit --omit=dev` passes with zero; full `npm audit` reports five dev-tree advisories through Vitest/Vite/esbuild; `cargo audit` is unavailable and CI installs/runs neither audit policy.
-- **Evidence/relaunch:** `npm-audit-production.log`, `npm-audit-full.log`; Rust vulnerability status is **Blocked**, not asserted vulnerable.
-- **Impact/frequency:** New advisories have no consistent release signal.
-- **Root cause:** No workflow steps/tool provisioning or explicit dev policy.
-- **Fix/order/dependencies:** Upgrade test toolchain; add blocking production npm and pinned Rust audit; document scoped, expiring dev exceptions.
-- **Regression/acceptance:** Both production audits pass in CI; any dev exception has owner/reason/expiry.
-- **Tester/reviewer:** CI agent; reproduction reviewer — **Narrowed** to policy gap.
+- **Status:** Native accepted.
+- Separate release-binary scenarios show recovery UI, preserve corrupt bytes exactly, avoid replacement of an unwritable profile, and reopen through Retry after permissions are repaired.
 
-### F-019 — CI packaged smoke proves only process liveness
+### F-018 — Advisory policy was missing
 
-- **Status:** Confirmed · **Severity:** P2 · **Area/type:** CI release validation
-- **Intended behavior:** PLAN requires AppImage render, first-launch persistence and export validation.
-- **Reproduction:** Inspect `.github/workflows/ci.yml`: a 20-second timeout is accepted as success. It does not assert a window/UI marker, mutation/relaunch, accessibility, export, or clean shutdown; upload lacks an explicit missing-file error/uniqueness check.
-- **Evidence/relaunch:** Hosted CI run 31290319956 proves packaged render and native accessibility, but not persistence/relaunch or export.
-- **Impact/frequency:** A blank, hung, nonpersistent or non-exporting package can pass after packaging is fixed.
-- **Root cause:** Liveness-only shell smoke.
-- **Fix/order/dependencies:** Extend the passing packaged suite to mutate, relaunch, verify persistence, and exercise export.
-- **Regression/acceptance:** Deliberate blank/crash/missing/persistence/export failures each fail CI; artifact upload uses `if-no-files-found: error`.
-- **Tester/reviewer:** CI agent; reproduction reviewer — **Confirmed**.
+- **Status:** Implemented.
+- CI blocks `npm audit --omit=dev`, installs `cargo-audit` 0.22.2 with `--locked`, blocks Rust advisories, displays the full npm audit, and rejects anything outside the exact temporary exception in `SECURITY.md`.
 
-### F-020 — README presents unavailable pre-release flows as executable steps
+### F-019 — Packaged smoke proved only liveness
 
-- **Status:** Confirmed/Narrowed · **Severity:** P2 · **Area/type:** Documentation/product truth
-- **Intended behavior:** Current quick start and feature guide distinguish reachable behavior from v1 vision.
-- **Reproduction:** Follow README user steps for filing status/residency, property/debts, activity/CSV, plan assumptions/scenarios, backup/restore. Most cannot be completed. README warning/status and unchecked PLAN phases acknowledge incompleteness, but imperative instructions do not mark each unavailable step.
-- **Evidence/relaunch:** README lines 30–53, 70; PLAN checklist; `APR` documented-claim reconciliation.
-- **Impact/frequency:** Every evaluator/user is directed into absent flows and may mistake realistic placeholders for their data.
-- **Root cause:** Vision copy and shipped-state documentation are interleaved.
-- **Fix/order/dependencies:** Immediately update status/feature labels while implementation proceeds; keep PLAN as vision.
-- **Regression/acceptance:** Every README command is CI-covered; every user step is reachable or explicitly tagged unavailable; no enabled mock data is called actual/current.
-- **Tester/reviewer:** Product-truth reviewer; reproduction reviewer — **Narrowed** because pre-release caveats exist.
+- **Status:** Narrowed; still open for packaged persistence/export.
+- CI validates AppImage contents, a visible window, native accessibility/recovery, and required artifact presence. The persistent-profile suite currently targets the release binary, not the AppImage, and export/file dialogs remain blocked.
+
+### F-020 — README mixed shipped and future flows
+
+- **Status:** Reconciled.
+- The quick start describes reachable onboarding/current-balance/activity/appearance behavior, while creation/editing, CSV, scenarios, and backup/restore are explicitly marked unavailable.
 
 ## Prioritized repair sequence
 
-1. **Packaging and CI blockers:** F-018–F-019.
-2. **Data loss and misleading output:** finish F-016 native acceptance, then F-003, F-004, F-005, F-006, F-007.
-3. **Dead primary interactions:** F-009 and F-011; F-002 is honestly disabled until its actual flows are implemented.
-4. **Persistence and error handling:** F-008 and F-010, then F-013 native/relaunch acceptance and backup/restore completion in F-009.
-5. **Accessibility and responsive verification:** F-015 and the remaining packaged viewport/edge-value wave; F-014 radio/nav/disclosure acceptance now passes natively.
-6. **Product polish/documentation:** F-020 and remaining intentional-unavailable v1 work, keeping current behavior and vision clearly separated.
+1. Implement safe restore plus backup/restore file selection and cancellation (F-009).
+2. Add transaction creation/editing and account editing, then native seeded Activity/current-balance relaunch coverage (F-003/F-005).
+3. Implement scenario selection/editing and expose the remaining planning inputs (F-005/F-008).
+4. Replace the Net Worth dead-end with a usable account action (F-015).
+5. Add the chart nonvisual alternative, strict offline test, and remaining native failure/calendar variants (F-013/F-014).
+6. Extend AppImage acceptance to mutation/relaunch and export/file-dialog behavior (F-019).
 
-Completion of a fix requires its observable acceptance criteria, immediate-state check, and post-relaunch check where mutation is involved. Remaining blocked viewport, offline, corrupt/unwritable, cancellation, failure, persistence/relaunch, and export rows cannot be converted to passes by source inspection alone.
+A finding is complete only when its observable acceptance criteria pass at the appropriate layer. Source inspection and component tests are never labeled as native persistence or packaged-runtime evidence.

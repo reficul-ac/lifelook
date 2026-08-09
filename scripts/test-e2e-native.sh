@@ -13,6 +13,7 @@ export LIFELOOK_E2E_BINARY="${LIFELOOK_E2E_BINARY:-$repo_root/src-tauri/target/r
 export XDG_DATA_DIRS="${XDG_DATA_DIRS_VSCODE_SNAP_ORIG:-/usr/local/share:/usr/share}"
 unset GTK_EXE_PREFIX GTK_PATH GTK_IM_MODULE_FILE GIO_MODULE_DIR
 mkdir -p "$XDG_DATA_HOME"
+export LIFELOOK_E2E_BACKUP="$profile_root/round-trip.lifelook"
 
 if [[ ! -x "$LIFELOOK_E2E_BINARY" ]]; then
   echo "Native release binary is missing or not executable: $LIFELOOK_E2E_BINARY" >&2

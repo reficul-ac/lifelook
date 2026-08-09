@@ -33,8 +33,9 @@ The AppImage is written under `src-tauri/target/release/bundle/appimage/`. This 
 2. Choose a filing status and add at least one account with its current balance. Credit-card input is the positive amount owed.
 3. Review current balances in Overview and Net Worth. Existing database postings appear in Activity and can be filtered by text, account, and year.
 4. Choose System, Light, or Dark appearance and reduced motion in Settings; these choices persist locally.
+5. In Settings, choose **Back up data** to save a portable `.lifelook` file. Choose **Restore** to replace the current workspace after reviewing the confirmation warning.
 
-Creation and editing forms, CSV import/export, scenario editing/comparison, and backup/restore file selection are not available in the current pre-release interface. Their controls are disabled rather than presented as working actions.
+Creation and editing forms, CSV import/export, and scenario editing/comparison are not available in the current pre-release interface. Their controls are disabled rather than presented as working actions.
 
 ## Feature guide
 
@@ -45,7 +46,7 @@ Creation and editing forms, CSV import/export, scenario editing/comparison, and 
 - **CSV import/export** is future work and is not currently exposed.
 - **Tax estimates** apply versioned federal, payroll, and California planning rules. Explanations disclose the source year, effective and marginal rates, projected threshold growth, and exclusions.
 - **Scenario comparison** is future work; saved baseline data can be loaded but cannot yet be edited in the interface.
-- **Backup/restore** database primitives exist, but safe file selection and staged restore are not yet available in the interface. Do not treat the disabled controls as a backup strategy.
+- **Backup/restore** creates portable, unencrypted `.lifelook` snapshots. Restore validates and stages the selected backup before replacing the current local workspace; the selected backup itself is not modified.
 
 ### Actuals, assumptions, and projections
 

@@ -107,8 +107,53 @@ describe("LifeLook shell", () => {
     fireEvent.click(screen.getByRole("button",{name:/Net Worth/}));
     expect(screen.getByRole("button",{name:/Add account \(unavailable\)/})).toBeDisabled();
     fireEvent.click(screen.getByRole("button",{name:/Settings/}));
-    expect(screen.getByRole("button",{name:/Back up data \(unavailable\)/})).toBeDisabled();
-    expect(screen.getByRole("button",{name:/Choose backup \(unavailable\)/})).toBeDisabled();
+    expect(screen.getByRole("button",{name:"Back up data"})).toBeEnabled();
+    expect(screen.getByRole("button",{name:"Choose backup"})).toBeEnabled();
+  });
+  it("silently cancels backup and restore dialogs", async () => {
+    const backupDatabase=vi.fn();const restoreDatabase=vi.fn();
+    const repository={...testRepository,selectBackupDestination:vi.fn().mockResolvedValue(null),selectRestoreSource:vi.fn().mockResolvedValue(null),backupDatabase,restoreDatabase};
+    render(<App repository={repository}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Settings/}));
+    fireEvent.click(screen.getByRole("button",{name:"Back up data"}));
+    await waitFor(()=>expect(repository.selectBackupDestination).toHaveBeenCalledOnce());
+    expect(backupDatabase).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:"Choose backup"}));
+    fireEvent.click(screen.getByRole("button",{name:"Choose backup and restore"}));
+    await waitFor(()=>expect(repository.selectRestoreSource).toHaveBeenCalledOnce());
+    expect(restoreDatabase).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+  it("protects backup from duplicate clicks and announces success and errors", async () => {
+    let finish:()=>void=()=>{};const backupDatabase=vi.fn().mockReturnValueOnce(new Promise<void>(resolve=>{finish=resolve})).mockRejectedValueOnce({message:"Disk is full"});
+    const repository={...testRepository,selectBackupDestination:vi.fn().mockResolvedValue("/tmp/a.lifelook"),backupDatabase};
+    render(<App repository={repository}/>);fireEvent.click(await screen.findByRole("button",{name:/Settings/}));
+    fireEvent.click(screen.getByRole("button",{name:"Back up data"}));
+    expect(await screen.findByRole("button",{name:"Backing up…"})).toBeDisabled();
+    fireEvent.click(screen.getByRole("button",{name:"Backing up…"}));expect(backupDatabase).toHaveBeenCalledTimes(1);
+    finish();expect(await screen.findByRole("status")).toHaveTextContent("Backup created successfully");
+    fireEvent.click(screen.getByRole("button",{name:"Back up data"}));
+    const alert=await screen.findByRole("alert");expect(alert).toHaveTextContent("Disk is full");await waitFor(()=>expect(alert).toHaveFocus());
+  });
+  it("requires restore confirmation and refreshes the full workspace immediately", async () => {
+    const original=await testRepository.bootstrap();
+    const restored={...original,household:{id:"restored",name:"Restored household",state:"CA"},people:[{id:"r",householdId:"restored",name:"Restored Person"}],settings:{theme:"dark" as const,reducedMotion:true,revision:9}};
+    const restoreDatabase=vi.fn().mockResolvedValue(restored);
+    const repository={...testRepository,selectRestoreSource:vi.fn().mockResolvedValue("/tmp/a.lifelook"),restoreDatabase};
+    render(<App repository={repository}/>);fireEvent.click(await screen.findByRole("button",{name:/Settings/}));
+    fireEvent.click(screen.getByRole("button",{name:"Choose backup"}));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(/cannot be undone/i);
+    fireEvent.click(screen.getByRole("button",{name:"Cancel"}));expect(restoreDatabase).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:"Choose backup"}));fireEvent.click(screen.getByRole("button",{name:"Choose backup and restore"}));
+    expect(await screen.findByText("Restored household")).toBeInTheDocument();
+    await waitFor(()=>expect(document.querySelector(".app")).toHaveClass("dark"));expect(restoreDatabase).toHaveBeenCalledOnce();
+  });
+  it("keeps the workspace and focuses an invalid-restore error", async () => {
+    const repository={...testRepository,selectRestoreSource:vi.fn().mockResolvedValue("/tmp/bad.lifelook"),restoreDatabase:vi.fn().mockRejectedValue({code:"invalid_backup"})};
+    render(<App repository={repository}/>);fireEvent.click(await screen.findByRole("button",{name:/Settings/}));
+    fireEvent.click(screen.getByRole("button",{name:"Choose backup"}));fireEvent.click(screen.getByRole("button",{name:"Choose backup and restore"}));
+    const alert=await screen.findByRole("alert");expect(alert).toHaveTextContent(/not a compatible LifeLook backup/i);await waitFor(()=>expect(alert).toHaveFocus());
+    expect(screen.getByText("Test household")).toBeInTheDocument();
   });
   it("shows onboarding for a new workspace", async () => {
     const repository = {

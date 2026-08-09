@@ -11,7 +11,7 @@ jobs:
         with: { node-version: 20, cache: npm }
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Tauri system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev webkit2gtk-driver build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb xdotool imagemagick
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev webkit2gtk-driver build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb openbox xdotool imagemagick
       - run: npm ci
       - run: npm test
       - run: npm run build

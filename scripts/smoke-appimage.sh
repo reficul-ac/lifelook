@@ -7,10 +7,15 @@ mapfile -t appimages < <(find "$repo_root/src-tauri/target/release/bundle/appima
 
 profile_root="$(mktemp -d)"
 app_pid=""
+wm_pid=""
 cleanup() {
   if [[ -n "$app_pid" ]] && kill -0 "$app_pid" 2>/dev/null; then
     kill "$app_pid" 2>/dev/null || true
     wait "$app_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$wm_pid" ]] && kill -0 "$wm_pid" 2>/dev/null; then
+    kill "$wm_pid" 2>/dev/null || true
+    wait "$wm_pid" 2>/dev/null || true
   fi
   rm -rf -- "$profile_root"
 }
@@ -19,6 +24,12 @@ export XDG_DATA_HOME="$profile_root/data"
 export APPIMAGE_EXTRACT_AND_RUN=1
 mkdir -p "$XDG_DATA_HOME" "$repo_root/artifacts/appimage-smoke"
 app_log="$profile_root/app.log"
+wm_log="$profile_root/openbox.log"
+
+command -v openbox >/dev/null || { echo "openbox is required for normal window shutdown" >&2; exit 1; }
+openbox >"$wm_log" 2>&1 &
+wm_pid=$!
+sleep 1
 
 "${appimages[0]}" >"$app_log" 2>&1 &
 app_pid=$!
@@ -52,7 +63,8 @@ sleep 2
 import -window "$window_id" "$repo_root/artifacts/appimage-smoke/visible-window.png"
 [[ -s "$repo_root/artifacts/appimage-smoke/visible-window.png" ]]
 
-xdotool key --window "$window_id" alt+F4
+xdotool windowactivate --sync "$window_id"
+xdotool windowclose "$window_id"
 for _ in $(seq 1 10); do
   if ! kill -0 "$app_pid" 2>/dev/null; then
     set +e

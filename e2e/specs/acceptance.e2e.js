@@ -69,7 +69,14 @@ describe("LifeLook native acceptance", () => {
     const overviewNav = await $("nav button:nth-child(1)");
     assert.equal(await overviewNav.getAttribute("aria-current"), "page");
     assert.equal(await $("aria/Search (not yet available)").isEnabled(), false);
-    assert.equal(await $("aria/Add (unavailable)").isEnabled(), false);
+    const add = await $("aria/Add");
+    assert.equal(await add.isEnabled(), true);
+    await add.click();
+    assert.equal(await $("aria/What would you like to add?").isDisplayed(), true);
+    for (const mode of ["Income", "Expense", "Transfer", "Account"]) {
+      assert.equal(await $(`aria/${mode}`).isEnabled(), true);
+    }
+    await $("aria/Cancel").click();
     await browser.saveScreenshot(artifact("01-light-920x650.png"));
 
     const planNav = await $("nav button:nth-child(3)");

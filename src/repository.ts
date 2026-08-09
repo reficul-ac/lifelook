@@ -25,13 +25,21 @@ export interface WorkspaceSnapshot {
 export type Bootstrap = WorkspaceSnapshot;
 export type BootstrapInput = Pick<WorkspaceSnapshot,"onboardingStep"|"onboardingComplete"|"people"|"categories"> & {accounts:(BootstrapAccount|Omit<BootstrapAccount,"balanceCents">)[]} & Partial<Omit<WorkspaceSnapshot,"onboardingStep"|"onboardingComplete"|"people"|"accounts"|"categories">>;
 export interface TransactionInput { id:string; occurredOn:string; accountId:string; categoryId:string; amountCents:number; description:string; note?:string|null }
+export interface UpdateTransactionInput extends Omit<TransactionInput,"id"> { id:string; expectedRevision:number }
+export interface TransferInput { id:string;occurredOn:string;fromAccountId:string;toAccountId:string;amountCents:number;expectedRevision?:number }
+export interface AccountInput { id:string;name:string;kind:AccountKind;openingBalanceCents:number }
 export interface Repository {
   bootstrap():Promise<BootstrapInput>;
   retryStartup():Promise<BootstrapInput>;
   saveOnboardingStep(step:number,payload:unknown):Promise<void>;
   completeOnboarding():Promise<void>;
   createTransaction?(input:TransactionInput):Promise<void>;
-  createTransfer?(input:{id:string;occurredOn:string;fromAccountId:string;toAccountId:string;amountCents:number}):Promise<void>;
+  updateTransaction?(input:UpdateTransactionInput):Promise<void>;
+  createTransfer?(input:TransferInput):Promise<void>;
+  updateTransfer?(input:TransferInput&{expectedRevision:number}):Promise<void>;
+  createAccount?(input:AccountInput):Promise<void>;
+  updateAccount?(input:{id:string;name:string;kind:AccountKind;expectedRevision:number}):Promise<void>;
+  reconcileAccount?(input:{id:string;occurredOn:string;targetBalanceCents:number;expectedBalanceCents:number}):Promise<void>;
   updateSettings?(input:{theme:Theme;reducedMotion:boolean;expectedRevision:number}):Promise<Settings>;
   selectBackupDestination?():Promise<string|null>;
   selectRestoreSource?():Promise<string|null>;
@@ -48,7 +56,12 @@ export const tauriRepository:Repository = {
   saveOnboardingStep:(step,payload)=>invoke("save_onboarding_step",{step,payload}),
   completeOnboarding:()=>invoke("complete_onboarding"),
   createTransaction:(input)=>invoke("create_transaction",{input}),
-  createTransfer:(input)=>invoke("create_transfer",input),
+  updateTransaction:(input)=>invoke("update_transaction",{input}),
+  createTransfer:(input)=>invoke("create_transfer",{input}),
+  updateTransfer:(input)=>invoke("update_transfer",{input}),
+  createAccount:(input)=>invoke("create_account",{input}),
+  updateAccount:(input)=>invoke("update_account",{input}),
+  reconcileAccount:(input)=>invoke("reconcile_account",{input}),
   updateSettings:(input)=>invoke("update_settings",{input}),
   selectBackupDestination:()=>save({defaultPath:backupFilename(),filters:backupFilters}),
   selectRestoreSource:async()=>{
@@ -62,7 +75,7 @@ export const tauriRepository:Repository = {
 export const emptySettings:Settings={theme:"system",reducedMotion:false,revision:1};
 export const testRepository:Repository = {
   async bootstrap(){return {onboardingStep:8,onboardingComplete:true,household:{id:"test",name:"Test household",state:"CA"},people:[{id:"person",householdId:"test",name:"Test Person"}],taxProfile:null,settings:emptySettings,accounts:[{id:"cash",householdId:"test",name:"Test checking",kind:"checking",openingBalanceCents:0,balanceCents:0,annualReturnBps:0,liquid:true,revision:1}],categories:[],activity:[],recurring:[],assets:[],liabilities:[],scenarios:[]}},
-  async retryStartup(){return this.bootstrap()}, async saveOnboardingStep(){}, async completeOnboarding(){}, async createTransaction(){}, async createTransfer(){},
+  async retryStartup(){return this.bootstrap()}, async saveOnboardingStep(){}, async completeOnboarding(){}, async createTransaction(){}, async updateTransaction(){}, async createTransfer(){}, async updateTransfer(){},async createAccount(){},async updateAccount(){},async reconcileAccount(){},
   async updateSettings(input){return {...input,revision:input.expectedRevision+1}},
   async selectBackupDestination(){return null}, async selectRestoreSource(){return null},
   async backupDatabase(){}, async restoreDatabase(){return this.bootstrap()}

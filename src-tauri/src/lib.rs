@@ -252,6 +252,52 @@ struct TransactionInput {
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct UpdateTransactionInput {
+    id: String,
+    occurred_on: String,
+    account_id: String,
+    category_id: String,
+    amount_cents: i64,
+    description: String,
+    note: Option<String>,
+    expected_revision: i64,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TransferInput {
+    id: String,
+    occurred_on: String,
+    from_account_id: String,
+    to_account_id: String,
+    amount_cents: i64,
+    expected_revision: Option<i64>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AccountInput {
+    id: String,
+    name: String,
+    kind: String,
+    opening_balance_cents: i64,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UpdateAccountInput {
+    id: String,
+    name: String,
+    kind: String,
+    expected_revision: i64,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReconcileAccountInput {
+    id: String,
+    occurred_on: String,
+    target_balance_cents: i64,
+    expected_balance_cents: i64,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SettingsInput {
     theme: String,
     reduced_motion: bool,
@@ -658,38 +704,145 @@ fn complete_onboarding(database: tauri::State<Database>) -> Result<(), AppError>
 }
 
 fn insert_transaction(db: &mut Connection, input: &TransactionInput) -> Result<(), AppError> {
-    if input.amount_cents <= 0 || input.amount_cents > MAX_MONEY_CENTS {
+    validate_entry(input.amount_cents, &input.occurred_on, &input.description)?;
+    let tx = db.transaction()?;
+    let (hid, kind) = validate_transaction_refs(&tx, &input.account_id, &input.category_id)?;
+    tx.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description,note) VALUES(?1,?2,?3,?4,?5,?6)",params![input.id,hid,input.occurred_on,kind,input.description.trim(),input.note.as_ref().map(|x|x.trim()).filter(|x|!x.is_empty())])?;
+    tx.execute(
+        "INSERT INTO postings(entry_id,account_id,category_id,amount_cents) VALUES(?1,?2,?3,?4)",
+        params![
+            input.id,
+            input.account_id,
+            input.category_id,
+            signed_amount(&kind, input.amount_cents)?
+        ],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+fn validate_entry(amount: i64, date: &str, description: &str) -> Result<(), AppError> {
+    if amount <= 0 || amount > MAX_MONEY_CENTS {
         return Err(AppError::Validation(
             "amount must be a positive value within the supported money range".into(),
         ));
     }
-    let tx = db.transaction()?;
-    let hid: String = tx.query_row(
-        "SELECT household_id FROM accounts WHERE id=?",
-        [&input.account_id],
-        |r| r.get(0),
-    )?;
-    let kind: String = tx.query_row(
-        "SELECT kind FROM categories WHERE id=?",
-        [&input.category_id],
-        |r| r.get(0),
-    )?;
-    tx.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description,note) VALUES(?1,?2,?3,?4,?5,?6)",params![input.id,hid,input.occurred_on,kind,input.description,input.note])?;
-    let signed = match kind.as_str() {
-        "income" => input.amount_cents,
-        "expense" => -input.amount_cents,
+    validate_date(date)?;
+    if description.trim().is_empty() {
+        return Err(AppError::Validation("description is required".into()));
+    }
+    Ok(())
+}
+fn validate_date(value: &str) -> Result<(), AppError> {
+    let p: Vec<_> = value.split('-').collect();
+    let (y, m, d) = if p.len() == 3 {
+        (
+            p[0].parse::<i32>(),
+            p[1].parse::<u32>(),
+            p[2].parse::<u32>(),
+        )
+    } else {
+        (Err("".parse::<i32>().unwrap_err()), Ok(0), Ok(0))
+    };
+    let (y, m, d) = match (y, m, d) {
+        (Ok(y), Ok(m), Ok(d)) => (y, m, d),
         _ => {
             return Err(AppError::Validation(
-                "use the transfer command for transfers".into(),
+                "date must be a valid calendar date".into(),
             ))
         }
     };
-    tx.execute(
-        "INSERT INTO postings(entry_id,account_id,category_id,amount_cents) VALUES(?1,?2,?3,?4)",
-        params![input.id, input.account_id, input.category_id, signed],
-    )?;
-    tx.commit()?;
+    let leap = y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+    let days = [
+        0,
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    if value.len() != 10 || !(1..=12).contains(&m) || d < 1 || d > days[m as usize] {
+        return Err(AppError::Validation(
+            "date must be a valid calendar date".into(),
+        ));
+    }
     Ok(())
+}
+fn active_household(db: &Connection) -> Result<String, AppError> {
+    db.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))
+        .map_err(|_| AppError::Validation("household is required".into()))
+}
+fn validate_transaction_refs(
+    db: &Connection,
+    account: &str,
+    category: &str,
+) -> Result<(String, String), AppError> {
+    let active = active_household(db)?;
+    let ah: String = db
+        .query_row(
+            "SELECT household_id FROM accounts WHERE id=?",
+            [account],
+            |r| r.get(0),
+        )
+        .map_err(|_| AppError::Validation("account does not belong to this household".into()))?;
+    let (ch, kind): (Option<String>, String) = db
+        .query_row(
+            "SELECT household_id,kind FROM categories WHERE id=?",
+            [category],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(|_| AppError::Validation("category does not belong to this household".into()))?;
+    if ah != active || ch.as_deref().is_some_and(|x| x != active) {
+        return Err(AppError::Validation(
+            "account and category must belong to this household".into(),
+        ));
+    }
+    if !matches!(kind.as_str(), "income" | "expense") {
+        return Err(AppError::Validation(
+            "category must match income or expense".into(),
+        ));
+    }
+    Ok((active, kind))
+}
+fn signed_amount(kind: &str, amount: i64) -> Result<i64, AppError> {
+    match kind {
+        "income" => Ok(amount),
+        "expense" => Ok(-amount),
+        _ => Err(AppError::Validation(
+            "use the transfer command for transfers".into(),
+        )),
+    }
+}
+fn validate_transfer(db: &Connection, input: &TransferInput) -> Result<String, AppError> {
+    validate_entry(input.amount_cents, &input.occurred_on, "Transfer")?;
+    if input.from_account_id == input.to_account_id {
+        return Err(AppError::Validation(
+            "transfer must use distinct accounts".into(),
+        ));
+    }
+    let active = active_household(db)?;
+    for id in [&input.from_account_id, &input.to_account_id] {
+        let h: String = db
+            .query_row("SELECT household_id FROM accounts WHERE id=?", [id], |r| {
+                r.get(0)
+            })
+            .map_err(|_| {
+                AppError::Validation("transfer account does not belong to this household".into())
+            })?;
+        if h != active {
+            return Err(AppError::Validation(
+                "transfer accounts must belong to this household".into(),
+            ));
+        }
+    }
+    Ok(active)
 }
 #[tauri::command]
 fn update_settings(
@@ -733,45 +886,181 @@ fn create_transaction(
     with_db(&database, |db| insert_transaction(db, &input))
 }
 #[tauri::command]
-fn create_transfer(
-    id: String,
-    occurred_on: String,
-    from_account_id: String,
-    to_account_id: String,
-    amount_cents: i64,
-    database: tauri::State<Database>,
-) -> Result<(), AppError> {
-    if amount_cents <= 0 || from_account_id == to_account_id {
-        return Err(AppError::Validation(
-            "transfer must use distinct accounts and a positive amount".into(),
-        ));
-    }
+fn create_transfer(input: TransferInput, database: tauri::State<Database>) -> Result<(), AppError> {
     with_db(&database, |db| {
         let tx = db.transaction()?;
-        let h1: String = tx.query_row(
-            "SELECT household_id FROM accounts WHERE id=?",
-            [&from_account_id],
-            |r| r.get(0),
+        let hid = validate_transfer(&tx, &input)?;
+        tx.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description,transfer_group_id) VALUES(?1,?2,?3,'transfer','Transfer',?1)",params![input.id,hid,input.occurred_on])?;
+        tx.execute(
+            "INSERT INTO postings(entry_id,account_id,amount_cents) VALUES(?1,?2,?3)",
+            params![input.id, input.from_account_id, -input.amount_cents],
         )?;
-        let h2: String = tx.query_row(
-            "SELECT household_id FROM accounts WHERE id=?",
-            [&to_account_id],
-            |r| r.get(0),
+        tx.execute(
+            "INSERT INTO postings(entry_id,account_id,amount_cents) VALUES(?1,?2,?3)",
+            params![input.id, input.to_account_id, input.amount_cents],
         )?;
-        if h1 != h2 {
+        tx.commit()?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+fn update_transaction(
+    input: UpdateTransactionInput,
+    database: tauri::State<Database>,
+) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        validate_entry(input.amount_cents, &input.occurred_on, &input.description)?;
+        let tx = db.transaction()?;
+        let (_, kind) = validate_transaction_refs(&tx, &input.account_id, &input.category_id)?;
+        let existing: (String, Option<String>, i64) = tx
+            .query_row(
+                "SELECT kind,import_batch_id,revision FROM transaction_entries WHERE id=?",
+                [&input.id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .map_err(|_| AppError::Validation("transaction was not found".into()))?;
+        if existing.1.is_some() {
             return Err(AppError::Validation(
-                "accounts must belong to the same household".into(),
+                "imported transactions cannot be edited".into(),
             ));
         }
-        tx.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description,transfer_group_id) VALUES(?1,?2,?3,'transfer','Transfer',?1)",params![id,h1,occurred_on])?;
+        if existing.0 == "transfer" || existing.0 == "adjustment" {
+            return Err(AppError::Validation(
+                "this entry cannot be changed into an ordinary transaction".into(),
+            ));
+        }
+        if existing.2 != input.expected_revision {
+            return Err(AppError::Conflict);
+        }
+        tx.execute("UPDATE transaction_entries SET occurred_on=?1,kind=?2,description=?3,note=?4,revision=revision+1 WHERE id=?5 AND revision=?6",params![input.occurred_on,kind,input.description.trim(),input.note.as_ref().map(|x|x.trim()).filter(|x|!x.is_empty()),input.id,input.expected_revision])?;
+        tx.execute("DELETE FROM postings WHERE entry_id=?", [&input.id])?;
+        tx.execute("INSERT INTO postings(entry_id,account_id,category_id,amount_cents) VALUES(?1,?2,?3,?4)",params![input.id,input.account_id,input.category_id,signed_amount(&kind,input.amount_cents)?])?;
+        tx.commit()?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+fn update_transfer(input: TransferInput, database: tauri::State<Database>) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        let tx = db.transaction()?;
+        validate_transfer(&tx, &input)?;
+        let (kind, imported, revision): (String, Option<String>, i64) = tx
+            .query_row(
+                "SELECT kind,import_batch_id,revision FROM transaction_entries WHERE id=?",
+                [&input.id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .map_err(|_| AppError::Validation("transfer was not found".into()))?;
+        if imported.is_some() {
+            return Err(AppError::Validation(
+                "imported transactions cannot be edited".into(),
+            ));
+        }
+        if kind != "transfer" {
+            return Err(AppError::Validation(
+                "ordinary transactions cannot be changed into transfers".into(),
+            ));
+        }
+        if Some(revision) != input.expected_revision {
+            return Err(AppError::Conflict);
+        }
+        tx.execute("UPDATE transaction_entries SET occurred_on=?1,revision=revision+1 WHERE id=?2 AND revision=?3",params![input.occurred_on,input.id,revision])?;
+        tx.execute("DELETE FROM postings WHERE entry_id=?", [&input.id])?;
         tx.execute(
             "INSERT INTO postings(entry_id,account_id,amount_cents) VALUES(?1,?2,?3)",
-            params![id, from_account_id, -amount_cents],
+            params![input.id, input.from_account_id, -input.amount_cents],
         )?;
         tx.execute(
             "INSERT INTO postings(entry_id,account_id,amount_cents) VALUES(?1,?2,?3)",
-            params![id, to_account_id, amount_cents],
+            params![input.id, input.to_account_id, input.amount_cents],
         )?;
+        tx.commit()?;
+        Ok(())
+    })
+}
+fn account_properties(kind: &str) -> Result<bool, AppError> {
+    match kind {
+        "checking" | "savings" => Ok(true),
+        "investment" | "retirement" | "credit" => Ok(false),
+        _ => Err(AppError::Validation("choose a valid account type".into())),
+    }
+}
+fn stored_balance(kind: &str, value: i64) -> Result<i64, AppError> {
+    if value.abs() > MAX_MONEY_CENTS {
+        return Err(AppError::Validation(
+            "balance is outside the supported money range".into(),
+        ));
+    }
+    Ok(if kind == "credit" {
+        -value.abs()
+    } else {
+        value
+    })
+}
+#[tauri::command]
+fn create_account(input: AccountInput, database: tauri::State<Database>) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        if input.name.trim().is_empty() {
+            return Err(AppError::Validation("account name is required".into()));
+        }
+        let hid = active_household(db)?;
+        let liquid = account_properties(&input.kind)?;
+        let balance = stored_balance(&input.kind, input.opening_balance_cents)?;
+        db.execute("INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,liquid) VALUES(?1,?2,?3,?4,?5,?6)",params![input.id,hid,input.name.trim(),input.kind,balance,liquid])?;
+        Ok(())
+    })
+}
+#[tauri::command]
+fn update_account(
+    input: UpdateAccountInput,
+    database: tauri::State<Database>,
+) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        if input.name.trim().is_empty() {
+            return Err(AppError::Validation("account name is required".into()));
+        }
+        let hid = active_household(db)?;
+        let liquid = account_properties(&input.kind)?;
+        let changed=db.execute("UPDATE accounts SET name=?1,kind=?2,liquid=?3,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=?4 AND household_id=?5 AND revision=?6",params![input.name.trim(),input.kind,liquid,input.id,hid,input.expected_revision])?;
+        if changed == 0 {
+            return Err(AppError::Conflict);
+        }
+        Ok(())
+    })
+}
+#[tauri::command]
+fn reconcile_account(
+    input: ReconcileAccountInput,
+    database: tauri::State<Database>,
+) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        validate_date(&input.occurred_on)?;
+        if input.target_balance_cents.abs() > MAX_MONEY_CENTS {
+            return Err(AppError::Validation(
+                "balance is outside the supported money range".into(),
+            ));
+        }
+        let tx = db.transaction()?;
+        let hid = active_household(&tx)?;
+        let current:i64=tx.query_row("SELECT b.balance_cents FROM account_balances b JOIN accounts a ON a.id=b.id WHERE a.id=?1 AND a.household_id=?2",params![input.id,hid],|r|r.get(0)).map_err(|_|AppError::Validation("account does not belong to this household".into()))?;
+        if current != input.expected_balance_cents {
+            return Err(AppError::Conflict);
+        }
+        let difference = input.target_balance_cents - current;
+        if difference != 0 {
+            let nonce = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
+            let eid = format!("adjustment-{}-{nonce}", input.id);
+            tx.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description) VALUES(?1,?2,?3,'adjustment','Balance reconciliation')",params![eid,hid,input.occurred_on])?;
+            tx.execute(
+                "INSERT INTO postings(entry_id,account_id,amount_cents) VALUES(?1,?2,?3)",
+                params![eid, input.id, difference],
+            )?;
+        }
         tx.commit()?;
         Ok(())
     })
@@ -1205,6 +1494,11 @@ pub fn run() {
             complete_onboarding,
             create_transaction,
             create_transfer,
+            update_transaction,
+            update_transfer,
+            create_account,
+            update_account,
+            reconcile_account,
             update_settings,
             backup_database,
             inspect_backup,
@@ -1480,6 +1774,74 @@ mod tests {
             insert_transaction(&mut c, &input),
             Err(AppError::Validation(_))
         ));
+    }
+
+    #[test]
+    fn transaction_references_must_share_the_active_household() {
+        let mut c = seeded();
+        c.execute(
+            "INSERT INTO households(id,name,state) VALUES('other','Other','CA')",
+            [],
+        )
+        .unwrap();
+        c.execute("INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,liquid) VALUES('foreign','other','Foreign','checking',0,1)", []).unwrap();
+        let input = TransactionInput {
+            id: "foreign-entry".into(),
+            occurred_on: "2026-08-09".into(),
+            account_id: "foreign".into(),
+            category_id: "c".into(),
+            amount_cents: 100,
+            description: "No".into(),
+            note: None,
+        };
+        assert!(matches!(
+            insert_transaction(&mut c, &input),
+            Err(AppError::Validation(_))
+        ));
+        assert_eq!(
+            c.query_row(
+                "SELECT count(*) FROM transaction_entries WHERE id='foreign-entry'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn calendar_dates_and_category_kinds_are_validated() {
+        let mut c = seeded();
+        for (id, date, category) in [
+            ("bad-date", "2026-02-30", "c"),
+            ("bad-kind", "2026-02-28", "transfer-category"),
+        ] {
+            if category == "transfer-category" {
+                c.execute("INSERT INTO categories(id,household_id,name,kind) VALUES(?1,'h','Transfer','transfer')",[category]).unwrap();
+            }
+            let input = TransactionInput {
+                id: id.into(),
+                occurred_on: date.into(),
+                account_id: "a".into(),
+                category_id: category.into(),
+                amount_cents: 100,
+                description: "Test".into(),
+                note: None,
+            };
+            assert!(matches!(
+                insert_transaction(&mut c, &input),
+                Err(AppError::Validation(_))
+            ));
+        }
+        assert_eq!(
+            c.query_row(
+                "SELECT count(*) FROM transaction_entries WHERE id IN ('bad-date','bad-kind')",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
     }
 
     #[test]

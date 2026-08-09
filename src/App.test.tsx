@@ -98,17 +98,41 @@ describe("LifeLook shell", () => {
     );
     expect(document.querySelector(".app")).toHaveClass("dark");
   });
-  it("marks unavailable controls as disabled", async () => {
+  it("keeps only genuinely unavailable controls disabled", async () => {
     render(<App repository={testRepository}/>);
     await screen.findByRole("heading",{name:"Overview"});
     expect(screen.getByRole("button",{name:/Search \(not yet available\)/})).toBeDisabled();
-    expect(screen.getByRole("button",{name:/Add \(unavailable\)/})).toBeDisabled();
+    expect(screen.getByRole("button",{name:"Add"})).toBeEnabled();
     expect(screen.getByRole("button",{name:/Test Person/})).toBeDisabled();
     fireEvent.click(screen.getByRole("button",{name:/Net Worth/}));
-    expect(screen.getByRole("button",{name:/Add account \(unavailable\)/})).toBeDisabled();
+    expect(screen.getByRole("button",{name:"Add account"})).toBeEnabled();
     fireEvent.click(screen.getByRole("button",{name:/Settings/}));
     expect(screen.getByRole("button",{name:"Back up data"})).toBeEnabled();
     expect(screen.getByRole("button",{name:"Choose backup"})).toBeEnabled();
+  });
+  it("offers all four Add modes and creates an exact income amount", async()=>{
+    const data=await testRepository.bootstrap();const createTransaction=vi.fn();
+    const repository={...testRepository,createTransaction,bootstrap:vi.fn().mockResolvedValue({...data,categories:[{id:"income",householdId:"test",name:"Pay",kind:"income" as const,revision:1},{id:"expense",householdId:"test",name:"Food",kind:"expense" as const,revision:1}]})};
+    render(<App repository={repository}/>);fireEvent.click(await screen.findByRole("button",{name:"Add"}));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();for(const name of ["Income","Expense","Transfer","Account"])expect(screen.getByRole("button",{name})).toBeEnabled();
+    fireEvent.click(screen.getByRole("button",{name:"Income"}));fireEvent.change(screen.getByLabelText("Amount (USD)"),{target:{value:"123.45"}});fireEvent.change(screen.getByLabelText("Description"),{target:{value:"Paycheck"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(createTransaction).toHaveBeenCalledWith(expect.objectContaining({amountCents:12345,categoryId:"income",description:"Paycheck"})));await waitFor(()=>expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+  it("retains transfer drafts, validates distinct accounts, and restores focus on Escape",async()=>{
+    const data=await testRepository.bootstrap();const second={...data.accounts[0],id:"second",name:"Savings",kind:"savings" as const};const createTransfer=vi.fn();
+    render(<App repository={{...testRepository,createTransfer,bootstrap:async()=>({...data,accounts:[...data.accounts,second]})}}/>);const add=await screen.findByRole("button",{name:"Add"});fireEvent.click(add);fireEvent.click(screen.getByRole("button",{name:"Transfer"}));
+    fireEvent.change(screen.getByLabelText("Amount (USD)"),{target:{value:"9.99"}});fireEvent.change(screen.getByLabelText("To account"),{target:{value:"cash"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));expect(await screen.findByRole("alert")).toHaveTextContent(/different accounts/i);expect(screen.getByLabelText("Amount (USD)")).toHaveValue("9.99");expect(createTransfer).not.toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByRole("dialog"),{key:"Escape"});expect(screen.queryByRole("dialog")).not.toBeInTheDocument();expect(add).toHaveFocus();
+  });
+  it("creates credit accounts as positive amounts owed from Net Worth",async()=>{
+    const data=await testRepository.bootstrap();const createAccount=vi.fn();render(<App repository={{...testRepository,createAccount,bootstrap:async()=>data}}/>);fireEvent.click(await screen.findByRole("button",{name:/Net Worth/}));fireEvent.click(screen.getByRole("button",{name:"Add account"}));
+    fireEvent.change(screen.getByLabelText("Account name"),{target:{value:"Rewards"}});fireEvent.change(screen.getByLabelText("Account type"),{target:{value:"credit"}});fireEvent.change(screen.getByLabelText("Amount owed (USD)"),{target:{value:"42.50"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(createAccount).toHaveBeenCalledWith(expect.objectContaining({name:"Rewards",kind:"credit",openingBalanceCents:4250})));
+  });
+  it("groups transfer postings into one editable Activity row",async()=>{
+    const data=await testRepository.bootstrap();const a=data.accounts[0],b={...a,id:"b",name:"Savings"};const base={postingId:1,entryId:"t",occurredOn:`${new Date().getFullYear()}-01-02`,kind:"transfer" as const,description:"Transfer",transferGroupId:"t",categoryId:null,categoryName:null,note:null,revision:1};
+    render(<App repository={{...testRepository,bootstrap:async()=>({...data,accounts:[a,b],activity:[{...base,accountId:a.id,accountName:a.name,amountCents:-1000},{...base,postingId:2,accountId:b.id,accountName:b.name,amountCents:1000}]})}}/>);fireEvent.click(await screen.findByRole("button",{name:/Activity/}));
+    expect(screen.getAllByRole("button",{name:"Edit Transfer"})).toHaveLength(1);fireEvent.click(screen.getByRole("button",{name:"Edit Transfer"}));expect(screen.getByRole("heading",{name:"Edit transfer"})).toBeInTheDocument();expect(screen.getByLabelText("From account")).toHaveValue(a.id);expect(screen.getByLabelText("To account")).toHaveValue(b.id);
   });
   it("silently cancels backup and restore dialogs", async () => {
     const backupDatabase=vi.fn();const restoreDatabase=vi.fn();

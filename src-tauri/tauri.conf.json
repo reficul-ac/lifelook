@@ -5,5 +5,5 @@
   "identifier": "com.lifelook.desktop",
   "build": { "beforeDevCommand": "npm run web:dev", "devUrl": "http://localhost:1420", "beforeBuildCommand": "npm run build", "frontendDist": "../dist" },
   "app": { "windows": [{ "title": "LifeLook", "width": 1280, "height": 820, "minWidth": 920, "minHeight": 650, "resizable": true }], "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" } },
-  "bundle": { "active": true, "targets": ["appimage"], "category": "Finance", "shortDescription": "Private personal finance planning", "longDescription": "Understand today and plan decades ahead without giving up your financial privacy." }
+  "bundle": { "active": true, "targets": ["appimage"], "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png"], "category": "Finance", "shortDescription": "Private personal finance planning", "longDescription": "Understand today and plan decades ahead without giving up your financial privacy." }
 }

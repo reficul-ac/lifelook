@@ -73,6 +73,7 @@ describe("LifeLook shell", () => {
     await screen.findByRole("heading", {
       name: "Add the accounts you want to track",
     });
+    fireEvent.change(screen.getByLabelText("Filing status"),{target:{value:"single"}});
     fireEvent.click(screen.getByRole("radio", { name: /Savings/ }));
     fireEvent.change(screen.getByLabelText("Account 1 name"), {
       target: { value: "Rainy day" },
@@ -168,10 +169,7 @@ describe("LifeLook shell", () => {
     };
     render(<App repository={repository} />);
     expect(await screen.findByDisplayValue("Saved IRA")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /Retirement/ })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
+    expect(screen.getByRole("radio", { name: /Retirement/ })).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.getByDisplayValue("Saved Person")).toBeInTheDocument();
   });

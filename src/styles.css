@@ -659,7 +659,7 @@ main.standalone {
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
-.account-types button {
+.account-types label {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -671,11 +671,14 @@ main.standalone {
   padding: 10px;
   cursor: pointer;
 }
-.account-types button.selected {
+.account-types label.selected {
   border-color: #66715f;
   background: #eef1eb;
   box-shadow: 0 0 0 1px #66715f;
 }
+.account-types input { position:absolute; opacity:0; }
+.account-types label:has(input:focus-visible) { outline:3px solid #4f6b9a; outline-offset:2px; }
+[data-reduced-motion="true"] *,[data-reduced-motion="true"] *::before,[data-reduced-motion="true"] *::after { animation-duration:0.01ms !important; transition-duration:0.01ms !important; }
 .account-types small {
   color: #70736b;
 }

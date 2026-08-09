@@ -8,7 +8,8 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
+const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database(Mutex<Connection>);
 
@@ -24,6 +25,8 @@ enum AppError {
     Busy,
     #[error("{0}")]
     Validation(String),
+    #[error("this record was changed elsewhere; refresh and try again")]
+    Conflict,
 }
 
 #[derive(Serialize)]
@@ -44,6 +47,7 @@ impl Serialize for AppError {
             Self::InvalidBackup => ("invalid_backup", None),
             Self::Busy => ("busy", None),
             Self::Validation(_) => ("validation", None),
+            Self::Conflict => ("conflict", None),
         };
         ErrorBody {
             code,
@@ -54,15 +58,22 @@ impl Serialize for AppError {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkspaceSnapshot {
     onboarding_step: i64,
     onboarding_complete: bool,
     household: Option<Household>,
     people: Vec<Person>,
+    tax_profile: Option<TaxProfile>,
+    settings: Settings,
     accounts: Vec<Account>,
     categories: Vec<Category>,
+    activity: Vec<ActivityPosting>,
+    recurring: Vec<RecurringEntry>,
+    assets: Vec<Asset>,
+    liabilities: Vec<Liability>,
+    scenarios: Vec<ScenarioRecord>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 struct Household {
@@ -80,12 +91,29 @@ struct Person {
 }
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct TaxProfile {
+    filing_status: String,
+    state: String,
+    tax_year: i64,
+    threshold_inflation_bps: i64,
+    revision: i64,
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Settings {
+    theme: String,
+    reduced_motion: bool,
+    revision: i64,
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Account {
     id: String,
     household_id: String,
     name: String,
     kind: String,
     opening_balance_cents: i64,
+    balance_cents: i64,
     annual_return_bps: i64,
     liquid: bool,
     revision: i64,
@@ -93,15 +121,82 @@ struct Account {
 #[derive(Debug, Serialize, Deserialize)]
 struct Category {
     id: String,
+    household_id: String,
     name: String,
     kind: String,
     revision: i64,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ActivityPosting {
+    posting_id: i64,
+    entry_id: String,
+    occurred_on: String,
+    kind: String,
+    description: String,
+    note: Option<String>,
+    transfer_group_id: Option<String>,
+    account_id: String,
+    account_name: String,
+    category_id: Option<String>,
+    category_name: Option<String>,
+    amount_cents: i64,
+    revision: i64,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecurringEntry {
+    id: String,
+    household_id: String,
+    category_id: String,
+    account_id: Option<String>,
+    name: String,
+    amount_cents: i64,
+    start_date: String,
+    end_date: Option<String>,
+    annual_growth_bps: i64,
+    revision: i64,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Asset {
+    id: String,
+    household_id: String,
+    name: String,
+    value_cents: i64,
+    annual_growth_bps: i64,
+    revision: i64,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Liability {
+    id: String,
+    household_id: String,
+    name: String,
+    balance_cents: i64,
+    annual_rate_bps: i64,
+    minimum_payment_cents: i64,
+    revision: i64,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScenarioRecord {
+    id: String,
+    household_id: String,
+    name: String,
+    is_baseline: bool,
+    assumptions: serde_json::Value,
+    horizon_months: i64,
+    revision: i64,
+    events: Vec<serde_json::Value>,
+    allocations: Vec<serde_json::Value>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OnboardingPayload {
     household: Option<Household>,
     people: Option<Vec<Person>>,
+    tax_profile: Option<TaxProfile>,
     accounts: Option<Vec<Account>>,
 }
 #[derive(Debug, Deserialize)]
@@ -114,6 +209,13 @@ struct TransactionInput {
     amount_cents: i64,
     description: String,
     note: Option<String>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SettingsInput {
+    theme: String,
+    reduced_motion: bool,
+    expected_revision: i64,
 }
 
 fn migrate(connection: &mut Connection) -> Result<(), AppError> {
@@ -147,6 +249,22 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         "INSERT OR IGNORE INTO schema_migrations(version) VALUES(2)",
         [],
     )?;
+    let has_horizon: bool = transaction
+        .prepare("PRAGMA table_info(scenarios)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .any(|name| name == "horizon_months");
+    if !has_horizon {
+        transaction.execute("ALTER TABLE scenarios ADD COLUMN horizon_months INTEGER NOT NULL DEFAULT 120 CHECK(horizon_months BETWEEN 1 AND 480)", [])?;
+    }
+    transaction.execute(
+        "INSERT OR IGNORE INTO schema_migrations(version) VALUES(3)",
+        [],
+    )?;
+    // Versions 1–2 accepted a positive credit opening balance. Version 3 defines
+    // onboarding input as a positive amount owed and stores credit as signed debt.
+    transaction.execute("UPDATE accounts SET opening_balance_cents=-opening_balance_cents,revision=revision+1 WHERE kind='credit' AND opening_balance_cents>0", [])?;
     transaction.commit()?;
     Ok(())
 }
@@ -173,6 +291,17 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
     let mut people = Vec::new();
     let mut accounts = Vec::new();
     let mut categories = Vec::new();
+    let mut tax_profile = None;
+    let mut settings = Settings {
+        theme: "system".into(),
+        reduced_motion: false,
+        revision: 1,
+    };
+    let mut activity = Vec::new();
+    let mut recurring = Vec::new();
+    let mut assets = Vec::new();
+    let mut liabilities = Vec::new();
+    let mut scenarios = Vec::new();
     if let Some(h) = &household {
         let mut q=connection.prepare("SELECT id,household_id,name,birth_date FROM people WHERE household_id=? ORDER BY rowid")?;
         people = q
@@ -185,7 +314,22 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,name,kind,opening_balance_cents,annual_return_bps,liquid,revision FROM accounts WHERE household_id=? ORDER BY rowid")?;
+        tax_profile = connection.query_row("SELECT filing_status,state,tax_year,250,revision FROM tax_profiles WHERE household_id=?",[&h.id],|r| Ok(TaxProfile{filing_status:r.get(0)?,state:r.get(1)?,tax_year:r.get(2)?,threshold_inflation_bps:r.get(3)?,revision:r.get(4)?})).optional()?;
+        settings = connection
+            .query_row(
+                "SELECT theme,reduced_motion,revision FROM settings WHERE household_id=?",
+                [&h.id],
+                |r| {
+                    Ok(Settings {
+                        theme: r.get(0)?,
+                        reduced_motion: r.get::<_, i64>(1)? != 0,
+                        revision: r.get(2)?,
+                    })
+                },
+            )
+            .optional()?
+            .unwrap_or(settings);
+        let mut q=connection.prepare("SELECT a.id,a.household_id,a.name,a.kind,a.opening_balance_cents,b.balance_cents,a.annual_return_bps,a.liquid,a.revision FROM accounts a JOIN account_balances b ON b.id=a.id WHERE a.household_id=? ORDER BY a.rowid")?;
         accounts = q
             .query_map([&h.id], |r| {
                 Ok(Account {
@@ -194,20 +338,103 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     name: r.get(2)?,
                     kind: r.get(3)?,
                     opening_balance_cents: r.get(4)?,
-                    annual_return_bps: r.get(5)?,
-                    liquid: r.get::<_, i64>(6)? != 0,
-                    revision: r.get(7)?,
+                    balance_cents: r.get(5)?,
+                    annual_return_bps: r.get(6)?,
+                    liquid: r.get::<_, i64>(7)? != 0,
+                    revision: r.get(8)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,name,kind,revision FROM categories WHERE household_id=? OR household_id IS NULL ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,COALESCE(household_id,?),name,kind,revision FROM categories WHERE household_id=? OR household_id IS NULL ORDER BY name")?;
         categories = q
-            .query_map([&h.id], |r| {
+            .query_map([&h.id, &h.id], |r| {
                 Ok(Category {
                     id: r.get(0)?,
-                    name: r.get(1)?,
-                    kind: r.get(2)?,
-                    revision: r.get(3)?,
+                    household_id: r.get(1)?,
+                    name: r.get(2)?,
+                    kind: r.get(3)?,
+                    revision: r.get(4)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        let mut q=connection.prepare("SELECT p.id,e.id,e.occurred_on,e.kind,e.description,e.note,e.transfer_group_id,p.account_id,a.name,p.category_id,c.name,p.amount_cents,e.revision FROM transaction_entries e JOIN postings p ON p.entry_id=e.id JOIN accounts a ON a.id=p.account_id LEFT JOIN categories c ON c.id=p.category_id WHERE e.household_id=? ORDER BY e.occurred_on DESC,e.id,p.id")?;
+        activity = q
+            .query_map([&h.id], |r| {
+                Ok(ActivityPosting {
+                    posting_id: r.get(0)?,
+                    entry_id: r.get(1)?,
+                    occurred_on: r.get(2)?,
+                    kind: r.get(3)?,
+                    description: r.get(4)?,
+                    note: r.get(5)?,
+                    transfer_group_id: r.get(6)?,
+                    account_id: r.get(7)?,
+                    account_name: r.get(8)?,
+                    category_id: r.get(9)?,
+                    category_name: r.get(10)?,
+                    amount_cents: r.get(11)?,
+                    revision: r.get(12)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        let mut q=connection.prepare("SELECT id,household_id,category_id,account_id,name,amount_cents,start_date,end_date,annual_growth_bps,revision FROM recurring_entries WHERE household_id=? ORDER BY name")?;
+        recurring = q
+            .query_map([&h.id], |r| {
+                Ok(RecurringEntry {
+                    id: r.get(0)?,
+                    household_id: r.get(1)?,
+                    category_id: r.get(2)?,
+                    account_id: r.get(3)?,
+                    name: r.get(4)?,
+                    amount_cents: r.get(5)?,
+                    start_date: r.get(6)?,
+                    end_date: r.get(7)?,
+                    annual_growth_bps: r.get(8)?,
+                    revision: r.get(9)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision FROM assets WHERE household_id=? ORDER BY name")?;
+        assets = q
+            .query_map([&h.id], |r| {
+                Ok(Asset {
+                    id: r.get(0)?,
+                    household_id: r.get(1)?,
+                    name: r.get(2)?,
+                    value_cents: r.get(3)?,
+                    annual_growth_bps: r.get(4)?,
+                    revision: r.get(5)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        let mut q=connection.prepare("SELECT id,household_id,name,balance_cents,annual_rate_bps,minimum_payment_cents,revision FROM liabilities WHERE household_id=? ORDER BY name")?;
+        liabilities = q
+            .query_map([&h.id], |r| {
+                Ok(Liability {
+                    id: r.get(0)?,
+                    household_id: r.get(1)?,
+                    name: r.get(2)?,
+                    balance_cents: r.get(3)?,
+                    annual_rate_bps: r.get(4)?,
+                    minimum_payment_cents: r.get(5)?,
+                    revision: r.get(6)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+        let mut q=connection.prepare("SELECT id,household_id,name,is_baseline,assumptions_json,horizon_months,revision FROM scenarios WHERE household_id=? ORDER BY is_baseline DESC,name")?;
+        scenarios = q
+            .query_map([&h.id], |r| {
+                let raw: String = r.get(4)?;
+                Ok(ScenarioRecord {
+                    id: r.get(0)?,
+                    household_id: r.get(1)?,
+                    name: r.get(2)?,
+                    is_baseline: r.get::<_, i64>(3)? != 0,
+                    assumptions: serde_json::from_str(&raw).unwrap_or_default(),
+                    horizon_months: r.get(5)?,
+                    revision: r.get(6)?,
+                    events: vec![],
+                    allocations: vec![],
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -217,8 +444,15 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
         onboarding_complete: complete,
         household,
         people,
+        tax_profile,
+        settings,
         accounts,
         categories,
+        activity,
+        recurring,
+        assets,
+        liabilities,
+        scenarios,
     })
 }
 
@@ -266,6 +500,19 @@ fn save_onboarding_step(
         values.extend(ids.iter().map(|id| id as &dyn rusqlite::ToSql));
         tx.execute(&sql, values.as_slice())?;
     }
+    if let Some(profile) = payload.tax_profile {
+        if !matches!(
+            profile.filing_status.as_str(),
+            "single" | "married-joint" | "married-separate" | "head-of-household"
+        ) || !matches!(profile.tax_year, 2025 | 2026)
+        {
+            return Err(AppError::Validation(
+                "select a supported filing status and tax year".into(),
+            ));
+        }
+        let hid: String = tx.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
+        tx.execute("INSERT INTO tax_profiles(household_id,filing_status,state,tax_year) VALUES(?1,?2,'CA',?3) ON CONFLICT(household_id) DO UPDATE SET filing_status=excluded.filing_status,tax_year=excluded.tax_year,revision=revision+1",params![hid,profile.filing_status,profile.tax_year])?;
+    }
     if let Some(items) = payload.accounts {
         if items.is_empty() {
             return Err(AppError::Validation(
@@ -280,7 +527,21 @@ fn save_onboarding_step(
         }
         let ids: Vec<String> = items.iter().map(|a| a.id.clone()).collect();
         for a in items {
+            if a.opening_balance_cents.abs() > MAX_MONEY_CENTS {
+                return Err(AppError::Validation(
+                    "opening balance exceeds the supported money range".into(),
+                ));
+            }
+            let opening = if a.kind == "credit" {
+                -a.opening_balance_cents.abs()
+            } else {
+                a.opening_balance_cents
+            };
             tx.execute("INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,annual_return_bps,liquid) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(id) DO UPDATE SET name=excluded.name,kind=excluded.kind,opening_balance_cents=excluded.opening_balance_cents,annual_return_bps=excluded.annual_return_bps,liquid=excluded.liquid,revision=revision+1,updated_at=CURRENT_TIMESTAMP",params![a.id,a.household_id,a.name,a.kind,a.opening_balance_cents,a.annual_return_bps,a.liquid])?;
+            tx.execute(
+                "UPDATE accounts SET opening_balance_cents=? WHERE id=?",
+                params![opening, a.id],
+            )?;
         }
         let placeholders = std::iter::repeat_n("?", ids.len())
             .collect::<Vec<_>>()
@@ -323,6 +584,27 @@ fn complete_onboarding(database: tauri::State<Database>) -> Result<(), AppError>
             "at least one account is required".into(),
         ));
     }
+    let tp: i64 = tx.query_row(
+        "SELECT count(*) FROM tax_profiles WHERE household_id=?",
+        [&hid],
+        |r| r.get(0),
+    )?;
+    if tp < 1 {
+        return Err(AppError::Validation("filing status is required".into()));
+    }
+    tx.execute(
+        "INSERT OR IGNORE INTO settings(household_id) VALUES(?)",
+        [&hid],
+    )?;
+    for (id, name, kind) in [
+        ("income-other", "Other income", "income"),
+        ("expense-other", "Other expense", "expense"),
+    ] {
+        tx.execute(
+            "INSERT OR IGNORE INTO categories(id,household_id,name,kind) VALUES(?1,?2,?3,?4)",
+            params![format!("{id}-{hid}"), hid, name, kind],
+        )?;
+    }
     tx.execute("INSERT OR IGNORE INTO scenarios(id,household_id,name,is_baseline,assumptions_json) VALUES(?1,?2,'Baseline',1,'{\"inflationBps\":250}')",params![format!("baseline-{hid}"),hid])?;
     tx.execute(
         "UPDATE households SET onboarding_complete=1,onboarding_step=8 WHERE id=?",
@@ -333,6 +615,11 @@ fn complete_onboarding(database: tauri::State<Database>) -> Result<(), AppError>
 }
 
 fn insert_transaction(db: &mut Connection, input: &TransactionInput) -> Result<(), AppError> {
+    if input.amount_cents <= 0 || input.amount_cents > MAX_MONEY_CENTS {
+        return Err(AppError::Validation(
+            "amount must be a positive value within the supported money range".into(),
+        ));
+    }
     let tx = db.transaction()?;
     let hid: String = tx.query_row(
         "SELECT household_id FROM accounts WHERE id=?",
@@ -345,17 +632,54 @@ fn insert_transaction(db: &mut Connection, input: &TransactionInput) -> Result<(
         |r| r.get(0),
     )?;
     tx.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description,note) VALUES(?1,?2,?3,?4,?5,?6)",params![input.id,hid,input.occurred_on,kind,input.description,input.note])?;
+    let signed = match kind.as_str() {
+        "income" => input.amount_cents,
+        "expense" => -input.amount_cents,
+        _ => {
+            return Err(AppError::Validation(
+                "use the transfer command for transfers".into(),
+            ))
+        }
+    };
     tx.execute(
         "INSERT INTO postings(entry_id,account_id,category_id,amount_cents) VALUES(?1,?2,?3,?4)",
-        params![
-            input.id,
-            input.account_id,
-            input.category_id,
-            input.amount_cents
-        ],
+        params![input.id, input.account_id, input.category_id, signed],
     )?;
     tx.commit()?;
     Ok(())
+}
+#[tauri::command]
+fn update_settings(
+    input: SettingsInput,
+    database: tauri::State<Database>,
+) -> Result<Settings, AppError> {
+    if !matches!(input.theme.as_str(), "system" | "light" | "dark") {
+        return Err(AppError::Validation(
+            "theme must be system, light, or dark".into(),
+        ));
+    }
+    let db = database.0.lock().map_err(|_| AppError::Busy)?;
+    let hid: String = db.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
+    db.execute(
+        "INSERT OR IGNORE INTO settings(household_id) VALUES(?)",
+        [&hid],
+    )?;
+    let changed=db.execute("UPDATE settings SET theme=?1,reduced_motion=?2,revision=revision+1 WHERE household_id=?3 AND revision=?4",params![input.theme,input.reduced_motion,hid,input.expected_revision])?;
+    if changed == 0 {
+        return Err(AppError::Conflict);
+    }
+    db.query_row(
+        "SELECT theme,reduced_motion,revision FROM settings WHERE household_id=?",
+        [hid],
+        |r| {
+            Ok(Settings {
+                theme: r.get(0)?,
+                reduced_motion: r.get::<_, i64>(1)? != 0,
+                revision: r.get(2)?,
+            })
+        },
+    )
+    .map_err(AppError::from)
 }
 #[tauri::command]
 fn create_transaction(
@@ -454,6 +778,24 @@ pub fn run() {
             let path = dir.join("lifelook.db");
             let mut c = Connection::open(&path)?;
             c.pragma_update(None, "journal_mode", "WAL")?;
+            let version: i64 = c
+                .query_row(
+                    "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap_or(0);
+            if version > 0 && version < SCHEMA_VERSION {
+                let stamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                backup_to(
+                    &c,
+                    &dir.join(format!("lifelook.pre-migration-{stamp}.lifelook")),
+                )
+                .map_err(Box::<dyn std::error::Error>::from)?;
+            }
             migrate(&mut c).map_err(Box::<dyn std::error::Error>::from)?;
             app.manage(path);
             app.manage(Database(Mutex::new(c)));
@@ -465,6 +807,7 @@ pub fn run() {
             complete_onboarding,
             create_transaction,
             create_transfer,
+            update_settings,
             backup_database,
             inspect_backup
         ])
@@ -504,7 +847,7 @@ mod tests {
         let n: i64 = c
             .query_row("SELECT count(*) FROM schema_migrations", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(n, 2)
+        assert_eq!(n, 3)
     }
     #[test]
     fn transfers_are_balanced() {
@@ -535,5 +878,44 @@ mod tests {
         assert_eq!(name, "Home");
         drop(restored);
         fs::remove_file(path).unwrap()
+    }
+    #[test]
+    fn transaction_sign_comes_from_category() {
+        let mut c = seeded();
+        let input = TransactionInput {
+            id: "x".into(),
+            occurred_on: "2026-08-09".into(),
+            account_id: "a".into(),
+            category_id: "c".into(),
+            amount_cents: 1250,
+            description: "Food".into(),
+            note: None,
+        };
+        insert_transaction(&mut c, &input).unwrap();
+        let amount: i64 = c
+            .query_row(
+                "SELECT amount_cents FROM postings WHERE entry_id='x'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(amount, -1250);
+    }
+    #[test]
+    fn money_limit_is_enforced() {
+        let mut c = seeded();
+        let input = TransactionInput {
+            id: "x".into(),
+            occurred_on: "2026-08-09".into(),
+            account_id: "a".into(),
+            category_id: "c".into(),
+            amount_cents: MAX_MONEY_CENTS + 1,
+            description: "Too much".into(),
+            note: None,
+        };
+        assert!(matches!(
+            insert_transaction(&mut c, &input),
+            Err(AppError::Validation(_))
+        ));
     }
 }

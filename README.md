@@ -29,23 +29,23 @@ The AppImage is written under `src-tauri/target/release/bundle/appimage/`. This 
 
 ## User quick start
 
-1. Launch LifeLook and create your household. Choose filing status and California residency.
-2. Add checking, savings, investments, property, and debts with their current balances.
-3. Enter recent activity manually or import a CSV and confirm its column mapping.
-4. Add annual income, recurring spending, savings targets, and growth assumptions in Plan.
-5. Clone the baseline, name a scenario, add dated life events, and compare its trajectory.
+1. Launch LifeLook and create a household with at least one member.
+2. Choose a filing status and add at least one account with its current balance. Credit-card input is the positive amount owed.
+3. Review current balances in Overview and Net Worth. Existing database postings appear in Activity and can be filtered by text, account, and year.
+4. Choose System, Light, or Dark appearance and reduced motion in Settings; these choices persist locally.
+
+Creation and editing forms, CSV import/export, scenario editing/comparison, and backup/restore file selection are not available in the current pre-release interface. Their controls are disabled rather than presented as working actions.
 
 ## Feature guide
 
 - **Overview** shows current cash flow, savings, taxes, and net-worth direction without burying the headline in transaction detail.
-- **Activity** supports income, expenses, and balance-neutral transfers, with account/category filters, recurring entries, and reconciliation.
+- **Activity** reads persisted income, expenses, and balance-neutral transfer postings, with text, account, and year filters. Creation/editing is not yet exposed in the interface.
 - **Plan** starts with years and expands into deterministic monthly calculations. Actuals fill elapsed periods while assumptions drive future projections.
 - **Net Worth** brings liquid accounts, investments, assets, mortgages, and other liabilities into one balance sheet.
-- **CSV import** maps arbitrary columns, previews and validates rows, remembers profiles, suggests categories, flags duplicates, and commits only confirmed rows in one transaction.
+- **CSV import/export** is future work and is not currently exposed.
 - **Tax estimates** apply versioned federal, payroll, and California planning rules. Explanations disclose the source year, effective and marginal rates, projected threshold growth, and exclusions.
-- **Scenario comparison** keeps named alternatives independent and compares cash flow, taxes, savings, liquidity, net worth, debt payoff, and allocation.
-- **Backup** creates an unencrypted snapshot of the local database. Store it somewhere protected.
-- **Restore** validates integrity and schema before replacing current data. Back up current data first.
+- **Scenario comparison** is future work; saved baseline data can be loaded but cannot yet be edited in the interface.
+- **Backup/restore** database primitives exist, but safe file selection and staged restore are not yet available in the interface. Do not treat the disabled controls as a backup strategy.
 
 ### Actuals, assumptions, and projections
 

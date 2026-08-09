@@ -29,9 +29,13 @@ import {
 import {
   tauriRepository,
   type Bootstrap,
+  type BootstrapInput,
   type BootstrapAccount,
   type BootstrapPerson,
   type Repository,
+  type Theme,
+  type ActivityPosting,
+  emptySettings,
 } from "./repository";
 
 type View = "Overview" | "Activity" | "Plan" | "Net Worth" | "Settings";
@@ -58,6 +62,13 @@ const baseline: Scenario = {
   allocations: [{ accountId: "savings", percentBps: 10000, priority: 1 }],
   horizon: { start: "2025-01", months: 120 },
 };
+const normalizeBootstrap=(value:BootstrapInput):Bootstrap=>({
+  ...value,
+  settings:value.settings??emptySettings,
+  taxProfile:value.taxProfile??null,
+  activity:value.activity??[],recurring:value.recurring??[],assets:value.assets??[],liabilities:value.liabilities??[],scenarios:value.scenarios??[],
+  accounts:value.accounts.map(a=>({...a,balanceCents:"balanceCents" in a?a.balanceCents:a.openingBalanceCents})),
+});
 
 export function App({
   repository = tauriRepository,
@@ -69,7 +80,7 @@ export function App({
   useEffect(() => {
     repository
       .bootstrap()
-      .then(setBootstrap)
+      .then((value) => setBootstrap(normalizeBootstrap(value)))
       .catch((error) =>
         setLoadError(error?.message ?? "Could not open the local database"),
       );
@@ -95,14 +106,14 @@ export function App({
       <Onboarding
         initial={bootstrap}
         repository={repository}
-        onComplete={() => repository.bootstrap().then(setBootstrap)}
+        onComplete={() => repository.bootstrap().then((value)=>setBootstrap(normalizeBootstrap(value)))}
       />
     );
   return (
     <Workspace
       bootstrap={bootstrap}
       repository={repository}
-      onRefresh={() => repository.bootstrap().then(setBootstrap)}
+      onRefresh={() => repository.bootstrap().then((value)=>setBootstrap(normalizeBootstrap(value)))}
     />
   );
 }
@@ -117,7 +128,11 @@ function Workspace({
   onRefresh: () => void;
 }) {
   const [view, setView] = useState<View>("Overview");
-  const [dark, setDark] = useState(false);
+  const [settings, setSettings] = useState(bootstrap.settings);
+  const systemDark=()=>typeof matchMedia==="function"&&matchMedia("(prefers-color-scheme: dark)").matches;
+  const [osDark,setOsDark]=useState(systemDark);
+  useEffect(()=>{if(typeof matchMedia!=="function")return;const media=matchMedia("(prefers-color-scheme: dark)");const change=()=>setOsDark(media.matches);media.addEventListener("change",change);return()=>media.removeEventListener("change",change)},[]);
+  const dark=settings.theme==="dark"||(settings.theme==="system"&&osDark);
   const [expanded, setExpanded] = useState<number | null>(null);
   const snapshot = useMemo<FinancialSnapshot>(
     () => ({
@@ -131,32 +146,24 @@ function Workspace({
           birthDate: p.birthDate ?? undefined,
         })),
       },
-      taxProfile: {
-        filingStatus: "single",
-        state: "CA",
-        taxYear: 2025,
-        thresholdInflationBps: 250,
-      },
+      taxProfile: bootstrap.taxProfile!,
       accounts: bootstrap.accounts.map((a) => ({
         id: a.id,
         name: a.name,
         kind: a.kind,
-        balanceCents: a.openingBalanceCents,
+        balanceCents: a.balanceCents,
         annualReturnBps: a.annualReturnBps,
         liquid: a.liquid,
       })),
-      recurring: [],
-      assets: [],
-      liabilities: [],
+      recurring: bootstrap.recurring.map(r=>({...r,endDate:r.endDate??undefined,kind:bootstrap.categories.find(c=>c.id===r.categoryId)?.kind==="income"?"income":"expense"})),
+      assets: bootstrap.assets,
+      liabilities: bootstrap.liabilities,
     }),
     [bootstrap],
   );
-  const projections = useMemo(
-    () => ProjectionEngine.calculate(snapshot, baseline),
-    [snapshot],
-  );
+  const projections = useMemo(() => bootstrap.taxProfile ? ProjectionEngine.calculate(snapshot, baseline) : null,[snapshot,bootstrap.taxProfile]);
   return (
-    <div className={dark ? "app dark" : "app"}>
+    <div className={dark ? "app dark" : "app"} data-reduced-motion={settings.reducedMotion||undefined}>
       <aside>
         <div className="brand">
           <span className="brandmark">
@@ -169,16 +176,17 @@ function Workspace({
             <button
               key={name}
               className={view === name ? "active" : ""}
+              aria-current={view === name ? "page" : undefined}
               onClick={() => setView(name)}
             >
               <Icon size={18} />
               <span>{name}</span>
-              {name === "Activity" && <i>12</i>}
+              {name === "Activity" && bootstrap.activity.length>0 && <i>{new Set(bootstrap.activity.map(x=>x.entryId)).size}</i>}
             </button>
           ))}
         </nav>
         <div className="aside-bottom">
-          <button className="profile">
+          <button className="profile" disabled title="Profile menu is not available in this build">
             <span>
               {bootstrap.people[0]?.name.slice(0, 2).toUpperCase() || "LL"}
             </span>
@@ -197,35 +205,36 @@ function Workspace({
             <h1>{view}</h1>
           </div>
           <div className="header-actions">
-            <button className="icon" aria-label="Search">
+            <button className="icon" aria-label="Search (not yet available)" disabled>
               <Search size={18} />
             </button>
             <button
               className="icon"
-              onClick={() => setDark(!dark)}
+              onClick={() => setSettings(s=>({...s,theme:dark?"light":"dark"}))}
               aria-label="Toggle theme"
             >
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <button className="add">
-              <Plus size={17} /> Add <ChevronDown size={14} />
+            <button className="add" disabled title="Creation forms are not yet available in this build">
+              <Plus size={17} /> Add (unavailable)
             </button>
           </div>
         </header>
-        {view === "Overview" && <Overview projections={projections} />}
-        {view === "Activity" && <ActivityView />}
-        {view === "Plan" && (
+        {view === "Overview" && <Overview bootstrap={bootstrap} projections={projections} navigate={setView} />}
+        {view === "Activity" && <ActivityView activity={bootstrap.activity} accounts={bootstrap.accounts} />}
+        {view === "Plan" && projections && (
           <PlanView
             projections={projections}
             expanded={expanded}
             setExpanded={setExpanded}
           />
         )}
+        {view === "Plan" && !projections && <div className="content"><section className="card"><h2>Complete your tax profile</h2><p>Projected plan values are hidden until a filing status and supported tax year are saved.</p><button onClick={()=>setView("Settings")}>Open Settings</button></section></div>}
         {view === "Net Worth" && <NetWorth snapshot={snapshot} />}
         {view === "Settings" && (
           <SettingsView
-            dark={dark}
-            setDark={setDark}
+            settings={settings}
+            setSettings={setSettings}
             bootstrap={bootstrap}
             repository={repository}
             onSaved={onRefresh}
@@ -264,6 +273,7 @@ function Onboarding({
         }))
       : [newAccount(householdId.current)],
   );
+  const [filingStatus,setFilingStatus]=useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   async function submit(event: FormEvent) {
@@ -286,6 +296,7 @@ function Onboarding({
       }
     }
     if (step === 2) {
+      if(!filingStatus){setError("Select a filing status before finishing setup.");return;}
       const invalid = accounts.findIndex(
         (a) => !a.kind || !a.name.trim() || !validMoney(a.balance),
       );
@@ -315,6 +326,7 @@ function Onboarding({
       } else {
         await repository.saveOnboardingStep(6, {
           accounts: accounts.map(toAccount),
+          taxProfile:{filingStatus,state:"CA",taxYear:2026,thresholdInflationBps:250,revision:1},
         });
         await repository.completeOnboarding();
         onComplete();
@@ -405,28 +417,24 @@ function Onboarding({
             </>
           ) : (
             <>
+              <label>Filing status<select aria-label="Filing status" value={filingStatus} onChange={e=>setFilingStatus(e.target.value)}><option value="">Select…</option><option value="single">Single</option><option value="married-joint">Married filing jointly</option><option value="married-separate">Married filing separately</option><option value="head-of-household">Head of household</option></select></label>
+              <p className="muted">Required for tax-dependent projections. California and the 2026 rule pack are used.</p>
               {accounts.map((a, i) => (
                 <fieldset className="repeat-row" key={a.id}>
                   <legend>Account {i + 1}</legend>
                   <div
                     className="account-types"
-                    role="radiogroup"
                     aria-label={`Account ${i + 1} type`}
                   >
                     {accountKinds.map((k) => (
-                      <button
-                        type="button"
-                        role="radio"
-                        aria-checked={a.kind === k.value}
+                      <label
                         className={a.kind === k.value ? "selected" : ""}
                         key={k.value}
-                        onClick={() =>
-                          setAccounts(updateAt(accounts, i, { kind: k.value }))
-                        }
                       >
+                        <input type="radio" name={`account-${i}-type`} value={k.value} checked={a.kind===k.value} onChange={()=>setAccounts(updateAt(accounts,i,{kind:k.value}))}/>
                         <strong>{k.label}</strong>
                         <small>{k.help}</small>
-                      </button>
+                      </label>
                     ))}
                   </div>
                   <label>
@@ -460,7 +468,7 @@ function Onboarding({
                   <p className="muted">
                     Balance as of today.{" "}
                     {a.kind === "credit"
-                      ? "Enter an amount you owe as a negative number (for example, -125.40)."
+                      ? "Enter the positive amount you owe (for example, 125.40). It is stored as debt."
                       : "Use the current balance; negative values are accepted."}
                   </p>
                   {accounts.length > 1 && (
@@ -541,6 +549,7 @@ const newAccount = (householdId: string): AccountDraft => ({
   kind: "" as BootstrapAccount["kind"],
   balance: "",
   openingBalanceCents: 0,
+  balanceCents:0,
   annualReturnBps: 0,
   liquid: true,
   revision: 1,
@@ -548,10 +557,18 @@ const newAccount = (householdId: string): AccountDraft => ({
 const updateAt = <T,>(items: T[], index: number, patch: Partial<T>) =>
   items.map((item, i) => (i === index ? { ...item, ...patch } : item));
 const validMoney = (value: string) =>
-  /^-?(?:\d+|\d*\.\d{1,2})$/.test(value.trim());
+  parseMoney(value)!==undefined;
+function parseMoney(value:string):number|undefined{
+  const match=/^(-?)(\d{1,12})(?:\.(\d{1,2}))?$/.exec(value.trim());
+  if(!match)return undefined;
+  const cents=BigInt(match[2])*100n+BigInt((match[3]??"").padEnd(2,"0"));
+  if(cents>99_999_999_999_999n)return undefined;
+  return Number((match[1]? -cents:cents));
+}
 const toAccount = (a: AccountDraft): BootstrapAccount => ({
   ...a,
-  openingBalanceCents: Math.round(Number(a.balance) * 100),
+  openingBalanceCents:a.kind==="credit"?-Math.abs(parseMoney(a.balance)!):parseMoney(a.balance)!,
+  balanceCents:a.kind==="credit"?-Math.abs(parseMoney(a.balance)!):parseMoney(a.balance)!,
   liquid: a.kind === "checking" || a.kind === "savings" || a.kind === "credit",
 });
 const displayBirthDate = (value?: string | null) =>
@@ -611,72 +628,51 @@ function BirthDateField({
 }
 
 function Overview({
+  bootstrap,
   projections,
+  navigate,
 }: {
-  projections: ReturnType<typeof ProjectionEngine.calculate>;
+  bootstrap:Bootstrap;
+  projections: ReturnType<typeof ProjectionEngine.calculate>|null;
+  navigate:(view:View)=>void;
 }) {
-  const current = projections[0];
+  const currentNetWorth=bootstrap.accounts.reduce((sum,a)=>sum+a.balanceCents,0)+bootstrap.assets.reduce((sum,a)=>sum+a.valueCents,0)-bootstrap.liabilities.reduce((sum,a)=>sum+a.balanceCents,0);
+  const year=String(new Date().getFullYear());
+  const actual=bootstrap.activity.filter(x=>x.occurredOn.startsWith(year)&&x.kind!=="transfer");
+  const income=actual.filter(x=>x.kind==="income").reduce((s,x)=>s+x.amountCents,0);
+  const spending=-actual.filter(x=>x.kind==="expense").reduce((s,x)=>s+x.amountCents,0);
   return (
     <div className="content">
       <section className="hero">
         <div>
-          <span className="label projected">Projected · Dec 2025</span>
+          <span className="label actual">Current balance</span>
           <p className="hero-label">Net worth</p>
-          <h2>{money(current.endingNetWorthCents)}</h2>
-          <p className="positive">
-            <ArrowUpRight size={16} /> {money(2948200)} this year
-          </p>
+          <h2>{money(currentNetWorth)}</h2>
+          <p className="muted">Based on current account, asset, and liability balances.</p>
         </div>
-        <div className="hero-chart" aria-label="Net worth trend chart">
-          <svg viewBox="0 0 500 150" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#6d7965" stopOpacity=".22" />
-                <stop offset="1" stopColor="#6d7965" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <path
-              className="area"
-              d="M0 134 C70 124 80 105 140 108 S220 84 270 89 S350 58 390 63 S455 25 500 18 V150 H0Z"
-            />
-            <path
-              className="line"
-              d="M0 134 C70 124 80 105 140 108 S220 84 270 89 S350 58 390 63 S455 25 500 18"
-            />
-          </svg>
-          <div className="axis">
-            <span>Jan</span>
-            <span>Apr</span>
-            <span>Jul</span>
-            <span>Oct</span>
-            <span>Dec</span>
-          </div>
-        </div>
+        <div className="hero-chart"><p className="muted">Historical net-worth trend unavailable: no dated balance history has been recorded.</p></div>
       </section>
       <div className="metrics">
         <Metric
           title="Income"
-          value={money(current.incomeCents)}
-          change="3.2%"
+          value={money(income)} change={`${year} actual`}
           icon={ArrowDownRight}
         />
         <Metric
           title="Spending"
-          value={money(current.expenseCents)}
-          change="1.8%"
+          value={money(spending)} change={`${year} actual`}
           icon={ArrowUpRight}
           negative
         />
         <Metric
           title="Saved"
-          value={money(current.surplusCents)}
-          change="24.6% rate"
+          value={money(income-spending)} change="Income minus spending"
           icon={PiggyBank}
         />
         <Metric
           title="Taxes"
-          value={money(current.taxCents)}
-          change="Estimated"
+          value={projections?money(projections[0]?.taxCents??0):"Unavailable"}
+          change={projections?"Projected":"Tax profile required"}
           icon={CircleDollarSign}
           neutral
         />
@@ -688,12 +684,12 @@ function Overview({
               <span className="label actual">Actual</span>
               <h3>Recent activity</h3>
             </div>
-            <button>
+            <button onClick={()=>navigate("Activity")}>
               View all <ChevronRight size={14} />
             </button>
           </div>
           <p className="empty">
-            No transactions yet. Use Add to record your first activity.
+            No transactions have been recorded.
           </p>
         </section>
         <section className="card">
@@ -702,29 +698,11 @@ function Overview({
               <span className="label assumption">Assumption</span>
               <h3>Your plan at a glance</h3>
             </div>
-            <button>
+            <button onClick={()=>navigate("Plan")}>
               Open plan <ChevronRight size={14} />
             </button>
           </div>
-          <div className="plan-row">
-            <span>Retirement target</span>
-            <strong>2048</strong>
-          </div>
-          <div className="plan-row">
-            <span>Annual return</span>
-            <strong>6.5%</strong>
-          </div>
-          <div className="plan-row">
-            <span>Inflation</span>
-            <strong>2.5%</strong>
-          </div>
-          <div className="callout">
-            <Sparkles size={17} />
-            <div>
-              <strong>You’re on track</strong>
-              <p>At this pace, your plan funds 92% of your target lifestyle.</p>
-            </div>
-          </div>
+          {projections?<p>Projected values use your saved tax profile and planning assumptions. Open Plan for the monthly reconciliation.</p>:<p>Complete your tax profile before LifeLook calculates projections.</p>}
         </section>
       </div>
     </div>
@@ -787,7 +765,11 @@ function Transaction({
   );
 }
 
-function ActivityView() {
+function ActivityView({activity,accounts}:{activity:ActivityPosting[];accounts:BootstrapAccount[]}) {
+  const [query,setQuery]=useState(""); const [account,setAccount]=useState("all"); const [year,setYear]=useState(String(new Date().getFullYear()));
+  const rows=activity.filter(x=>(account==="all"||x.accountId===account)&&(year==="all"||x.occurredOn.startsWith(year))&&`${x.description} ${x.accountName} ${x.categoryName??""}`.toLowerCase().includes(query.toLowerCase()));
+  const total=rows.filter(x=>x.kind!=="transfer").reduce((sum,x)=>sum+x.amountCents,0);
+  const years=[...new Set(activity.map(x=>x.occurredOn.slice(0,4)))].sort().reverse();
   return (
     <div className="content">
       <div className="toolbar">
@@ -796,43 +778,30 @@ function ActivityView() {
           <input
             aria-label="Search activity"
             placeholder="Search transactions"
+            value={query} onChange={e=>setQuery(e.target.value)}
           />
         </div>
-        <button>
-          All accounts <ChevronDown size={14} />
-        </button>
-        <button>
-          This year <ChevronDown size={14} />
-        </button>
+        <label className="sr-only" htmlFor="activity-account">Account</label><select id="activity-account" value={account} onChange={e=>setAccount(e.target.value)}><option value="all">All accounts</option>{accounts.map(a=><option value={a.id} key={a.id}>{a.name}</option>)}</select>
+        <label className="sr-only" htmlFor="activity-year">Year</label><select id="activity-year" value={year} onChange={e=>setYear(e.target.value)}><option value="all">All years</option>{years.map(y=><option key={y}>{y}</option>)}</select>
       </div>
       <section className="card wide">
         <div className="card-title">
           <div>
             <span className="label actual">Actual</span>
-            <h3>August 2025</h3>
+            <h3>Activity</h3>
           </div>
-          <strong className="negative">−$4,916.80</strong>
+          <strong className={total<0?"negative":"positive"}>{money(total)}</strong>
         </div>
-        {[
-          [Building2, "Mortgage payment", "Home · Today", "−$3,120.00"],
-          [WalletCards, "Payroll deposit", "Income · Aug 1", "+$8,125.00"],
-          [Command, "Whole Foods Market", "Groceries · Jul 30", "−$184.32"],
-          [
-            CircleDollarSign,
-            "Pacific Gas & Electric",
-            "Utilities · Jul 28",
-            "−$162.48",
-          ],
-        ].map(([i, n, d, a], x) => (
+        {rows.map((row) => (
           <Transaction
-            key={n as string}
-            icon={i as typeof Activity}
-            name={n as string}
-            detail={d as string}
-            amount={a as string}
-            positive={x === 1}
+            key={`${row.entryId}-${row.postingId}`}
+            icon={row.kind==="income"?ArrowDownRight:row.kind==="transfer"?WalletCards:ArrowUpRight}
+            name={row.description||row.kind}
+            detail={`${row.accountName} · ${row.categoryName??"Transfer"} · ${row.occurredOn}`}
+            amount={money(row.amountCents)} positive={row.amountCents>0}
           />
         ))}
+        {!rows.length&&<p className="empty">{activity.length?"No activity matches these filters.":"No transactions have been recorded."}</p>}
       </section>
     </div>
   );
@@ -854,7 +823,7 @@ function PlanView({
           <span className="label assumption">Assumptions</span>
           <h3>Baseline plan</h3>
         </div>
-        <button>Compare scenarios</button>
+        <button disabled title="Scenario comparison editor is not yet available">Compare scenarios (unavailable)</button>
       </div>
       <section className="card wide">
         <div className="card-title">
@@ -919,9 +888,10 @@ function PlanView({
 }
 function NetWorth({ snapshot }: { snapshot: FinancialSnapshot }) {
   const assets =
-      snapshot.accounts.reduce((s, a) => s + a.balanceCents, 0) +
+      snapshot.accounts.reduce((s, a) => s + Math.max(0,a.balanceCents), 0) +
       snapshot.assets.reduce((s, a) => s + a.valueCents, 0),
-    debt = snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0);
+    debt = snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0)+snapshot.accounts.reduce((s,a)=>s+Math.max(0,-a.balanceCents),0),
+    netWorth=snapshot.accounts.reduce((s,a)=>s+a.balanceCents,0)+snapshot.assets.reduce((s,a)=>s+a.valueCents,0)-snapshot.liabilities.reduce((s,l)=>s+l.balanceCents,0);
   return (
     <div className="content">
       <div className="metrics">
@@ -941,7 +911,7 @@ function NetWorth({ snapshot }: { snapshot: FinancialSnapshot }) {
         />
         <Metric
           title="Net worth"
-          value={money(assets - debt)}
+          value={money(netWorth)}
           change="Current"
           icon={Landmark}
         />
@@ -952,11 +922,11 @@ function NetWorth({ snapshot }: { snapshot: FinancialSnapshot }) {
             <span className="label actual">Current balance</span>
             <h3>Accounts & assets</h3>
           </div>
-          <button>
-            <Plus size={14} /> Add account
+          <button disabled title="Account editing is not yet available">
+            <Plus size={14} /> Add account (unavailable)
           </button>
         </div>
-        {snapshot.accounts.map((a) => (
+        {snapshot.accounts.filter(a=>a.balanceCents>=0).map((a) => (
           <div className="account" key={a.id}>
             <span className="transaction-icon">
               <WalletCards size={17} />
@@ -980,19 +950,21 @@ function NetWorth({ snapshot }: { snapshot: FinancialSnapshot }) {
             <b>{money(a.valueCents)}</b>
           </div>
         ))}
+        {!snapshot.accounts.length&&!snapshot.assets.length&&<p className="empty">No accounts or assets yet.</p>}
       </section>
+      {(debt>0)&&<section className="card wide"><div className="card-title"><div><span className="label actual">Current balance</span><h3>Credit & liabilities</h3></div></div>{snapshot.accounts.filter(a=>a.balanceCents<0).map(a=><div className="account" key={a.id}><span className="transaction-icon"><WalletCards size={17}/></span><div><strong>{a.name}</strong><small>Credit balance</small></div><b>{money(-a.balanceCents)}</b></div>)}{snapshot.liabilities.map(l=><div className="account" key={l.id}><span className="transaction-icon"><Building2 size={17}/></span><div><strong>{l.name}</strong><small>Liability</small></div><b>{money(l.balanceCents)}</b></div>)}</section>}
     </div>
   );
 }
 function SettingsView({
-  dark,
-  setDark,
+  settings,
+  setSettings,
   bootstrap,
   repository,
   onSaved,
 }: {
-  dark: boolean;
-  setDark: (x: boolean) => void;
+  settings: Bootstrap["settings"];
+  setSettings: (x:Bootstrap["settings"]|((old:Bootstrap["settings"])=>Bootstrap["settings"])) => void;
   bootstrap: Bootstrap;
   repository: Repository;
   onSaved: () => void;
@@ -1004,6 +976,11 @@ function SettingsView({
     })),
   );
   const [message, setMessage] = useState("");
+  const [saving,setSaving]=useState(false);
+  async function saveAppearance(patch:Partial<Bootstrap["settings"]>){
+    const next={...settings,...patch};setSaving(true);setMessage("");
+    try{if(!repository.updateSettings)throw new Error("Settings persistence is unavailable.");const saved=await repository.updateSettings({theme:next.theme,reducedMotion:next.reducedMotion,expectedRevision:settings.revision});setSettings(saved);setMessage("Appearance saved.")}catch(e){setMessage((e as {message?:string}).message??"Could not save appearance.")}finally{setSaving(false)}
+  }
   async function savePeople() {
     if (people.some((p) => !p.name.trim())) {
       setMessage("Every household member needs a name.");
@@ -1077,22 +1054,7 @@ function SettingsView({
       <section className="card settings-card">
         <h3>Appearance</h3>
         <div className="setting">
-          <div>
-            <strong id="dark-theme-label">Dark theme</strong>
-            <p id="dark-theme-description">
-              Use a darker, low-glare appearance.
-            </p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={dark}
-            aria-labelledby="dark-theme-label"
-            aria-describedby="dark-theme-description"
-            className={dark ? "switch on" : "switch"}
-            onClick={() => setDark(!dark)}
-          >
-            <span />
-          </button>
+          <fieldset><legend>Theme</legend>{(["system","light","dark"] as Theme[]).map(theme=><label key={theme}><input type="radio" name="theme" checked={settings.theme===theme} disabled={saving} onChange={()=>saveAppearance({theme})}/>{theme[0].toUpperCase()+theme.slice(1)}</label>)}</fieldset>
         </div>
         <div className="setting">
           <div>
@@ -1103,10 +1065,11 @@ function SettingsView({
           </div>
           <button
             role="switch"
-            aria-checked="false"
+            aria-checked={settings.reducedMotion}
             aria-labelledby="reduced-motion-label"
             aria-describedby="reduced-motion-description"
-            className="switch"
+            className={settings.reducedMotion?"switch on":"switch"}
+            disabled={saving} onClick={()=>saveAppearance({reducedMotion:!settings.reducedMotion})}
           >
             <span />
           </button>
@@ -1119,14 +1082,14 @@ function SettingsView({
             <strong>Local database</strong>
             <p>Your financial data stays on this device.</p>
           </div>
-          <button>Back up data</button>
+          <button disabled title="Backup file selection is not yet available">Back up data (unavailable)</button>
         </div>
         <div className="setting">
           <div>
             <strong>Restore</strong>
             <p>Replace local data from a LifeLook backup.</p>
           </div>
-          <button>Choose backup</button>
+          <button disabled title="Restore is not yet available">Choose backup (unavailable)</button>
         </div>
       </section>
     </div>

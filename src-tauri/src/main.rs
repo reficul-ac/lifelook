@@ -1,1 +1,3 @@
-fn main() { lifelook_lib::run(); }
+fn main() {
+    lifelook_lib::run();
+}

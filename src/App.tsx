@@ -1078,12 +1078,16 @@ function SettingsView({
         <h3>Appearance</h3>
         <div className="setting">
           <div>
-            <strong>Dark theme</strong>
-            <p>Use a darker, low-glare appearance.</p>
+            <strong id="dark-theme-label">Dark theme</strong>
+            <p id="dark-theme-description">
+              Use a darker, low-glare appearance.
+            </p>
           </div>
           <button
             role="switch"
             aria-checked={dark}
+            aria-labelledby="dark-theme-label"
+            aria-describedby="dark-theme-description"
             className={dark ? "switch on" : "switch"}
             onClick={() => setDark(!dark)}
           >
@@ -1092,10 +1096,18 @@ function SettingsView({
         </div>
         <div className="setting">
           <div>
-            <strong>Reduced motion</strong>
-            <p>Minimize interface animation.</p>
+            <strong id="reduced-motion-label">Reduced motion</strong>
+            <p id="reduced-motion-description">
+              Minimize interface animation.
+            </p>
           </div>
-          <button role="switch" aria-checked="false" className="switch">
+          <button
+            role="switch"
+            aria-checked="false"
+            aria-labelledby="reduced-motion-label"
+            aria-describedby="reduced-motion-description"
+            className="switch"
+          >
             <span />
           </button>
         </div>

@@ -34,6 +34,9 @@ button {
   --line: #e5e5de;
   --accent: #64705d;
   --accent-soft: #e9ede6;
+  --positive: #58745b;
+  --negative: #a45e57;
+  --focus: #3157c8;
   min-height: 100vh;
   display: grid;
   grid-template-columns: 224px 1fr;
@@ -52,6 +55,9 @@ button {
   --line: #343830;
   --accent: #a5b09d;
   --accent-soft: #30362d;
+  --positive: #91c997;
+  --negative: #f19a91;
+  --focus: #a9bfff;
 }
 aside {
   position: fixed;
@@ -255,10 +261,10 @@ h1 {
   letter-spacing: -0.04em;
 }
 .positive {
-  color: #58745b !important;
+  color: var(--positive) !important;
 }
 .negative {
-  color: #a45e57 !important;
+  color: var(--negative) !important;
 }
 .neutral {
   color: var(--muted) !important;
@@ -428,6 +434,15 @@ h1 {
   background: var(--surface);
   padding: 8px 12px;
   border-radius: 9px;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.search:focus-within {
+  border-color: var(--focus);
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 4px var(--focus);
 }
 .search input {
   border: 0;

@@ -23,14 +23,14 @@ No P0 defect was found. “Passed” is limited to the behavior named; component
 | Account onboarding | Passed ordinary checking path; other kinds component/source | Partial; custom radio Defect | Account visible after completion; process relaunch Blocked | Boundary/sign Defects | N/A | Blocked | Confirmed |
 | Shell/navigation | Passed all five destinations | Native buttons supported; detailed focus Blocked | View not expected to persist | N/A | Immediate toggle Passed; persistence Defect | Blocked | Confirmed |
 | Overview | Pointer rendered | Chart alternative Defect | Uses persisted opening balance only | Misleading-output Defect | Rendered both; contrast Defect | Blocked | Confirmed |
-| Activity | Navigation/input entry Passed | Search focus Defect | Defect: ignores database | Empty/filters Defect | Rendered | Blocked | Confirmed |
+| Activity | Navigation/input entry Passed | Search focus Passed (native) | Defect: ignores database | Empty/filters Defect | Dark semantic contrast Passed | Passed at 920×650 | Confirmed |
 | Plan | Year expand/collapse Passed | Disclosure state Defect | Defect: ignores persisted scenarios/domain | Edge warnings absent/outstanding v1 | Rendered | Blocked | Confirmed |
 | Net Worth | Navigation Passed | Native button semantics supported | Defect: opening balances only | Empty state Defect | Rendered | Blocked | Confirmed |
 | Settings members | Controls wired; full mutation not exercised | Calendar Blocked | Blocked after real relaunch | Save rejection Defect | Rendered | Blocked | Narrowed |
-| Appearance | Immediate theme toggles Passed | Switch names Defect | Theme/motion persistence Defect | N/A | Contrast Defect | Blocked | Confirmed |
+| Appearance | Immediate theme toggles Passed | Switch names/states Passed (native) | Theme/motion persistence Defect | N/A | Light/dark Passed | Passed at 920×650 | Confirmed |
 | Backup/restore | Defect: buttons are no-ops | Defect | Blocked | Blocked | N/A | Blocked | Confirmed |
 | Corrupt/unwritable startup | N/A; app exits | N/A | Defect | Defect | N/A | N/A | Confirmed |
-| AppImage/CI | Blocked | Blocked | Blocked | Packaging failure Confirmed | Blocked | Blocked | Confirmed |
+| AppImage/CI | Local visible launch Passed | Native keyboard suite Passed | Packaged persistence/export still Blocked | Hosted run pending | Light/dark evidence Passed | Passed at 920×650 | Awaiting hosted CI |
 
 ## Complete interaction and claim inventory
 
@@ -89,21 +89,21 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 | I-049 | Back up data | Defect | Enabled no-op despite backend command; F-009 |
 | I-050 | Choose backup/restore | Defect | Enabled no-op; no replacement command; F-009 |
 | I-051 | Loading/error/validation announcements | Passed implementation only | Roles at `src/App.tsx:80-91,490-493` |
-| I-052 | Switch accessible names | Defect | F-012 |
-| I-053 | Activity-search focus indicator | Defect | F-012 |
+| I-052 | Switch accessible names | Passed | Native WebDriver role/name/state assertions; `artifacts/native-e2e/02-dark-settings-920x650.png` |
+| I-053 | Activity-search focus indicator | Passed | Native keyboard focus assertion; `artifacts/native-e2e/03-dark-activity-search-focus-920x650.png` |
 | I-054 | Radio arrow keys/roving tab stop | Defect | F-014 |
 | I-055 | Current nav and Plan disclosure state | Defect | F-014 |
 | I-056 | Chart nonvisual alternative | Defect | F-014 |
-| I-057 | Dark semantic text contrast | Defect | F-012 |
+| I-057 | Dark semantic text contrast | Passed | Native computed-style contrast assertions ≥4.5:1 |
 | I-058 | OS reduced-motion media query | Implementation-supported; native Blocked | `EDGE` |
-| I-059 | 920×650, 1024×768, 1280×820, large desktop | Blocked | No complete native viewport wave; source risks retained |
+| I-059 | 920×650, 1024×768, 1280×820, large desktop | Partial | Native onboarding/Settings/Activity passed at 920×650; remaining viewport wave Blocked |
 | I-060 | Long names, extreme/negative currency, expanded table clipping | Blocked except monetary Defect | `EDGE`; F-007 |
 | I-061 | Corrupt profile startup | Defect | Exit 101; F-016; `corrupt-profile.log` |
 | I-062 | Unwritable profile startup | Defect | Exit 101; F-016; `unwritable-profile.log` |
 | I-063 | Offline launch | Blocked | No strict network namespace test |
-| I-064 | AppImage build/launch/upload | Defect build; launch/upload Blocked | F-001; CI run 31287128922 |
+| I-064 | AppImage build/launch/upload | Local build/metadata/icon/visible launch Passed; hosted upload pending | F-001; `artifacts/appimage-smoke/visible-window.png` |
 | I-065 | `npm ci`, 12 frontend tests, web build, 3 Rust tests | Passed | CI logs |
-| I-066 | Rust format and strict Clippy | Defect | F-017 |
+| I-066 | Rust format and strict Clippy | Passed | Exact all-target/all-feature commands pass locally and gate CI before packaging |
 | I-067 | Production npm audit | Passed (0); full audit policy Defect; Rust status Blocked | F-018 |
 | I-068 | Packaged render/persistence/accessibility/export CI | Defect/Blocked | F-019 |
 | I-069 | CSV/import/scenarios/tax fixtures and other unchecked PLAN phases with no enabled UI | Intentional unavailable/outstanding v1 | `PLAN.md` checklist; not silently counted as defects |
@@ -111,17 +111,17 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 
 ## Deduplicated defects
 
-### F-001 — AppImage packaging aborts because no bundle icon is configured
+### F-001 — AppImage packaging awaits hosted CI confirmation
 
-- **Status:** Confirmed · **Severity:** P1 · **Area/type:** Packaging, release blocker
+- **Status:** Fix implemented; awaiting hosted GitHub Actions · **Severity:** P1 · **Area/type:** Packaging, release blocker
 - **Intended behavior:** README documents `npm run appimage`; PLAN requires an x86_64 AppImage that launches under a virtual display.
-- **Reproduction:** From a clean checkout run `npm ci`, then `npm run appimage`. Expected one executable AppImage. Actual: after building the release executable, bundling aborts with exit 134: `couldn't find a square icon to use as AppImage icon`.
-- **Evidence/relaunch:** `ci-packaging/npm-appimage.log`, `github-actions-failed.log`, and Actions run 31287128922. Packaged relaunch is Blocked because no artifact exists.
-- **Impact/frequency:** Blocks every release, packaged smoke, and artifact upload.
-- **Root cause:** `src-tauri/tauri.conf.json` omits `bundle.icon` although square PNGs exist under `src-tauri/icons/`.
-- **Fix/order/dependencies:** First. Configure explicit icon candidates including a square Linux PNG, then validate the AppImage metadata and executable bit on Ubuntu 22.04.
+- **Reproduction:** The audited checkout aborted after compiling because it had no configured square bundle icon. The current worktree builds exactly one nonempty executable AppImage locally.
+- **Evidence/relaunch:** Original failure: `ci-packaging/npm-appimage.log`, `github-actions-failed.log`, and Actions run 31287128922. Current local validation checks desktop metadata/icon and captures a visible launched window at `artifacts/appimage-smoke/visible-window.png`.
+- **Impact/frequency:** Local release packaging is unblocked; hosted artifact production remains unproven until the updated workflow passes.
+- **Root cause:** Fixed by configuring the existing square Linux PNGs in `src-tauri/tauri.conf.json`.
+- **Fix/order/dependencies:** Keep active until the updated Ubuntu 22.04 hosted workflow validates and uploads the artifact.
 - **Regression/acceptance:** Local and CI builds exit 0; exactly one nonempty executable AppImage exists; desktop metadata/icon validate; smoke and upload steps run.
-- **Tester/reviewer:** CI/packaging agent; adversarial reproduction reviewer — **Confirmed**, identical local and Actions failure.
+- **Tester/reviewer:** Local packaging/native verification **Passed**; hosted Actions confirmation pending.
 
 ### F-002 — Enabled navigation and creation controls silently do nothing
 
@@ -243,18 +243,6 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 - **Regression/acceptance:** Named switch toggles by pointer/keyboard, disables every transition immediately, and survives relaunch.
 - **Tester/reviewer:** Edge/workspace agents; product-truth reviewer — **Confirmed**.
 
-### F-012 — Appearance and focus styling has critical accessibility gaps
-
-- **Status:** Confirmed by source/contrast calculation; native AT verification Blocked · **Severity:** P1 · **Area/type:** Accessibility
-- **Intended behavior:** PLAN/README claim keyboard use and accessible contrast.
-- **Reproduction:** Inspect Settings accessibility tree; Tab to Activity search; view semantic small text in dark theme. Expected named switches, visible focus, and ≥4.5:1 text contrast. Actual switches contain only an empty span; search input forces `outline:0` with no `:focus-within`; positive/negative colors measure 3.08:1/3.27:1 on dark surface.
-- **Evidence/relaunch:** `src/App.tsx:1079-1100`; `src/styles.css:46-54,257-270,422-439`; `EDGE`.
-- **Impact/frequency:** Screen-reader and keyboard users cannot reliably identify/toggle settings or locate focus; low-vision users may not read status text.
-- **Root cause:** Visual adjacency without programmatic labeling and theme-independent semantic colors.
-- **Fix/order/dependencies:** Label switches with description IDs, restore a ≥2px contrasting composite focus ring, and define theme-specific AA colors.
-- **Regression/acceptance:** Accessibility-tree role/name/state tests, keyboard screenshots in both themes/viewports, automated contrast ≥4.5:1.
-- **Tester/reviewer:** Edge agent; not independently native-reviewed — source outcome **Confirmed**, native AT presentation **Blocked**.
-
 ### F-013 — Settings member-save failures are unhandled and unannounced
 
 - **Status:** Confirmed · **Severity:** P2 · **Area/type:** Persistence/error handling
@@ -303,18 +291,6 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 - **Regression/acceptance:** Both profiles show actionable error, original bytes stay identical, fixed-permission/recovered relaunch succeeds, no panic text is the user interface.
 - **Tester/reviewer:** Reproduction reviewer — **Confirmed** with independent profiles.
 
-### F-017 — Rust formatting and strict Clippy fail outside CI's gates
-
-- **Status:** Confirmed · **Severity:** P2 · **Area/type:** CI quality gates
-- **Intended behavior:** CI should reject formatting and warning regressions before packaging.
-- **Reproduction:** Run `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` and strict Clippy with all targets/features and `-D warnings`. Actual format diffs in `build.rs`/`main.rs`; two `manual_repeat_n` errors in `lib.rs`.
-- **Evidence/relaunch:** `ci-packaging/cargo-fmt.log`, `cargo-clippy.log`; workflow omits both.
-- **Impact/frequency:** Every change can merge with mechanically detectable Rust issues.
-- **Root cause:** Missing gates and current violations.
-- **Fix/order/dependencies:** Format current files, resolve/justify warnings, add both gates before release build.
-- **Regression/acceptance:** Exact commands pass locally and in Actions.
-- **Tester/reviewer:** CI agent; reproduction reviewer — **Confirmed**.
-
 ### F-018 — Dependency-advisory coverage and policy are incomplete
 
 - **Status:** Confirmed/Narrowed · **Severity:** P2 · **Area/type:** CI supply-chain gate
@@ -353,11 +329,11 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 
 ## Prioritized repair sequence
 
-1. **Packaging and CI blockers:** F-001, then F-017–F-019. Produce a real AppImage before claiming packaged behavior.
+1. **Packaging and CI blockers:** Confirm F-001 in hosted Actions, then F-018–F-019.
 2. **Data loss and misleading output:** F-016, F-003, F-004, F-005, F-006, F-007. Preserve corrupt data and remove fabricated/current-looking finance results first.
 3. **Dead primary interactions:** F-002, F-009, F-011. Hide/disable unavailable affordances only as a short-term honest state; implement their actual flows.
 4. **Persistence and error handling:** F-008, F-010, F-013, then backup/restore completion in F-009.
-5. **Accessibility and responsive verification:** F-012, F-014, F-015, followed by packaged tests at 920×650, 1024×768, 1280×820, large desktop, long names, extreme values and expanded tables.
+5. **Accessibility and responsive verification:** F-014, F-015, followed by packaged tests at 1024×768, 1280×820, large desktop, long names, extreme values and expanded tables.
 6. **Product polish/documentation:** F-020 and remaining intentional-unavailable v1 work, keeping current behavior and vision clearly separated.
 
 Completion of a fix requires its observable acceptance criteria, immediate-state check, and post-relaunch check where mutation is involved. Previously blocked AppImage, viewport, keyboard/AT, offline, corrupt/unwritable, cancellation, and failure rows must be rerun after F-001; they cannot be converted to passes by source inspection alone.

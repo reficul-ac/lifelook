@@ -11,10 +11,29 @@ use thiserror::Error;
 const SCHEMA_VERSION: i64 = 3;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
-struct Database(Mutex<Connection>);
+struct Database {
+    path: PathBuf,
+    state: Mutex<DatabaseState>,
+}
+
+enum DatabaseState {
+    Ready(Connection),
+    Unavailable(StartupFailure),
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StartupFailure {
+    code: &'static str,
+    message: String,
+    profile_path: Option<String>,
+    retryable: bool,
+}
 
 #[derive(Debug, Error)]
 enum AppError {
+    #[error("profile startup failed")]
+    Startup(StartupFailure),
     #[error("database error: {0}")]
     Database(#[from] rusqlite::Error),
     #[error("file error: {0}")]
@@ -41,7 +60,11 @@ impl Serialize for AppError {
     where
         S: serde::Serializer,
     {
+        if let Self::Startup(failure) = self {
+            return failure.serialize(serializer);
+        }
         let (code, field) = match self {
+            Self::Startup(_) => unreachable!(),
             Self::Database(_) => ("database", None),
             Self::Io(_) => ("io", None),
             Self::InvalidBackup => ("invalid_backup", None),
@@ -55,6 +78,17 @@ impl Serialize for AppError {
             field,
         }
         .serialize(serializer)
+    }
+}
+
+fn with_db<T>(
+    database: &Database,
+    operation: impl FnOnce(&mut Connection) -> Result<T, AppError>,
+) -> Result<T, AppError> {
+    let mut state = database.state.lock().map_err(|_| AppError::Busy)?;
+    match &mut *state {
+        DatabaseState::Ready(connection) => operation(connection),
+        DatabaseState::Unavailable(failure) => Err(AppError::Startup(failure.clone())),
     }
 }
 
@@ -458,8 +492,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
 
 #[tauri::command]
 fn get_bootstrap(database: tauri::State<Database>) -> Result<WorkspaceSnapshot, AppError> {
-    let db = database.0.lock().map_err(|_| AppError::Busy)?;
-    bootstrap(&db)
+    with_db(&database, |db| bootstrap(db))
 }
 
 #[tauri::command]
@@ -471,147 +504,151 @@ fn save_onboarding_step(
     if !(1..=8).contains(&step) {
         return Err(AppError::Validation("invalid onboarding step".into()));
     }
-    let mut db = database.0.lock().map_err(|_| AppError::Busy)?;
-    let tx = db.transaction()?;
-    if let Some(h) = payload.household {
-        tx.execute("INSERT INTO households(id,name,state,onboarding_step) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET name=excluded.name,state=excluded.state,onboarding_step=MAX(onboarding_step,excluded.onboarding_step),revision=revision+1,updated_at=CURRENT_TIMESTAMP",params![h.id,h.name,h.state,step])?;
-    }
-    if let Some(items) = payload.people {
-        if items.is_empty() {
-            return Err(AppError::Validation(
-                "at least one household member is required".into(),
-            ));
+    with_db(&database, |db| {
+        let tx = db.transaction()?;
+        if let Some(h) = payload.household {
+            tx.execute("INSERT INTO households(id,name,state,onboarding_step) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET name=excluded.name,state=excluded.state,onboarding_step=MAX(onboarding_step,excluded.onboarding_step),revision=revision+1,updated_at=CURRENT_TIMESTAMP",params![h.id,h.name,h.state,step])?;
         }
-        let household_id = items[0].household_id.clone();
-        if items.iter().any(|p| p.household_id != household_id) {
-            return Err(AppError::Validation(
-                "household members must belong to one household".into(),
-            ));
-        }
-        let ids: Vec<String> = items.iter().map(|p| p.id.clone()).collect();
-        for p in items {
-            tx.execute("INSERT INTO people(id,household_id,name,birth_date) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET name=excluded.name,birth_date=excluded.birth_date,revision=revision+1,updated_at=CURRENT_TIMESTAMP",params![p.id,p.household_id,p.name,p.birth_date])?;
-        }
-        let placeholders = std::iter::repeat_n("?", ids.len())
-            .collect::<Vec<_>>()
-            .join(",");
-        let sql = format!("DELETE FROM people WHERE household_id=? AND id NOT IN ({placeholders})");
-        let mut values: Vec<&dyn rusqlite::ToSql> = vec![&household_id];
-        values.extend(ids.iter().map(|id| id as &dyn rusqlite::ToSql));
-        tx.execute(&sql, values.as_slice())?;
-    }
-    if let Some(profile) = payload.tax_profile {
-        if !matches!(
-            profile.filing_status.as_str(),
-            "single" | "married-joint" | "married-separate" | "head-of-household"
-        ) || !matches!(profile.tax_year, 2025 | 2026)
-        {
-            return Err(AppError::Validation(
-                "select a supported filing status and tax year".into(),
-            ));
-        }
-        let hid: String = tx.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
-        tx.execute("INSERT INTO tax_profiles(household_id,filing_status,state,tax_year) VALUES(?1,?2,'CA',?3) ON CONFLICT(household_id) DO UPDATE SET filing_status=excluded.filing_status,tax_year=excluded.tax_year,revision=revision+1",params![hid,profile.filing_status,profile.tax_year])?;
-    }
-    if let Some(items) = payload.accounts {
-        if items.is_empty() {
-            return Err(AppError::Validation(
-                "at least one account is required".into(),
-            ));
-        }
-        let household_id = items[0].household_id.clone();
-        if items.iter().any(|a| a.household_id != household_id) {
-            return Err(AppError::Validation(
-                "accounts must belong to one household".into(),
-            ));
-        }
-        let ids: Vec<String> = items.iter().map(|a| a.id.clone()).collect();
-        for a in items {
-            if a.opening_balance_cents.abs() > MAX_MONEY_CENTS {
+        if let Some(items) = payload.people {
+            if items.is_empty() {
                 return Err(AppError::Validation(
-                    "opening balance exceeds the supported money range".into(),
+                    "at least one household member is required".into(),
                 ));
             }
-            let opening = if a.kind == "credit" {
-                -a.opening_balance_cents.abs()
-            } else {
-                a.opening_balance_cents
-            };
-            tx.execute("INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,annual_return_bps,liquid) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(id) DO UPDATE SET name=excluded.name,kind=excluded.kind,opening_balance_cents=excluded.opening_balance_cents,annual_return_bps=excluded.annual_return_bps,liquid=excluded.liquid,revision=revision+1,updated_at=CURRENT_TIMESTAMP",params![a.id,a.household_id,a.name,a.kind,a.opening_balance_cents,a.annual_return_bps,a.liquid])?;
-            tx.execute(
-                "UPDATE accounts SET opening_balance_cents=? WHERE id=?",
-                params![opening, a.id],
-            )?;
+            let household_id = items[0].household_id.clone();
+            if items.iter().any(|p| p.household_id != household_id) {
+                return Err(AppError::Validation(
+                    "household members must belong to one household".into(),
+                ));
+            }
+            let ids: Vec<String> = items.iter().map(|p| p.id.clone()).collect();
+            for p in items {
+                tx.execute("INSERT INTO people(id,household_id,name,birth_date) VALUES(?1,?2,?3,?4) ON CONFLICT(id) DO UPDATE SET name=excluded.name,birth_date=excluded.birth_date,revision=revision+1,updated_at=CURRENT_TIMESTAMP",params![p.id,p.household_id,p.name,p.birth_date])?;
+            }
+            let placeholders = std::iter::repeat_n("?", ids.len())
+                .collect::<Vec<_>>()
+                .join(",");
+            let sql =
+                format!("DELETE FROM people WHERE household_id=? AND id NOT IN ({placeholders})");
+            let mut values: Vec<&dyn rusqlite::ToSql> = vec![&household_id];
+            values.extend(ids.iter().map(|id| id as &dyn rusqlite::ToSql));
+            tx.execute(&sql, values.as_slice())?;
         }
-        let placeholders = std::iter::repeat_n("?", ids.len())
-            .collect::<Vec<_>>()
-            .join(",");
-        let sql =
-            format!("DELETE FROM accounts WHERE household_id=? AND id NOT IN ({placeholders})");
-        let mut values: Vec<&dyn rusqlite::ToSql> = vec![&household_id];
-        values.extend(ids.iter().map(|id| id as &dyn rusqlite::ToSql));
-        tx.execute(&sql, values.as_slice())?;
-    }
-    tx.execute("UPDATE households SET onboarding_step=MAX(onboarding_step,?1) WHERE id=(SELECT id FROM households LIMIT 1)",[step])?;
-    tx.commit()?;
-    Ok(())
+        if let Some(profile) = payload.tax_profile {
+            if !matches!(
+                profile.filing_status.as_str(),
+                "single" | "married-joint" | "married-separate" | "head-of-household"
+            ) || !matches!(profile.tax_year, 2025 | 2026)
+            {
+                return Err(AppError::Validation(
+                    "select a supported filing status and tax year".into(),
+                ));
+            }
+            let hid: String =
+                tx.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
+            tx.execute("INSERT INTO tax_profiles(household_id,filing_status,state,tax_year) VALUES(?1,?2,'CA',?3) ON CONFLICT(household_id) DO UPDATE SET filing_status=excluded.filing_status,tax_year=excluded.tax_year,revision=revision+1",params![hid,profile.filing_status,profile.tax_year])?;
+        }
+        if let Some(items) = payload.accounts {
+            if items.is_empty() {
+                return Err(AppError::Validation(
+                    "at least one account is required".into(),
+                ));
+            }
+            let household_id = items[0].household_id.clone();
+            if items.iter().any(|a| a.household_id != household_id) {
+                return Err(AppError::Validation(
+                    "accounts must belong to one household".into(),
+                ));
+            }
+            let ids: Vec<String> = items.iter().map(|a| a.id.clone()).collect();
+            for a in items {
+                if a.opening_balance_cents.abs() > MAX_MONEY_CENTS {
+                    return Err(AppError::Validation(
+                        "opening balance exceeds the supported money range".into(),
+                    ));
+                }
+                let opening = if a.kind == "credit" {
+                    -a.opening_balance_cents.abs()
+                } else {
+                    a.opening_balance_cents
+                };
+                tx.execute("INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,annual_return_bps,liquid) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(id) DO UPDATE SET name=excluded.name,kind=excluded.kind,opening_balance_cents=excluded.opening_balance_cents,annual_return_bps=excluded.annual_return_bps,liquid=excluded.liquid,revision=revision+1,updated_at=CURRENT_TIMESTAMP",params![a.id,a.household_id,a.name,a.kind,a.opening_balance_cents,a.annual_return_bps,a.liquid])?;
+                tx.execute(
+                    "UPDATE accounts SET opening_balance_cents=? WHERE id=?",
+                    params![opening, a.id],
+                )?;
+            }
+            let placeholders = std::iter::repeat_n("?", ids.len())
+                .collect::<Vec<_>>()
+                .join(",");
+            let sql =
+                format!("DELETE FROM accounts WHERE household_id=? AND id NOT IN ({placeholders})");
+            let mut values: Vec<&dyn rusqlite::ToSql> = vec![&household_id];
+            values.extend(ids.iter().map(|id| id as &dyn rusqlite::ToSql));
+            tx.execute(&sql, values.as_slice())?;
+        }
+        tx.execute("UPDATE households SET onboarding_step=MAX(onboarding_step,?1) WHERE id=(SELECT id FROM households LIMIT 1)",[step])?;
+        tx.commit()?;
+        Ok(())
+    })
 }
 
 #[tauri::command]
 fn complete_onboarding(database: tauri::State<Database>) -> Result<(), AppError> {
-    let mut db = database.0.lock().map_err(|_| AppError::Busy)?;
-    let tx = db.transaction()?;
-    let hid: String = tx
-        .query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))
-        .map_err(|_| AppError::Validation("household is required".into()))?;
-    let pc: i64 = tx.query_row(
-        "SELECT count(*) FROM people WHERE household_id=?",
-        [&hid],
-        |r| r.get(0),
-    )?;
-    let ac: i64 = tx.query_row(
-        "SELECT count(*) FROM accounts WHERE household_id=?",
-        [&hid],
-        |r| r.get(0),
-    )?;
-    if pc < 1 {
-        return Err(AppError::Validation(
-            "at least one household member is required".into(),
-        ));
-    }
-    if ac < 1 {
-        return Err(AppError::Validation(
-            "at least one account is required".into(),
-        ));
-    }
-    let tp: i64 = tx.query_row(
-        "SELECT count(*) FROM tax_profiles WHERE household_id=?",
-        [&hid],
-        |r| r.get(0),
-    )?;
-    if tp < 1 {
-        return Err(AppError::Validation("filing status is required".into()));
-    }
-    tx.execute(
-        "INSERT OR IGNORE INTO settings(household_id) VALUES(?)",
-        [&hid],
-    )?;
-    for (id, name, kind) in [
-        ("income-other", "Other income", "income"),
-        ("expense-other", "Other expense", "expense"),
-    ] {
-        tx.execute(
-            "INSERT OR IGNORE INTO categories(id,household_id,name,kind) VALUES(?1,?2,?3,?4)",
-            params![format!("{id}-{hid}"), hid, name, kind],
+    with_db(&database, |db| {
+        let tx = db.transaction()?;
+        let hid: String = tx
+            .query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))
+            .map_err(|_| AppError::Validation("household is required".into()))?;
+        let pc: i64 = tx.query_row(
+            "SELECT count(*) FROM people WHERE household_id=?",
+            [&hid],
+            |r| r.get(0),
         )?;
-    }
-    tx.execute("INSERT OR IGNORE INTO scenarios(id,household_id,name,is_baseline,assumptions_json) VALUES(?1,?2,'Baseline',1,'{\"inflationBps\":250}')",params![format!("baseline-{hid}"),hid])?;
-    tx.execute(
-        "UPDATE households SET onboarding_complete=1,onboarding_step=8 WHERE id=?",
-        [hid],
-    )?;
-    tx.commit()?;
-    Ok(())
+        let ac: i64 = tx.query_row(
+            "SELECT count(*) FROM accounts WHERE household_id=?",
+            [&hid],
+            |r| r.get(0),
+        )?;
+        if pc < 1 {
+            return Err(AppError::Validation(
+                "at least one household member is required".into(),
+            ));
+        }
+        if ac < 1 {
+            return Err(AppError::Validation(
+                "at least one account is required".into(),
+            ));
+        }
+        let tp: i64 = tx.query_row(
+            "SELECT count(*) FROM tax_profiles WHERE household_id=?",
+            [&hid],
+            |r| r.get(0),
+        )?;
+        if tp < 1 {
+            return Err(AppError::Validation("filing status is required".into()));
+        }
+        tx.execute(
+            "INSERT OR IGNORE INTO settings(household_id) VALUES(?)",
+            [&hid],
+        )?;
+        for (id, name, kind) in [
+            ("income-other", "Other income", "income"),
+            ("expense-other", "Other expense", "expense"),
+        ] {
+            tx.execute(
+                "INSERT OR IGNORE INTO categories(id,household_id,name,kind) VALUES(?1,?2,?3,?4)",
+                params![format!("{id}-{hid}"), hid, name, kind],
+            )?;
+        }
+        tx.execute("INSERT OR IGNORE INTO scenarios(id,household_id,name,is_baseline,assumptions_json) VALUES(?1,?2,'Baseline',1,'{\"inflationBps\":250}')",params![format!("baseline-{hid}"),hid])?;
+        tx.execute(
+            "UPDATE households SET onboarding_complete=1,onboarding_step=8 WHERE id=?",
+            [hid],
+        )?;
+        tx.commit()?;
+        Ok(())
+    })
 }
 
 fn insert_transaction(db: &mut Connection, input: &TransactionInput) -> Result<(), AppError> {
@@ -658,36 +695,36 @@ fn update_settings(
             "theme must be system, light, or dark".into(),
         ));
     }
-    let db = database.0.lock().map_err(|_| AppError::Busy)?;
-    let hid: String = db.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
-    db.execute(
-        "INSERT OR IGNORE INTO settings(household_id) VALUES(?)",
-        [&hid],
-    )?;
-    let changed=db.execute("UPDATE settings SET theme=?1,reduced_motion=?2,revision=revision+1 WHERE household_id=?3 AND revision=?4",params![input.theme,input.reduced_motion,hid,input.expected_revision])?;
-    if changed == 0 {
-        return Err(AppError::Conflict);
-    }
-    db.query_row(
-        "SELECT theme,reduced_motion,revision FROM settings WHERE household_id=?",
-        [hid],
-        |r| {
-            Ok(Settings {
-                theme: r.get(0)?,
-                reduced_motion: r.get::<_, i64>(1)? != 0,
-                revision: r.get(2)?,
-            })
-        },
-    )
-    .map_err(AppError::from)
+    with_db(&database, |db| {
+        let hid: String = db.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
+        db.execute(
+            "INSERT OR IGNORE INTO settings(household_id) VALUES(?)",
+            [&hid],
+        )?;
+        let changed=db.execute("UPDATE settings SET theme=?1,reduced_motion=?2,revision=revision+1 WHERE household_id=?3 AND revision=?4",params![input.theme,input.reduced_motion,hid,input.expected_revision])?;
+        if changed == 0 {
+            return Err(AppError::Conflict);
+        }
+        db.query_row(
+            "SELECT theme,reduced_motion,revision FROM settings WHERE household_id=?",
+            [hid],
+            |r| {
+                Ok(Settings {
+                    theme: r.get(0)?,
+                    reduced_motion: r.get::<_, i64>(1)? != 0,
+                    revision: r.get(2)?,
+                })
+            },
+        )
+        .map_err(AppError::from)
+    })
 }
 #[tauri::command]
 fn create_transaction(
     input: TransactionInput,
     database: tauri::State<Database>,
 ) -> Result<(), AppError> {
-    let mut db = database.0.lock().map_err(|_| AppError::Busy)?;
-    insert_transaction(&mut db, &input)
+    with_db(&database, |db| insert_transaction(db, &input))
 }
 #[tauri::command]
 fn create_transfer(
@@ -703,34 +740,35 @@ fn create_transfer(
             "transfer must use distinct accounts and a positive amount".into(),
         ));
     }
-    let mut db = database.0.lock().map_err(|_| AppError::Busy)?;
-    let tx = db.transaction()?;
-    let h1: String = tx.query_row(
-        "SELECT household_id FROM accounts WHERE id=?",
-        [&from_account_id],
-        |r| r.get(0),
-    )?;
-    let h2: String = tx.query_row(
-        "SELECT household_id FROM accounts WHERE id=?",
-        [&to_account_id],
-        |r| r.get(0),
-    )?;
-    if h1 != h2 {
-        return Err(AppError::Validation(
-            "accounts must belong to the same household".into(),
-        ));
-    }
-    tx.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description,transfer_group_id) VALUES(?1,?2,?3,'transfer','Transfer',?1)",params![id,h1,occurred_on])?;
-    tx.execute(
-        "INSERT INTO postings(entry_id,account_id,amount_cents) VALUES(?1,?2,?3)",
-        params![id, from_account_id, -amount_cents],
-    )?;
-    tx.execute(
-        "INSERT INTO postings(entry_id,account_id,amount_cents) VALUES(?1,?2,?3)",
-        params![id, to_account_id, amount_cents],
-    )?;
-    tx.commit()?;
-    Ok(())
+    with_db(&database, |db| {
+        let tx = db.transaction()?;
+        let h1: String = tx.query_row(
+            "SELECT household_id FROM accounts WHERE id=?",
+            [&from_account_id],
+            |r| r.get(0),
+        )?;
+        let h2: String = tx.query_row(
+            "SELECT household_id FROM accounts WHERE id=?",
+            [&to_account_id],
+            |r| r.get(0),
+        )?;
+        if h1 != h2 {
+            return Err(AppError::Validation(
+                "accounts must belong to the same household".into(),
+            ));
+        }
+        tx.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description,transfer_group_id) VALUES(?1,?2,?3,'transfer','Transfer',?1)",params![id,h1,occurred_on])?;
+        tx.execute(
+            "INSERT INTO postings(entry_id,account_id,amount_cents) VALUES(?1,?2,?3)",
+            params![id, from_account_id, -amount_cents],
+        )?;
+        tx.execute(
+            "INSERT INTO postings(entry_id,account_id,amount_cents) VALUES(?1,?2,?3)",
+            params![id, to_account_id, amount_cents],
+        )?;
+        tx.commit()?;
+        Ok(())
+    })
 }
 
 fn backup_to(source: &Connection, destination: &Path) -> Result<(), AppError> {
@@ -744,8 +782,7 @@ fn backup_to(source: &Connection, destination: &Path) -> Result<(), AppError> {
 }
 #[tauri::command]
 fn backup_database(destination: PathBuf, database: tauri::State<Database>) -> Result<(), AppError> {
-    let db = database.0.lock().map_err(|_| AppError::Busy)?;
-    backup_to(&db, &destination)
+    with_db(&database, |db| backup_to(db, &destination))
 }
 #[tauri::command]
 fn inspect_backup(source: PathBuf) -> Result<(), AppError> {
@@ -768,37 +805,190 @@ fn validate_backup(path: &Path) -> Result<(), AppError> {
     Ok(())
 }
 
+fn startup_failure(
+    code: &'static str,
+    message: &str,
+    path: &Path,
+    retryable: bool,
+) -> StartupFailure {
+    StartupFailure {
+        code,
+        message: message.into(),
+        profile_path: Some(path.display().to_string()),
+        retryable,
+    }
+}
+
+fn is_writable(path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path)
+            .map(|metadata| metadata.permissions().mode() & 0o222 != 0)
+            .unwrap_or(false)
+    }
+    #[cfg(not(unix))]
+    {
+        fs::metadata(path)
+            .map(|metadata| !metadata.permissions().readonly())
+            .unwrap_or(false)
+    }
+}
+
+fn open_profile(path: &Path) -> Result<Connection, StartupFailure> {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    if let Err(error) = fs::create_dir_all(parent) {
+        return Err(startup_failure(
+            "unwritable",
+            &format!("LifeLook cannot write to the profile folder: {error}"),
+            path,
+            true,
+        ));
+    }
+    if !is_writable(parent) || (path.exists() && !is_writable(path)) {
+        return Err(startup_failure(
+            "unwritable",
+            "LifeLook does not have permission to write to this profile.",
+            path,
+            true,
+        ));
+    }
+
+    if path.exists() {
+        let readonly =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(
+                |_| {
+                    startup_failure(
+                        "corrupt",
+                        "The local profile could not be read as a database.",
+                        path,
+                        true,
+                    )
+                },
+            )?;
+        let integrity: String = readonly
+            .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+            .map_err(|_| {
+                startup_failure(
+                    "corrupt",
+                    "The local profile failed its integrity check.",
+                    path,
+                    true,
+                )
+            })?;
+        if integrity != "ok" {
+            return Err(startup_failure(
+                "corrupt",
+                "The local profile failed its integrity check.",
+                path,
+                true,
+            ));
+        }
+        let version = readonly
+            .query_row(
+                "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0);
+        if version > SCHEMA_VERSION {
+            return Err(startup_failure(
+                "incompatible",
+                "This profile was created by a newer version of LifeLook.",
+                path,
+                false,
+            ));
+        }
+    }
+
+    let mut connection = Connection::open(path).map_err(|error| {
+        startup_failure(
+            "unwritable",
+            &format!("LifeLook could not open the profile for writing: {error}"),
+            path,
+            true,
+        )
+    })?;
+    connection
+        .pragma_update(None, "journal_mode", "WAL")
+        .map_err(|error| {
+            startup_failure(
+                "unwritable",
+                &format!("LifeLook could not prepare the profile for writing: {error}"),
+                path,
+                true,
+            )
+        })?;
+    let version: i64 = connection
+        .query_row(
+            "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    if version > 0 && version < SCHEMA_VERSION {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        backup_to(
+            &connection,
+            &parent.join(format!("lifelook.pre-migration-{stamp}.lifelook")),
+        )
+        .map_err(|error| startup_failure("startup_failed", &error.to_string(), path, true))?;
+    }
+    migrate(&mut connection).map_err(|error| {
+        startup_failure(
+            "startup_failed",
+            &format!("LifeLook could not initialize the profile: {error}"),
+            path,
+            true,
+        )
+    })?;
+    Ok(connection)
+}
+
+#[tauri::command]
+fn retry_startup(database: tauri::State<Database>) -> Result<WorkspaceSnapshot, AppError> {
+    retry_database(&database)
+}
+
+fn retry_database(database: &Database) -> Result<WorkspaceSnapshot, AppError> {
+    let mut state = database.state.lock().map_err(|_| AppError::Busy)?;
+    if let DatabaseState::Ready(connection) = &*state {
+        return bootstrap(connection);
+    }
+    match open_profile(&database.path) {
+        Ok(connection) => {
+            let snapshot = bootstrap(&connection)?;
+            *state = DatabaseState::Ready(connection);
+            Ok(snapshot)
+        }
+        Err(failure) => {
+            *state = DatabaseState::Unavailable(failure.clone());
+            Err(AppError::Startup(failure))
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let dir = app.path().app_data_dir()?;
-            fs::create_dir_all(&dir)?;
+            let dir = app
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| PathBuf::from("."));
             let path = dir.join("lifelook.db");
-            let mut c = Connection::open(&path)?;
-            c.pragma_update(None, "journal_mode", "WAL")?;
-            let version: i64 = c
-                .query_row(
-                    "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
-                    [],
-                    |r| r.get(0),
-                )
-                .unwrap_or(0);
-            if version > 0 && version < SCHEMA_VERSION {
-                let stamp = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
-                backup_to(
-                    &c,
-                    &dir.join(format!("lifelook.pre-migration-{stamp}.lifelook")),
-                )
-                .map_err(Box::<dyn std::error::Error>::from)?;
-            }
-            migrate(&mut c).map_err(Box::<dyn std::error::Error>::from)?;
-            app.manage(path);
-            app.manage(Database(Mutex::new(c)));
+            let state = match open_profile(&path) {
+                Ok(connection) => DatabaseState::Ready(connection),
+                Err(failure) => DatabaseState::Unavailable(failure),
+            };
+            app.manage(Database {
+                path,
+                state: Mutex::new(state),
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -809,7 +999,8 @@ pub fn run() {
             create_transfer,
             update_settings,
             backup_database,
-            inspect_backup
+            inspect_backup,
+            retry_startup
         ])
         .run(tauri::generate_context!())
         .expect("failed to run LifeLook")
@@ -818,6 +1009,16 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn test_dir(name: &str) -> PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("lifelook-{name}-{}-{nonce}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
     fn seeded() -> Connection {
         let mut c = Connection::open_in_memory().unwrap();
         migrate(&mut c).unwrap();
@@ -917,5 +1118,82 @@ mod tests {
             insert_transaction(&mut c, &input),
             Err(AppError::Validation(_))
         ));
+    }
+
+    #[test]
+    fn corrupt_profile_is_reported_and_unchanged() {
+        let dir = test_dir("corrupt");
+        let path = dir.join("lifelook.db");
+        let original = b"not a sqlite database";
+        fs::write(&path, original).unwrap();
+        let error = open_profile(&path).unwrap_err();
+        assert_eq!(error.code, "corrupt");
+        assert_eq!(fs::read(&path).unwrap(), original);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn unwritable_profile_can_be_retried_after_permissions_are_repaired() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = test_dir("unwritable");
+        let path = dir.join("lifelook.db");
+        drop(open_profile(&path).unwrap());
+        let original = fs::read(&path).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
+        let error = open_profile(&path).unwrap_err();
+        assert_eq!(error.code, "unwritable");
+        assert_eq!(fs::read(&path).unwrap(), original);
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        drop(open_profile(&path).unwrap());
+        drop(open_profile(&path).unwrap());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn future_schema_is_incompatible_and_unchanged() {
+        let dir = test_dir("future");
+        let path = dir.join("lifelook.db");
+        let connection = open_profile(&path).unwrap();
+        connection
+            .execute("INSERT INTO schema_migrations(version) VALUES(99)", [])
+            .unwrap();
+        connection
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")
+            .unwrap();
+        drop(connection);
+        let original = fs::read(&path).unwrap();
+        let error = open_profile(&path).unwrap_err();
+        assert_eq!(error.code, "incompatible");
+        assert!(!error.retryable);
+        assert_eq!(fs::read(&path).unwrap(), original);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn managed_retry_stays_unavailable_then_becomes_idempotently_ready() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = test_dir("managed-retry");
+        let path = dir.join("lifelook.db");
+        drop(open_profile(&path).unwrap());
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
+        let failure = open_profile(&path).unwrap_err();
+        let database = Database {
+            path: path.clone(),
+            state: Mutex::new(DatabaseState::Unavailable(failure)),
+        };
+        assert!(matches!(
+            retry_database(&database),
+            Err(AppError::Startup(_))
+        ));
+        assert!(matches!(
+            &*database.state.lock().unwrap(),
+            DatabaseState::Unavailable(_)
+        ));
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        retry_database(&database).unwrap();
+        retry_database(&database).unwrap();
+        fs::remove_dir_all(dir).unwrap();
     }
 }

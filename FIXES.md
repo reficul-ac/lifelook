@@ -19,17 +19,17 @@ No P0 defect was found. “Passed” is limited to the behavior named; component
 
 | Screen or flow | Pointer | Keyboard | Persistence/relaunch | Error paths | Light/dark | 920×650 | Adversarial review |
 |---|---|---|---|---|---|---|---|
-| Fresh onboarding | Passed ordinary release path | Implementation-supported; radio defect | Ordinary account appeared in workspace; interruption/relaunch Blocked | Validation component-tested; native DB failures Blocked | N/A | Blocked | Confirmed/Narrowed |
-| Account onboarding | Passed ordinary checking path; other kinds component/source | Partial; custom radio Defect | Account visible after completion; process relaunch Blocked | Boundary/sign Defects | N/A | Blocked | Confirmed |
+| Fresh onboarding | Passed ordinary release path | Native radio semantics component-tested | Ordinary account appeared in workspace; interruption/relaunch Blocked | Validation component-tested; native DB failures Blocked | N/A | Blocked | Confirmed/Narrowed |
+| Account onboarding | Passed ordinary checking path; other kinds component/source | Native labelled radio group component-tested | Account visible after completion; process relaunch Blocked | Boundary/sign Defects | N/A | Blocked | Confirmed |
 | Shell/navigation | Passed all five destinations | Native buttons supported; detailed focus Blocked | View not expected to persist | N/A | Immediate toggle Passed; persistence Defect | Blocked | Confirmed |
 | Overview | Pointer rendered | Chart alternative Defect | Uses persisted opening balance only | Misleading-output Defect | Rendered both; contrast Defect | Blocked | Confirmed |
 | Activity | Navigation/input entry Passed | Search focus Passed (native) | Defect: ignores database | Empty/filters Defect | Dark semantic contrast Passed | Passed at 920×650 | Confirmed |
-| Plan | Year expand/collapse Passed | Disclosure state Defect | Defect: ignores persisted scenarios/domain | Edge warnings absent/outstanding v1 | Rendered | Blocked | Confirmed |
+| Plan | Year expand/collapse Passed | Disclosure state/relationships Passed native | Defect: ignores persisted scenarios/domain | Edge warnings absent/outstanding v1 | Rendered | Passed at 920×650 | Confirmed |
 | Net Worth | Navigation Passed | Native button semantics supported | Defect: opening balances only | Empty state Defect | Rendered | Blocked | Confirmed |
-| Settings members | Controls wired; full mutation not exercised | Calendar Blocked | Blocked after real relaunch | Save rejection Defect | Rendered | Blocked | Narrowed |
+| Settings members | Save/retry component-tested | Focused alert and busy controls component-tested; calendar native Blocked | Successful refresh component-tested; real relaunch Blocked | Rejection/retry/retained drafts Passed component | Rendered | Blocked | Narrowed |
 | Appearance | Immediate theme toggles Passed | Switch names/states Passed (native) | Theme/motion persistence Defect | N/A | Light/dark Passed | Passed at 920×650 | Confirmed |
 | Backup/restore | Defect: buttons are no-ops | Defect | Blocked | Blocked | N/A | Blocked | Confirmed |
-| Corrupt/unwritable startup | N/A; app exits | N/A | Defect | Defect | N/A | N/A | Confirmed |
+| Corrupt/unwritable startup | Recovery/retry component-tested; native launch pending | Recovery announcements component-tested | Byte preservation and permission repair Passed in Rust; native relaunch Blocked | Structured failure/repeated retry Passed in component/Rust | N/A | N/A | Remediated; native acceptance pending |
 | AppImage/CI | Hosted visible launch Passed | Native keyboard suite Passed | Packaged persistence/export still Blocked | Packaging gates Passed | Light/dark evidence Passed | Passed at 920×650 | Passed |
 
 ## Complete interaction and claim inventory
@@ -48,7 +48,7 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 | I-008 | Disabled California display | Passed as display only | `WF-01`; `ONB` ONB-08 |
 | I-009 | Filing-status/residency selection | Defect | F-008; `ADV` confirms |
 | I-010 | Save & Continue | Passed ordinary path | `WF-01`→`WF-02`; component contract |
-| I-011 | Checking account radio | Passed ordinary pointer path | `WF-02`; keyboard semantics Defect F-014 |
+| I-011 | Checking account radio | Passed ordinary pointer path; native group semantics component-tested | `WF-02`; F-014 remediation test |
 | I-012 | Savings account radio | Passed component; native Blocked | `ONB` ONB-12 |
 | I-013 | Credit-card radio | Passed component; sign semantics Defect | `ONB` ONB-13; F-006 |
 | I-014 | Investment account radio | Implementation-supported; native Blocked | `ONB` ONB-14 |
@@ -66,43 +66,43 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 | I-026 | Plan navigation | Passed | `WF-06` |
 | I-027 | Net Worth navigation | Passed | `WF-07` |
 | I-028 | Settings navigation | Passed | `WF-08` |
-| I-029 | Profile/ellipsis menu | Defect | Enabled no-op; F-002 |
-| I-030 | Global Search | Defect | Enabled no-op; F-002 |
+| I-029 | Profile/ellipsis menu | Honestly unavailable | Disabled-state regression; F-002 remediation |
+| I-030 | Global Search | Honestly unavailable | Disabled-state regression; F-002 remediation |
 | I-031 | Header/Settings dark-theme toggles | Passed immediate; Defect after relaunch | Component test; F-010 |
-| I-032 | Global Add menu | Defect | Enabled no-op; F-002 |
+| I-032 | Global Add menu | Honestly unavailable | Disabled-state regression; F-002 remediation |
 | I-033 | Overview net-worth ending amount | Passed only for fresh opening balance | `WF-04`; becomes false after postings, F-005 |
 | I-034 | Overview date, yearly gain, trend, deltas, assumptions and 92% guidance | Defect | Hard-coded/current-looking; F-004 |
-| I-035 | Overview View all | Defect | Enabled no-op; F-002 |
-| I-036 | Overview Open plan | Defect | Enabled no-op; F-002 |
+| I-035 | Overview View all | Passed component | Navigates to Activity |
+| I-036 | Overview Open plan | Passed component | Navigates to Plan |
 | I-037 | Activity search input | Defect | Accepts text but never filters; F-003 |
 | I-038 | Activity account filter | Defect | Enabled no-op; F-003 |
 | I-039 | Activity year filter | Defect | Enabled no-op; F-003 |
 | I-040 | Activity badge, total and four “Actual” rows | Defect | Fresh DB still shows literals; `WF-05`; F-003 |
-| I-041 | Compare scenarios | Defect | Enabled no-op and persisted scenarios ignored; F-005 |
+| I-041 | Compare scenarios | Honestly unavailable | Disabled; persisted scenarios remain F-005 |
 | I-042 | Ten Plan annual row expanders | Passed disclosure only | `WF-06`; `APR` PC-016 |
 | I-043 | Plan annual/monthly values | Defect as household truth | Hard-coded/incomplete snapshot; F-005 |
 | I-044 | Net Worth totals/accounts | Passed fresh opening-only display; Defect as current balance | `WF-07`; F-005/F-006 |
-| I-045 | Net Worth Add account and zero-account state | Defect | No-op/blank state; F-002/F-015 |
+| I-045 | Net Worth Add account and zero-account state | Add honestly unavailable; empty guidance remains incomplete | Disabled-state regression; F-015 |
 | I-046 | Settings member text/date editing | Passed immediate/component; relaunch Blocked | `APR` PC-018/019 |
-| I-047 | Settings member calendar/add/remove/save | Blocked ordinary success; error Defect | `APR` PC-020–023; F-013 |
+| I-047 | Settings member calendar/add/remove/save | Save rejection/retry Passed component; native/relaunch Blocked | Focused alert, retained draft, duplicate-write and retry regression; F-013 |
 | I-048 | Reduced-motion switch | Defect | No handler or state; F-011 |
 | I-049 | Back up data | Defect | Enabled no-op despite backend command; F-009 |
 | I-050 | Choose backup/restore | Defect | Enabled no-op; no replacement command; F-009 |
 | I-051 | Loading/error/validation announcements | Passed implementation only | Roles at `src/App.tsx:80-91,490-493` |
 | I-052 | Switch accessible names | Passed | Native WebDriver role/name/state assertions; `artifacts/native-e2e/02-dark-settings-920x650.png` |
 | I-053 | Activity-search focus indicator | Passed | Native keyboard focus assertion; `artifacts/native-e2e/03-dark-activity-search-focus-920x650.png` |
-| I-054 | Radio arrow keys/roving tab stop | Defect | F-014 |
-| I-055 | Current nav and Plan disclosure state | Defect | F-014 |
+| I-054 | Radio arrow keys/roving tab stop | Passed implementation/native | Native labelled radio groups retain browser keyboard behavior; F-014 |
+| I-055 | Current nav and Plan disclosure state | Passed native | `aria-current`, `aria-expanded`, `aria-controls`, labelled region assertions; F-014 |
 | I-056 | Chart nonvisual alternative | Defect | F-014 |
 | I-057 | Dark semantic text contrast | Passed | Native computed-style contrast assertions ≥4.5:1 |
 | I-058 | OS reduced-motion media query | Implementation-supported; native Blocked | `EDGE` |
 | I-059 | 920×650, 1024×768, 1280×820, large desktop | Partial | Native onboarding/Settings/Activity passed at 920×650; remaining viewport wave Blocked |
 | I-060 | Long names, extreme/negative currency, expanded table clipping | Blocked except monetary Defect | `EDGE`; F-007 |
-| I-061 | Corrupt profile startup | Defect | Exit 101; F-016; `corrupt-profile.log` |
-| I-062 | Unwritable profile startup | Defect | Exit 101; F-016; `unwritable-profile.log` |
+| I-061 | Corrupt profile startup | Remediated in Rust/component; native acceptance Blocked | Original bytes unchanged; recovery/retry UI; F-016 |
+| I-062 | Unwritable profile startup | Remediated in Rust/component; native acceptance Blocked | No replacement; repaired permissions reopen idempotently; F-016 |
 | I-063 | Offline launch | Blocked | No strict network namespace test |
 | I-064 | AppImage build/launch/upload | Passed | Hosted CI run 31290319956; `artifacts/appimage-smoke/visible-window.png` |
-| I-065 | `npm ci`, 12 frontend tests, web build, 3 Rust tests | Passed | CI logs |
+| I-065 | Frontend tests/web build and Rust tests | Passed locally (19 frontend, 9 Rust); prior CI baseline passed | Current fix-batch verification plus CI logs |
 | I-066 | Rust format and strict Clippy | Passed | Exact all-target/all-feature commands pass locally and gate CI before packaging |
 | I-067 | Production npm audit | Passed (0); full audit policy Defect; Rust status Blocked | F-018 |
 | I-068 | Packaged render/persistence/accessibility/export CI | Defect/Blocked | F-019 |
@@ -113,7 +113,7 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 
 ### F-002 — Enabled navigation and creation controls silently do nothing
 
-- **Status:** Confirmed · **Severity:** P1 · **Area/type:** Shell/Overview/Net Worth, dead primary interactions
+- **Status:** Remediated (honest-disabled/component-tested) · **Severity:** P1 · **Area/type:** Shell/Overview/Net Worth, dead primary interactions
 - **Intended behavior:** PLAN's progressive-disclosure/Add-menu principle and the visible labels themselves promise navigation or creation.
 - **Reproduction:** Complete setup; activate profile, global Search, global Add, Overview View all/Open plan, or Net Worth Add account. Expected the named menu/view/flow. Actual: no visible or persisted change.
 - **Evidence/relaunch:** `WF-04`, `WF-07`; `src/App.tsx:181-212,691-707,955-957`. Relaunch not applicable because no mutation occurs.
@@ -121,7 +121,7 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 - **Root cause:** Enabled buttons have no handlers.
 - **Fix/order/dependencies:** After truthful financial output. Implement reachable flows/navigation or render controls disabled with honest unavailable copy until their flows exist.
 - **Regression/acceptance:** Pointer and keyboard activation opens the correct surface; cancellation is safe; successful mutations update immediately and survive relaunch.
-- **Tester/reviewer:** Workspace agent; product-truth and reproduction reviewers — **Confirmed**.
+- **Tester/reviewer:** Workspace agent; product-truth and reproduction reviewers — unavailable controls now have disabled-state regression coverage; native recheck pending.
 
 ### F-003 — Activity is a realistic static mock, not a persisted ledger
 
@@ -233,7 +233,7 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 
 ### F-013 — Settings member-save failures are unhandled and unannounced
 
-- **Status:** Confirmed · **Severity:** P2 · **Area/type:** Persistence/error handling
+- **Status:** Remediated in component tests; native/relaunch acceptance pending · **Severity:** P2 · **Area/type:** Persistence/error handling
 - **Intended behavior:** Local write failures should retain edits and produce actionable announced errors.
 - **Reproduction:** Make repository save reject; activate Save members. Expected busy protection then `role=alert` with retry. Actual unhandled promise; success status is never set and no failure status exists.
 - **Evidence/relaunch:** `src/App.tsx:1007-1029,1071-1075`; ordinary native failure injection/relaunch Blocked.
@@ -245,7 +245,7 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 
 ### F-014 — Custom radio, navigation, disclosure and chart semantics are incomplete
 
-- **Status:** Confirmed by source; native AT verification Blocked · **Severity:** P2 · **Area/type:** Keyboard/accessibility
+- **Status:** Remaining radio/nav/disclosure items remediated and native-tested · **Severity:** P2 · **Area/type:** Keyboard/accessibility
 - **Intended behavior:** Standard radio/disclosure/current-page patterns and a chart data alternative.
 - **Reproduction:** Keyboard through account types and inspect the accessibility tree for nav/year/chart. Actual: five radios are all tab stops with no arrow handling; nav has no `aria-current`; year rows lack `aria-expanded/controls`; generic chart div has no role or underlying data alternative.
 - **Evidence/relaunch:** `src/App.tsx:167-177,411-430,621-654,875-913`; `EDGE`.
@@ -269,7 +269,7 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 
 ### F-016 — Corrupt or unwritable profiles panic before recovery UI
 
-- **Status:** Confirmed · **Severity:** P1 · **Area/type:** Startup/data recovery
+- **Status:** Remediated in Rust/component tests; native release acceptance pending · **Severity:** P1 · **Area/type:** Startup/data recovery
 - **Intended behavior:** Startup failures preserve data and show actionable recovery, retry, or safe exit.
 - **Reproduction:** Put invalid bytes at `lifelook.db` in a fresh XDG profile, or make the app-data path unwritable; launch release binary. Expected recovery UI. Actual exit 101/panic (`file is not a database` or `Permission denied`) before React loads.
 - **Evidence/relaunch:** `adversarial-reproduction/corrupt-profile.log`, `unwritable-profile.log`; setup and `.expect` at `src-tauri/src/lib.rs:450-469`.
@@ -318,10 +318,10 @@ Evidence abbreviations: `WF-01`–`WF-08` are the native PNGs in `workspace-feat
 ## Prioritized repair sequence
 
 1. **Packaging and CI blockers:** F-018–F-019.
-2. **Data loss and misleading output:** F-016, F-003, F-004, F-005, F-006, F-007. Preserve corrupt data and remove fabricated/current-looking finance results first.
-3. **Dead primary interactions:** F-002, F-009, F-011. Hide/disable unavailable affordances only as a short-term honest state; implement their actual flows.
-4. **Persistence and error handling:** F-008, F-010, F-013, then backup/restore completion in F-009.
-5. **Accessibility and responsive verification:** F-014, F-015, followed by packaged tests at 1024×768, 1280×820, large desktop, long names, extreme values and expanded tables.
+2. **Data loss and misleading output:** finish F-016 native acceptance, then F-003, F-004, F-005, F-006, F-007.
+3. **Dead primary interactions:** F-009 and F-011; F-002 is honestly disabled until its actual flows are implemented.
+4. **Persistence and error handling:** F-008 and F-010, then F-013 native/relaunch acceptance and backup/restore completion in F-009.
+5. **Accessibility and responsive verification:** F-015 and the remaining packaged viewport/edge-value wave; F-014 radio/nav/disclosure acceptance now passes natively.
 6. **Product polish/documentation:** F-020 and remaining intentional-unavailable v1 work, keeping current behavior and vision clearly separated.
 
 Completion of a fix requires its observable acceptance criteria, immediate-state check, and post-relaunch check where mutation is involved. Remaining blocked viewport, offline, corrupt/unwritable, cancellation, failure, persistence/relaunch, and export rows cannot be converted to passes by source inspection alone.

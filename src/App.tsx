@@ -33,6 +33,7 @@ import {
   type BootstrapAccount,
   type BootstrapPerson,
   type Repository,
+  type StartupError,
   type Theme,
   type ActivityPosting,
   emptySettings,
@@ -76,22 +77,38 @@ export function App({
   repository?: Repository;
 }) {
   const [bootstrap, setBootstrap] = useState<Bootstrap | null>(null);
-  const [loadError, setLoadError] = useState("");
+  const [loadError, setLoadError] = useState<StartupError | null>(null);
+  const [retrying, setRetrying] = useState(false);
   useEffect(() => {
     repository
       .bootstrap()
       .then((value) => setBootstrap(normalizeBootstrap(value)))
-      .catch((error) =>
-        setLoadError(error?.message ?? "Could not open the local database"),
-      );
+      .catch((error) => setLoadError(normalizeStartupError(error)));
   }, [repository]);
+  async function retryStartup() {
+    if (retrying || !loadError?.retryable) return;
+    setRetrying(true);
+    try {
+      const value = await repository.retryStartup();
+      setBootstrap(normalizeBootstrap(value));
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(normalizeStartupError(error));
+    } finally {
+      setRetrying(false);
+    }
+  }
   if (loadError)
     return (
       <main className="standalone">
         <section className="card">
           <h1>LifeLook couldn’t open your data</h1>
-          <p role="alert">{loadError}</p>
-          <button onClick={() => location.reload()}>Try again</button>
+          <p role="alert">{loadError.message}</p>
+          <p>{startupGuidance[loadError.code] ?? startupGuidance.startup_failed}</p>
+          {loadError.profilePath && <p><strong>Local profile:</strong> <code>{loadError.profilePath}</code></p>}
+          <p>Your existing profile has not been deleted, renamed, replaced, or changed by this recovery screen.</p>
+          {loadError.retryable && <button disabled={retrying} onClick={retryStartup}>{retrying ? "Retrying…" : "Retry"}</button>}
+          <p className="muted">You can safely close this window and try again later.</p>
         </section>
       </main>
     );
@@ -116,6 +133,20 @@ export function App({
       onRefresh={() => repository.bootstrap().then((value)=>setBootstrap(normalizeBootstrap(value)))}
     />
   );
+}
+
+const startupGuidance:Record<string,string> = {
+  corrupt:"The profile appears damaged. Restore access to a known-good copy or contact support before retrying.",
+  unwritable:"Check the profile and folder permissions, free disk space if needed, then retry.",
+  incompatible:"Open this profile with the newer LifeLook version that created it.",
+  startup_failed:"Resolve the reported local profile problem, then retry.",
+};
+function normalizeStartupError(error:unknown):StartupError {
+  if (error && typeof error === "object") {
+    const value=error as Partial<StartupError>;
+    return {code:value.code??"startup_failed",message:value.message??"Could not open the local database",profilePath:value.profilePath,retryable:value.retryable??true};
+  }
+  return {code:"startup_failed",message:typeof error==="string"?error:"Could not open the local database",retryable:true};
 }
 
 function Workspace({
@@ -422,10 +453,10 @@ function Onboarding({
               {accounts.map((a, i) => (
                 <fieldset className="repeat-row" key={a.id}>
                   <legend>Account {i + 1}</legend>
-                  <div
+                  <fieldset
                     className="account-types"
-                    aria-label={`Account ${i + 1} type`}
                   >
+                    <legend>Account {i + 1} type</legend>
                     {accountKinds.map((k) => (
                       <label
                         className={a.kind === k.value ? "selected" : ""}
@@ -436,7 +467,7 @@ function Onboarding({
                         <small>{k.help}</small>
                       </label>
                     ))}
-                  </div>
+                  </fieldset>
                   <label>
                     Account name{" "}
                     <span className="optional">
@@ -592,10 +623,12 @@ function BirthDateField({
   label,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   const inputId = `${label.replaceAll(" ", "-")}-text`;
   return (
@@ -610,6 +643,7 @@ function BirthDateField({
           inputMode="numeric"
           placeholder="MM/DD/YYYY"
           value={value}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
         />
         <label className="calendar-control" title="Choose from calendar">
@@ -619,6 +653,7 @@ function BirthDateField({
             aria-label={`Choose ${label} from calendar`}
             type="date"
             value={parseBirthDate(value) ?? ""}
+            disabled={disabled}
             onChange={(event) => onChange(displayBirthDate(event.target.value))}
           />
         </label>
@@ -845,6 +880,8 @@ function PlanView({
             <div key={year.year}>
               <button
                 className="year-row"
+                aria-expanded={expanded === year.year}
+                aria-controls={`plan-months-${year.year}`}
                 onClick={() =>
                   setExpanded(expanded === year.year ? null : year.year)
                 }
@@ -863,7 +900,7 @@ function PlanView({
                 <strong>{money(year.endingNetWorthCents, true)}</strong>
               </button>
               {expanded === year.year && (
-                <div className="months">
+                <div className="months" id={`plan-months-${year.year}`} role="region" aria-label={`${year.year} monthly detail`}>
                   {year.months.map((m) => (
                     <div key={m.month}>
                       <span>
@@ -956,6 +993,11 @@ function NetWorth({ snapshot }: { snapshot: FinancialSnapshot }) {
     </div>
   );
 }
+function errorMessage(error:unknown,fallback:string){
+  if(typeof error==="string")return error;
+  if(error&&typeof error==="object"&&typeof (error as {message?:unknown}).message==="string")return (error as {message:string}).message;
+  return fallback;
+}
 function SettingsView({
   settings,
   setSettings,
@@ -976,34 +1018,44 @@ function SettingsView({
     })),
   );
   const [message, setMessage] = useState("");
-  const [saving,setSaving]=useState(false);
+  const [appearanceSaving,setAppearanceSaving]=useState(false);
+  const [memberSaving,setMemberSaving]=useState(false);
+  const [memberResult,setMemberResult]=useState<{kind:"error"|"success";message:string}|null>(null);
+  const memberAlert=useRef<HTMLParagraphElement>(null);
   async function saveAppearance(patch:Partial<Bootstrap["settings"]>){
-    const next={...settings,...patch};setSaving(true);setMessage("");
-    try{if(!repository.updateSettings)throw new Error("Settings persistence is unavailable.");const saved=await repository.updateSettings({theme:next.theme,reducedMotion:next.reducedMotion,expectedRevision:settings.revision});setSettings(saved);setMessage("Appearance saved.")}catch(e){setMessage((e as {message?:string}).message??"Could not save appearance.")}finally{setSaving(false)}
+    const next={...settings,...patch};setAppearanceSaving(true);setMessage("");
+    try{if(!repository.updateSettings)throw new Error("Settings persistence is unavailable.");const saved=await repository.updateSettings({theme:next.theme,reducedMotion:next.reducedMotion,expectedRevision:settings.revision});setSettings(saved);setMessage("Appearance saved.")}catch(e){setMessage((e as {message?:string}).message??"Could not save appearance.")}finally{setAppearanceSaving(false)}
   }
   async function savePeople() {
+    if(memberSaving)return;
+    setMemberResult(null);
     if (people.some((p) => !p.name.trim())) {
-      setMessage("Every household member needs a name.");
+      setMemberResult({kind:"error",message:"Every household member needs a name."});
+      queueMicrotask(()=>memberAlert.current?.focus());
       return;
     }
     const invalidDate = people.findIndex(
       (person) => parseBirthDate(person.birthDate) === undefined,
     );
     if (invalidDate >= 0) {
-      setMessage(
-        `Member ${invalidDate + 1}: enter a valid birth date as MM/DD/YYYY.`,
-      );
+      setMemberResult({kind:"error",message:`Member ${invalidDate + 1}: enter a valid birth date as MM/DD/YYYY.`});
+      queueMicrotask(()=>memberAlert.current?.focus());
       return;
     }
-    await repository.saveOnboardingStep(8, {
+    setMemberSaving(true);
+    try { await repository.saveOnboardingStep(8, {
       people: people.map((p) => ({
         ...p,
         name: p.name.trim(),
         birthDate: parseBirthDate(p.birthDate),
       })),
     });
-    setMessage("Household members saved.");
+    setMemberResult({kind:"success",message:"Household members saved."});
     onSaved();
+    } catch(error) {
+      setMemberResult({kind:"error",message:errorMessage(error,"Could not save household members.")});
+      queueMicrotask(()=>memberAlert.current?.focus());
+    } finally { setMemberSaving(false); }
   }
   return (
     <div className="content">
@@ -1017,6 +1069,7 @@ function SettingsView({
             <input
               aria-label={`Member ${i + 1} name`}
               value={p.name}
+              disabled={memberSaving}
               onChange={(e) =>
                 setPeople(updateAt(people, i, { name: e.target.value }))
               }
@@ -1024,6 +1077,7 @@ function SettingsView({
             <BirthDateField
               label={`Member ${i + 1} birth date`}
               value={p.birthDate ?? ""}
+              disabled={memberSaving}
               onChange={(birthDate) =>
                 setPeople(updateAt(people, i, { birthDate }))
               }
@@ -1031,6 +1085,7 @@ function SettingsView({
             {people.length > 1 && (
               <button
                 onClick={() => setPeople(people.filter((_, x) => x !== i))}
+                disabled={memberSaving}
               >
                 Remove
               </button>
@@ -1039,22 +1094,25 @@ function SettingsView({
         ))}
         <div className="form-actions">
           <button
+            disabled={memberSaving}
             onClick={() =>
               setPeople([...people, newPerson(bootstrap.household!.id)])
             }
           >
             <Plus size={14} /> Add person
           </button>
-          <button className="primary" onClick={savePeople}>
-            Save members
+          <button className="primary" disabled={memberSaving} onClick={savePeople}>
+            {memberSaving?"Saving…":"Save members"}
           </button>
         </div>
+        {memberResult?.kind==="error"&&<p ref={memberAlert} tabIndex={-1} role="alert" className="negative">{memberResult.message}</p>}
+        {memberResult?.kind==="success"&&<p role="status">{memberResult.message}</p>}
         {message && <p role="status">{message}</p>}
       </section>
       <section className="card settings-card">
         <h3>Appearance</h3>
         <div className="setting">
-          <fieldset><legend>Theme</legend>{(["system","light","dark"] as Theme[]).map(theme=><label key={theme}><input type="radio" name="theme" checked={settings.theme===theme} disabled={saving} onChange={()=>saveAppearance({theme})}/>{theme[0].toUpperCase()+theme.slice(1)}</label>)}</fieldset>
+          <fieldset><legend>Theme</legend>{(["system","light","dark"] as Theme[]).map(theme=><label key={theme}><input type="radio" name="theme" checked={settings.theme===theme} disabled={appearanceSaving} onChange={()=>saveAppearance({theme})}/>{theme[0].toUpperCase()+theme.slice(1)}</label>)}</fieldset>
         </div>
         <div className="setting">
           <div>
@@ -1069,7 +1127,7 @@ function SettingsView({
             aria-labelledby="reduced-motion-label"
             aria-describedby="reduced-motion-description"
             className={settings.reducedMotion?"switch on":"switch"}
-            disabled={saving} onClick={()=>saveAppearance({reducedMotion:!settings.reducedMotion})}
+            disabled={appearanceSaving} onClick={()=>saveAppearance({reducedMotion:!settings.reducedMotion})}
           >
             <span />
           </button>

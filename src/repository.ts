@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 export type Theme = "system" | "light" | "dark";
 export type AccountKind = "checking" | "savings" | "investment" | "retirement" | "credit";
 export interface RepositoryError { code:string; message:string; field?:string; details?:unknown }
+export interface StartupError extends RepositoryError { profilePath?:string; retryable:boolean }
 export interface BootstrapPerson { id:string; householdId:string; name:string; birthDate?:string|null; revision?:number }
 export interface BootstrapAccount { id:string; householdId:string; name:string; kind:AccountKind; openingBalanceCents:number; balanceCents:number; annualReturnBps:number; liquid:boolean; revision:number }
 export interface TaxProfile { filingStatus:"single"|"married-joint"|"married-separate"|"head-of-household"; state:"CA"; taxYear:2025|2026; thresholdInflationBps:number; revision:number }
@@ -25,6 +26,7 @@ export type BootstrapInput = Pick<WorkspaceSnapshot,"onboardingStep"|"onboarding
 export interface TransactionInput { id:string; occurredOn:string; accountId:string; categoryId:string; amountCents:number; description:string; note?:string|null }
 export interface Repository {
   bootstrap():Promise<BootstrapInput>;
+  retryStartup():Promise<BootstrapInput>;
   saveOnboardingStep(step:number,payload:unknown):Promise<void>;
   completeOnboarding():Promise<void>;
   createTransaction?(input:TransactionInput):Promise<void>;
@@ -35,6 +37,7 @@ export interface Repository {
 
 export const tauriRepository:Repository = {
   bootstrap:()=>invoke("get_bootstrap"),
+  retryStartup:()=>invoke("retry_startup"),
   saveOnboardingStep:(step,payload)=>invoke("save_onboarding_step",{step,payload}),
   completeOnboarding:()=>invoke("complete_onboarding"),
   createTransaction:(input)=>invoke("create_transaction",{input}),
@@ -46,6 +49,6 @@ export const tauriRepository:Repository = {
 export const emptySettings:Settings={theme:"system",reducedMotion:false,revision:1};
 export const testRepository:Repository = {
   async bootstrap(){return {onboardingStep:8,onboardingComplete:true,household:{id:"test",name:"Test household",state:"CA"},people:[{id:"person",householdId:"test",name:"Test Person"}],taxProfile:null,settings:emptySettings,accounts:[{id:"cash",householdId:"test",name:"Test checking",kind:"checking",openingBalanceCents:0,balanceCents:0,annualReturnBps:0,liquid:true,revision:1}],categories:[],activity:[],recurring:[],assets:[],liabilities:[],scenarios:[]}},
-  async saveOnboardingStep(){}, async completeOnboarding(){}, async createTransaction(){}, async createTransfer(){},
+  async retryStartup(){return this.bootstrap()}, async saveOnboardingStep(){}, async completeOnboarding(){}, async createTransaction(){}, async createTransfer(){},
   async updateSettings(input){return {...input,revision:input.expectedRevision+1}}, async backupDatabase(){}
 };

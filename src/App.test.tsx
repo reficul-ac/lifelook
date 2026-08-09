@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { testRepository } from "./repository";
 describe("LifeLook shell", () => {
@@ -10,6 +10,86 @@ describe("LifeLook shell", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Plan/ }));
     expect(screen.getByRole("heading", { name: "Plan" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Plan/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: /Overview/ })).not.toHaveAttribute("aria-current");
+  });
+
+  it("recovers from a startup failure without reloading", async () => {
+    const bootstrap=vi.fn().mockRejectedValue({code:"corrupt",message:"Integrity check failed",profilePath:"/data/lifelook.db",retryable:true});
+    let resolveRetry:(value:Awaited<ReturnType<typeof testRepository.bootstrap>>)=>void=()=>{};
+    const retryStartup=vi.fn().mockReturnValue(new Promise(resolve=>{resolveRetry=resolve}));
+    render(<App repository={{...testRepository,bootstrap,retryStartup}}/>);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Integrity check failed");
+    expect(screen.getByText("/data/lifelook.db")).toBeInTheDocument();
+    expect(screen.getByText(/has not been deleted, renamed, replaced, or changed/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button",{name:"Retry"}));
+    expect(screen.getByRole("button",{name:"Retrying…"})).toBeDisabled();
+    resolveRetry(await testRepository.bootstrap());
+    expect(await screen.findByRole("heading",{name:"Overview"})).toBeInTheDocument();
+    expect(retryStartup).toHaveBeenCalledTimes(1);
+    expect(bootstrap).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a non-retryable incompatible profile safely", async () => {
+    render(<App repository={{...testRepository,bootstrap:vi.fn().mockRejectedValue({code:"incompatible",message:"Newer profile",retryable:false})}}/>);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Newer profile");
+    expect(screen.queryByRole("button",{name:"Retry"})).not.toBeInTheDocument();
+    expect(screen.getByText(/newer LifeLook version/i)).toBeInTheDocument();
+  });
+
+  it("keeps recovery available after a failed retry", async () => {
+    const failure={code:"unwritable",message:"Permission denied",profilePath:"/data/lifelook.db",retryable:true};
+    render(<App repository={{...testRepository,bootstrap:vi.fn().mockRejectedValue(failure),retryStartup:vi.fn().mockRejectedValue(failure)}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:"Retry"}));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Permission denied");
+    expect(screen.getByRole("button",{name:"Retry"})).toBeEnabled();
+  });
+
+  it("exposes native account radio groups", async () => {
+    const repository={...testRepository,bootstrap:async()=>({onboardingStep:0,onboardingComplete:false,people:[],accounts:[],categories:[]})};
+    render(<App repository={repository}/>);
+    fireEvent.change(await screen.findByLabelText("Household name"),{target:{value:"Home"}});
+    fireEvent.change(screen.getByLabelText("Person 1 name"),{target:{value:"Person"}});
+    fireEvent.click(screen.getByRole("button",{name:"Save & Continue"}));
+    expect(await screen.findByRole("group",{name:"Account 1 type"})).toBeInTheDocument();
+    expect(screen.getAllByRole("radio")).toHaveLength(5);
+  });
+
+  it("connects Plan disclosures to labelled month regions", async () => {
+    const data=await testRepository.bootstrap();
+    const repository={...testRepository,bootstrap:async()=>({...data,taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})};
+    render(<App repository={repository}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Plan/}));
+    const disclosure=screen.getByRole("button",{name:/2025/});
+    expect(disclosure).toHaveAttribute("aria-expanded","false");
+    fireEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute("aria-expanded","true");
+    const region=screen.getByRole("region",{name:"2025 monthly detail"});
+    expect(disclosure).toHaveAttribute("aria-controls",region.id);
+  });
+
+  it("retains member drafts, blocks duplicate saves, and retries after rejection", async () => {
+    let rejectFirst:(reason:unknown)=>void=()=>{};
+    const pending=new Promise<void>((_resolve,reject)=>{rejectFirst=reject});
+    const save=vi.fn().mockReturnValueOnce(pending).mockResolvedValue(undefined);
+    const repository={...testRepository,saveOnboardingStep:save};
+    render(<App repository={repository}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Settings/}));
+    const input=screen.getByLabelText("Member 1 name");
+    fireEvent.change(input,{target:{value:"Edited Person"}});
+    const button=screen.getByRole("button",{name:"Save members"});
+    fireEvent.click(button);
+    expect(screen.getByRole("button",{name:"Saving…"})).toBeDisabled();
+    fireEvent.click(screen.getByRole("button",{name:"Saving…"}));
+    expect(save).toHaveBeenCalledTimes(1);
+    rejectFirst({code:"io",message:"Disk is full"});
+    const alert=await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Disk is full");
+    await waitFor(()=>expect(alert).toHaveFocus());
+    expect(input).toHaveValue("Edited Person");
+    fireEvent.click(screen.getByRole("button",{name:"Save members"}));
+    expect(await screen.findByRole("status")).toHaveTextContent("Household members saved");
+    expect(save).toHaveBeenCalledTimes(2);
   });
   it("toggles theme", async () => {
     render(<App repository={testRepository} />);
@@ -17,6 +97,18 @@ describe("LifeLook shell", () => {
       await screen.findByRole("button", { name: "Toggle theme" }),
     );
     expect(document.querySelector(".app")).toHaveClass("dark");
+  });
+  it("marks unavailable controls as disabled", async () => {
+    render(<App repository={testRepository}/>);
+    await screen.findByRole("heading",{name:"Overview"});
+    expect(screen.getByRole("button",{name:/Search \(not yet available\)/})).toBeDisabled();
+    expect(screen.getByRole("button",{name:/Add \(unavailable\)/})).toBeDisabled();
+    expect(screen.getByRole("button",{name:/Test Person/})).toBeDisabled();
+    fireEvent.click(screen.getByRole("button",{name:/Net Worth/}));
+    expect(screen.getByRole("button",{name:/Add account \(unavailable\)/})).toBeDisabled();
+    fireEvent.click(screen.getByRole("button",{name:/Settings/}));
+    expect(screen.getByRole("button",{name:/Back up data \(unavailable\)/})).toBeDisabled();
+    expect(screen.getByRole("button",{name:/Choose backup \(unavailable\)/})).toBeDisabled();
   });
   it("shows onboarding for a new workspace", async () => {
     const repository = {
@@ -27,6 +119,7 @@ describe("LifeLook shell", () => {
         accounts: [],
         categories: [],
       }),
+      retryStartup: async () => { throw new Error("not used"); },
       saveOnboardingStep: async () => {},
       completeOnboarding: async () => {},
     };
@@ -50,6 +143,7 @@ describe("LifeLook shell", () => {
         accounts: [],
         categories: [],
       }),
+      retryStartup: async () => { throw new Error("not used"); },
       saveOnboardingStep: async (_step: number, payload: unknown) => {
         payloads.push(payload);
       },
@@ -122,6 +216,7 @@ describe("LifeLook shell", () => {
         accounts: [],
         categories: [],
       }),
+      retryStartup: async () => { throw new Error("not used"); },
       saveOnboardingStep: async () => {},
       completeOnboarding: async () => {},
     };
@@ -164,6 +259,7 @@ describe("LifeLook shell", () => {
         ],
         categories: [],
       }),
+      retryStartup: async () => { throw new Error("not used"); },
       saveOnboardingStep: async () => {},
       completeOnboarding: async () => {},
     };

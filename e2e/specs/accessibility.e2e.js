@@ -31,34 +31,56 @@ function rgbToHex(rgb) {
 describe("LifeLook native accessibility", () => {
   it("completes onboarding and verifies controls, contrast, focus, and minimum viewport", async () => {
     await browser.setWindowSize(920, 650);
-    const household = await $('input[value=""]');
-    await household.waitForDisplayed();
+    const household = await $("aria/Household name");
+    try {
+      await household.waitForDisplayed();
+    } catch (error) {
+      await browser.saveScreenshot(artifact("startup-failure.png"));
+      console.error(await browser.getPageSource());
+      throw error;
+    }
     await household.setValue("Native E2E Household");
     await $('[aria-label="Person 1 name"]').setValue("Native Tester");
     await $("aria/Save & Continue").click();
 
     const accountName = await $('[aria-label="Account 1 name"]');
     await accountName.waitForDisplayed();
+    await $("aria/Filing status").selectByAttribute("value", "single");
     await $("aria/Checking").click();
     await accountName.setValue("Everyday checking");
     await $('[aria-label="Account 1 opening balance"]').setValue("1250.00");
     await $("aria/Finish setup").click();
     await $("aria/Overview").waitForDisplayed();
+    const overviewNav = await $("nav button:nth-child(1)");
+    assert.equal(await overviewNav.getAttribute("aria-current"), "page");
+    assert.equal(await $("aria/Search (not yet available)").isEnabled(), false);
+    assert.equal(await $("aria/Add (unavailable)").isEnabled(), false);
     await browser.saveScreenshot(artifact("01-light-920x650.png"));
+
+    const planNav = await $("nav button:nth-child(3)");
+    await planNav.click();
+    assert.equal(await planNav.getAttribute("aria-current"), "page");
+    const year = await $(".year-row[aria-expanded]");
+    assert.equal(await year.getAttribute("aria-expanded"), "false");
+    await year.click();
+    assert.equal(await year.getAttribute("aria-expanded"), "true");
+    const monthPanelId = await year.getAttribute("aria-controls");
+    const monthPanel = await $(`#${monthPanelId}`);
+    assert.equal(await monthPanel.getAttribute("role"), "region");
+    assert.ok((await monthPanel.getAttribute("aria-label")).includes("monthly detail"));
 
     await $("aria/Settings").click();
     const switches = await $$('button[role="switch"]');
-    assert.equal(switches.length, 2);
-    const dark = switches[0];
-    const reducedMotion = switches[1];
-    assert.equal(await dark.getAttribute("aria-labelledby"), "dark-theme-label");
-    assert.equal(await dark.getAttribute("aria-describedby"), "dark-theme-description");
-    assert.equal(await dark.getAttribute("aria-checked"), "false");
+    assert.equal(switches.length, 1);
+    const reducedMotion = switches[0];
     assert.equal(await reducedMotion.getAttribute("aria-labelledby"), "reduced-motion-label");
     assert.equal(await reducedMotion.getAttribute("aria-describedby"), "reduced-motion-description");
     assert.equal(await reducedMotion.getAttribute("aria-checked"), "false");
+    const dark = await $("aria/Dark");
+    assert.equal(await dark.getAttribute("type"), "radio");
+    assert.equal(await dark.isSelected(), false);
     await dark.click();
-    assert.equal(await dark.getAttribute("aria-checked"), "true");
+    assert.equal(await dark.isSelected(), true);
     await browser.saveScreenshot(artifact("02-dark-settings-920x650.png"));
 
     const activityNav = await $("nav button:nth-child(2)");
@@ -66,9 +88,18 @@ describe("LifeLook native accessibility", () => {
     await $("aria/Search activity").waitForDisplayed();
     const colors = await browser.execute(() => {
       const read = (selector) => {
-        const node = document.querySelector(selector);
+        let node = document.querySelector(selector);
+        let temporary = false;
+        if (!node) {
+          node = document.createElement("span");
+          node.className = selector.slice(1);
+          document.querySelector(".card").append(node);
+          temporary = true;
+        }
         const style = getComputedStyle(node);
-        return { color: style.color, background: getComputedStyle(node.closest(".card")).backgroundColor };
+        const sample = { color: style.color, background: getComputedStyle(node.closest(".card")).backgroundColor };
+        if (temporary) node.remove();
+        return sample;
       };
       return { positive: read(".positive"), negative: read(".negative") };
     });

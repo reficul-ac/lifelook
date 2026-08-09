@@ -10,7 +10,7 @@ export interface BootstrapAccount { id:string; householdId:string; name:string; 
 export interface TaxProfile { filingStatus:"single"|"married-joint"|"married-separate"|"head-of-household"; state:"CA"; taxYear:2025|2026; thresholdInflationBps:number; revision:number }
 export interface Settings { theme:Theme; reducedMotion:boolean; revision:number }
 export interface Category { id:string; householdId:string; name:string; kind:"income"|"expense"|"transfer"; revision:number }
-export interface ActivityPosting { postingId:number; entryId:string; occurredOn:string; kind:"income"|"expense"|"transfer"|"adjustment"; description:string; note?:string|null; transferGroupId?:string|null; accountId:string; accountName:string; categoryId?:string|null; categoryName?:string|null; amountCents:number; revision:number }
+export interface ActivityPosting { postingId:number; entryId:string; occurredOn:string; kind:"income"|"expense"|"transfer"|"adjustment"; origin?:"manual"|"import"|"reconciliation"; canDelete?:boolean; description:string; note?:string|null; transferGroupId?:string|null; accountId:string; accountName:string; categoryId?:string|null; categoryName?:string|null; amountCents:number; revision:number }
 export interface RecurringEntry { id:string; householdId:string; categoryId:string; accountId?:string|null; name:string; amountCents:number; startDate:string; endDate?:string|null; annualGrowthBps:number; revision:number }
 export interface Asset { id:string; householdId:string; name:string; valueCents:number; annualGrowthBps:number; revision:number }
 export interface Liability { id:string; householdId:string; name:string; balanceCents:number; annualRateBps:number; minimumPaymentCents:number; revision:number }
@@ -28,6 +28,16 @@ export interface TransactionInput { id:string; occurredOn:string; accountId:stri
 export interface UpdateTransactionInput extends Omit<TransactionInput,"id"> { id:string; expectedRevision:number }
 export interface TransferInput { id:string;occurredOn:string;fromAccountId:string;toAccountId:string;amountCents:number;expectedRevision?:number }
 export interface AccountInput { id:string;name:string;kind:AccountKind;openingBalanceCents:number }
+export type CsvDateFormat="iso"|"us";
+export type CsvAmountLayout="signed"|"debitCredit";
+export interface CsvMapping { accountId:string; dateColumn:string; descriptionColumn:string; noteColumn?:string|null; amountLayout:CsvAmountLayout; amountColumn?:string|null; debitColumn?:string|null; creditColumn?:string|null; inflowPositive:boolean; dateFormat:CsvDateFormat }
+export interface CsvInspection { path:string; fileHash:string; headers:string[]; rowCount:number; savedMapping?:CsvMapping|null }
+export type CsvDuplicateState="none"|"file"|"existing";
+export interface CsvPreviewRow { rowNumber:number; occurredOn?:string|null; description:string; note?:string|null; amountCents?:number|null; kind?:"income"|"expense"|null; categoryId?:string|null; categoryName?:string|null; valid:boolean; error?:string|null; duplicate:CsvDuplicateState; include:boolean }
+export interface CsvPreview { path:string; fileHash:string; mapping:CsvMapping; rows:CsvPreviewRow[] }
+export interface CsvCommitRow { rowNumber:number; categoryId:string; include:boolean }
+export interface CsvImportResult { batchId:string; importedCount:number; skippedCount:number }
+export interface AccountDeletionImpact { accountId:string; canDelete:boolean; blockers:string[] }
 export interface Repository {
   bootstrap():Promise<BootstrapInput>;
   retryStartup():Promise<BootstrapInput>;
@@ -37,9 +47,16 @@ export interface Repository {
   updateTransaction?(input:UpdateTransactionInput):Promise<void>;
   createTransfer?(input:TransferInput):Promise<void>;
   updateTransfer?(input:TransferInput&{expectedRevision:number}):Promise<void>;
+  deleteTransaction?(input:{id:string;expectedRevision:number}):Promise<void>;
   createAccount?(input:AccountInput):Promise<void>;
   updateAccount?(input:{id:string;name:string;kind:AccountKind;expectedRevision:number}):Promise<void>;
   reconcileAccount?(input:{id:string;occurredOn:string;targetBalanceCents:number;expectedBalanceCents:number}):Promise<void>;
+  accountDeletionImpact?(accountId:string):Promise<AccountDeletionImpact>;
+  deleteAccount?(input:{id:string;expectedRevision:number}):Promise<void>;
+  selectCsvSource?():Promise<string|null>;
+  inspectCsv?(path:string):Promise<CsvInspection>;
+  previewCsv?(path:string,fileHash:string,mapping:CsvMapping):Promise<CsvPreview>;
+  commitCsv?(preview:CsvPreview,rows:CsvCommitRow[]):Promise<CsvImportResult>;
   updateSettings?(input:{theme:Theme;reducedMotion:boolean;expectedRevision:number}):Promise<Settings>;
   selectBackupDestination?():Promise<string|null>;
   selectRestoreSource?():Promise<string|null>;
@@ -59,9 +76,16 @@ export const tauriRepository:Repository = {
   updateTransaction:(input)=>invoke("update_transaction",{input}),
   createTransfer:(input)=>invoke("create_transfer",{input}),
   updateTransfer:(input)=>invoke("update_transfer",{input}),
+  deleteTransaction:(input)=>invoke("delete_transaction",{input}),
   createAccount:(input)=>invoke("create_account",{input}),
   updateAccount:(input)=>invoke("update_account",{input}),
   reconcileAccount:(input)=>invoke("reconcile_account",{input}),
+  accountDeletionImpact:(accountId)=>invoke("account_deletion_impact",{accountId}),
+  deleteAccount:(input)=>invoke("delete_account",{input}),
+  selectCsvSource:async()=>{const selected=await open({multiple:false,directory:false,filters:[{name:"CSV files",extensions:["csv"]}]});return typeof selected==="string"?selected:null},
+  inspectCsv:(path)=>invoke("inspect_csv",{path}),
+  previewCsv:(path,fileHash,mapping)=>invoke("preview_csv",{path,fileHash,mapping}),
+  commitCsv:(preview,rows)=>invoke("commit_csv",{preview,rows}),
   updateSettings:(input)=>invoke("update_settings",{input}),
   selectBackupDestination:()=>save({defaultPath:backupFilename(),filters:backupFilters}),
   selectRestoreSource:async()=>{

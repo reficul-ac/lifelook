@@ -425,6 +425,12 @@ h1 {
   gap: 8px;
   margin-bottom: 14px;
 }
+.import-modal { width: min(960px, calc(100vw - 32px)); max-height: 88vh; overflow: auto; }
+.import-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px 16px; }
+.import-preview { overflow: auto; max-height: 52vh; border: 1px solid var(--line); border-radius: 8px; }
+.import-preview table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.import-preview th,.import-preview td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+@media (max-width: 650px) { .import-grid { grid-template-columns: 1fr; } }
 .search {
   flex: 1;
   display: flex;

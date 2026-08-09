@@ -21,7 +21,7 @@ Run the complete web check or build the desktop AppImage:
 
 ```bash
 npm run check
-npm run tauri dev
+npm run web:dev
 npm run appimage
 ```
 

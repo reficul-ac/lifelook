@@ -1,5 +1,6 @@
 use rusqlite::{backup::Backup, params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -8,7 +9,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -173,6 +174,8 @@ struct ActivityPosting {
     entry_id: String,
     occurred_on: String,
     kind: String,
+    origin: String,
+    can_delete: bool,
     description: String,
     note: Option<String>,
     transfer_group_id: Option<String>,
@@ -298,6 +301,80 @@ struct ReconcileAccountInput {
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct DeleteInput {
+    id: String,
+    expected_revision: i64,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AccountDeletionImpact {
+    account_id: String,
+    can_delete: bool,
+    blockers: Vec<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CsvMapping {
+    account_id: String,
+    date_column: String,
+    description_column: String,
+    note_column: Option<String>,
+    amount_layout: String,
+    amount_column: Option<String>,
+    debit_column: Option<String>,
+    credit_column: Option<String>,
+    inflow_positive: bool,
+    date_format: String,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CsvInspection {
+    path: String,
+    file_hash: String,
+    headers: Vec<String>,
+    row_count: usize,
+    saved_mapping: Option<CsvMapping>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CsvPreviewRow {
+    row_number: usize,
+    occurred_on: Option<String>,
+    description: String,
+    note: Option<String>,
+    amount_cents: Option<i64>,
+    kind: Option<String>,
+    category_id: Option<String>,
+    category_name: Option<String>,
+    valid: bool,
+    error: Option<String>,
+    duplicate: String,
+    include: bool,
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CsvPreview {
+    path: String,
+    file_hash: String,
+    mapping: CsvMapping,
+    rows: Vec<CsvPreviewRow>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CsvCommitRow {
+    row_number: usize,
+    category_id: String,
+    include: bool,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CsvImportResult {
+    batch_id: String,
+    imported_count: usize,
+    skipped_count: usize,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct SettingsInput {
     theme: String,
     reduced_motion: bool,
@@ -351,6 +428,21 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
     // Versions 1–2 accepted a positive credit opening balance. Version 3 defines
     // onboarding input as a positive amount owed and stores credit as signed debt.
     transaction.execute("UPDATE accounts SET opening_balance_cents=-opening_balance_cents,revision=revision+1 WHERE kind='credit' AND opening_balance_cents>0", [])?;
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 4 {
+        transaction.execute_batch("DROP VIEW IF EXISTS account_balances;
+          ALTER TABLE postings RENAME TO postings_v3;
+          CREATE TABLE postings(id INTEGER PRIMARY KEY AUTOINCREMENT, entry_id TEXT NOT NULL REFERENCES transaction_entries(id) ON DELETE RESTRICT, account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT, category_id TEXT REFERENCES categories(id) ON DELETE RESTRICT, amount_cents INTEGER NOT NULL CHECK(amount_cents<>0), fingerprint TEXT);
+          INSERT INTO postings SELECT * FROM postings_v3;
+          DROP TABLE postings_v3;
+          CREATE INDEX postings_duplicate_key ON postings(account_id,fingerprint);
+          CREATE VIEW account_balances AS SELECT a.id, a.opening_balance_cents + COALESCE(SUM(p.amount_cents),0) AS balance_cents FROM accounts a LEFT JOIN postings p ON p.account_id=a.id GROUP BY a.id;")?;
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(4)", [])?;
+    }
     transaction.commit()?;
     Ok(())
 }
@@ -443,7 +535,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT p.id,e.id,e.occurred_on,e.kind,e.description,e.note,e.transfer_group_id,p.account_id,a.name,p.category_id,c.name,p.amount_cents,e.revision FROM transaction_entries e JOIN postings p ON p.entry_id=e.id JOIN accounts a ON a.id=p.account_id LEFT JOIN categories c ON c.id=p.category_id WHERE e.household_id=? ORDER BY e.occurred_on DESC,e.id,p.id")?;
+        let mut q=connection.prepare("SELECT p.id,e.id,e.occurred_on,e.kind,CASE WHEN e.kind='adjustment' THEN 'reconciliation' WHEN e.import_batch_id IS NOT NULL THEN 'import' ELSE 'manual' END,e.kind<>'adjustment',e.description,e.note,e.transfer_group_id,p.account_id,a.name,p.category_id,c.name,p.amount_cents,e.revision FROM transaction_entries e JOIN postings p ON p.entry_id=e.id JOIN accounts a ON a.id=p.account_id LEFT JOIN categories c ON c.id=p.category_id WHERE e.household_id=? ORDER BY e.occurred_on DESC,e.id,p.id")?;
         activity = q
             .query_map([&h.id], |r| {
                 Ok(ActivityPosting {
@@ -451,15 +543,17 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     entry_id: r.get(1)?,
                     occurred_on: r.get(2)?,
                     kind: r.get(3)?,
-                    description: r.get(4)?,
-                    note: r.get(5)?,
-                    transfer_group_id: r.get(6)?,
-                    account_id: r.get(7)?,
-                    account_name: r.get(8)?,
-                    category_id: r.get(9)?,
-                    category_name: r.get(10)?,
-                    amount_cents: r.get(11)?,
-                    revision: r.get(12)?,
+                    origin: r.get(4)?,
+                    can_delete: r.get(5)?,
+                    description: r.get(6)?,
+                    note: r.get(7)?,
+                    transfer_group_id: r.get(8)?,
+                    account_id: r.get(9)?,
+                    account_name: r.get(10)?,
+                    category_id: r.get(11)?,
+                    category_name: r.get(12)?,
+                    amount_cents: r.get(13)?,
+                    revision: r.get(14)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -980,6 +1074,41 @@ fn update_transfer(input: TransferInput, database: tauri::State<Database>) -> Re
         Ok(())
     })
 }
+#[tauri::command]
+fn delete_transaction(
+    input: DeleteInput,
+    database: tauri::State<Database>,
+) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        let tx = db.transaction()?;
+        let hid = active_household(&tx)?;
+        let (kind, revision): (String, i64) = tx
+            .query_row(
+                "SELECT kind,revision FROM transaction_entries WHERE id=?1 AND household_id=?2",
+                params![input.id, hid],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(|_| AppError::Validation("transaction was not found".into()))?;
+        if kind == "adjustment" {
+            return Err(AppError::Validation(
+                "reconciliation adjustments cannot be deleted".into(),
+            ));
+        }
+        if revision != input.expected_revision {
+            return Err(AppError::Conflict);
+        }
+        tx.execute("DELETE FROM postings WHERE entry_id=?", [&input.id])?;
+        let changed = tx.execute(
+            "DELETE FROM transaction_entries WHERE id=?1 AND household_id=?2 AND revision=?3",
+            params![input.id, hid, input.expected_revision],
+        )?;
+        if changed == 0 {
+            return Err(AppError::Conflict);
+        }
+        tx.commit()?;
+        Ok(())
+    })
+}
 fn account_properties(kind: &str) -> Result<bool, AppError> {
     match kind {
         "checking" | "savings" => Ok(true),
@@ -1030,6 +1159,90 @@ fn update_account(
         Ok(())
     })
 }
+fn account_impact(db: &Connection, account_id: &str) -> Result<AccountDeletionImpact, AppError> {
+    let hid = active_household(db)?;
+    let exists: i64 = db.query_row(
+        "SELECT count(*) FROM accounts WHERE id=?1 AND household_id=?2",
+        params![account_id, hid],
+        |r| r.get(0),
+    )?;
+    if exists == 0 {
+        return Err(AppError::Validation(
+            "account does not belong to this household".into(),
+        ));
+    }
+    let mut blockers = Vec::new();
+    let accounts: i64 = db.query_row(
+        "SELECT count(*) FROM accounts WHERE household_id=?",
+        [&hid],
+        |r| r.get(0),
+    )?;
+    if accounts <= 1 {
+        blockers.push("This is the household's last account.".into())
+    }
+    let postings: i64 = db.query_row(
+        "SELECT count(*) FROM postings WHERE account_id=?",
+        [account_id],
+        |r| r.get(0),
+    )?;
+    if postings > 0 {
+        blockers.push("The account has transactions or reconciliation history.".into())
+    }
+    let imports: i64 = db.query_row(
+        "SELECT count(*) FROM import_batches WHERE account_id=?",
+        [account_id],
+        |r| r.get(0),
+    )?;
+    if imports > 0 {
+        blockers.push("The account has import batch history.".into())
+    }
+    let recurring: i64 = db.query_row(
+        "SELECT count(*) FROM recurring_entries WHERE account_id=?",
+        [account_id],
+        |r| r.get(0),
+    )?;
+    if recurring > 0 {
+        blockers.push("The account is used by recurring entries.".into())
+    }
+    let allocations: i64 = db.query_row(
+        "SELECT count(*) FROM allocations WHERE account_id=?",
+        [account_id],
+        |r| r.get(0),
+    )?;
+    if allocations > 0 {
+        blockers.push("The account is used by scenario allocations.".into())
+    }
+    Ok(AccountDeletionImpact {
+        account_id: account_id.into(),
+        can_delete: blockers.is_empty(),
+        blockers,
+    })
+}
+#[tauri::command]
+fn account_deletion_impact(
+    account_id: String,
+    database: tauri::State<Database>,
+) -> Result<AccountDeletionImpact, AppError> {
+    with_db(&database, |db| account_impact(db, &account_id))
+}
+#[tauri::command]
+fn delete_account(input: DeleteInput, database: tauri::State<Database>) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        let impact = account_impact(db, &input.id)?;
+        if !impact.can_delete {
+            return Err(AppError::Validation(impact.blockers.join(" ")));
+        }
+        let hid = active_household(db)?;
+        let changed = db.execute(
+            "DELETE FROM accounts WHERE id=?1 AND household_id=?2 AND revision=?3",
+            params![input.id, hid, input.expected_revision],
+        )?;
+        if changed == 0 {
+            return Err(AppError::Conflict);
+        }
+        Ok(())
+    })
+}
 #[tauri::command]
 fn reconcile_account(
     input: ReconcileAccountInput,
@@ -1063,6 +1276,375 @@ fn reconcile_account(
         }
         tx.commit()?;
         Ok(())
+    })
+}
+
+fn csv_bytes(path: &str) -> Result<(Vec<u8>, String), AppError> {
+    let meta = fs::metadata(path)?;
+    if meta.len() > 10 * 1024 * 1024 {
+        return Err(AppError::Validation(
+            "CSV files must be 10 MiB or smaller".into(),
+        ));
+    }
+    let bytes = fs::read(path)?;
+    std::str::from_utf8(&bytes)
+        .map_err(|_| AppError::Validation("CSV must use UTF-8 encoding".into()))?;
+    let hash = format!("{:x}", Sha256::digest(&bytes));
+    Ok((bytes, hash))
+}
+fn csv_reader(bytes: &[u8]) -> csv::Reader<&[u8]> {
+    csv::ReaderBuilder::new()
+        .flexible(false)
+        .trim(csv::Trim::All)
+        .from_reader(bytes)
+}
+fn csv_headers(bytes: &[u8]) -> Result<(Vec<String>, usize), AppError> {
+    let mut rdr = csv_reader(bytes);
+    let headers = rdr
+        .headers()
+        .map_err(|e| AppError::Validation(format!("Malformed CSV header: {e}")))?
+        .iter()
+        .map(|x| x.trim_start_matches('\u{feff}').to_string())
+        .collect::<Vec<_>>();
+    if headers.is_empty() || headers.iter().all(|x| x.is_empty()) {
+        return Err(AppError::Validation("CSV has no header row".into()));
+    }
+    let mut count = 0;
+    for row in rdr.records() {
+        row.map_err(|e| AppError::Validation(format!("Malformed CSV row: {e}")))?;
+        count += 1;
+        if count > 50_000 {
+            return Err(AppError::Validation(
+                "CSV may contain at most 50,000 data rows".into(),
+            ));
+        }
+    }
+    if count == 0 {
+        return Err(AppError::Validation("CSV contains no data rows".into()));
+    }
+    Ok((headers, count))
+}
+fn header_signature(headers: &[String]) -> String {
+    headers
+        .iter()
+        .map(|h| h.trim().to_lowercase())
+        .collect::<Vec<_>>()
+        .join("\u{1f}")
+}
+#[tauri::command]
+fn inspect_csv(path: String, database: tauri::State<Database>) -> Result<CsvInspection, AppError> {
+    let (bytes, file_hash) = csv_bytes(&path)?;
+    let (headers, row_count) = csv_headers(&bytes)?;
+    let sig = header_signature(&headers);
+    let saved_mapping = with_db(&database, |db| {
+        let hid = active_household(db)?;
+        let raw:Option<String>=db.query_row("SELECT parsing_json FROM import_profiles WHERE household_id=?1 AND normalized_headers=?2",params![hid,sig],|r|r.get(0)).optional()?;
+        Ok(raw.and_then(|x| serde_json::from_str(&x).ok()))
+    })?;
+    Ok(CsvInspection {
+        path,
+        file_hash,
+        headers,
+        row_count,
+        saved_mapping,
+    })
+}
+fn parse_csv_date(value: &str, format: &str) -> Result<String, String> {
+    let iso = if format == "iso" {
+        value.to_string()
+    } else {
+        let p = value.split('/').collect::<Vec<_>>();
+        if p.len() != 3 {
+            return Err("Invalid US date".into());
+        }
+        format!("{:0>4}-{:0>2}-{:0>2}", p[2], p[0], p[1])
+    };
+    validate_date(&iso).map_err(|_| "Invalid calendar date".to_string())?;
+    Ok(iso)
+}
+fn parse_csv_money(value: &str) -> Result<i64, String> {
+    let mut s = value.trim().to_string();
+    let parens = s.starts_with('(') && s.ends_with(')');
+    if parens {
+        s = s[1..s.len() - 1].to_string()
+    }
+    s = s.replace('$', "").replace(',', "").trim().to_string();
+    if s.is_empty() {
+        return Ok(0);
+    }
+    let neg = s.starts_with('-') || parens;
+    s = s.trim_start_matches(['+', '-']).to_string();
+    let p = s.split('.').collect::<Vec<_>>();
+    if p.len() > 2
+        || p[0].is_empty()
+        || !p.iter().all(|x| x.chars().all(|c| c.is_ascii_digit()))
+        || p.get(1).is_some_and(|x| x.len() > 2)
+    {
+        return Err("Invalid USD amount".into());
+    }
+    let whole: i128 = p[0].parse().map_err(|_| "Amount is too large")?;
+    let frac = if p.len() == 2 {
+        p[1].parse::<i128>().unwrap_or(0) * if p[1].len() == 1 { 10 } else { 1 }
+    } else {
+        0
+    };
+    let cents = whole * 100 + frac;
+    if cents > MAX_MONEY_CENTS as i128 {
+        return Err("Amount is outside the supported range".into());
+    }
+    Ok(if neg { -(cents as i64) } else { cents as i64 })
+}
+fn duplicate_key(date: &str, amount: i64, description: &str) -> String {
+    let normalized = description
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase();
+    format!(
+        "{:x}",
+        Sha256::digest(format!("{date}|{amount}|{normalized}").as_bytes())
+    )
+}
+fn make_preview(
+    db: &Connection,
+    path: String,
+    file_hash: String,
+    mapping: CsvMapping,
+) -> Result<CsvPreview, AppError> {
+    let (bytes, actual) = csv_bytes(&path)?;
+    if actual != file_hash {
+        return Err(AppError::Validation(
+            "The CSV changed after selection; preview it again".into(),
+        ));
+    }
+    let mut rdr = csv_reader(&bytes);
+    let headers = rdr
+        .headers()
+        .map_err(|e| AppError::Validation(format!("Malformed CSV header: {e}")))?
+        .iter()
+        .map(|x| x.trim_start_matches('\u{feff}').to_string())
+        .collect::<Vec<_>>();
+    let col = |name: &str| {
+        headers
+            .iter()
+            .position(|h| h == name)
+            .ok_or_else(|| AppError::Validation(format!("CSV column '{name}' was not found")))
+    };
+    let di = col(&mapping.date_column)?;
+    let xi = col(&mapping.description_column)?;
+    let ni = mapping.note_column.as_deref().map(col).transpose()?;
+    let ai = mapping.amount_column.as_deref().map(col).transpose()?;
+    let debit = mapping.debit_column.as_deref().map(col).transpose()?;
+    let credit = mapping.credit_column.as_deref().map(col).transpose()?;
+    if mapping.amount_layout == "signed" && ai.is_none()
+        || mapping.amount_layout == "debitCredit" && (debit.is_none() || credit.is_none())
+    {
+        return Err(AppError::Validation(
+            "Choose the required amount columns".into(),
+        ));
+    }
+    let hid = active_household(db)?;
+    let ah: String = db
+        .query_row(
+            "SELECT household_id FROM accounts WHERE id=?",
+            [&mapping.account_id],
+            |r| r.get(0),
+        )
+        .map_err(|_| {
+            AppError::Validation("destination account does not belong to this household".into())
+        })?;
+    if ah != hid {
+        return Err(AppError::Validation(
+            "destination account does not belong to this household".into(),
+        ));
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut rows = Vec::new();
+    for (idx, result) in rdr.records().enumerate() {
+        let rec = result.map_err(|e| AppError::Validation(format!("Malformed CSV row: {e}")))?;
+        let description = rec.get(xi).unwrap_or("").trim().to_string();
+        let note = ni
+            .and_then(|i| rec.get(i))
+            .map(str::trim)
+            .filter(|x| !x.is_empty())
+            .map(str::to_string);
+        let parsed_date = parse_csv_date(rec.get(di).unwrap_or(""), &mapping.date_format);
+        let parsed_amount: Result<i64,String> = (|| {
+            if mapping.amount_layout == "signed" {
+                let v = parse_csv_money(rec.get(ai.unwrap()).unwrap_or(""))?;
+                Ok(if mapping.inflow_positive { v } else { -v })
+            } else {
+                let d = parse_csv_money(rec.get(debit.unwrap()).unwrap_or(""))?.abs();
+                let c = parse_csv_money(rec.get(credit.unwrap()).unwrap_or(""))?.abs();
+                if d > 0 && c > 0 {
+                    return Err("Debit and credit cannot both have values".into());
+                }
+                if d == 0 && c == 0 {
+                    return Err("An amount is required".into());
+                }
+                Ok(c - d)
+            }
+        })();
+        let mut error = None;
+        if description.is_empty() {
+            error = Some("Description is required".into())
+        }
+        if parsed_date.is_err() {
+            error = Some(parsed_date.as_ref().unwrap_err().clone())
+        }
+        if parsed_amount.as_ref().is_err() {
+            error = Some(parsed_amount.as_ref().unwrap_err().clone())
+        }
+        if parsed_amount.as_ref().is_ok_and(|x| *x == 0) {
+            error = Some("Amount cannot be zero".into())
+        }
+        let date = parsed_date.ok();
+        let amount = parsed_amount.ok();
+        let kind = amount.map(|x| {
+            if x > 0 {
+                "income".to_string()
+            } else {
+                "expense".to_string()
+            }
+        });
+        let mut category_id = None;
+        let mut category_name = None;
+        if let Some(k) = &kind {
+            let suggested:Option<(String,String)>=db.query_row("SELECT p.category_id,c.name FROM transaction_entries e JOIN postings p ON p.entry_id=e.id JOIN categories c ON c.id=p.category_id WHERE e.household_id=?1 AND lower(trim(e.description))=lower(trim(?2)) AND c.kind=?3 ORDER BY e.created_at DESC LIMIT 1",params![hid,description,k],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
+            let fallback = || {
+                db.query_row("SELECT id,name FROM categories WHERE (household_id=?1 OR household_id IS NULL) AND kind=?2 ORDER BY CASE WHEN name LIKE 'Other %' THEN 0 ELSE 1 END,name LIMIT 1",params![hid,k],|r|Ok((r.get(0)?,r.get(1)?))).optional()
+            };
+            if let Some((id, name)) = suggested.or_else(|| fallback().ok().flatten()) {
+                category_id = Some(id);
+                category_name = Some(name)
+            }
+        }
+        let mut duplicate = "none".to_string();
+        if let (Some(d), Some(a)) = (&date, amount) {
+            let fp = duplicate_key(d, a, &description);
+            if !seen.insert(fp.clone()) {
+                duplicate = "file".into()
+            } else {
+                let exists: i64 = db.query_row(
+                    "SELECT count(*) FROM postings WHERE account_id=?1 AND fingerprint=?2",
+                    params![mapping.account_id, fp],
+                    |r| r.get(0),
+                )?;
+                if exists > 0 {
+                    duplicate = "existing".into()
+                }
+            }
+        }
+        let valid = error.is_none() && category_id.is_some();
+        let include = valid && duplicate == "none";
+        rows.push(CsvPreviewRow {
+            row_number: idx + 2,
+            occurred_on: date,
+            description,
+            note,
+            amount_cents: amount,
+            kind,
+            category_id,
+            category_name,
+            valid,
+            error,
+            duplicate,
+            include,
+        });
+    }
+    Ok(CsvPreview {
+        path,
+        file_hash,
+        mapping,
+        rows,
+    })
+}
+#[tauri::command]
+fn preview_csv(
+    path: String,
+    file_hash: String,
+    mapping: CsvMapping,
+    database: tauri::State<Database>,
+) -> Result<CsvPreview, AppError> {
+    with_db(&database, |db| make_preview(db, path, file_hash, mapping))
+}
+#[tauri::command]
+fn commit_csv(
+    preview: CsvPreview,
+    rows: Vec<CsvCommitRow>,
+    database: tauri::State<Database>,
+) -> Result<CsvImportResult, AppError> {
+    with_db(&database, |db| {
+        let fresh = make_preview(
+            db,
+            preview.path.clone(),
+            preview.file_hash.clone(),
+            preview.mapping.clone(),
+        )?;
+        let selected = rows.iter().filter(|x| x.include).collect::<Vec<_>>();
+        if selected.is_empty() {
+            return Err(AppError::Validation(
+                "Select at least one valid row to import".into(),
+            ));
+        }
+        let selected_len = selected.len();
+        let tx = db.transaction()?;
+        let hid = active_household(&tx)?;
+        let sig = {
+            let (bytes, _) = csv_bytes(&preview.path)?;
+            let (h, _) = csv_headers(&bytes)?;
+            header_signature(&h)
+        };
+        let profile_id = format!("import-profile-{}", &preview.file_hash[..16]);
+        let json = serde_json::to_string(&preview.mapping)
+            .map_err(|_| AppError::Validation("Could not save CSV mapping".into()))?;
+        tx.execute("INSERT INTO import_profiles(id,household_id,normalized_headers,parsing_json) VALUES(?1,?2,?3,?4) ON CONFLICT(household_id,normalized_headers) DO UPDATE SET parsing_json=excluded.parsing_json",params![profile_id,hid,sig,json])?;
+        let actual_profile: String = tx.query_row(
+            "SELECT id FROM import_profiles WHERE household_id=?1 AND normalized_headers=?2",
+            params![hid, sig],
+            |r| r.get(0),
+        )?;
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let batch_id = format!("import-{nonce}");
+        tx.execute("INSERT INTO import_batches(id,account_id,profile_id,row_count,status) VALUES(?1,?2,?3,?4,'complete')",params![batch_id,preview.mapping.account_id,actual_profile,selected.len()])?;
+        for choice in selected {
+            let row = fresh
+                .rows
+                .iter()
+                .find(|r| r.row_number == choice.row_number)
+                .ok_or_else(|| AppError::Validation("An included CSV row was not found".into()))?;
+            if !row.valid {
+                return Err(AppError::Validation(format!(
+                    "Row {} is invalid",
+                    row.row_number
+                )));
+            }
+            let kind = row.kind.as_ref().unwrap();
+            let category_kind:String=tx.query_row("SELECT kind FROM categories WHERE id=?1 AND (household_id=?2 OR household_id IS NULL)",params![choice.category_id,hid],|r|r.get(0)).map_err(|_|AppError::Validation(format!("Row {} has an invalid category",row.row_number)))?;
+            if &category_kind != kind {
+                return Err(AppError::Validation(format!(
+                    "Row {} category does not match its amount",
+                    row.row_number
+                )));
+            }
+            let eid = format!("{batch_id}-{}", row.row_number);
+            tx.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description,note,import_batch_id) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![eid,hid,row.occurred_on,row.kind,row.description,row.note,batch_id])?;
+            let fp = duplicate_key(
+                row.occurred_on.as_ref().unwrap(),
+                row.amount_cents.unwrap(),
+                &row.description,
+            );
+            tx.execute("INSERT INTO postings(entry_id,account_id,category_id,amount_cents,fingerprint) VALUES(?1,?2,?3,?4,?5)",params![eid,preview.mapping.account_id,choice.category_id,row.amount_cents,fp])?;
+        }
+        tx.commit()?;
+        Ok(CsvImportResult {
+            batch_id,
+            imported_count: selected_len,
+            skipped_count: fresh.rows.len() - selected_len,
+        })
     })
 }
 
@@ -1496,9 +2078,15 @@ pub fn run() {
             create_transfer,
             update_transaction,
             update_transfer,
+            delete_transaction,
             create_account,
             update_account,
             reconcile_account,
+            account_deletion_impact,
+            delete_account,
+            inspect_csv,
+            preview_csv,
+            commit_csv,
             update_settings,
             backup_database,
             inspect_backup,
@@ -1569,7 +2157,7 @@ mod tests {
         let n: i64 = c
             .query_row("SELECT count(*) FROM schema_migrations", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(n, 3)
+        assert_eq!(n, SCHEMA_VERSION)
     }
     #[test]
     fn transfers_are_balanced() {
@@ -1842,6 +2430,28 @@ mod tests {
             .unwrap(),
             0
         );
+    }
+
+    #[test]
+    fn csv_money_and_dates_are_exact() {
+        assert_eq!(parse_csv_money("$1,234.50").unwrap(), 123450);
+        assert_eq!(parse_csv_money("(12.3)").unwrap(), -1230);
+        assert!(parse_csv_money("1.001").is_err());
+        assert_eq!(parse_csv_date("2/29/2024", "us").unwrap(), "2024-02-29");
+        assert!(parse_csv_date("2/29/2025", "us").is_err());
+    }
+
+    #[test]
+    fn account_deletion_reports_history_and_last_account() {
+        let mut c = seeded();
+        c.execute("DELETE FROM accounts WHERE id='b'", []).unwrap();
+        let impact = account_impact(&c, "a").unwrap();
+        assert!(!impact.can_delete);
+        assert!(impact.blockers.iter().any(|x| x.contains("last account")));
+        let input=TransactionInput{id:"history".into(),occurred_on:"2026-01-01".into(),account_id:"a".into(),category_id:"c".into(),amount_cents:100,description:"History".into(),note:None};
+        insert_transaction(&mut c,&input).unwrap();
+        let impact = account_impact(&c, "a").unwrap();
+        assert!(impact.blockers.iter().any(|x| x.contains("transactions")));
     }
 
     #[test]

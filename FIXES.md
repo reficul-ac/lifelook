@@ -6,24 +6,24 @@ This is a current-branch backlog, not a snapshot of the original audit. `PLAN.md
 
 - Reconciled branch: current worktree based on `d81bbf1855dfcc694f8970898f40db4d780b8314`.
 - Reconciliation date: 2026-08-09 America/Los_Angeles.
-- Current automated baseline: 47 frontend tests, 27 Rust tests, 9 isolated release-binary WebDriver scenarios, and 1 packaged AppImage acceptance scenario.
+- Current automated baseline: 50 frontend tests, 27 Rust tests, 9 isolated release-binary WebDriver scenarios, and 1 packaged AppImage acceptance scenario.
 - Native evidence: `artifacts/native-e2e/`, generated from the release binary with isolated profiles.
 - Terms used below:
   - **Implemented/component-tested** means code or an injected-repository test passed; it is not persistence evidence.
   - **Native accepted** means the release process and real SQLite profile were exercised.
   - **Still blocked** means the UI or required end-to-end evidence does not exist yet.
 
-No P0 defect is known. Native acceptance covers onboarding variants and interruption, strict-offline setup, member-save failure/retry, member edits, appearance preferences, ledger/account/asset/liability mutation, mixed CSV import, filtering, reconciliation, backup/restore, supported viewport sizes, and startup recovery.
+No P0 defect is known. Native acceptance covers onboarding variants and interruption, strict-offline setup, member-save failure/retry, member edits, appearance preferences, ledger/account/asset/liability mutation, global search navigation and focus, mixed CSV import, filtering, reconciliation, backup/restore, supported viewport sizes, and startup recovery.
 
 ## Coverage matrix
 
 | Screen or flow | Current implementation | Native acceptance | Still blocked |
 |---|---|---|---|
-| Onboarding | Household, members, filing status, typed accounts, exact money parsing, and credit signs are implemented/component-tested | Add/remove/Back, calendar birth date, interruption/relaunch, and credit/investment/retirement accounts accepted | Broader planning inputs |
-| Shell/navigation | All five destinations, the six-mode Add menu, and honest disabled controls are implemented | Navigation, current state, focus, and 920×650 minimum accepted | Profile and global-search implementations |
-| Overview | Current balances/activity totals are derived; projections require a saved tax profile | Transaction-driven income, spending, saved amount, and net worth survive relaunch | Broader planning inputs |
-| Activity | Manual/import/export/transfer deletion and reviewed CSV import are implemented with component and persistence-backed Rust coverage | Native filtering/export, mutation, editing, deletion, grouped transfers, mixed-file CSV import, exact totals, and relaunch persistence accepted | Broader planning inputs |
-| Plan | Recurring CRUD, all dated event variants, ordered surplus allocations, scenario CRUD/clone, dynamic horizons, selection, and comparison feed deterministic projections | Planning mutation, clone isolation, changed totals, allocations, and relaunch persistence accepted | Broader planning inputs |
+| Onboarding | Household, members, filing status, typed accounts, recurring income/expenses, assets, debts, exact money parsing, and credit signs are implemented/component-tested | Add/remove/Back, guided financial inputs, calendar birth date, interruption/relaunch, and credit/investment/retirement accounts accepted | None for current scope |
+| Shell/navigation | All five destinations, local global search, the six-mode Add menu, and honest disabled Profile are implemented | Navigation, search navigation/focus, current state, focus, and 920×650 minimum accepted | Profile implementation |
+| Overview | Current balances/activity totals are derived; projections require a saved tax profile | Transaction-driven income, spending, saved amount, and net worth survive relaunch | None for current scope |
+| Activity | Manual/import/export/transfer deletion and reviewed CSV import are implemented with component and persistence-backed Rust coverage | Native filtering/export, global-search focus, mutation, editing, deletion, grouped transfers, mixed-file CSV import, exact totals, and relaunch persistence accepted | None for current scope |
+| Plan | Recurring CRUD, all dated event variants, ordered surplus allocations, scenario CRUD/clone, dynamic horizons, selection, and comparison feed deterministic projections | Planning mutation, clone isolation, changed totals, allocations, and relaunch persistence accepted | None for current scope |
 | Net Worth | Account, asset, liability, and scenario-linked asset/debt lifecycle editing; mortgage terms; signed credit balances; reconciliation; and guarded deletion are implemented/component/Rust-tested | Current-record CRUD and general scenario mutation/relaunch accepted | Native coverage of every scenario lifecycle variant |
 | Settings members | Save busy/error/retry behavior is component-tested | Real SQLite failure, announced/focused error, retained draft, retry, calendar date, and relaunch persistence accepted | None for current scope |
 | Appearance | System/light/dark and reduced motion persist | Dark and reduced motion survive process relaunch | Native OS preference-change simulation |
@@ -52,7 +52,7 @@ No P0 defect is known. Native acceptance covers onboarding variants and interrup
 | I-014 | Net Worth zero-account action | Implemented/component-tested | Add account opens the shared account dialog |
 | I-015 | Settings member save, rejection, retained draft, retry | Native accepted | SQLite trigger injects a real write failure; focus, draft, retry, and relaunch persistence verified |
 | I-016 | Theme and reduced motion | Native accepted | Both persisted through process relaunch |
-| I-017 | Search/add/profile controls | Add implemented; search/profile honestly unavailable | Add modal component coverage; search/profile remain disabled |
+| I-017 | Search/add/profile controls | Search and Add implemented; only Profile unavailable | Component coverage plus release-binary global-search acceptance |
 | I-018 | Backup and restore | Native accepted | Staged atomic backup/restore, confirmation, recovery, immediate refresh, dialogs, and relaunch persistence are covered |
 | I-019 | Keyboard focus, switch/radio/nav/disclosure semantics | Native accepted | Current no-history visualization exposes its state as semantic text; no chart is rendered |
 | I-020 | Long names and responsive layouts | Native accepted | 920×650, 1024×768, and 1280×820 screenshots |
@@ -65,10 +65,11 @@ No P0 defect is known. Native acceptance covers onboarding variants and interrup
 
 ## Deduplicated findings
 
-### F-002 — Unimplemented global and creation controls
+### F-002 — Remaining unavailable profile control
 
-- **Status:** Narrowed to Profile and global Search, which remain honestly disabled and component-tested.
+- **Status:** Narrowed to Profile, which remains honestly disabled. Global Search and Add are implemented and tested.
 - Add now opens income, expense, transfer, account, asset, and debt creation. Net Worth creation controls and backup/restore selection are functional.
+- Global Search indexes the current bootstrap snapshot locally, deduplicates transfers, and navigates to and focuses Activity, Plan, and Net Worth records. Release-binary acceptance covers `Ctrl+K` activation against a persisted transaction.
 
 ### F-003 — Activity used static mock data
 
@@ -102,7 +103,7 @@ No P0 defect is known. Native acceptance covers onboarding variants and interrup
 ### F-008 — Filing status and onboarding scope mismatch
 
 - **Status:** Narrowed.
-- Filing status and the supported California tax profile are implemented and persisted. Income, expenses, assets, and debts are still not editable during onboarding and remain explicit pre-release work.
+- Filing status, the supported California tax profile, and guided income, expense, asset, and debt onboarding are implemented and persisted.
 
 ### F-009 — Backup/restore is incomplete
 

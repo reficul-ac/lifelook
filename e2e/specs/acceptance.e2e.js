@@ -155,7 +155,7 @@ describe("LifeLook native acceptance", () => {
     await $("aria/Overview").waitForDisplayed();
     const overviewNav = await $("nav button:nth-child(1)");
     assert.equal(await overviewNav.getAttribute("aria-current"), "page");
-    assert.equal(await $("aria/Search (not yet available)").isEnabled(), false);
+    assert.equal(await $("aria/Search workspace").isEnabled(), true);
     const add = await $("aria/Add");
     assert.equal(await add.isEnabled(), true);
     await add.click();
@@ -209,6 +209,12 @@ describe("LifeLook native acceptance", () => {
     await $("aria/Activity").click();
     await assertActivity({ total: "$1,900.00", rows: 4, present: ["Native salary", "Edited groceries", "Transfer", "Balance reconciliation"], absent: ["Prior year parking"] });
     assert.equal((await $$('button[aria-label="Edit Transfer"]')).length, 1, "the two transfer postings should render as one row");
+    await browser.execute(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true })));
+    const workspaceSearch = await $('input[aria-label="Search workspace"]');
+    await workspaceSearch.setValue("Edited groceries");
+    await browser.keys("Enter");
+    await $("aria/Activity").waitForDisplayed();
+    await browser.waitUntil(async () => browser.execute(() => document.activeElement?.getAttribute("aria-label") === "Edit Edited groceries"));
     await browser.saveScreenshot(artifact("04-native-activity-ledger-920x650.png"));
 
     const searchActivity = await $("aria/Search activity");

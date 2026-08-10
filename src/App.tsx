@@ -50,6 +50,10 @@ import {
   type Asset,
   type Liability,
   type RecurringEntry,
+  type RecurringInput,
+  type AssetInput,
+  type LiabilityInput,
+  type TaxProfile,
   type ScenarioRecord,
   emptySettings,
 } from "./repository";
@@ -1268,7 +1272,7 @@ function Onboarding({
   onComplete: () => void;
 }) {
   const householdId = useRef(initial.household?.id ?? crypto.randomUUID());
-  const [step, setStep] = useState(initial.onboardingStep >= 6 ? 2 : 1);
+  const [step, setStep] = useState(Math.min(8, Math.max(1, initial.onboardingStep + 1)));
   const [name, setName] = useState(initial.household?.name ?? "");
   const [people, setPeople] = useState<BootstrapPerson[]>(
     initial.people.length
@@ -1286,7 +1290,12 @@ function Onboarding({
         }))
       : [newAccount(householdId.current)],
   );
-  const [filingStatus, setFilingStatus] = useState("");
+  const [filingStatus, setFilingStatus] = useState(initial.taxProfile?.filingStatus ?? "");
+  const categoryId = (kind:"income"|"expense") => initial.categories.find(c=>c.kind===kind)?.id ?? `${kind}-other-${householdId.current}`;
+  const [income,setIncome]=useState<RecurringDraft[]>(()=>initial.recurring.filter(r=>initial.categories.find(c=>c.id===r.categoryId)?.kind==="income").map(toRecurringDraft));
+  const [expenses,setExpenses]=useState<RecurringDraft[]>(()=>initial.recurring.filter(r=>initial.categories.find(c=>c.id===r.categoryId)?.kind==="expense").map(toRecurringDraft));
+  const [assets,setAssets]=useState<AssetDraft[]>(()=>initial.assets.map(a=>({id:a.id,name:a.name,value:String(a.valueCents/100),rate:String(a.annualGrowthBps/100)})));
+  const [debts,setDebts]=useState<DebtDraft[]>(()=>initial.liabilities.map(toDebtDraft));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   async function submit(event: FormEvent) {
@@ -1310,9 +1319,11 @@ function Onboarding({
     }
     if (step === 2) {
       if (!filingStatus) {
-        setError("Select a filing status before finishing setup.");
+        setError("Select a filing status before continuing.");
         return;
       }
+    }
+    if (step === 3) {
       const invalid = accounts.findIndex(
         (a) => !a.kind || !a.name.trim() || !validMoney(a.balance),
       );
@@ -1323,6 +1334,15 @@ function Onboarding({
         return;
       }
     }
+    let payload: import("./repository").OnboardingStepPayload = {};
+    if(step===4||step===5){
+      const kind=step===4?"income":"expense", drafts=step===4?income:expenses;
+      const converted=drafts.map((d,i)=>validateRecurringDraft(d,i));
+      const failure=converted.find(x=>typeof x==="string"); if(failure){setError(failure as string);return}
+      payload={recurring:{kind,items:converted as RecurringInput[]}};
+    }
+    if(step===6){const converted=assets.map((d,i)=>validateAssetDraft(d,i));const failure=converted.find(x=>typeof x==="string");if(failure){setError(failure as string);return}payload={assets:converted as AssetInput[]}}
+    if(step===7){const converted=debts.map((d,i)=>validateDebtDraft(d,i));const failure=converted.find(x=>typeof x==="string");if(failure){setError(failure as string);return}payload={liabilities:converted as LiabilityInput[]}}
     setSaving(true);
     try {
       if (step === 1) {
@@ -1338,21 +1358,22 @@ function Onboarding({
             birthDate: parseBirthDate(p.birthDate),
           })),
         });
-        setStep(2);
-      } else {
-        await repository.saveOnboardingStep(6, {
+      } else if(step===2) {
+        await repository.saveOnboardingStep(2, {taxProfile: {
+          filingStatus:filingStatus as TaxProfile["filingStatus"], state:"CA", taxYear:2026, thresholdInflationBps:250, revision:initial.taxProfile?.revision??1,
+        }});
+      } else if(step===3) {
+        await repository.saveOnboardingStep(3, {
           accounts: accounts.map(toAccount),
-          taxProfile: {
-            filingStatus,
-            state: "CA",
-            taxYear: 2026,
-            thresholdInflationBps: 250,
-            revision: 1,
-          },
         });
+      } else if(step<8) {
+        await repository.saveOnboardingStep(step,payload);
+      } else {
         await repository.completeOnboarding();
         onComplete();
+        return;
       }
+      setStep(Math.min(8,step+1));
     } catch (e) {
       setError(
         (e as { message?: string }).message ?? "Could not save this step.",
@@ -1364,17 +1385,8 @@ function Onboarding({
   return (
     <main className="standalone">
       <section className="card onboarding">
-        <span className="label assumption">Setup · Step {step} of 2</span>
-        <h1>
-          {step === 1
-            ? "Tell us about your household"
-            : "Add the accounts you want to track"}
-        </h1>
-        <p>
-          {step === 1
-            ? "Include each person whose income, spending, or goals are part of this financial plan."
-            : "Accounts are financial balances LifeLook tracks, such as bank, credit card, investment, and retirement accounts."}
-        </p>
+        <span className="label assumption">Setup · Step {step} of 8</span>
+        <h1>{["","Tell us about your household","Choose your tax profile","Add the accounts you want to track","Add recurring income","Add recurring expenses","Add your assets","Add your debts","Review and finish"][step]}</h1>
         <p className="muted">
           Your progress is saved locally. LifeLook does not create an online
           account.
@@ -1437,7 +1449,7 @@ function Onboarding({
                 <input value="California" disabled />
               </label>
             </>
-          ) : (
+          ) : step===2 ? (
             <>
               <label>
                 Filing status
@@ -1459,6 +1471,8 @@ function Onboarding({
                 Required for tax-dependent projections. California and the 2026
                 rule pack are used.
               </p>
+            </>
+          ) : step===3 ? <>
               {accounts.map((a, i) => (
                 <fieldset className="repeat-row" key={a.id}>
                   <legend>Account {i + 1}</legend>
@@ -1523,9 +1537,7 @@ function Onboarding({
                     <button
                       type="button"
                       className="quiet danger"
-                      onClick={() =>
-                        setAccounts(accounts.filter((_, x) => x !== i))
-                      }
+                      onClick={() => {const removed=a.id;setAccounts(accounts.filter((_, x) => x !== i));setIncome(income.map(r=>r.accountId===removed?{...r,accountId:""}:r));setExpenses(expenses.map(r=>r.accountId===removed?{...r,accountId:""}:r))}}
                     >
                       Remove account {i + 1}
                     </button>
@@ -1541,19 +1553,21 @@ function Onboarding({
               >
                 <Plus size={15} /> Add another account
               </button>
-            </>
-          )}
+            </> : step===4||step===5 ? <RecurringOnboardingFields kind={step===4?"income":"expense"} items={step===4?income:expenses} setItems={step===4?setIncome:setExpenses} accounts={accounts} categoryId={categoryId(step===4?"income":"expense")}/>
+          : step===6 ? <AssetOnboardingFields items={assets} setItems={setAssets}/>
+          : step===7 ? <DebtOnboardingFields items={debts} setItems={setDebts}/>
+          : <OnboardingReview name={name} people={people} filingStatus={filingStatus} accounts={accounts} income={income} expenses={expenses} assets={assets} debts={debts} edit={setStep}/>}
           {error && (
             <p role="alert" className="negative">
               {error}
             </p>
           )}
           <div className="form-actions">
-            {step === 2 && (
+            {step > 1 && (
               <button
                 type="button"
                 className="quiet"
-                onClick={() => setStep(1)}
+                onClick={() => setStep(step - 1)}
               >
                 Back
               </button>
@@ -1563,7 +1577,7 @@ function Onboarding({
                 ? "Saving…"
                 : step === 1
                   ? "Save & Continue"
-                  : "Finish setup"}
+                  : step===8 ? "Finish setup" : step>=4 && ((step===4?income.length:step===5?expenses.length:step===6?assets.length:debts.length)===0) ? "Skip & Continue" : "Save & Continue"}
             </button>
           </div>
         </form>
@@ -1571,6 +1585,21 @@ function Onboarding({
     </main>
   );
 }
+
+type RecurringDraft={id:string;categoryId:string;accountId:string;name:string;amount:string;frequency:RecurringInput["frequency"];startDate:string;endDate:string;growth:string};
+type AssetDraft={id:string;name:string;value:string;rate:string};
+type DebtDraft={id:string;name:string;balance:string;rate:string;minimumPayment:string;mortgage:boolean;principal:string;term:string;startDate:string;overridePayment:boolean;paymentOverride:string};
+const toRecurringDraft=(r:RecurringEntry):RecurringDraft=>({id:r.id,categoryId:r.categoryId,accountId:r.accountId??"",name:r.name,amount:String(r.amountCents/100),frequency:r.frequency,startDate:r.startDate,endDate:r.endDate??"",growth:String(r.annualGrowthBps/100)});
+const newRecurringDraft=(categoryId:string):RecurringDraft=>({id:crypto.randomUUID(),categoryId,accountId:"",name:"",amount:"",frequency:"monthly",startDate:today(),endDate:"",growth:"0"});
+const toDebtDraft=(d:Liability):DebtDraft=>({id:d.id,name:d.name,balance:String(d.balanceCents/100),rate:String(d.annualRateBps/100),minimumPayment:String(d.minimumPaymentCents/100),mortgage:Boolean(d.mortgage),principal:String((d.mortgage?.originalPrincipalCents??0)/100),term:String(d.mortgage?.termMonths??360),startDate:d.mortgage?.startDate??today(),overridePayment:d.mortgage?.paymentOverrideCents!=null,paymentOverride:String((d.mortgage?.paymentOverrideCents??0)/100)});
+const newDebtDraft=():DebtDraft=>({id:crypto.randomUUID(),name:"",balance:"",rate:"0",minimumPayment:"",mortgage:false,principal:"",term:"360",startDate:today(),overridePayment:false,paymentOverride:""});
+function validateRecurringDraft(d:RecurringDraft,i:number):RecurringInput|string{const amount=parseMoney(d.amount),growth=parsePercent(d.growth);if(!d.name.trim())return `Record ${i+1}: name is required.`;if(amount==null||amount<=0)return `Record ${i+1}: enter a positive USD amount.`;if(!d.startDate||d.endDate&&d.endDate<d.startDate)return `Record ${i+1}: enter a valid date range.`;if(growth==null||growth < -10000||growth>100000)return `Record ${i+1}: annual growth is outside the supported range.`;return{id:d.id,categoryId:d.categoryId,accountId:d.accountId||null,name:d.name.trim(),amountCents:amount,frequency:d.frequency,startDate:d.startDate,endDate:d.endDate||null,annualGrowthBps:growth}}
+function validateAssetDraft(d:AssetDraft,i:number):AssetInput|string{const value=parseMoney(d.value),rate=parsePercent(d.rate);if(!d.name.trim())return `Asset ${i+1}: name is required.`;if(value==null||value<0)return `Asset ${i+1}: enter a non-negative USD value.`;if(rate==null||rate < -10000||rate>100000)return `Asset ${i+1}: annual growth is outside the supported range.`;return{id:d.id,name:d.name.trim(),valueCents:value,annualGrowthBps:rate}}
+function validateDebtDraft(d:DebtDraft,i:number):LiabilityInput|string{const balance=parseMoney(d.balance),rate=parsePercent(d.rate),minimum=parseMoney(d.minimumPayment);if(!d.name.trim())return `Debt ${i+1}: name is required.`;if(balance==null||balance<0)return `Debt ${i+1}: enter a non-negative balance.`;if(rate==null||rate<0||rate>100000)return `Debt ${i+1}: interest rate is outside the supported range.`;let mortgage=null,payment=minimum;if(d.mortgage){const principal=parseMoney(d.principal),months=/^\d+$/.test(d.term)?Number(d.term):0,custom=d.overridePayment?parseMoney(d.paymentOverride):null;if(!principal||principal<balance||months<1||months>480||!/^\d{4}-\d{2}-\d{2}$/.test(d.startDate))return `Debt ${i+1}: enter valid mortgage principal, date, and term.`;if(d.overridePayment&&(!custom||custom<=0))return `Debt ${i+1}: enter a positive custom payment.`;payment=custom??mortgagePayment(principal,rate,months);mortgage={originalPrincipalCents:principal,termMonths:months,startDate:d.startDate,paymentOverrideCents:custom}}if(payment==null||(balance>0&&payment<=0))return `Debt ${i+1}: enter a positive monthly payment.`;return{id:d.id,name:d.name.trim(),balanceCents:balance,annualRateBps:rate,minimumPaymentCents:payment,mortgage}}
+function RecurringOnboardingFields({kind,items,setItems,accounts,categoryId}:{kind:"income"|"expense";items:RecurringDraft[];setItems:(x:RecurringDraft[])=>void;accounts:AccountDraft[];categoryId:string}){return <><p className="muted">Optional. Add as many recurring {kind} records as you need.</p>{items.map((d,i)=><fieldset className="repeat-row" key={d.id}><legend>{kind==="income"?"Income":"Expense"} {i+1}</legend><label>Name<input aria-label={`${kind} ${i+1} name`} value={d.name} onChange={e=>setItems(updateAt(items,i,{name:e.target.value}))}/></label><label>Category<select value={d.categoryId} onChange={e=>setItems(updateAt(items,i,{categoryId:e.target.value}))}><option value={categoryId}>{kind==="income"?"Other income":"Other expense"}</option></select></label><label>Account (optional)<select value={d.accountId} onChange={e=>setItems(updateAt(items,i,{accountId:e.target.value}))}><option value="">No specific account</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Amount (USD)<input inputMode="decimal" value={d.amount} onChange={e=>setItems(updateAt(items,i,{amount:e.target.value}))}/></label><label>Frequency<select value={d.frequency} onChange={e=>setItems(updateAt(items,i,{frequency:e.target.value as RecurringInput["frequency"]}))}>{[["weekly","Weekly"],["biweekly","Every two weeks"],["monthly","Monthly"],["quarterly","Quarterly"],["annual","Annual"]].map(x=><option key={x[0]} value={x[0]}>{x[1]}</option>)}</select></label><label>Start date<input type="date" value={d.startDate} onChange={e=>setItems(updateAt(items,i,{startDate:e.target.value}))}/></label><label>End date (optional)<input type="date" min={d.startDate} value={d.endDate} onChange={e=>setItems(updateAt(items,i,{endDate:e.target.value}))}/></label><label>Annual growth (%)<input inputMode="decimal" value={d.growth} onChange={e=>setItems(updateAt(items,i,{growth:e.target.value}))}/></label><button type="button" className="quiet danger" onClick={()=>setItems(items.filter((_,x)=>x!==i))}>Remove {kind} {i+1}</button></fieldset>)}<button type="button" className="quiet" onClick={()=>setItems([...items,newRecurringDraft(categoryId)])}><Plus size={15}/> Add {kind}</button></>}
+function AssetOnboardingFields({items,setItems}:{items:AssetDraft[];setItems:(x:AssetDraft[])=>void}){return <><p className="muted">Optional. Include property and other assets not represented by an account.</p>{items.map((d,i)=><fieldset className="repeat-row" key={d.id}><legend>Asset {i+1}</legend><label>Asset name<input value={d.name} onChange={e=>setItems(updateAt(items,i,{name:e.target.value}))}/></label><label>Current value (USD)<input inputMode="decimal" value={d.value} onChange={e=>setItems(updateAt(items,i,{value:e.target.value}))}/></label><label>Annual growth (%)<input inputMode="decimal" value={d.rate} onChange={e=>setItems(updateAt(items,i,{rate:e.target.value}))}/></label><button type="button" className="quiet danger" onClick={()=>setItems(items.filter((_,x)=>x!==i))}>Remove asset {i+1}</button></fieldset>)}<button type="button" className="quiet" onClick={()=>setItems([...items,{id:crypto.randomUUID(),name:"",value:"",rate:"0"}])}><Plus size={15}/> Add asset</button></>}
+function DebtOnboardingFields({items,setItems}:{items:DebtDraft[];setItems:(x:DebtDraft[])=>void}){return <><p className="muted">Optional. Mortgage payments include principal and interest only.</p>{items.map((d,i)=><fieldset className="repeat-row" key={d.id}><legend>Debt {i+1}</legend><label>Debt name<input value={d.name} onChange={e=>setItems(updateAt(items,i,{name:e.target.value}))}/></label><label>Current balance (USD)<input inputMode="decimal" value={d.balance} onChange={e=>setItems(updateAt(items,i,{balance:e.target.value}))}/></label><label>Annual interest rate (%)<input inputMode="decimal" value={d.rate} onChange={e=>setItems(updateAt(items,i,{rate:e.target.value}))}/></label><label className="check-row"><input type="checkbox" checked={d.mortgage} onChange={e=>setItems(updateAt(items,i,{mortgage:e.target.checked}))}/> Include mortgage details</label>{d.mortgage?<><label>Original principal (USD)<input inputMode="decimal" value={d.principal} onChange={e=>setItems(updateAt(items,i,{principal:e.target.value}))}/></label><label>Mortgage start date<input type="date" value={d.startDate} onChange={e=>setItems(updateAt(items,i,{startDate:e.target.value}))}/></label><label>Original term (months)<input inputMode="numeric" value={d.term} onChange={e=>setItems(updateAt(items,i,{term:e.target.value}))}/></label><label className="check-row"><input type="checkbox" checked={d.overridePayment} onChange={e=>setItems(updateAt(items,i,{overridePayment:e.target.checked}))}/> Use custom monthly payment</label>{d.overridePayment&&<label>Custom monthly payment (USD)<input inputMode="decimal" value={d.paymentOverride} onChange={e=>setItems(updateAt(items,i,{paymentOverride:e.target.value}))}/></label>}</>:<label>Minimum monthly payment (USD)<input inputMode="decimal" value={d.minimumPayment} onChange={e=>setItems(updateAt(items,i,{minimumPayment:e.target.value}))}/></label>}<button type="button" className="quiet danger" onClick={()=>setItems(items.filter((_,x)=>x!==i))}>Remove debt {i+1}</button></fieldset>)}<button type="button" className="quiet" onClick={()=>setItems([...items,newDebtDraft()])}><Plus size={15}/> Add debt</button></>}
+function OnboardingReview({name,people,filingStatus,accounts,income,expenses,assets,debts,edit}:{name:string;people:BootstrapPerson[];filingStatus:string;accounts:AccountDraft[];income:RecurringDraft[];expenses:RecurringDraft[];assets:AssetDraft[];debts:DebtDraft[];edit:(n:number)=>void}){const sections:[[string,string,number],...Array<[string,string,number]>]=[["Household",`${name} · ${people.length} member(s)`,1],["Tax profile",filingStatus,2],["Accounts",`${accounts.length} account(s)`,3],["Income",`${income.length} recurring record(s)`,4],["Expenses",`${expenses.length} recurring record(s)`,5],["Assets",`${assets.length} asset(s)`,6],["Debts",`${debts.length} debt(s)`,7]];return <>{sections.map(([title,summary,target])=><section className="review-row" key={title}><div><strong>{title}</strong><p className="muted">{summary}</p></div><button type="button" className="quiet" onClick={()=>edit(target)}>Edit {title.toLowerCase()}</button></section>)}</>}
 
 type AccountDraft = BootstrapAccount & { balance: string };
 const accountKinds: {

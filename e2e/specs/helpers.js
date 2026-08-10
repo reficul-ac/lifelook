@@ -38,6 +38,7 @@ export async function onboard({ secondAccount = false } = {}) {
   await $('[aria-label="Person 1 name"]').setValue("Native Person");
   await $("aria/Save & Continue").click();
   await $("aria/Filing status").selectByAttribute("value", "single");
+  await $("aria/Save & Continue").click();
   await $("aria/Checking").click();
   await $('[aria-label="Account 1 name"]').setValue("Checking");
   await $('[aria-label="Account 1 opening balance"]').setValue("1000.00");
@@ -47,6 +48,8 @@ export async function onboard({ secondAccount = false } = {}) {
     await $('[aria-label="Account 2 name"]').setValue("Savings");
     await $('[aria-label="Account 2 opening balance"]').setValue("0.00");
   }
+  await $("aria/Save & Continue").click();
+  for (let step = 0; step < 4; step += 1) await $("aria/Skip & Continue").click();
   await $("aria/Finish setup").click();
   await $("aria/Overview").waitForDisplayed();
 }

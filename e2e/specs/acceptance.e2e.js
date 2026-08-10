@@ -142,13 +142,15 @@ describe("LifeLook native acceptance", () => {
     await household.setValue("Native E2E Household With A Deliberately Long Name");
     await $('[aria-label="Person 1 name"]').setValue("Native Tester With A Deliberately Long Name");
     await $("aria/Save & Continue").click();
-
+    await $("aria/Filing status").selectByAttribute("value", "single");
+    await $("aria/Save & Continue").click();
     const accountName = await $('[aria-label="Account 1 name"]');
     await accountName.waitForDisplayed();
-    await $("aria/Filing status").selectByAttribute("value", "single");
     await $("aria/Checking").click();
     await accountName.setValue("Everyday checking");
     await $('[aria-label="Account 1 opening balance"]').setValue("1250.00");
+    await $("aria/Save & Continue").click();
+    for (let step = 0; step < 4; step += 1) await $("aria/Skip & Continue").click();
     await $("aria/Finish setup").click();
     await $("aria/Overview").waitForDisplayed();
     const overviewNav = await $("nav button:nth-child(1)");

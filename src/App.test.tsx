@@ -65,6 +65,8 @@ describe("LifeLook shell", () => {
     fireEvent.change(await screen.findByLabelText("Household name"),{target:{value:"Home"}});
     fireEvent.change(screen.getByLabelText("Person 1 name"),{target:{value:"Person"}});
     fireEvent.click(screen.getByRole("button",{name:"Save & Continue"}));
+    fireEvent.change(await screen.findByLabelText("Filing status"),{target:{value:"single"}});
+    fireEvent.click(screen.getByRole("button",{name:"Save & Continue"}));
     expect(await screen.findByRole("group",{name:"Account 1 type"})).toBeInTheDocument();
     expect(screen.getAllByRole("radio")).toHaveLength(5);
   });
@@ -264,10 +266,12 @@ describe("LifeLook shell", () => {
       target: { value: "Second Person" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save & Continue" }));
+    await screen.findByRole("heading", {name:"Choose your tax profile"});
+    fireEvent.change(screen.getByLabelText("Filing status"),{target:{value:"single"}});
+    fireEvent.click(screen.getByRole("button", { name: "Save & Continue" }));
     await screen.findByRole("heading", {
       name: "Add the accounts you want to track",
     });
-    fireEvent.change(screen.getByLabelText("Filing status"),{target:{value:"single"}});
     fireEvent.click(screen.getByRole("radio", { name: /Savings/ }));
     fireEvent.change(screen.getByLabelText("Account 1 name"), {
       target: { value: "Rainy day" },
@@ -285,13 +289,15 @@ describe("LifeLook shell", () => {
     fireEvent.change(screen.getByLabelText("Account 2 opening balance"), {
       target: { value: "-25.50" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Finish setup" }));
-    await waitFor(() => expect(payloads).toHaveLength(2));
+    fireEvent.click(screen.getByRole("button", { name: "Save & Continue" }));
+    for(let i=0;i<4;i++) fireEvent.click(await screen.findByRole("button", { name: "Skip & Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish setup" }));
+    await waitFor(() => expect(payloads).toHaveLength(7));
     const first = payloads[0] as {
       household: { id: string };
       people: { birthDate: string | null }[];
     };
-    const second = payloads[1] as {
+    const second = payloads[2] as {
       accounts: {
         householdId: string;
         kind: string;
@@ -339,7 +345,7 @@ describe("LifeLook shell", () => {
   it("restores onboarding data and lets the user go back without losing it", async () => {
     const repository = {
       bootstrap: async () => ({
-        onboardingStep: 6,
+        onboardingStep: 2,
         onboardingComplete: false,
         household: { id: "h", name: "Saved home", state: "CA" },
         people: [
@@ -367,7 +373,7 @@ describe("LifeLook shell", () => {
     expect(await screen.findByDisplayValue("Saved IRA")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Retirement/ })).toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    expect(screen.getByDisplayValue("Saved Person")).toBeInTheDocument();
+    expect(screen.getByLabelText("Filing status")).toBeInTheDocument();
   });
 
   it("deletes an imported transaction individually through an alert dialog", async () => {

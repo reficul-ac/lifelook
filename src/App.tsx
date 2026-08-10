@@ -47,6 +47,8 @@ import {
   type CsvInspection,
   type CsvMapping,
   type CsvPreview,
+  type Asset,
+  type Liability,
   emptySettings,
 } from "./repository";
 
@@ -272,7 +274,16 @@ function Workspace({
             : "expense",
       })),
       assets: bootstrap.assets,
-      liabilities: bootstrap.liabilities,
+      liabilities: bootstrap.liabilities.map((liability) => ({
+        ...liability,
+        mortgage: liability.mortgage
+          ? {
+              ...liability.mortgage,
+              paymentOverrideCents:
+                liability.mortgage.paymentOverrideCents ?? undefined,
+            }
+          : undefined,
+      })),
     }),
     [bootstrap],
   );
@@ -403,6 +414,8 @@ function Workspace({
           <NetWorth
             snapshot={snapshot}
             accounts={bootstrap.accounts}
+            assets={bootstrap.assets}
+            liabilities={bootstrap.liabilities}
             onAdd={(el) => openDialog({ type: "account" }, el)}
             onEdit={(account, el) =>
               openDialog({ type: "account", account }, el)
@@ -410,6 +423,10 @@ function Workspace({
             onReconcile={(account, el) =>
               openDialog({ type: "reconcile", account }, el)
             }
+            onAddAsset={(el) => openDialog({ type: "asset" }, el)}
+            onAddLiability={(el) => openDialog({ type: "liability" }, el)}
+            onEditAsset={(asset, el) => openDialog({ type: "asset", asset }, el)}
+            onEditLiability={(liability, el) => openDialog({ type: "liability", liability }, el)}
           />
         )}
         {view === "Settings" && (
@@ -431,6 +448,13 @@ function Workspace({
           refresh={onRefresh}
           invoker={dialog.invoker}
         />
+      ) : dialog?.type === "asset" || dialog?.type === "liability" ? (
+        <FinancialRecordDialog
+          state={dialog}
+          repository={repository}
+          close={closeDialog}
+          refresh={onRefresh}
+        />
       ) : (
         dialog && (
           <EntryDialog
@@ -450,10 +474,12 @@ function Workspace({
 
 type DialogState = {
   type:
-    "chooser" | "transaction" | "transfer" | "account" | "reconcile" | "import";
+    "chooser" | "transaction" | "transfer" | "account" | "reconcile" | "import" | "asset" | "liability";
   kind?: "income" | "expense";
   entry?: ActivityPosting[];
   account?: BootstrapAccount;
+  asset?: Asset;
+  liability?: Liability;
   invoker?: HTMLElement | null;
 };
 
@@ -734,6 +760,8 @@ function EntryDialog({
             </button>
             <button onClick={() => open({ type: "transfer" })}>Transfer</button>
             <button onClick={() => open({ type: "account" })}>Account</button>
+            <button onClick={() => open({ type: "asset" })}>Asset</button>
+            <button onClick={() => open({ type: "liability" })}>Debt</button>
           </div>
           <div className="actions">
             <button onClick={close}>Cancel</button>
@@ -1032,6 +1060,170 @@ function EntryDialog({
             </div>
           </form>
         )}
+      </section>
+    </div>
+  );
+}
+
+function FinancialRecordDialog({
+  state,
+  repository,
+  close,
+  refresh,
+}: {
+  state: DialogState;
+  repository: Repository;
+  close: () => void;
+  refresh: () => void;
+}) {
+  const modal = useRef<HTMLElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const isAsset = state.type === "asset";
+  const record = isAsset ? state.asset : state.liability;
+  const liability = state.liability;
+  const [name, setName] = useState(record?.name ?? "");
+  const [value, setValue] = useState("0");
+  useEffect(() => {
+    const cents = isAsset ? state.asset?.valueCents : liability?.balanceCents;
+    if (cents != null) setValue(String(cents / 100));
+  }, []);
+  const [rate, setRate] = useState(
+    String(
+      ((isAsset ? state.asset?.annualGrowthBps : liability?.annualRateBps) ?? 0) /
+        100,
+    ),
+  );
+  const [minimumPayment, setMinimumPayment] = useState(
+    String((liability?.minimumPaymentCents ?? 0) / 100),
+  );
+  const [mortgage, setMortgage] = useState(Boolean(liability?.mortgage));
+  const [principal, setPrincipal] = useState(
+    String((liability?.mortgage?.originalPrincipalCents ?? 0) / 100),
+  );
+  const [term, setTerm] = useState(
+    String(liability?.mortgage?.termMonths ?? 360),
+  );
+  const [startDate, setStartDate] = useState(
+    liability?.mortgage?.startDate ?? today(),
+  );
+  const [overridePayment, setOverridePayment] = useState(
+    liability?.mortgage?.paymentOverrideCents != null,
+  );
+  const [paymentOverride, setPaymentOverride] = useState(
+    String((liability?.mortgage?.paymentOverrideCents ?? 0) / 100),
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  useEffect(() => {
+    modal.current
+      ?.querySelector<HTMLElement>("button,input,select")
+      ?.focus();
+    return () => state.invoker?.focus();
+  }, []);
+  useEffect(() => {
+    if (error) queueMicrotask(() => errorRef.current?.focus());
+  }, [error]);
+  useEffect(() => {
+    if (confirmDelete) queueMicrotask(() => headingRef.current?.focus());
+  }, [confirmDelete]);
+  const principalCents = parseMoney(principal);
+  const rateBps = parsePercent(rate);
+  const termMonths = /^\d+$/.test(term) ? Number(term) : undefined;
+  const calculatedPayment =
+    principalCents && rateBps != null && termMonths && termMonths <= 480
+      ? mortgagePayment(principalCents, rateBps, termMonths)
+      : undefined;
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    const cents = parseMoney(value);
+    const bps = parsePercent(rate);
+    if (!name.trim()) return setError(`${isAsset ? "Asset" : "Debt"} name is required.`);
+    if (cents == null || cents < 0) return setError("Enter an exact non-negative USD value.");
+    if (bps == null || bps < (isAsset ? -10_000 : 0) || bps > 100_000)
+      return setError(`Enter an annual ${isAsset ? "growth" : "interest"} rate within the supported range.`);
+    setBusy(true);
+    try {
+      if (isAsset) {
+        const input = { id: state.asset?.id ?? crypto.randomUUID(), name: name.trim(), valueCents: cents, annualGrowthBps: bps };
+        if (state.asset) await repository.updateAsset?.({ ...input, expectedRevision: state.asset.revision });
+        else await repository.createAsset?.(input);
+      } else {
+        let payment = parseMoney(minimumPayment);
+        let mortgageTerms = null;
+        if (mortgage) {
+          const original = parseMoney(principal);
+          const months = /^\d+$/.test(term) ? Number(term) : 0;
+          const custom = overridePayment ? parseMoney(paymentOverride) : null;
+          if (!original || original < cents || months < 1 || months > 480 || !/^\d{4}-\d{2}-\d{2}$/.test(startDate))
+            throw { message: "Enter valid mortgage principal, start date, and a term from 1 to 480 months." };
+          if (overridePayment && (!custom || custom <= 0)) throw { message: "Enter a positive custom monthly payment." };
+          payment = custom ?? mortgagePayment(original, bps, months);
+          mortgageTerms = { originalPrincipalCents: original, termMonths: months, startDate, paymentOverrideCents: custom };
+        }
+        if (payment == null || (cents > 0 && payment <= 0)) throw { message: "Enter a positive monthly payment for a nonzero debt." };
+        const input = { id: liability?.id ?? crypto.randomUUID(), name: name.trim(), balanceCents: cents, annualRateBps: bps, minimumPaymentCents: payment, mortgage: mortgageTerms };
+        if (liability) await repository.updateLiability?.({ ...input, expectedRevision: liability.revision });
+        else await repository.createLiability?.(input);
+      }
+      await Promise.resolve(refresh());
+      close();
+    } catch (x) {
+      setError(errorMessage(x, "Could not save your changes."));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove() {
+    setBusy(true);
+    setError("");
+    try {
+      if (isAsset) await repository.deleteAsset?.({ id: state.asset!.id, expectedRevision: state.asset!.revision });
+      else await repository.deleteLiability?.({ id: liability!.id, expectedRevision: liability!.revision });
+      await Promise.resolve(refresh());
+      close();
+    } catch (x) {
+      setError(errorMessage(x, "Could not delete this record."));
+    } finally {
+      setBusy(false);
+    }
+  }
+  function keyDown(event: KeyboardEvent) {
+    if (event.key === "Escape" && !busy) close();
+  }
+  const noun = isAsset ? "asset" : "debt";
+  return (
+    <div className="modal-backdrop">
+      <section ref={modal} className="card modal entry-modal" role={confirmDelete ? "alertdialog" : "dialog"} aria-modal="true" aria-labelledby="financial-record-title" onKeyDown={keyDown}>
+        <h2 id="financial-record-title" ref={headingRef} tabIndex={confirmDelete ? -1 : undefined}>
+          {confirmDelete ? `Delete ${noun}?` : `${record ? "Edit" : "Add"} ${noun}`}
+        </h2>
+        {error && <p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}
+        {confirmDelete ? <>
+          <p>This permanently removes {record?.name}. Existing account and activity history is unaffected.</p>
+          <div className="actions"><button disabled={busy} onClick={() => setConfirmDelete(false)}>Cancel</button><button className="danger" disabled={busy} onClick={remove}>{busy ? "Deleting…" : "Delete permanently"}</button></div>
+        </> : <form onSubmit={submit}>
+          <fieldset disabled={busy}>
+            <label>{isAsset ? "Asset name" : "Debt name"}<input required value={name} onChange={e => setName(e.target.value)} /></label>
+            <label>{isAsset ? "Current value (USD)" : "Current balance (USD)"}<input required inputMode="decimal" value={value} onChange={e => setValue(e.target.value)} /></label>
+            <label>{isAsset ? "Annual growth (%)" : "Annual interest rate (%)"}<input required inputMode="decimal" value={rate} onChange={e => setRate(e.target.value)} /></label>
+            {!isAsset && <>
+              <label className="check-row"><input type="checkbox" checked={mortgage} onChange={e => setMortgage(e.target.checked)} /> Include mortgage details</label>
+              {mortgage ? <>
+                <p className="muted">Calculated payments include principal and interest only, not taxes, insurance, or escrow.</p>
+                <label>Original principal (USD)<input required inputMode="decimal" value={principal} onChange={e => setPrincipal(e.target.value)} /></label>
+                <label>Mortgage start date<input required type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></label>
+                <label>Original term (months)<input required inputMode="numeric" value={term} onChange={e => setTerm(e.target.value)} /></label>
+                {!overridePayment && calculatedPayment != null && <p role="status">Calculated principal and interest: <strong>{money(calculatedPayment)}</strong> per month.</p>}
+                <label className="check-row"><input type="checkbox" checked={overridePayment} onChange={e => setOverridePayment(e.target.checked)} /> Use custom monthly payment</label>
+                {overridePayment && <label>Custom monthly payment (USD)<input required inputMode="decimal" value={paymentOverride} onChange={e => setPaymentOverride(e.target.value)} /></label>}
+              </> : <label>Minimum monthly payment (USD)<input required inputMode="decimal" value={minimumPayment} onChange={e => setMinimumPayment(e.target.value)} /></label>}
+            </>}
+          </fieldset>
+          <div className="actions">{record && <button type="button" className="danger" disabled={busy} onClick={() => setConfirmDelete(true)}>Delete</button>}<button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save"}</button></div>
+        </form>}
       </section>
     </div>
   );
@@ -1391,6 +1583,20 @@ function parseMoney(value: string): number | undefined {
     BigInt(match[2]) * 100n + BigInt((match[3] ?? "").padEnd(2, "0"));
   if (cents > 99_999_999_999_999n) return undefined;
   return Number(match[1] ? -cents : cents);
+}
+function parsePercent(value: string): number | undefined {
+  const match = /^(-?)(\d{1,4})(?:\.(\d{1,2}))?$/.exec(value.trim());
+  if (!match) return undefined;
+  const bps = Number(match[2]) * 100 + Number((match[3] ?? "").padEnd(2, "0"));
+  return match[1] ? -bps : bps;
+}
+function mortgagePayment(principalCents: number, annualRateBps: number, months: number) {
+  if (annualRateBps === 0) return Math.round(principalCents / months);
+  const monthlyRate = annualRateBps / 120_000;
+  return Math.round(
+    (principalCents * monthlyRate) /
+      (1 - Math.pow(1 + monthlyRate, -months)),
+  );
 }
 const toAccount = (a: AccountDraft): BootstrapAccount => ({
   ...a,
@@ -2289,15 +2495,27 @@ function PlanView({
 function NetWorth({
   snapshot,
   accounts,
+  assets: assetRecords,
+  liabilities: liabilityRecords,
   onAdd,
   onEdit,
   onReconcile,
+  onAddAsset,
+  onAddLiability,
+  onEditAsset,
+  onEditLiability,
 }: {
   snapshot: FinancialSnapshot;
   accounts: BootstrapAccount[];
+  assets: Asset[];
+  liabilities: Liability[];
   onAdd: (el: HTMLElement) => void;
   onEdit: (a: BootstrapAccount, el: HTMLElement) => void;
   onReconcile: (a: BootstrapAccount, el: HTMLElement) => void;
+  onAddAsset: (el: HTMLElement) => void;
+  onAddLiability: (el: HTMLElement) => void;
+  onEditAsset: (a: Asset, el: HTMLElement) => void;
+  onEditLiability: (l: Liability, el: HTMLElement) => void;
 }) {
   const assets =
       snapshot.accounts.reduce((s, a) => s + Math.max(0, a.balanceCents), 0) +
@@ -2339,9 +2557,10 @@ function NetWorth({
             <span className="label actual">Current balance</span>
             <h3>Accounts & assets</h3>
           </div>
-          <button onClick={(e) => onAdd(e.currentTarget)}>
-            <Plus size={14} /> Add account
-          </button>
+          <div className="actions">
+            <button onClick={(e) => onAddAsset(e.currentTarget)}><Plus size={14} /> Add asset</button>
+            <button onClick={(e) => onAdd(e.currentTarget)}><Plus size={14} /> Add account</button>
+          </div>
         </div>
         {snapshot.accounts
           .filter((a) => a.balanceCents >= 0)
@@ -2377,7 +2596,7 @@ function NetWorth({
               </button>
             </div>
           ))}
-        {snapshot.assets.map((a) => (
+        {assetRecords.map((a) => (
           <div className="account" key={a.id}>
             <span className="transaction-icon">
               <Building2 size={17} />
@@ -2387,19 +2606,20 @@ function NetWorth({
               <small>Asset</small>
             </div>
             <b>{money(a.valueCents)}</b>
+            <button onClick={(e) => onEditAsset(a, e.currentTarget)}>Edit</button>
           </div>
         ))}
         {!snapshot.accounts.length && !snapshot.assets.length && (
           <p className="empty">No accounts or assets yet.</p>
         )}
       </section>
-      {debt > 0 && (
-        <section className="card wide">
+      <section className="card wide">
           <div className="card-title">
             <div>
               <span className="label actual">Current balance</span>
               <h3>Credit & liabilities</h3>
             </div>
+            <button onClick={(e) => onAddLiability(e.currentTarget)}><Plus size={14} /> Add debt</button>
           </div>
           {snapshot.accounts
             .filter((a) => a.balanceCents < 0)
@@ -2435,7 +2655,7 @@ function NetWorth({
                 </button>
               </div>
             ))}
-          {snapshot.liabilities.map((l) => (
+          {liabilityRecords.map((l) => (
             <div className="account" key={l.id}>
               <span className="transaction-icon">
                 <Building2 size={17} />
@@ -2445,10 +2665,11 @@ function NetWorth({
                 <small>Liability</small>
               </div>
               <b>{money(l.balanceCents)}</b>
+              <button onClick={(e) => onEditLiability(l, e.currentTarget)}>Edit</button>
             </div>
           ))}
+          {debt === 0 && <p className="empty">No credit balances or liabilities.</p>}
         </section>
-      )}
     </div>
   );
 }

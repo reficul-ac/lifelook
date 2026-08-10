@@ -58,6 +58,11 @@ import {
   emptySettings,
 } from "./repository";
 import { ScenarioPlanningDialog } from "./ScenarioPlanningDialog";
+import {
+  buildSearchIndex,
+  GlobalSearch,
+  type SearchResult,
+} from "./GlobalSearch";
 
 type View = "Overview" | "Activity" | "Plan" | "Net Worth" | "Settings";
 const nav: [View, typeof LayoutDashboard][] = [
@@ -88,7 +93,10 @@ const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
   settings: value.settings ?? emptySettings,
   taxProfile: value.taxProfile ?? null,
   activity: value.activity ?? [],
-  recurring: (value.recurring ?? []).map((entry) => ({ ...entry, frequency: entry.frequency ?? "monthly" })),
+  recurring: (value.recurring ?? []).map((entry) => ({
+    ...entry,
+    frequency: entry.frequency ?? "monthly",
+  })),
   assets: value.assets ?? [],
   liabilities: value.liabilities ?? [],
   scenarios: value.scenarios ?? [],
@@ -242,8 +250,17 @@ function Workspace({
   const dark =
     settings.theme === "dark" || (settings.theme === "system" && osDark);
   const [expanded, setExpanded] = useState<number | null>(null);
-  const [selectedScenarioId, setSelectedScenarioId] = useState(bootstrap.scenarios[0]?.id ?? "");
+  const [selectedScenarioId, setSelectedScenarioId] = useState(
+    bootstrap.scenarios[0]?.id ?? "",
+  );
   const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [searchInvoker, setSearchInvoker] = useState<HTMLElement | null>(null);
+  const [focusTarget, setFocusTarget] = useState<{
+    kind: string;
+    id: string;
+  } | null>(null);
+  const searchIndex = useMemo(() => buildSearchIndex(bootstrap), [bootstrap]);
+  const searchButton = useRef<HTMLButtonElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const openDialog = (state: DialogState, invoker?: HTMLElement | null) =>
     setDialog({
@@ -251,6 +268,42 @@ function Workspace({
       invoker: invoker ?? (document.activeElement as HTMLElement),
     });
   const closeDialog = () => setDialog(null);
+  useEffect(() => {
+    const key = (event: globalThis.KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        if (!dialog && !searchInvoker)
+          setSearchInvoker(document.activeElement as HTMLElement);
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [dialog, searchInvoker]);
+  useEffect(() => {
+    if (!focusTarget) return;
+    requestAnimationFrame(() => {
+      const target = [
+        ...document.querySelectorAll<HTMLElement>(
+          "[data-search-kind][data-search-id]",
+        ),
+      ].find(
+        (x) =>
+          x.dataset.searchKind === focusTarget.kind &&
+          x.dataset.searchId === focusTarget.id,
+      );
+      if (target) {
+        target.scrollIntoView?.({ block: "center" });
+        target.focus();
+        setFocusTarget(null);
+      }
+    });
+  }, [view, focusTarget, selectedScenarioId]);
+  function activateSearch(result: SearchResult) {
+    setSearchInvoker(null);
+    if (result.kind === "Scenario") setSelectedScenarioId(result.id);
+    setFocusTarget({ kind: result.kind, id: result.id });
+    setView(result.view);
+  }
   const snapshot = useMemo<FinancialSnapshot>(
     () => ({
       household: {
@@ -296,16 +349,48 @@ function Workspace({
     }),
     [bootstrap],
   );
-  const scenarios = useMemo(() => bootstrap.scenarios.map((record): Scenario => ({
-    id: record.id,
-    name: record.name,
-    assumptions: { inflationBps: record.assumptions.inflationBps ?? 250, thresholdInflationBps: record.assumptions.thresholdInflationBps ?? 250 },
-    events: record.events,
-    allocations: record.allocations.map(rule => ({ ...rule, targetBalanceCents: rule.targetBalanceCents ?? undefined })),
-    horizon: { start: new Date().toISOString().slice(0, 7), months: record.horizonMonths },
-  })), [bootstrap.scenarios]);
-  const selectedScenario = scenarios.find(s => s.id === selectedScenarioId) ?? scenarios[0] ?? { ...baseline, allocations: snapshot.accounts[0] ? [{ accountId: snapshot.accounts[0].id, percentBps: 10000, priority: 1 }] : [] };
-  const projections = useMemo(() => bootstrap.taxProfile ? ProjectionEngine.calculate(snapshot, selectedScenario) : null, [snapshot, bootstrap.taxProfile, selectedScenario]);
+  const scenarios = useMemo(
+    () =>
+      bootstrap.scenarios.map((record): Scenario => ({
+        id: record.id,
+        name: record.name,
+        assumptions: {
+          inflationBps: record.assumptions.inflationBps ?? 250,
+          thresholdInflationBps:
+            record.assumptions.thresholdInflationBps ?? 250,
+        },
+        events: record.events,
+        allocations: record.allocations.map((rule) => ({
+          ...rule,
+          targetBalanceCents: rule.targetBalanceCents ?? undefined,
+        })),
+        horizon: {
+          start: new Date().toISOString().slice(0, 7),
+          months: record.horizonMonths,
+        },
+      })),
+    [bootstrap.scenarios],
+  );
+  const selectedScenario = scenarios.find((s) => s.id === selectedScenarioId) ??
+    scenarios[0] ?? {
+      ...baseline,
+      allocations: snapshot.accounts[0]
+        ? [
+            {
+              accountId: snapshot.accounts[0].id,
+              percentBps: 10000,
+              priority: 1,
+            },
+          ]
+        : [],
+    };
+  const projections = useMemo(
+    () =>
+      bootstrap.taxProfile
+        ? ProjectionEngine.calculate(snapshot, selectedScenario)
+        : null,
+    [snapshot, bootstrap.taxProfile, selectedScenario],
+  );
   return (
     <div
       className={dark ? "app dark" : "app"}
@@ -359,9 +444,10 @@ function Workspace({
           </div>
           <div className="header-actions">
             <button
+              ref={searchButton}
               className="icon"
-              aria-label="Search (not yet available)"
-              disabled
+              aria-label="Search workspace"
+              onClick={() => setSearchInvoker(searchButton.current)}
             >
               <Search size={18} />
             </button>
@@ -395,6 +481,9 @@ function Workspace({
             activity={bootstrap.activity}
             accounts={bootstrap.accounts}
             repository={repository}
+            revealEntryId={
+              focusTarget?.kind === "Activity" ? focusTarget.id : null
+            }
             onImport={(el) => openDialog({ type: "import" }, el)}
             onEdit={(entry) =>
               openDialog({
@@ -416,11 +505,45 @@ function Workspace({
             recurring={bootstrap.recurring}
             categories={bootstrap.categories}
             accounts={bootstrap.accounts}
-            onAddRecurring={(kind, el) => openDialog({ type: "recurring", kind }, el)}
-            onEditRecurring={(recurring, el) => openDialog({ type: "recurring", recurring }, el)}
-            onAddScenario={(el) => openDialog({ type: "scenario-create", scenario: bootstrap.scenarios.find(s => s.id === selectedScenario.id) }, el)}
-            onEditScenario={(el) => openDialog({ type: "scenario-edit", scenario: bootstrap.scenarios.find(s => s.id === selectedScenario.id) }, el)}
-            onPlanScenario={(el) => openDialog({ type: "scenario-plan", scenario: bootstrap.scenarios.find(s => s.id === selectedScenario.id) }, el)}
+            onAddRecurring={(kind, el) =>
+              openDialog({ type: "recurring", kind }, el)
+            }
+            onEditRecurring={(recurring, el) =>
+              openDialog({ type: "recurring", recurring }, el)
+            }
+            onAddScenario={(el) =>
+              openDialog(
+                {
+                  type: "scenario-create",
+                  scenario: bootstrap.scenarios.find(
+                    (s) => s.id === selectedScenario.id,
+                  ),
+                },
+                el,
+              )
+            }
+            onEditScenario={(el) =>
+              openDialog(
+                {
+                  type: "scenario-edit",
+                  scenario: bootstrap.scenarios.find(
+                    (s) => s.id === selectedScenario.id,
+                  ),
+                },
+                el,
+              )
+            }
+            onPlanScenario={(el) =>
+              openDialog(
+                {
+                  type: "scenario-plan",
+                  scenario: bootstrap.scenarios.find(
+                    (s) => s.id === selectedScenario.id,
+                  ),
+                },
+                el,
+              )
+            }
           />
         )}
         {view === "Plan" && !projections && (
@@ -450,8 +573,12 @@ function Workspace({
             }
             onAddAsset={(el) => openDialog({ type: "asset" }, el)}
             onAddLiability={(el) => openDialog({ type: "liability" }, el)}
-            onEditAsset={(asset, el) => openDialog({ type: "asset", asset }, el)}
-            onEditLiability={(liability, el) => openDialog({ type: "liability", liability }, el)}
+            onEditAsset={(asset, el) =>
+              openDialog({ type: "asset", asset }, el)
+            }
+            onEditLiability={(liability, el) =>
+              openDialog({ type: "liability", liability }, el)
+            }
           />
         )}
         {view === "Settings" && (
@@ -465,12 +592,40 @@ function Workspace({
           />
         )}
       </main>
+      {searchInvoker && (
+        <GlobalSearch
+          index={searchIndex}
+          invoker={searchInvoker}
+          onClose={() => setSearchInvoker(null)}
+          onActivate={activateSearch}
+        />
+      )}
       {dialog?.type === "recurring" ? (
-        <RecurringDialog state={dialog} bootstrap={bootstrap} repository={repository} close={closeDialog} refresh={onRefresh} />
-      ) : dialog?.type === "scenario-create" || dialog?.type === "scenario-edit" ? (
-        <ScenarioDialog state={dialog} scenarios={bootstrap.scenarios} repository={repository} close={closeDialog} refresh={onRefresh} select={setSelectedScenarioId} />
+        <RecurringDialog
+          state={dialog}
+          bootstrap={bootstrap}
+          repository={repository}
+          close={closeDialog}
+          refresh={onRefresh}
+        />
+      ) : dialog?.type === "scenario-create" ||
+        dialog?.type === "scenario-edit" ? (
+        <ScenarioDialog
+          state={dialog}
+          scenarios={bootstrap.scenarios}
+          repository={repository}
+          close={closeDialog}
+          refresh={onRefresh}
+          select={setSelectedScenarioId}
+        />
       ) : dialog?.type === "scenario-plan" && dialog.scenario ? (
-        <ScenarioPlanningDialog record={dialog.scenario} bootstrap={bootstrap} repository={repository} close={closeDialog} refresh={onRefresh} />
+        <ScenarioPlanningDialog
+          record={dialog.scenario}
+          bootstrap={bootstrap}
+          repository={repository}
+          close={closeDialog}
+          refresh={onRefresh}
+        />
       ) : dialog?.type === "import" ? (
         <CsvImportWizard
           bootstrap={bootstrap}
@@ -505,7 +660,18 @@ function Workspace({
 
 type DialogState = {
   type:
-    "chooser" | "transaction" | "transfer" | "account" | "reconcile" | "import" | "asset" | "liability" | "recurring" | "scenario-create" | "scenario-edit" | "scenario-plan";
+    | "chooser"
+    | "transaction"
+    | "transfer"
+    | "account"
+    | "reconcile"
+    | "import"
+    | "asset"
+    | "liability"
+    | "recurring"
+    | "scenario-create"
+    | "scenario-edit"
+    | "scenario-plan";
   kind?: "income" | "expense";
   entry?: ActivityPosting[];
   account?: BootstrapAccount;
@@ -1123,8 +1289,8 @@ function FinancialRecordDialog({
   }, []);
   const [rate, setRate] = useState(
     String(
-      ((isAsset ? state.asset?.annualGrowthBps : liability?.annualRateBps) ?? 0) /
-        100,
+      ((isAsset ? state.asset?.annualGrowthBps : liability?.annualRateBps) ??
+        0) / 100,
     ),
   );
   const [minimumPayment, setMinimumPayment] = useState(
@@ -1150,9 +1316,7 @@ function FinancialRecordDialog({
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   useEffect(() => {
-    modal.current
-      ?.querySelector<HTMLElement>("button,input,select")
-      ?.focus();
+    modal.current?.querySelector<HTMLElement>("button,input,select")?.focus();
     return () => state.invoker?.focus();
   }, []);
   useEffect(() => {
@@ -1173,15 +1337,28 @@ function FinancialRecordDialog({
     setError("");
     const cents = parseMoney(value);
     const bps = parsePercent(rate);
-    if (!name.trim()) return setError(`${isAsset ? "Asset" : "Debt"} name is required.`);
-    if (cents == null || cents < 0) return setError("Enter an exact non-negative USD value.");
+    if (!name.trim())
+      return setError(`${isAsset ? "Asset" : "Debt"} name is required.`);
+    if (cents == null || cents < 0)
+      return setError("Enter an exact non-negative USD value.");
     if (bps == null || bps < (isAsset ? -10_000 : 0) || bps > 100_000)
-      return setError(`Enter an annual ${isAsset ? "growth" : "interest"} rate within the supported range.`);
+      return setError(
+        `Enter an annual ${isAsset ? "growth" : "interest"} rate within the supported range.`,
+      );
     setBusy(true);
     try {
       if (isAsset) {
-        const input = { id: state.asset?.id ?? crypto.randomUUID(), name: name.trim(), valueCents: cents, annualGrowthBps: bps };
-        if (state.asset) await repository.updateAsset?.({ ...input, expectedRevision: state.asset.revision });
+        const input = {
+          id: state.asset?.id ?? crypto.randomUUID(),
+          name: name.trim(),
+          valueCents: cents,
+          annualGrowthBps: bps,
+        };
+        if (state.asset)
+          await repository.updateAsset?.({
+            ...input,
+            expectedRevision: state.asset.revision,
+          });
         else await repository.createAsset?.(input);
       } else {
         let payment = parseMoney(minimumPayment);
@@ -1190,15 +1367,44 @@ function FinancialRecordDialog({
           const original = parseMoney(principal);
           const months = /^\d+$/.test(term) ? Number(term) : 0;
           const custom = overridePayment ? parseMoney(paymentOverride) : null;
-          if (!original || original < cents || months < 1 || months > 480 || !/^\d{4}-\d{2}-\d{2}$/.test(startDate))
-            throw { message: "Enter valid mortgage principal, start date, and a term from 1 to 480 months." };
-          if (overridePayment && (!custom || custom <= 0)) throw { message: "Enter a positive custom monthly payment." };
+          if (
+            !original ||
+            original < cents ||
+            months < 1 ||
+            months > 480 ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(startDate)
+          )
+            throw {
+              message:
+                "Enter valid mortgage principal, start date, and a term from 1 to 480 months.",
+            };
+          if (overridePayment && (!custom || custom <= 0))
+            throw { message: "Enter a positive custom monthly payment." };
           payment = custom ?? mortgagePayment(original, bps, months);
-          mortgageTerms = { originalPrincipalCents: original, termMonths: months, startDate, paymentOverrideCents: custom };
+          mortgageTerms = {
+            originalPrincipalCents: original,
+            termMonths: months,
+            startDate,
+            paymentOverrideCents: custom,
+          };
         }
-        if (payment == null || (cents > 0 && payment <= 0)) throw { message: "Enter a positive monthly payment for a nonzero debt." };
-        const input = { id: liability?.id ?? crypto.randomUUID(), name: name.trim(), balanceCents: cents, annualRateBps: bps, minimumPaymentCents: payment, mortgage: mortgageTerms };
-        if (liability) await repository.updateLiability?.({ ...input, expectedRevision: liability.revision });
+        if (payment == null || (cents > 0 && payment <= 0))
+          throw {
+            message: "Enter a positive monthly payment for a nonzero debt.",
+          };
+        const input = {
+          id: liability?.id ?? crypto.randomUUID(),
+          name: name.trim(),
+          balanceCents: cents,
+          annualRateBps: bps,
+          minimumPaymentCents: payment,
+          mortgage: mortgageTerms,
+        };
+        if (liability)
+          await repository.updateLiability?.({
+            ...input,
+            expectedRevision: liability.revision,
+          });
         else await repository.createLiability?.(input);
       }
       await Promise.resolve(refresh());
@@ -1213,8 +1419,16 @@ function FinancialRecordDialog({
     setBusy(true);
     setError("");
     try {
-      if (isAsset) await repository.deleteAsset?.({ id: state.asset!.id, expectedRevision: state.asset!.revision });
-      else await repository.deleteLiability?.({ id: liability!.id, expectedRevision: liability!.revision });
+      if (isAsset)
+        await repository.deleteAsset?.({
+          id: state.asset!.id,
+          expectedRevision: state.asset!.revision,
+        });
+      else
+        await repository.deleteLiability?.({
+          id: liability!.id,
+          expectedRevision: liability!.revision,
+        });
       await Promise.resolve(refresh());
       close();
     } catch (x) {
@@ -1229,34 +1443,175 @@ function FinancialRecordDialog({
   const noun = isAsset ? "asset" : "debt";
   return (
     <div className="modal-backdrop">
-      <section ref={modal} className="card modal entry-modal" role={confirmDelete ? "alertdialog" : "dialog"} aria-modal="true" aria-labelledby="financial-record-title" onKeyDown={keyDown}>
-        <h2 id="financial-record-title" ref={headingRef} tabIndex={confirmDelete ? -1 : undefined}>
-          {confirmDelete ? `Delete ${noun}?` : `${record ? "Edit" : "Add"} ${noun}`}
+      <section
+        ref={modal}
+        className="card modal entry-modal"
+        role={confirmDelete ? "alertdialog" : "dialog"}
+        aria-modal="true"
+        aria-labelledby="financial-record-title"
+        onKeyDown={keyDown}
+      >
+        <h2
+          id="financial-record-title"
+          ref={headingRef}
+          tabIndex={confirmDelete ? -1 : undefined}
+        >
+          {confirmDelete
+            ? `Delete ${noun}?`
+            : `${record ? "Edit" : "Add"} ${noun}`}
         </h2>
-        {error && <p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}
-        {confirmDelete ? <>
-          <p>This permanently removes {record?.name}. Existing account and activity history is unaffected.</p>
-          <div className="actions"><button disabled={busy} onClick={() => setConfirmDelete(false)}>Cancel</button><button className="danger" disabled={busy} onClick={remove}>{busy ? "Deleting…" : "Delete permanently"}</button></div>
-        </> : <form onSubmit={submit}>
-          <fieldset disabled={busy}>
-            <label>{isAsset ? "Asset name" : "Debt name"}<input required value={name} onChange={e => setName(e.target.value)} /></label>
-            <label>{isAsset ? "Current value (USD)" : "Current balance (USD)"}<input required inputMode="decimal" value={value} onChange={e => setValue(e.target.value)} /></label>
-            <label>{isAsset ? "Annual growth (%)" : "Annual interest rate (%)"}<input required inputMode="decimal" value={rate} onChange={e => setRate(e.target.value)} /></label>
-            {!isAsset && <>
-              <label className="check-row"><input type="checkbox" checked={mortgage} onChange={e => setMortgage(e.target.checked)} /> Include mortgage details</label>
-              {mortgage ? <>
-                <p className="muted">Calculated payments include principal and interest only, not taxes, insurance, or escrow.</p>
-                <label>Original principal (USD)<input required inputMode="decimal" value={principal} onChange={e => setPrincipal(e.target.value)} /></label>
-                <label>Mortgage start date<input required type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></label>
-                <label>Original term (months)<input required inputMode="numeric" value={term} onChange={e => setTerm(e.target.value)} /></label>
-                {!overridePayment && calculatedPayment != null && <p role="status">Calculated principal and interest: <strong>{money(calculatedPayment)}</strong> per month.</p>}
-                <label className="check-row"><input type="checkbox" checked={overridePayment} onChange={e => setOverridePayment(e.target.checked)} /> Use custom monthly payment</label>
-                {overridePayment && <label>Custom monthly payment (USD)<input required inputMode="decimal" value={paymentOverride} onChange={e => setPaymentOverride(e.target.value)} /></label>}
-              </> : <label>Minimum monthly payment (USD)<input required inputMode="decimal" value={minimumPayment} onChange={e => setMinimumPayment(e.target.value)} /></label>}
-            </>}
-          </fieldset>
-          <div className="actions">{record && <button type="button" className="danger" disabled={busy} onClick={() => setConfirmDelete(true)}>Delete</button>}<button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save"}</button></div>
-        </form>}
+        {error && (
+          <p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>
+            {error}
+          </p>
+        )}
+        {confirmDelete ? (
+          <>
+            <p>
+              This permanently removes {record?.name}. Existing account and
+              activity history is unaffected.
+            </p>
+            <div className="actions">
+              <button disabled={busy} onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </button>
+              <button className="danger" disabled={busy} onClick={remove}>
+                {busy ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={submit}>
+            <fieldset disabled={busy}>
+              <label>
+                {isAsset ? "Asset name" : "Debt name"}
+                <input
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </label>
+              <label>
+                {isAsset ? "Current value (USD)" : "Current balance (USD)"}
+                <input
+                  required
+                  inputMode="decimal"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
+                />
+              </label>
+              <label>
+                {isAsset ? "Annual growth (%)" : "Annual interest rate (%)"}
+                <input
+                  required
+                  inputMode="decimal"
+                  value={rate}
+                  onChange={(e) => setRate(e.target.value)}
+                />
+              </label>
+              {!isAsset && (
+                <>
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={mortgage}
+                      onChange={(e) => setMortgage(e.target.checked)}
+                    />{" "}
+                    Include mortgage details
+                  </label>
+                  {mortgage ? (
+                    <>
+                      <p className="muted">
+                        Calculated payments include principal and interest only,
+                        not taxes, insurance, or escrow.
+                      </p>
+                      <label>
+                        Original principal (USD)
+                        <input
+                          required
+                          inputMode="decimal"
+                          value={principal}
+                          onChange={(e) => setPrincipal(e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Mortgage start date
+                        <input
+                          required
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Original term (months)
+                        <input
+                          required
+                          inputMode="numeric"
+                          value={term}
+                          onChange={(e) => setTerm(e.target.value)}
+                        />
+                      </label>
+                      {!overridePayment && calculatedPayment != null && (
+                        <p role="status">
+                          Calculated principal and interest:{" "}
+                          <strong>{money(calculatedPayment)}</strong> per month.
+                        </p>
+                      )}
+                      <label className="check-row">
+                        <input
+                          type="checkbox"
+                          checked={overridePayment}
+                          onChange={(e) => setOverridePayment(e.target.checked)}
+                        />{" "}
+                        Use custom monthly payment
+                      </label>
+                      {overridePayment && (
+                        <label>
+                          Custom monthly payment (USD)
+                          <input
+                            required
+                            inputMode="decimal"
+                            value={paymentOverride}
+                            onChange={(e) => setPaymentOverride(e.target.value)}
+                          />
+                        </label>
+                      )}
+                    </>
+                  ) : (
+                    <label>
+                      Minimum monthly payment (USD)
+                      <input
+                        required
+                        inputMode="decimal"
+                        value={minimumPayment}
+                        onChange={(e) => setMinimumPayment(e.target.value)}
+                      />
+                    </label>
+                  )}
+                </>
+              )}
+            </fieldset>
+            <div className="actions">
+              {record && (
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={busy}
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  Delete
+                </button>
+              )}
+              <button type="button" disabled={busy} onClick={close}>
+                Cancel
+              </button>
+              <button className="primary" disabled={busy}>
+                {busy ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
+        )}
       </section>
     </div>
   );
@@ -1272,7 +1627,9 @@ function Onboarding({
   onComplete: () => void;
 }) {
   const householdId = useRef(initial.household?.id ?? crypto.randomUUID());
-  const [step, setStep] = useState(Math.min(8, Math.max(1, initial.onboardingStep + 1)));
+  const [step, setStep] = useState(
+    Math.min(8, Math.max(1, initial.onboardingStep + 1)),
+  );
   const [name, setName] = useState(initial.household?.name ?? "");
   const [people, setPeople] = useState<BootstrapPerson[]>(
     initial.people.length
@@ -1290,12 +1647,41 @@ function Onboarding({
         }))
       : [newAccount(householdId.current)],
   );
-  const [filingStatus, setFilingStatus] = useState(initial.taxProfile?.filingStatus ?? "");
-  const categoryId = (kind:"income"|"expense") => initial.categories.find(c=>c.kind===kind)?.id ?? `${kind}-other-${householdId.current}`;
-  const [income,setIncome]=useState<RecurringDraft[]>(()=>initial.recurring.filter(r=>initial.categories.find(c=>c.id===r.categoryId)?.kind==="income").map(toRecurringDraft));
-  const [expenses,setExpenses]=useState<RecurringDraft[]>(()=>initial.recurring.filter(r=>initial.categories.find(c=>c.id===r.categoryId)?.kind==="expense").map(toRecurringDraft));
-  const [assets,setAssets]=useState<AssetDraft[]>(()=>initial.assets.map(a=>({id:a.id,name:a.name,value:String(a.valueCents/100),rate:String(a.annualGrowthBps/100)})));
-  const [debts,setDebts]=useState<DebtDraft[]>(()=>initial.liabilities.map(toDebtDraft));
+  const [filingStatus, setFilingStatus] = useState(
+    initial.taxProfile?.filingStatus ?? "",
+  );
+  const categoryId = (kind: "income" | "expense") =>
+    initial.categories.find((c) => c.kind === kind)?.id ??
+    `${kind}-other-${householdId.current}`;
+  const [income, setIncome] = useState<RecurringDraft[]>(() =>
+    initial.recurring
+      .filter(
+        (r) =>
+          initial.categories.find((c) => c.id === r.categoryId)?.kind ===
+          "income",
+      )
+      .map(toRecurringDraft),
+  );
+  const [expenses, setExpenses] = useState<RecurringDraft[]>(() =>
+    initial.recurring
+      .filter(
+        (r) =>
+          initial.categories.find((c) => c.id === r.categoryId)?.kind ===
+          "expense",
+      )
+      .map(toRecurringDraft),
+  );
+  const [assets, setAssets] = useState<AssetDraft[]>(() =>
+    initial.assets.map((a) => ({
+      id: a.id,
+      name: a.name,
+      value: String(a.valueCents / 100),
+      rate: String(a.annualGrowthBps / 100),
+    })),
+  );
+  const [debts, setDebts] = useState<DebtDraft[]>(() =>
+    initial.liabilities.map(toDebtDraft),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   async function submit(event: FormEvent) {
@@ -1335,14 +1721,35 @@ function Onboarding({
       }
     }
     let payload: import("./repository").OnboardingStepPayload = {};
-    if(step===4||step===5){
-      const kind=step===4?"income":"expense", drafts=step===4?income:expenses;
-      const converted=drafts.map((d,i)=>validateRecurringDraft(d,i));
-      const failure=converted.find(x=>typeof x==="string"); if(failure){setError(failure as string);return}
-      payload={recurring:{kind,items:converted as RecurringInput[]}};
+    if (step === 4 || step === 5) {
+      const kind = step === 4 ? "income" : "expense",
+        drafts = step === 4 ? income : expenses;
+      const converted = drafts.map((d, i) => validateRecurringDraft(d, i));
+      const failure = converted.find((x) => typeof x === "string");
+      if (failure) {
+        setError(failure as string);
+        return;
+      }
+      payload = { recurring: { kind, items: converted as RecurringInput[] } };
     }
-    if(step===6){const converted=assets.map((d,i)=>validateAssetDraft(d,i));const failure=converted.find(x=>typeof x==="string");if(failure){setError(failure as string);return}payload={assets:converted as AssetInput[]}}
-    if(step===7){const converted=debts.map((d,i)=>validateDebtDraft(d,i));const failure=converted.find(x=>typeof x==="string");if(failure){setError(failure as string);return}payload={liabilities:converted as LiabilityInput[]}}
+    if (step === 6) {
+      const converted = assets.map((d, i) => validateAssetDraft(d, i));
+      const failure = converted.find((x) => typeof x === "string");
+      if (failure) {
+        setError(failure as string);
+        return;
+      }
+      payload = { assets: converted as AssetInput[] };
+    }
+    if (step === 7) {
+      const converted = debts.map((d, i) => validateDebtDraft(d, i));
+      const failure = converted.find((x) => typeof x === "string");
+      if (failure) {
+        setError(failure as string);
+        return;
+      }
+      payload = { liabilities: converted as LiabilityInput[] };
+    }
     setSaving(true);
     try {
       if (step === 1) {
@@ -1358,22 +1765,28 @@ function Onboarding({
             birthDate: parseBirthDate(p.birthDate),
           })),
         });
-      } else if(step===2) {
-        await repository.saveOnboardingStep(2, {taxProfile: {
-          filingStatus:filingStatus as TaxProfile["filingStatus"], state:"CA", taxYear:2026, thresholdInflationBps:250, revision:initial.taxProfile?.revision??1,
-        }});
-      } else if(step===3) {
+      } else if (step === 2) {
+        await repository.saveOnboardingStep(2, {
+          taxProfile: {
+            filingStatus: filingStatus as TaxProfile["filingStatus"],
+            state: "CA",
+            taxYear: 2026,
+            thresholdInflationBps: 250,
+            revision: initial.taxProfile?.revision ?? 1,
+          },
+        });
+      } else if (step === 3) {
         await repository.saveOnboardingStep(3, {
           accounts: accounts.map(toAccount),
         });
-      } else if(step<8) {
-        await repository.saveOnboardingStep(step,payload);
+      } else if (step < 8) {
+        await repository.saveOnboardingStep(step, payload);
       } else {
         await repository.completeOnboarding();
         onComplete();
         return;
       }
-      setStep(Math.min(8,step+1));
+      setStep(Math.min(8, step + 1));
     } catch (e) {
       setError(
         (e as { message?: string }).message ?? "Could not save this step.",
@@ -1386,7 +1799,21 @@ function Onboarding({
     <main className="standalone">
       <section className="card onboarding">
         <span className="label assumption">Setup · Step {step} of 8</span>
-        <h1>{["","Tell us about your household","Choose your tax profile","Add the accounts you want to track","Add recurring income","Add recurring expenses","Add your assets","Add your debts","Review and finish"][step]}</h1>
+        <h1>
+          {
+            [
+              "",
+              "Tell us about your household",
+              "Choose your tax profile",
+              "Add the accounts you want to track",
+              "Add recurring income",
+              "Add recurring expenses",
+              "Add your assets",
+              "Add your debts",
+              "Review and finish",
+            ][step]
+          }
+        </h1>
         <p className="muted">
           Your progress is saved locally. LifeLook does not create an online
           account.
@@ -1449,7 +1876,7 @@ function Onboarding({
                 <input value="California" disabled />
               </label>
             </>
-          ) : step===2 ? (
+          ) : step === 2 ? (
             <>
               <label>
                 Filing status
@@ -1472,7 +1899,8 @@ function Onboarding({
                 rule pack are used.
               </p>
             </>
-          ) : step===3 ? <>
+          ) : step === 3 ? (
+            <>
               {accounts.map((a, i) => (
                 <fieldset className="repeat-row" key={a.id}>
                   <legend>Account {i + 1}</legend>
@@ -1537,7 +1965,24 @@ function Onboarding({
                     <button
                       type="button"
                       className="quiet danger"
-                      onClick={() => {const removed=a.id;setAccounts(accounts.filter((_, x) => x !== i));setIncome(income.map(r=>r.accountId===removed?{...r,accountId:""}:r));setExpenses(expenses.map(r=>r.accountId===removed?{...r,accountId:""}:r))}}
+                      onClick={() => {
+                        const removed = a.id;
+                        setAccounts(accounts.filter((_, x) => x !== i));
+                        setIncome(
+                          income.map((r) =>
+                            r.accountId === removed
+                              ? { ...r, accountId: "" }
+                              : r,
+                          ),
+                        );
+                        setExpenses(
+                          expenses.map((r) =>
+                            r.accountId === removed
+                              ? { ...r, accountId: "" }
+                              : r,
+                          ),
+                        );
+                      }}
                     >
                       Remove account {i + 1}
                     </button>
@@ -1553,10 +1998,32 @@ function Onboarding({
               >
                 <Plus size={15} /> Add another account
               </button>
-            </> : step===4||step===5 ? <RecurringOnboardingFields kind={step===4?"income":"expense"} items={step===4?income:expenses} setItems={step===4?setIncome:setExpenses} accounts={accounts} categoryId={categoryId(step===4?"income":"expense")}/>
-          : step===6 ? <AssetOnboardingFields items={assets} setItems={setAssets}/>
-          : step===7 ? <DebtOnboardingFields items={debts} setItems={setDebts}/>
-          : <OnboardingReview name={name} people={people} filingStatus={filingStatus} accounts={accounts} income={income} expenses={expenses} assets={assets} debts={debts} edit={setStep}/>}
+            </>
+          ) : step === 4 || step === 5 ? (
+            <RecurringOnboardingFields
+              kind={step === 4 ? "income" : "expense"}
+              items={step === 4 ? income : expenses}
+              setItems={step === 4 ? setIncome : setExpenses}
+              accounts={accounts}
+              categoryId={categoryId(step === 4 ? "income" : "expense")}
+            />
+          ) : step === 6 ? (
+            <AssetOnboardingFields items={assets} setItems={setAssets} />
+          ) : step === 7 ? (
+            <DebtOnboardingFields items={debts} setItems={setDebts} />
+          ) : (
+            <OnboardingReview
+              name={name}
+              people={people}
+              filingStatus={filingStatus}
+              accounts={accounts}
+              income={income}
+              expenses={expenses}
+              assets={assets}
+              debts={debts}
+              edit={setStep}
+            />
+          )}
           {error && (
             <p role="alert" className="negative">
               {error}
@@ -1577,7 +2044,18 @@ function Onboarding({
                 ? "Saving…"
                 : step === 1
                   ? "Save & Continue"
-                  : step===8 ? "Finish setup" : step>=4 && ((step===4?income.length:step===5?expenses.length:step===6?assets.length:debts.length)===0) ? "Skip & Continue" : "Save & Continue"}
+                  : step === 8
+                    ? "Finish setup"
+                    : step >= 4 &&
+                        (step === 4
+                          ? income.length
+                          : step === 5
+                            ? expenses.length
+                            : step === 6
+                              ? assets.length
+                              : debts.length) === 0
+                      ? "Skip & Continue"
+                      : "Save & Continue"}
             </button>
           </div>
         </form>
@@ -1586,20 +2064,574 @@ function Onboarding({
   );
 }
 
-type RecurringDraft={id:string;categoryId:string;accountId:string;name:string;amount:string;frequency:RecurringInput["frequency"];startDate:string;endDate:string;growth:string};
-type AssetDraft={id:string;name:string;value:string;rate:string};
-type DebtDraft={id:string;name:string;balance:string;rate:string;minimumPayment:string;mortgage:boolean;principal:string;term:string;startDate:string;overridePayment:boolean;paymentOverride:string};
-const toRecurringDraft=(r:RecurringEntry):RecurringDraft=>({id:r.id,categoryId:r.categoryId,accountId:r.accountId??"",name:r.name,amount:String(r.amountCents/100),frequency:r.frequency,startDate:r.startDate,endDate:r.endDate??"",growth:String(r.annualGrowthBps/100)});
-const newRecurringDraft=(categoryId:string):RecurringDraft=>({id:crypto.randomUUID(),categoryId,accountId:"",name:"",amount:"",frequency:"monthly",startDate:today(),endDate:"",growth:"0"});
-const toDebtDraft=(d:Liability):DebtDraft=>({id:d.id,name:d.name,balance:String(d.balanceCents/100),rate:String(d.annualRateBps/100),minimumPayment:String(d.minimumPaymentCents/100),mortgage:Boolean(d.mortgage),principal:String((d.mortgage?.originalPrincipalCents??0)/100),term:String(d.mortgage?.termMonths??360),startDate:d.mortgage?.startDate??today(),overridePayment:d.mortgage?.paymentOverrideCents!=null,paymentOverride:String((d.mortgage?.paymentOverrideCents??0)/100)});
-const newDebtDraft=():DebtDraft=>({id:crypto.randomUUID(),name:"",balance:"",rate:"0",minimumPayment:"",mortgage:false,principal:"",term:"360",startDate:today(),overridePayment:false,paymentOverride:""});
-function validateRecurringDraft(d:RecurringDraft,i:number):RecurringInput|string{const amount=parseMoney(d.amount),growth=parsePercent(d.growth);if(!d.name.trim())return `Record ${i+1}: name is required.`;if(amount==null||amount<=0)return `Record ${i+1}: enter a positive USD amount.`;if(!d.startDate||d.endDate&&d.endDate<d.startDate)return `Record ${i+1}: enter a valid date range.`;if(growth==null||growth < -10000||growth>100000)return `Record ${i+1}: annual growth is outside the supported range.`;return{id:d.id,categoryId:d.categoryId,accountId:d.accountId||null,name:d.name.trim(),amountCents:amount,frequency:d.frequency,startDate:d.startDate,endDate:d.endDate||null,annualGrowthBps:growth}}
-function validateAssetDraft(d:AssetDraft,i:number):AssetInput|string{const value=parseMoney(d.value),rate=parsePercent(d.rate);if(!d.name.trim())return `Asset ${i+1}: name is required.`;if(value==null||value<0)return `Asset ${i+1}: enter a non-negative USD value.`;if(rate==null||rate < -10000||rate>100000)return `Asset ${i+1}: annual growth is outside the supported range.`;return{id:d.id,name:d.name.trim(),valueCents:value,annualGrowthBps:rate}}
-function validateDebtDraft(d:DebtDraft,i:number):LiabilityInput|string{const balance=parseMoney(d.balance),rate=parsePercent(d.rate),minimum=parseMoney(d.minimumPayment);if(!d.name.trim())return `Debt ${i+1}: name is required.`;if(balance==null||balance<0)return `Debt ${i+1}: enter a non-negative balance.`;if(rate==null||rate<0||rate>100000)return `Debt ${i+1}: interest rate is outside the supported range.`;let mortgage=null,payment=minimum;if(d.mortgage){const principal=parseMoney(d.principal),months=/^\d+$/.test(d.term)?Number(d.term):0,custom=d.overridePayment?parseMoney(d.paymentOverride):null;if(!principal||principal<balance||months<1||months>480||!/^\d{4}-\d{2}-\d{2}$/.test(d.startDate))return `Debt ${i+1}: enter valid mortgage principal, date, and term.`;if(d.overridePayment&&(!custom||custom<=0))return `Debt ${i+1}: enter a positive custom payment.`;payment=custom??mortgagePayment(principal,rate,months);mortgage={originalPrincipalCents:principal,termMonths:months,startDate:d.startDate,paymentOverrideCents:custom}}if(payment==null||(balance>0&&payment<=0))return `Debt ${i+1}: enter a positive monthly payment.`;return{id:d.id,name:d.name.trim(),balanceCents:balance,annualRateBps:rate,minimumPaymentCents:payment,mortgage}}
-function RecurringOnboardingFields({kind,items,setItems,accounts,categoryId}:{kind:"income"|"expense";items:RecurringDraft[];setItems:(x:RecurringDraft[])=>void;accounts:AccountDraft[];categoryId:string}){return <><p className="muted">Optional. Add as many recurring {kind} records as you need.</p>{items.map((d,i)=><fieldset className="repeat-row" key={d.id}><legend>{kind==="income"?"Income":"Expense"} {i+1}</legend><label>Name<input aria-label={`${kind} ${i+1} name`} value={d.name} onChange={e=>setItems(updateAt(items,i,{name:e.target.value}))}/></label><label>Category<select value={d.categoryId} onChange={e=>setItems(updateAt(items,i,{categoryId:e.target.value}))}><option value={categoryId}>{kind==="income"?"Other income":"Other expense"}</option></select></label><label>Account (optional)<select value={d.accountId} onChange={e=>setItems(updateAt(items,i,{accountId:e.target.value}))}><option value="">No specific account</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Amount (USD)<input inputMode="decimal" value={d.amount} onChange={e=>setItems(updateAt(items,i,{amount:e.target.value}))}/></label><label>Frequency<select value={d.frequency} onChange={e=>setItems(updateAt(items,i,{frequency:e.target.value as RecurringInput["frequency"]}))}>{[["weekly","Weekly"],["biweekly","Every two weeks"],["monthly","Monthly"],["quarterly","Quarterly"],["annual","Annual"]].map(x=><option key={x[0]} value={x[0]}>{x[1]}</option>)}</select></label><label>Start date<input type="date" value={d.startDate} onChange={e=>setItems(updateAt(items,i,{startDate:e.target.value}))}/></label><label>End date (optional)<input type="date" min={d.startDate} value={d.endDate} onChange={e=>setItems(updateAt(items,i,{endDate:e.target.value}))}/></label><label>Annual growth (%)<input inputMode="decimal" value={d.growth} onChange={e=>setItems(updateAt(items,i,{growth:e.target.value}))}/></label><button type="button" className="quiet danger" onClick={()=>setItems(items.filter((_,x)=>x!==i))}>Remove {kind} {i+1}</button></fieldset>)}<button type="button" className="quiet" onClick={()=>setItems([...items,newRecurringDraft(categoryId)])}><Plus size={15}/> Add {kind}</button></>}
-function AssetOnboardingFields({items,setItems}:{items:AssetDraft[];setItems:(x:AssetDraft[])=>void}){return <><p className="muted">Optional. Include property and other assets not represented by an account.</p>{items.map((d,i)=><fieldset className="repeat-row" key={d.id}><legend>Asset {i+1}</legend><label>Asset name<input value={d.name} onChange={e=>setItems(updateAt(items,i,{name:e.target.value}))}/></label><label>Current value (USD)<input inputMode="decimal" value={d.value} onChange={e=>setItems(updateAt(items,i,{value:e.target.value}))}/></label><label>Annual growth (%)<input inputMode="decimal" value={d.rate} onChange={e=>setItems(updateAt(items,i,{rate:e.target.value}))}/></label><button type="button" className="quiet danger" onClick={()=>setItems(items.filter((_,x)=>x!==i))}>Remove asset {i+1}</button></fieldset>)}<button type="button" className="quiet" onClick={()=>setItems([...items,{id:crypto.randomUUID(),name:"",value:"",rate:"0"}])}><Plus size={15}/> Add asset</button></>}
-function DebtOnboardingFields({items,setItems}:{items:DebtDraft[];setItems:(x:DebtDraft[])=>void}){return <><p className="muted">Optional. Mortgage payments include principal and interest only.</p>{items.map((d,i)=><fieldset className="repeat-row" key={d.id}><legend>Debt {i+1}</legend><label>Debt name<input value={d.name} onChange={e=>setItems(updateAt(items,i,{name:e.target.value}))}/></label><label>Current balance (USD)<input inputMode="decimal" value={d.balance} onChange={e=>setItems(updateAt(items,i,{balance:e.target.value}))}/></label><label>Annual interest rate (%)<input inputMode="decimal" value={d.rate} onChange={e=>setItems(updateAt(items,i,{rate:e.target.value}))}/></label><label className="check-row"><input type="checkbox" checked={d.mortgage} onChange={e=>setItems(updateAt(items,i,{mortgage:e.target.checked}))}/> Include mortgage details</label>{d.mortgage?<><label>Original principal (USD)<input inputMode="decimal" value={d.principal} onChange={e=>setItems(updateAt(items,i,{principal:e.target.value}))}/></label><label>Mortgage start date<input type="date" value={d.startDate} onChange={e=>setItems(updateAt(items,i,{startDate:e.target.value}))}/></label><label>Original term (months)<input inputMode="numeric" value={d.term} onChange={e=>setItems(updateAt(items,i,{term:e.target.value}))}/></label><label className="check-row"><input type="checkbox" checked={d.overridePayment} onChange={e=>setItems(updateAt(items,i,{overridePayment:e.target.checked}))}/> Use custom monthly payment</label>{d.overridePayment&&<label>Custom monthly payment (USD)<input inputMode="decimal" value={d.paymentOverride} onChange={e=>setItems(updateAt(items,i,{paymentOverride:e.target.value}))}/></label>}</>:<label>Minimum monthly payment (USD)<input inputMode="decimal" value={d.minimumPayment} onChange={e=>setItems(updateAt(items,i,{minimumPayment:e.target.value}))}/></label>}<button type="button" className="quiet danger" onClick={()=>setItems(items.filter((_,x)=>x!==i))}>Remove debt {i+1}</button></fieldset>)}<button type="button" className="quiet" onClick={()=>setItems([...items,newDebtDraft()])}><Plus size={15}/> Add debt</button></>}
-function OnboardingReview({name,people,filingStatus,accounts,income,expenses,assets,debts,edit}:{name:string;people:BootstrapPerson[];filingStatus:string;accounts:AccountDraft[];income:RecurringDraft[];expenses:RecurringDraft[];assets:AssetDraft[];debts:DebtDraft[];edit:(n:number)=>void}){const sections:[[string,string,number],...Array<[string,string,number]>]=[["Household",`${name} · ${people.length} member(s)`,1],["Tax profile",filingStatus,2],["Accounts",`${accounts.length} account(s)`,3],["Income",`${income.length} recurring record(s)`,4],["Expenses",`${expenses.length} recurring record(s)`,5],["Assets",`${assets.length} asset(s)`,6],["Debts",`${debts.length} debt(s)`,7]];return <>{sections.map(([title,summary,target])=><section className="review-row" key={title}><div><strong>{title}</strong><p className="muted">{summary}</p></div><button type="button" className="quiet" onClick={()=>edit(target)}>Edit {title.toLowerCase()}</button></section>)}</>}
+type RecurringDraft = {
+  id: string;
+  categoryId: string;
+  accountId: string;
+  name: string;
+  amount: string;
+  frequency: RecurringInput["frequency"];
+  startDate: string;
+  endDate: string;
+  growth: string;
+};
+type AssetDraft = { id: string; name: string; value: string; rate: string };
+type DebtDraft = {
+  id: string;
+  name: string;
+  balance: string;
+  rate: string;
+  minimumPayment: string;
+  mortgage: boolean;
+  principal: string;
+  term: string;
+  startDate: string;
+  overridePayment: boolean;
+  paymentOverride: string;
+};
+const toRecurringDraft = (r: RecurringEntry): RecurringDraft => ({
+  id: r.id,
+  categoryId: r.categoryId,
+  accountId: r.accountId ?? "",
+  name: r.name,
+  amount: String(r.amountCents / 100),
+  frequency: r.frequency,
+  startDate: r.startDate,
+  endDate: r.endDate ?? "",
+  growth: String(r.annualGrowthBps / 100),
+});
+const newRecurringDraft = (categoryId: string): RecurringDraft => ({
+  id: crypto.randomUUID(),
+  categoryId,
+  accountId: "",
+  name: "",
+  amount: "",
+  frequency: "monthly",
+  startDate: today(),
+  endDate: "",
+  growth: "0",
+});
+const toDebtDraft = (d: Liability): DebtDraft => ({
+  id: d.id,
+  name: d.name,
+  balance: String(d.balanceCents / 100),
+  rate: String(d.annualRateBps / 100),
+  minimumPayment: String(d.minimumPaymentCents / 100),
+  mortgage: Boolean(d.mortgage),
+  principal: String((d.mortgage?.originalPrincipalCents ?? 0) / 100),
+  term: String(d.mortgage?.termMonths ?? 360),
+  startDate: d.mortgage?.startDate ?? today(),
+  overridePayment: d.mortgage?.paymentOverrideCents != null,
+  paymentOverride: String((d.mortgage?.paymentOverrideCents ?? 0) / 100),
+});
+const newDebtDraft = (): DebtDraft => ({
+  id: crypto.randomUUID(),
+  name: "",
+  balance: "",
+  rate: "0",
+  minimumPayment: "",
+  mortgage: false,
+  principal: "",
+  term: "360",
+  startDate: today(),
+  overridePayment: false,
+  paymentOverride: "",
+});
+function validateRecurringDraft(
+  d: RecurringDraft,
+  i: number,
+): RecurringInput | string {
+  const amount = parseMoney(d.amount),
+    growth = parsePercent(d.growth);
+  if (!d.name.trim()) return `Record ${i + 1}: name is required.`;
+  if (amount == null || amount <= 0)
+    return `Record ${i + 1}: enter a positive USD amount.`;
+  if (!d.startDate || (d.endDate && d.endDate < d.startDate))
+    return `Record ${i + 1}: enter a valid date range.`;
+  if (growth == null || growth < -10000 || growth > 100000)
+    return `Record ${i + 1}: annual growth is outside the supported range.`;
+  return {
+    id: d.id,
+    categoryId: d.categoryId,
+    accountId: d.accountId || null,
+    name: d.name.trim(),
+    amountCents: amount,
+    frequency: d.frequency,
+    startDate: d.startDate,
+    endDate: d.endDate || null,
+    annualGrowthBps: growth,
+  };
+}
+function validateAssetDraft(d: AssetDraft, i: number): AssetInput | string {
+  const value = parseMoney(d.value),
+    rate = parsePercent(d.rate);
+  if (!d.name.trim()) return `Asset ${i + 1}: name is required.`;
+  if (value == null || value < 0)
+    return `Asset ${i + 1}: enter a non-negative USD value.`;
+  if (rate == null || rate < -10000 || rate > 100000)
+    return `Asset ${i + 1}: annual growth is outside the supported range.`;
+  return {
+    id: d.id,
+    name: d.name.trim(),
+    valueCents: value,
+    annualGrowthBps: rate,
+  };
+}
+function validateDebtDraft(d: DebtDraft, i: number): LiabilityInput | string {
+  const balance = parseMoney(d.balance),
+    rate = parsePercent(d.rate),
+    minimum = parseMoney(d.minimumPayment);
+  if (!d.name.trim()) return `Debt ${i + 1}: name is required.`;
+  if (balance == null || balance < 0)
+    return `Debt ${i + 1}: enter a non-negative balance.`;
+  if (rate == null || rate < 0 || rate > 100000)
+    return `Debt ${i + 1}: interest rate is outside the supported range.`;
+  let mortgage = null,
+    payment = minimum;
+  if (d.mortgage) {
+    const principal = parseMoney(d.principal),
+      months = /^\d+$/.test(d.term) ? Number(d.term) : 0,
+      custom = d.overridePayment ? parseMoney(d.paymentOverride) : null;
+    if (
+      !principal ||
+      principal < balance ||
+      months < 1 ||
+      months > 480 ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(d.startDate)
+    )
+      return `Debt ${i + 1}: enter valid mortgage principal, date, and term.`;
+    if (d.overridePayment && (!custom || custom <= 0))
+      return `Debt ${i + 1}: enter a positive custom payment.`;
+    payment = custom ?? mortgagePayment(principal, rate, months);
+    mortgage = {
+      originalPrincipalCents: principal,
+      termMonths: months,
+      startDate: d.startDate,
+      paymentOverrideCents: custom,
+    };
+  }
+  if (payment == null || (balance > 0 && payment <= 0))
+    return `Debt ${i + 1}: enter a positive monthly payment.`;
+  return {
+    id: d.id,
+    name: d.name.trim(),
+    balanceCents: balance,
+    annualRateBps: rate,
+    minimumPaymentCents: payment,
+    mortgage,
+  };
+}
+function RecurringOnboardingFields({
+  kind,
+  items,
+  setItems,
+  accounts,
+  categoryId,
+}: {
+  kind: "income" | "expense";
+  items: RecurringDraft[];
+  setItems: (x: RecurringDraft[]) => void;
+  accounts: AccountDraft[];
+  categoryId: string;
+}) {
+  return (
+    <>
+      <p className="muted">
+        Optional. Add as many recurring {kind} records as you need.
+      </p>
+      {items.map((d, i) => (
+        <fieldset className="repeat-row" key={d.id}>
+          <legend>
+            {kind === "income" ? "Income" : "Expense"} {i + 1}
+          </legend>
+          <label>
+            Name
+            <input
+              aria-label={`${kind} ${i + 1} name`}
+              value={d.name}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { name: e.target.value }))
+              }
+            />
+          </label>
+          <label>
+            Category
+            <select
+              value={d.categoryId}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { categoryId: e.target.value }))
+              }
+            >
+              <option value={categoryId}>
+                {kind === "income" ? "Other income" : "Other expense"}
+              </option>
+            </select>
+          </label>
+          <label>
+            Account (optional)
+            <select
+              value={d.accountId}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { accountId: e.target.value }))
+              }
+            >
+              <option value="">No specific account</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Amount (USD)
+            <input
+              inputMode="decimal"
+              value={d.amount}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { amount: e.target.value }))
+              }
+            />
+          </label>
+          <label>
+            Frequency
+            <select
+              value={d.frequency}
+              onChange={(e) =>
+                setItems(
+                  updateAt(items, i, {
+                    frequency: e.target.value as RecurringInput["frequency"],
+                  }),
+                )
+              }
+            >
+              {[
+                ["weekly", "Weekly"],
+                ["biweekly", "Every two weeks"],
+                ["monthly", "Monthly"],
+                ["quarterly", "Quarterly"],
+                ["annual", "Annual"],
+              ].map((x) => (
+                <option key={x[0]} value={x[0]}>
+                  {x[1]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Start date
+            <input
+              type="date"
+              value={d.startDate}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { startDate: e.target.value }))
+              }
+            />
+          </label>
+          <label>
+            End date (optional)
+            <input
+              type="date"
+              min={d.startDate}
+              value={d.endDate}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { endDate: e.target.value }))
+              }
+            />
+          </label>
+          <label>
+            Annual growth (%)
+            <input
+              inputMode="decimal"
+              value={d.growth}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { growth: e.target.value }))
+              }
+            />
+          </label>
+          <button
+            type="button"
+            className="quiet danger"
+            onClick={() => setItems(items.filter((_, x) => x !== i))}
+          >
+            Remove {kind} {i + 1}
+          </button>
+        </fieldset>
+      ))}
+      <button
+        type="button"
+        className="quiet"
+        onClick={() => setItems([...items, newRecurringDraft(categoryId)])}
+      >
+        <Plus size={15} /> Add {kind}
+      </button>
+    </>
+  );
+}
+function AssetOnboardingFields({
+  items,
+  setItems,
+}: {
+  items: AssetDraft[];
+  setItems: (x: AssetDraft[]) => void;
+}) {
+  return (
+    <>
+      <p className="muted">
+        Optional. Include property and other assets not represented by an
+        account.
+      </p>
+      {items.map((d, i) => (
+        <fieldset className="repeat-row" key={d.id}>
+          <legend>Asset {i + 1}</legend>
+          <label>
+            Asset name
+            <input
+              value={d.name}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { name: e.target.value }))
+              }
+            />
+          </label>
+          <label>
+            Current value (USD)
+            <input
+              inputMode="decimal"
+              value={d.value}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { value: e.target.value }))
+              }
+            />
+          </label>
+          <label>
+            Annual growth (%)
+            <input
+              inputMode="decimal"
+              value={d.rate}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { rate: e.target.value }))
+              }
+            />
+          </label>
+          <button
+            type="button"
+            className="quiet danger"
+            onClick={() => setItems(items.filter((_, x) => x !== i))}
+          >
+            Remove asset {i + 1}
+          </button>
+        </fieldset>
+      ))}
+      <button
+        type="button"
+        className="quiet"
+        onClick={() =>
+          setItems([
+            ...items,
+            { id: crypto.randomUUID(), name: "", value: "", rate: "0" },
+          ])
+        }
+      >
+        <Plus size={15} /> Add asset
+      </button>
+    </>
+  );
+}
+function DebtOnboardingFields({
+  items,
+  setItems,
+}: {
+  items: DebtDraft[];
+  setItems: (x: DebtDraft[]) => void;
+}) {
+  return (
+    <>
+      <p className="muted">
+        Optional. Mortgage payments include principal and interest only.
+      </p>
+      {items.map((d, i) => (
+        <fieldset className="repeat-row" key={d.id}>
+          <legend>Debt {i + 1}</legend>
+          <label>
+            Debt name
+            <input
+              value={d.name}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { name: e.target.value }))
+              }
+            />
+          </label>
+          <label>
+            Current balance (USD)
+            <input
+              inputMode="decimal"
+              value={d.balance}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { balance: e.target.value }))
+              }
+            />
+          </label>
+          <label>
+            Annual interest rate (%)
+            <input
+              inputMode="decimal"
+              value={d.rate}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { rate: e.target.value }))
+              }
+            />
+          </label>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={d.mortgage}
+              onChange={(e) =>
+                setItems(updateAt(items, i, { mortgage: e.target.checked }))
+              }
+            />{" "}
+            Include mortgage details
+          </label>
+          {d.mortgage ? (
+            <>
+              <label>
+                Original principal (USD)
+                <input
+                  inputMode="decimal"
+                  value={d.principal}
+                  onChange={(e) =>
+                    setItems(updateAt(items, i, { principal: e.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                Mortgage start date
+                <input
+                  type="date"
+                  value={d.startDate}
+                  onChange={(e) =>
+                    setItems(updateAt(items, i, { startDate: e.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                Original term (months)
+                <input
+                  inputMode="numeric"
+                  value={d.term}
+                  onChange={(e) =>
+                    setItems(updateAt(items, i, { term: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={d.overridePayment}
+                  onChange={(e) =>
+                    setItems(
+                      updateAt(items, i, { overridePayment: e.target.checked }),
+                    )
+                  }
+                />{" "}
+                Use custom monthly payment
+              </label>
+              {d.overridePayment && (
+                <label>
+                  Custom monthly payment (USD)
+                  <input
+                    inputMode="decimal"
+                    value={d.paymentOverride}
+                    onChange={(e) =>
+                      setItems(
+                        updateAt(items, i, { paymentOverride: e.target.value }),
+                      )
+                    }
+                  />
+                </label>
+              )}
+            </>
+          ) : (
+            <label>
+              Minimum monthly payment (USD)
+              <input
+                inputMode="decimal"
+                value={d.minimumPayment}
+                onChange={(e) =>
+                  setItems(
+                    updateAt(items, i, { minimumPayment: e.target.value }),
+                  )
+                }
+              />
+            </label>
+          )}
+          <button
+            type="button"
+            className="quiet danger"
+            onClick={() => setItems(items.filter((_, x) => x !== i))}
+          >
+            Remove debt {i + 1}
+          </button>
+        </fieldset>
+      ))}
+      <button
+        type="button"
+        className="quiet"
+        onClick={() => setItems([...items, newDebtDraft()])}
+      >
+        <Plus size={15} /> Add debt
+      </button>
+    </>
+  );
+}
+function OnboardingReview({
+  name,
+  people,
+  filingStatus,
+  accounts,
+  income,
+  expenses,
+  assets,
+  debts,
+  edit,
+}: {
+  name: string;
+  people: BootstrapPerson[];
+  filingStatus: string;
+  accounts: AccountDraft[];
+  income: RecurringDraft[];
+  expenses: RecurringDraft[];
+  assets: AssetDraft[];
+  debts: DebtDraft[];
+  edit: (n: number) => void;
+}) {
+  const sections: [
+    [string, string, number],
+    ...Array<[string, string, number]>,
+  ] = [
+    ["Household", `${name} · ${people.length} member(s)`, 1],
+    ["Tax profile", filingStatus, 2],
+    ["Accounts", `${accounts.length} account(s)`, 3],
+    ["Income", `${income.length} recurring record(s)`, 4],
+    ["Expenses", `${expenses.length} recurring record(s)`, 5],
+    ["Assets", `${assets.length} asset(s)`, 6],
+    ["Debts", `${debts.length} debt(s)`, 7],
+  ];
+  return (
+    <>
+      {sections.map(([title, summary, target]) => (
+        <section className="review-row" key={title}>
+          <div>
+            <strong>{title}</strong>
+            <p className="muted">{summary}</p>
+          </div>
+          <button type="button" className="quiet" onClick={() => edit(target)}>
+            Edit {title.toLowerCase()}
+          </button>
+        </section>
+      ))}
+    </>
+  );
+}
 
 type AccountDraft = BootstrapAccount & { balance: string };
 const accountKinds: {
@@ -1648,12 +2680,15 @@ function parsePercent(value: string): number | undefined {
   const bps = Number(match[2]) * 100 + Number((match[3] ?? "").padEnd(2, "0"));
   return match[1] ? -bps : bps;
 }
-function mortgagePayment(principalCents: number, annualRateBps: number, months: number) {
+function mortgagePayment(
+  principalCents: number,
+  annualRateBps: number,
+  months: number,
+) {
   if (annualRateBps === 0) return Math.round(principalCents / months);
   const monthlyRate = annualRateBps / 120_000;
   return Math.round(
-    (principalCents * monthlyRate) /
-      (1 - Math.pow(1 + monthlyRate, -months)),
+    (principalCents * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -months)),
   );
 }
 const toAccount = (a: AccountDraft): BootstrapAccount => ({
@@ -2324,18 +3359,39 @@ function ActivityView({
   repository,
   onEdit,
   onImport,
+  revealEntryId,
 }: {
   activity: ActivityPosting[];
   accounts: BootstrapAccount[];
   repository: Repository;
   onEdit: (entry: ActivityPosting[]) => void;
   onImport: (el: HTMLElement) => void;
+  revealEntryId: string | null;
 }) {
   const [query, setQuery] = useState("");
   const [account, setAccount] = useState("all");
   const [year, setYear] = useState(String(new Date().getFullYear()));
-  const [exporting,setExporting]=useState(false);
-  const [exportError,setExportError]=useState("");
+  useEffect(() => {
+    if (revealEntryId) {
+      setQuery("");
+      setAccount("all");
+      setYear("all");
+    }
+  }, [revealEntryId]);
+  useEffect(() => {
+    if (!revealEntryId || query || account !== "all" || year !== "all") return;
+    requestAnimationFrame(() => {
+      const target = [
+        ...document.querySelectorAll<HTMLElement>(
+          '[data-search-kind="Activity"]',
+        ),
+      ].find((node) => node.dataset.searchId === revealEntryId);
+      target?.scrollIntoView?.({ block: "center" });
+      target?.focus();
+    });
+  }, [revealEntryId, query, account, year]);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const grouped = [
     ...activity
       .reduce(
@@ -2361,17 +3417,33 @@ function ActivityView({
   const years = [...new Set(activity.map((x) => x.occurredOn.slice(0, 4)))]
     .sort()
     .reverse();
-  async function exportCsv(){
-    if(exporting || !rows.length || !repository.selectActivityExportDestination || !repository.exportActivityCsv)return;
+  async function exportCsv() {
+    if (
+      exporting ||
+      !rows.length ||
+      !repository.selectActivityExportDestination ||
+      !repository.exportActivityCsv
+    )
+      return;
     setExportError("");
     setExporting(true);
-    try{
-      const destination=await repository.selectActivityExportDestination();
-      if(!destination)return;
-      await repository.exportActivityCsv(destination,rows.flat().map(row=>row.postingId));
+    try {
+      const destination = await repository.selectActivityExportDestination();
+      if (!destination) return;
+      await repository.exportActivityCsv(
+        destination,
+        rows.flat().map((row) => row.postingId),
+      );
+    } catch (error) {
+      setExportError(
+        errorMessage(
+          error,
+          "Could not export Activity CSV. Choose another location and try again.",
+        ),
+      );
+    } finally {
+      setExporting(false);
     }
-    catch(error){setExportError(errorMessage(error,"Could not export Activity CSV. Choose another location and try again."));}
-    finally{setExporting(false);}
   }
   return (
     <div className="content">
@@ -2414,9 +3486,15 @@ function ActivityView({
           ))}
         </select>
         <button onClick={(e) => onImport(e.currentTarget)}>Import CSV</button>
-        <button onClick={exportCsv} disabled={!rows.length || exporting}>{exporting?"Exporting…":"Export CSV"}</button>
+        <button onClick={exportCsv} disabled={!rows.length || exporting}>
+          {exporting ? "Exporting…" : "Export CSV"}
+        </button>
       </div>
-      {exportError && <p className="form-error" role="alert">{exportError}</p>}
+      {exportError && (
+        <p className="form-error" role="alert">
+          {exportError}
+        </p>
+      )}
       <section className="card wide">
         <div className="card-title">
           <div>
@@ -2434,6 +3512,8 @@ function ActivityView({
             to = group.find((x) => x.amountCents > 0);
           return (
             <button
+              data-search-kind="Activity"
+              data-search-id={row.entryId}
               className="transaction transaction-action"
               key={row.entryId}
               onClick={() => onEdit(group)}
@@ -2477,26 +3557,503 @@ function ActivityView({
   );
 }
 
-const horizonLabel = (months: number) => months % 12 === 0 ? `${months / 12}-year` : `${months}-month`;
+const horizonLabel = (months: number) =>
+  months % 12 === 0 ? `${months / 12}-year` : `${months}-month`;
 
-function RecurringDialog({state,bootstrap,repository,close,refresh}:{state:DialogState;bootstrap:Bootstrap;repository:Repository;close:()=>void;refresh:()=>Promise<void>}) {
-  const record=state.recurring;
-  const initialKind=record ? (bootstrap.categories.find(c=>c.id===record.categoryId)?.kind === "income" ? "income" : "expense") : state.kind ?? "expense";
-  const [kind,setKind]=useState<"income"|"expense">(initialKind);
-  const available=bootstrap.categories.filter(c=>c.kind===kind);
-  const [name,setName]=useState(record?.name ?? ""),[categoryId,setCategoryId]=useState(record?.categoryId ?? available[0]?.id ?? ""),[accountId,setAccountId]=useState(record?.accountId ?? ""),[amount,setAmount]=useState(record ? String(record.amountCents/100) : ""),[frequency,setFrequency]=useState(record?.frequency ?? "monthly"),[startDate,setStartDate]=useState(record?.startDate ?? today()),[endDate,setEndDate]=useState(record?.endDate ?? ""),[growth,setGrowth]=useState(String((record?.annualGrowthBps ?? 0)/100));
-  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[confirmDelete,setConfirmDelete]=useState(false); const errorRef=useRef<HTMLParagraphElement>(null);
-  useEffect(()=>{if(!available.some(c=>c.id===categoryId))setCategoryId(available[0]?.id??"")},[kind]); useEffect(()=>{if(error)errorRef.current?.focus()},[error]);
-  async function submit(e:FormEvent){e.preventDefault();setError("");const cents=parseMoney(amount),bps=parsePercent(growth);if(!name.trim())return setError("Name is required.");if(!categoryId)return setError(`Create an ${kind} category before adding this input.`);if(cents==null||cents<=0)return setError("Enter a positive USD amount with no more than two decimal places.");if(!startDate||endDate&&endDate<startDate)return setError("End date must be on or after the start date.");if(bps==null||bps < -10000||bps > 100000)return setError("Enter an annual growth rate within the supported range.");setBusy(true);try{const input={id:record?.id??crypto.randomUUID(),categoryId,accountId:accountId||null,name:name.trim(),amountCents:cents,frequency,startDate,endDate:endDate||null,annualGrowthBps:bps};if(record)await repository.updateRecurring?.({...input,expectedRevision:record.revision});else await repository.createRecurring?.(input);await refresh();close()}catch(x){setError(errorMessage(x,"Could not save this planning input."))}finally{setBusy(false)}}
-  async function remove(){setBusy(true);setError("");try{await repository.deleteRecurring?.({id:record!.id,expectedRevision:record!.revision});await refresh();close()}catch(x){setError(errorMessage(x,"Could not delete this planning input."));setConfirmDelete(false)}finally{setBusy(false)}}
-  return <div className="modal-backdrop"><section className="card modal entry-modal" role={confirmDelete?"alertdialog":"dialog"} aria-modal="true" aria-labelledby="recurring-title"><h2 id="recurring-title">{confirmDelete?"Delete planning input?":record?"Edit planning input":"Add planning input"}</h2>{error&&<p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}{confirmDelete?<><p>This permanently removes {record?.name} from future projections.</p><div className="actions"><button disabled={busy} onClick={()=>setConfirmDelete(false)}>Cancel</button><button className="danger" disabled={busy} onClick={remove}>{busy?"Deleting…":"Delete permanently"}</button></div></>:<form onSubmit={submit}><label>Type<select value={kind} onChange={e=>setKind(e.target.value as typeof kind)}><option value="income">Income</option><option value="expense">Expense</option></select></label><label>Name<input required value={name} onChange={e=>setName(e.target.value)}/></label><label>Category<select aria-label="Recurring category" value={categoryId} onChange={e=>setCategoryId(e.target.value)}>{available.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Account (optional)<select value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">No specific account</option>{bootstrap.accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Amount (USD)<input required inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)}/></label><label>Frequency<select value={frequency} onChange={e=>setFrequency(e.target.value as typeof frequency)}><option value="weekly">Weekly</option><option value="biweekly">Every two weeks</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annual</option></select></label><label>Start date<input required type="date" value={startDate} onChange={e=>setStartDate(e.target.value)}/></label><label>End date (optional)<input type="date" value={endDate} min={startDate} onChange={e=>setEndDate(e.target.value)}/></label><label>Annual growth (%)<input required inputMode="decimal" value={growth} onChange={e=>setGrowth(e.target.value)}/></label><div className="actions">{record&&<button type="button" className="danger-link" disabled={busy} onClick={()=>setConfirmDelete(true)}>Delete</button>}<button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy?"Saving…":"Save"}</button></div></form>}</section></div>
+function RecurringDialog({
+  state,
+  bootstrap,
+  repository,
+  close,
+  refresh,
+}: {
+  state: DialogState;
+  bootstrap: Bootstrap;
+  repository: Repository;
+  close: () => void;
+  refresh: () => Promise<void>;
+}) {
+  const record = state.recurring;
+  const initialKind = record
+    ? bootstrap.categories.find((c) => c.id === record.categoryId)?.kind ===
+      "income"
+      ? "income"
+      : "expense"
+    : (state.kind ?? "expense");
+  const [kind, setKind] = useState<"income" | "expense">(initialKind);
+  const available = bootstrap.categories.filter((c) => c.kind === kind);
+  const [name, setName] = useState(record?.name ?? ""),
+    [categoryId, setCategoryId] = useState(
+      record?.categoryId ?? available[0]?.id ?? "",
+    ),
+    [accountId, setAccountId] = useState(record?.accountId ?? ""),
+    [amount, setAmount] = useState(
+      record ? String(record.amountCents / 100) : "",
+    ),
+    [frequency, setFrequency] = useState(record?.frequency ?? "monthly"),
+    [startDate, setStartDate] = useState(record?.startDate ?? today()),
+    [endDate, setEndDate] = useState(record?.endDate ?? ""),
+    [growth, setGrowth] = useState(
+      String((record?.annualGrowthBps ?? 0) / 100),
+    );
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [confirmDelete, setConfirmDelete] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (!available.some((c) => c.id === categoryId))
+      setCategoryId(available[0]?.id ?? "");
+  }, [kind]);
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    const cents = parseMoney(amount),
+      bps = parsePercent(growth);
+    if (!name.trim()) return setError("Name is required.");
+    if (!categoryId)
+      return setError(`Create an ${kind} category before adding this input.`);
+    if (cents == null || cents <= 0)
+      return setError(
+        "Enter a positive USD amount with no more than two decimal places.",
+      );
+    if (!startDate || (endDate && endDate < startDate))
+      return setError("End date must be on or after the start date.");
+    if (bps == null || bps < -10000 || bps > 100000)
+      return setError(
+        "Enter an annual growth rate within the supported range.",
+      );
+    setBusy(true);
+    try {
+      const input = {
+        id: record?.id ?? crypto.randomUUID(),
+        categoryId,
+        accountId: accountId || null,
+        name: name.trim(),
+        amountCents: cents,
+        frequency,
+        startDate,
+        endDate: endDate || null,
+        annualGrowthBps: bps,
+      };
+      if (record)
+        await repository.updateRecurring?.({
+          ...input,
+          expectedRevision: record.revision,
+        });
+      else await repository.createRecurring?.(input);
+      await refresh();
+      close();
+    } catch (x) {
+      setError(errorMessage(x, "Could not save this planning input."));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove() {
+    setBusy(true);
+    setError("");
+    try {
+      await repository.deleteRecurring?.({
+        id: record!.id,
+        expectedRevision: record!.revision,
+      });
+      await refresh();
+      close();
+    } catch (x) {
+      setError(errorMessage(x, "Could not delete this planning input."));
+      setConfirmDelete(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="modal-backdrop">
+      <section
+        className="card modal entry-modal"
+        role={confirmDelete ? "alertdialog" : "dialog"}
+        aria-modal="true"
+        aria-labelledby="recurring-title"
+      >
+        <h2 id="recurring-title">
+          {confirmDelete
+            ? "Delete planning input?"
+            : record
+              ? "Edit planning input"
+              : "Add planning input"}
+        </h2>
+        {error && (
+          <p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>
+            {error}
+          </p>
+        )}
+        {confirmDelete ? (
+          <>
+            <p>
+              This permanently removes {record?.name} from future projections.
+            </p>
+            <div className="actions">
+              <button disabled={busy} onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </button>
+              <button className="danger" disabled={busy} onClick={remove}>
+                {busy ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={submit}>
+            <label>
+              Type
+              <select
+                value={kind}
+                onChange={(e) => setKind(e.target.value as typeof kind)}
+              >
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+            </label>
+            <label>
+              Name
+              <input
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label>
+              Category
+              <select
+                aria-label="Recurring category"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+              >
+                {available.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Account (optional)
+              <select
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+              >
+                <option value="">No specific account</option>
+                {bootstrap.accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Amount (USD)
+              <input
+                required
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </label>
+            <label>
+              Frequency
+              <select
+                value={frequency}
+                onChange={(e) =>
+                  setFrequency(e.target.value as typeof frequency)
+                }
+              >
+                <option value="weekly">Weekly</option>
+                <option value="biweekly">Every two weeks</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="annual">Annual</option>
+              </select>
+            </label>
+            <label>
+              Start date
+              <input
+                required
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </label>
+            <label>
+              End date (optional)
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </label>
+            <label>
+              Annual growth (%)
+              <input
+                required
+                inputMode="decimal"
+                value={growth}
+                onChange={(e) => setGrowth(e.target.value)}
+              />
+            </label>
+            <div className="actions">
+              {record && (
+                <button
+                  type="button"
+                  className="danger-link"
+                  disabled={busy}
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  Delete
+                </button>
+              )}
+              <button type="button" disabled={busy} onClick={close}>
+                Cancel
+              </button>
+              <button className="primary" disabled={busy}>
+                {busy ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </form>
+        )}
+      </section>
+    </div>
+  );
 }
 
-function ScenarioDialog({state,scenarios,repository,close,refresh,select}:{state:DialogState;scenarios:ScenarioRecord[];repository:Repository;close:()=>void;refresh:()=>Promise<void>;select:(id:string)=>void}) {
-  const editing=state.type==="scenario-edit", record=state.scenario; const [name,setName]=useState(editing?record?.name??"":`${record?.name ?? "Baseline"} copy`),[clone,setClone]=useState(true),[inflation,setInflation]=useState(String((record?.assumptions.inflationBps??250)/100)),[threshold,setThreshold]=useState(String((record?.assumptions.thresholdInflationBps??250)/100)),[horizon,setHorizon]=useState(String(record?.horizonMonths??120)),[busy,setBusy]=useState(false),[error,setError]=useState(""),[confirmDelete,setConfirmDelete]=useState(false);const errorRef=useRef<HTMLParagraphElement>(null);useEffect(()=>{if(error)errorRef.current?.focus()},[error]);
-  async function submit(e:FormEvent){e.preventDefault();setError("");if(!name.trim())return setError("Scenario name is required.");if(scenarios.some(s=>s.id!==record?.id&&s.name.trim().toLowerCase()===name.trim().toLowerCase()))return setError("A scenario with this name already exists.");setBusy(true);try{if(editing){const i=parsePercent(inflation),t=parsePercent(threshold),h=/^\d+$/.test(horizon)?Number(horizon):0;if(i==null||t==null||i < -10000||i > 100000||t < -10000||t > 100000)throw {message:"Enter assumption rates within the supported range."};if(h<1||h>480)throw {message:"Projection horizon must be between 1 and 480 months."};await repository.updateScenario?.({id:record!.id,name:name.trim(),assumptions:{inflationBps:i,thresholdInflationBps:t},horizonMonths:h,events:record!.events,allocations:record!.allocations,expectedRevision:record!.revision});await refresh();select(record!.id)}else{const id=crypto.randomUUID();await repository.createScenario?.({id,name:name.trim(),cloneFromId:clone?record?.id??null:null});await refresh();select(id)}close()}catch(x){setError(errorMessage(x,"Could not save this scenario."))}finally{setBusy(false)}}
-  async function remove(){setBusy(true);setError("");try{await repository.deleteScenario?.({id:record!.id,expectedRevision:record!.revision});await refresh();const next=scenarios.find(s=>s.id!==record!.id)?.id??"";select(next);close()}catch(x){setError(errorMessage(x,"Could not delete this scenario."));setConfirmDelete(false)}finally{setBusy(false)}}
-  return <div className="modal-backdrop"><section className="card modal entry-modal" role={confirmDelete?"alertdialog":"dialog"} aria-modal="true" aria-labelledby="scenario-title"><h2 id="scenario-title">{confirmDelete?"Delete scenario?":editing?"Edit scenario":"New scenario"}</h2>{error&&<p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}{confirmDelete?<><p>This permanently removes {record?.name}. The baseline and planning inputs remain.</p><div className="actions"><button disabled={busy} onClick={()=>setConfirmDelete(false)}>Cancel</button><button className="danger" disabled={busy} onClick={remove}>{busy?"Deleting…":"Delete permanently"}</button></div></>:<form onSubmit={submit}><label>Name<input required disabled={record?.isBaseline} value={name} onChange={e=>setName(e.target.value)}/></label>{!editing&&<label className="check"><input type="checkbox" checked={clone} onChange={e=>setClone(e.target.checked)}/> Clone active scenario settings</label>}{editing&&<><label>Inflation (%)<input inputMode="decimal" required value={inflation} onChange={e=>setInflation(e.target.value)}/></label><label>Tax-threshold inflation (%)<input inputMode="decimal" required value={threshold} onChange={e=>setThreshold(e.target.value)}/></label><label>Projection horizon (months)<input type="number" min="1" max="480" required value={horizon} onChange={e=>setHorizon(e.target.value)}/></label></>}<div className="actions">{editing&&!record?.isBaseline&&<button type="button" className="danger-link" disabled={busy} onClick={()=>setConfirmDelete(true)}>Delete</button>}<button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy?"Saving…":editing?"Save":"Create scenario"}</button></div></form>}</section></div>
+function ScenarioDialog({
+  state,
+  scenarios,
+  repository,
+  close,
+  refresh,
+  select,
+}: {
+  state: DialogState;
+  scenarios: ScenarioRecord[];
+  repository: Repository;
+  close: () => void;
+  refresh: () => Promise<void>;
+  select: (id: string) => void;
+}) {
+  const editing = state.type === "scenario-edit",
+    record = state.scenario;
+  const [name, setName] = useState(
+      editing ? (record?.name ?? "") : `${record?.name ?? "Baseline"} copy`,
+    ),
+    [clone, setClone] = useState(true),
+    [inflation, setInflation] = useState(
+      String((record?.assumptions.inflationBps ?? 250) / 100),
+    ),
+    [threshold, setThreshold] = useState(
+      String((record?.assumptions.thresholdInflationBps ?? 250) / 100),
+    ),
+    [horizon, setHorizon] = useState(String(record?.horizonMonths ?? 120)),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [confirmDelete, setConfirmDelete] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (!name.trim()) return setError("Scenario name is required.");
+    if (
+      scenarios.some(
+        (s) =>
+          s.id !== record?.id &&
+          s.name.trim().toLowerCase() === name.trim().toLowerCase(),
+      )
+    )
+      return setError("A scenario with this name already exists.");
+    setBusy(true);
+    try {
+      if (editing) {
+        const i = parsePercent(inflation),
+          t = parsePercent(threshold),
+          h = /^\d+$/.test(horizon) ? Number(horizon) : 0;
+        if (
+          i == null ||
+          t == null ||
+          i < -10000 ||
+          i > 100000 ||
+          t < -10000 ||
+          t > 100000
+        )
+          throw {
+            message: "Enter assumption rates within the supported range.",
+          };
+        if (h < 1 || h > 480)
+          throw {
+            message: "Projection horizon must be between 1 and 480 months.",
+          };
+        await repository.updateScenario?.({
+          id: record!.id,
+          name: name.trim(),
+          assumptions: { inflationBps: i, thresholdInflationBps: t },
+          horizonMonths: h,
+          events: record!.events,
+          allocations: record!.allocations,
+          expectedRevision: record!.revision,
+        });
+        await refresh();
+        select(record!.id);
+      } else {
+        const id = crypto.randomUUID();
+        await repository.createScenario?.({
+          id,
+          name: name.trim(),
+          cloneFromId: clone ? (record?.id ?? null) : null,
+        });
+        await refresh();
+        select(id);
+      }
+      close();
+    } catch (x) {
+      setError(errorMessage(x, "Could not save this scenario."));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove() {
+    setBusy(true);
+    setError("");
+    try {
+      await repository.deleteScenario?.({
+        id: record!.id,
+        expectedRevision: record!.revision,
+      });
+      await refresh();
+      const next = scenarios.find((s) => s.id !== record!.id)?.id ?? "";
+      select(next);
+      close();
+    } catch (x) {
+      setError(errorMessage(x, "Could not delete this scenario."));
+      setConfirmDelete(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="modal-backdrop">
+      <section
+        className="card modal entry-modal"
+        role={confirmDelete ? "alertdialog" : "dialog"}
+        aria-modal="true"
+        aria-labelledby="scenario-title"
+      >
+        <h2 id="scenario-title">
+          {confirmDelete
+            ? "Delete scenario?"
+            : editing
+              ? "Edit scenario"
+              : "New scenario"}
+        </h2>
+        {error && (
+          <p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>
+            {error}
+          </p>
+        )}
+        {confirmDelete ? (
+          <>
+            <p>
+              This permanently removes {record?.name}. The baseline and planning
+              inputs remain.
+            </p>
+            <div className="actions">
+              <button disabled={busy} onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </button>
+              <button className="danger" disabled={busy} onClick={remove}>
+                {busy ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={submit}>
+            <label>
+              Name
+              <input
+                required
+                disabled={record?.isBaseline}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            {!editing && (
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={clone}
+                  onChange={(e) => setClone(e.target.checked)}
+                />{" "}
+                Clone active scenario settings
+              </label>
+            )}
+            {editing && (
+              <>
+                <label>
+                  Inflation (%)
+                  <input
+                    inputMode="decimal"
+                    required
+                    value={inflation}
+                    onChange={(e) => setInflation(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Tax-threshold inflation (%)
+                  <input
+                    inputMode="decimal"
+                    required
+                    value={threshold}
+                    onChange={(e) => setThreshold(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Projection horizon (months)
+                  <input
+                    type="number"
+                    min="1"
+                    max="480"
+                    required
+                    value={horizon}
+                    onChange={(e) => setHorizon(e.target.value)}
+                  />
+                </label>
+              </>
+            )}
+            <div className="actions">
+              {editing && !record?.isBaseline && (
+                <button
+                  type="button"
+                  className="danger-link"
+                  disabled={busy}
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  Delete
+                </button>
+              )}
+              <button type="button" disabled={busy} onClick={close}>
+                Cancel
+              </button>
+              <button className="primary" disabled={busy}>
+                {busy ? "Saving…" : editing ? "Save" : "Create scenario"}
+              </button>
+            </div>
+          </form>
+        )}
+      </section>
+    </div>
+  );
 }
 
 function PlanView({
@@ -2533,32 +4090,176 @@ function PlanView({
   onPlanScenario: (el: HTMLElement) => void;
 }) {
   const [comparisonIds, setComparisonIds] = useState<string[]>([]);
-  const comparisons = scenarios.filter(s => comparisonIds.includes(s.id)).map(s => ({ scenario: s, years: ProjectionEngine.calculate(snapshot, s) }));
-  const comparisonYears = [...new Set(comparisons.flatMap(x => x.years.map(y => y.year)))].sort();
+  const comparisons = scenarios
+    .filter((s) => comparisonIds.includes(s.id))
+    .map((s) => ({
+      scenario: s,
+      years: ProjectionEngine.calculate(snapshot, s),
+    }));
+  const comparisonYears = [
+    ...new Set(comparisons.flatMap((x) => x.years.map((y) => y.year))),
+  ].sort();
   return (
     <div className="content">
       <div className="scenario-bar">
         <div>
           <span className="label assumption">Assumptions</span>
-          <h3>{scenarios.find(s => s.id === selectedScenarioId)?.name ?? "Baseline"} plan</h3>
-          {scenarios.length > 0 && <select aria-label="Active scenario" value={selectedScenarioId} onChange={event => onSelectScenario(event.target.value)}>{scenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
-          <div className="inline-actions"><button onClick={e => onAddScenario(e.currentTarget)}>New scenario</button><button disabled={!scenarios.length} onClick={e => onEditScenario(e.currentTarget)}>Edit scenario</button><button disabled={!scenarios.length} onClick={e => onPlanScenario(e.currentTarget)}>Events &amp; allocations</button></div>
+          <h3>
+            {scenarios.find((s) => s.id === selectedScenarioId)?.name ??
+              "Baseline"}{" "}
+            plan
+          </h3>
+          {scenarios.length > 0 && (
+            <select
+              data-search-kind="Scenario"
+              data-search-id={selectedScenarioId}
+              aria-label="Active scenario"
+              value={selectedScenarioId}
+              onChange={(event) => onSelectScenario(event.target.value)}
+            >
+              {scenarios.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="inline-actions">
+            <button onClick={(e) => onAddScenario(e.currentTarget)}>
+              New scenario
+            </button>
+            <button
+              disabled={!scenarios.length}
+              onClick={(e) => onEditScenario(e.currentTarget)}
+            >
+              Edit scenario
+            </button>
+            <button
+              disabled={!scenarios.length}
+              onClick={(e) => onPlanScenario(e.currentTarget)}
+            >
+              Events &amp; allocations
+            </button>
+          </div>
         </div>
-        <div aria-label="Compare scenarios">{scenarios.map(s => <label key={s.id}><input type="checkbox" checked={comparisonIds.includes(s.id)} disabled={!comparisonIds.includes(s.id) && comparisonIds.length >= 3} onChange={() => setComparisonIds(ids => ids.includes(s.id) ? ids.filter(id => id !== s.id) : [...ids, s.id])}/>{s.name}</label>)}</div>
+        <div aria-label="Compare scenarios">
+          {scenarios.map((s) => (
+            <label key={s.id}>
+              <input
+                type="checkbox"
+                checked={comparisonIds.includes(s.id)}
+                disabled={
+                  !comparisonIds.includes(s.id) && comparisonIds.length >= 3
+                }
+                onChange={() =>
+                  setComparisonIds((ids) =>
+                    ids.includes(s.id)
+                      ? ids.filter((id) => id !== s.id)
+                      : [...ids, s.id],
+                  )
+                }
+              />
+              {s.name}
+            </label>
+          ))}
+        </div>
       </div>
-      {comparisons.length > 1 && <section className="card wide" aria-label="Scenario comparison"><h3>Scenario comparison</h3><div className="year-table"><div className="year-row table-head"><span>Year</span>{comparisons.map(x => <span key={x.scenario.id}>{x.scenario.name}</span>)}</div>{comparisonYears.map(year => <div className="year-row" key={year}><span>{year}</span>{comparisons.map(x => { const row=x.years.find(y => y.year===year); return <span key={x.scenario.id}>{row ? `${money(row.endingNetWorthCents,true)} · deficit ${money(row.unfundedDeficitCents,true)}` : "—"}</span>})}</div>)}</div></section>}
+      {comparisons.length > 1 && (
+        <section className="card wide" aria-label="Scenario comparison">
+          <h3>Scenario comparison</h3>
+          <div className="year-table">
+            <div className="year-row table-head">
+              <span>Year</span>
+              {comparisons.map((x) => (
+                <span key={x.scenario.id}>{x.scenario.name}</span>
+              ))}
+            </div>
+            {comparisonYears.map((year) => (
+              <div className="year-row" key={year}>
+                <span>{year}</span>
+                {comparisons.map((x) => {
+                  const row = x.years.find((y) => y.year === year);
+                  return (
+                    <span key={x.scenario.id}>
+                      {row
+                        ? `${money(row.endingNetWorthCents, true)} · deficit ${money(row.unfundedDeficitCents, true)}`
+                        : "—"}
+                    </span>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="card wide" aria-label="Planning inputs">
-        <div className="card-title"><div><span className="label assumption">Inputs</span><h3>Planning inputs</h3></div><div className="inline-actions"><button onClick={e => onAddRecurring("income", e.currentTarget)}>Add income</button><button onClick={e => onAddRecurring("expense", e.currentTarget)}>Add expense</button></div></div>
+        <div className="card-title">
+          <div>
+            <span className="label assumption">Inputs</span>
+            <h3>Planning inputs</h3>
+          </div>
+          <div className="inline-actions">
+            <button onClick={(e) => onAddRecurring("income", e.currentTarget)}>
+              Add income
+            </button>
+            <button onClick={(e) => onAddRecurring("expense", e.currentTarget)}>
+              Add expense
+            </button>
+          </div>
+        </div>
         <div className="planning-inputs">
-          {recurring.map(entry => { const category=categories.find(c=>c.id===entry.categoryId); const account=accounts.find(a=>a.id===entry.accountId); return <button className="transaction transaction-action" key={entry.id} onClick={e=>onEditRecurring(entry,e.currentTarget)} aria-label={`Edit recurring ${entry.name}`}><span className="transaction-icon">{category?.kind === "income" ? <ArrowDownRight size={17}/> : <ArrowUpRight size={17}/>}</span><div><strong>{entry.name}</strong><small>{category?.name ?? "Uncategorized"}{account ? ` · ${account.name}` : ""} · {entry.frequency}</small></div><b className={category?.kind === "income" ? "positive" : ""}>{money(category?.kind === "income" ? entry.amountCents : -entry.amountCents)}</b></button>})}
-          {!recurring.length && <p className="empty">No recurring planning inputs yet.</p>}
+          {recurring.map((entry) => {
+            const category = categories.find((c) => c.id === entry.categoryId);
+            const account = accounts.find((a) => a.id === entry.accountId);
+            return (
+              <button
+                data-search-kind="Recurring"
+                data-search-id={entry.id}
+                className="transaction transaction-action"
+                key={entry.id}
+                onClick={(e) => onEditRecurring(entry, e.currentTarget)}
+                aria-label={`Edit recurring ${entry.name}`}
+              >
+                <span className="transaction-icon">
+                  {category?.kind === "income" ? (
+                    <ArrowDownRight size={17} />
+                  ) : (
+                    <ArrowUpRight size={17} />
+                  )}
+                </span>
+                <div>
+                  <strong>{entry.name}</strong>
+                  <small>
+                    {category?.name ?? "Uncategorized"}
+                    {account ? ` · ${account.name}` : ""} · {entry.frequency}
+                  </small>
+                </div>
+                <b className={category?.kind === "income" ? "positive" : ""}>
+                  {money(
+                    category?.kind === "income"
+                      ? entry.amountCents
+                      : -entry.amountCents,
+                  )}
+                </b>
+              </button>
+            );
+          })}
+          {!recurring.length && (
+            <p className="empty">No recurring planning inputs yet.</p>
+          )}
         </div>
       </section>
       <section className="card wide">
         <div className="card-title">
           <div>
             <span className="label projected">Projected</span>
-            <h3>{horizonLabel(scenarios.find(s => s.id === selectedScenarioId)?.horizon.months ?? 120)} outlook</h3>
+            <h3>
+              {horizonLabel(
+                scenarios.find((s) => s.id === selectedScenarioId)?.horizon
+                  .months ?? 120,
+              )}{" "}
+              outlook
+            </h3>
           </div>
           <small>Click a year for monthly detail</small>
         </div>
@@ -2688,8 +4389,12 @@ function NetWorth({
             <h3>Accounts & assets</h3>
           </div>
           <div className="actions">
-            <button onClick={(e) => onAddAsset(e.currentTarget)}><Plus size={14} /> Add asset</button>
-            <button onClick={(e) => onAdd(e.currentTarget)}><Plus size={14} /> Add account</button>
+            <button onClick={(e) => onAddAsset(e.currentTarget)}>
+              <Plus size={14} /> Add asset
+            </button>
+            <button onClick={(e) => onAdd(e.currentTarget)}>
+              <Plus size={14} /> Add account
+            </button>
           </div>
         </div>
         {snapshot.accounts
@@ -2705,6 +4410,8 @@ function NetWorth({
               </div>
               <b>{money(a.balanceCents)}</b>
               <button
+                data-search-kind="Account"
+                data-search-id={a.id}
                 onClick={(e) =>
                   onEdit(
                     accounts.find((x) => x.id === a.id)!,
@@ -2736,7 +4443,13 @@ function NetWorth({
               <small>Asset</small>
             </div>
             <b>{money(a.valueCents)}</b>
-            <button onClick={(e) => onEditAsset(a, e.currentTarget)}>Edit</button>
+            <button
+              data-search-kind="Asset"
+              data-search-id={a.id}
+              onClick={(e) => onEditAsset(a, e.currentTarget)}
+            >
+              Edit
+            </button>
           </div>
         ))}
         {!snapshot.accounts.length && !snapshot.assets.length && (
@@ -2744,62 +4457,74 @@ function NetWorth({
         )}
       </section>
       <section className="card wide">
-          <div className="card-title">
-            <div>
-              <span className="label actual">Current balance</span>
-              <h3>Credit & liabilities</h3>
-            </div>
-            <button onClick={(e) => onAddLiability(e.currentTarget)}><Plus size={14} /> Add debt</button>
+        <div className="card-title">
+          <div>
+            <span className="label actual">Current balance</span>
+            <h3>Credit & liabilities</h3>
           </div>
-          {snapshot.accounts
-            .filter((a) => a.balanceCents < 0)
-            .map((a) => (
-              <div className="account" key={a.id}>
-                <span className="transaction-icon">
-                  <WalletCards size={17} />
-                </span>
-                <div>
-                  <strong>{a.name}</strong>
-                  <small>Credit balance</small>
-                </div>
-                <b>{money(-a.balanceCents)}</b>
-                <button
-                  onClick={(e) =>
-                    onEdit(
-                      accounts.find((x) => x.id === a.id)!,
-                      e.currentTarget,
-                    )
-                  }
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={(e) =>
-                    onReconcile(
-                      accounts.find((x) => x.id === a.id)!,
-                      e.currentTarget,
-                    )
-                  }
-                >
-                  Reconcile
-                </button>
-              </div>
-            ))}
-          {liabilityRecords.map((l) => (
-            <div className="account" key={l.id}>
+          <button onClick={(e) => onAddLiability(e.currentTarget)}>
+            <Plus size={14} /> Add debt
+          </button>
+        </div>
+        {snapshot.accounts
+          .filter((a) => a.balanceCents < 0)
+          .map((a) => (
+            <div className="account" key={a.id}>
               <span className="transaction-icon">
-                <Building2 size={17} />
+                <WalletCards size={17} />
               </span>
               <div>
-                <strong>{l.name}</strong>
-                <small>Liability</small>
+                <strong>{a.name}</strong>
+                <small>Credit balance</small>
               </div>
-              <b>{money(l.balanceCents)}</b>
-              <button onClick={(e) => onEditLiability(l, e.currentTarget)}>Edit</button>
+              <b>{money(-a.balanceCents)}</b>
+              <button
+                data-search-kind="Account"
+                data-search-id={a.id}
+                onClick={(e) =>
+                  onEdit(
+                    accounts.find((x) => x.id === a.id)!,
+                    e.currentTarget,
+                  )
+                }
+              >
+                Edit
+              </button>
+              <button
+                onClick={(e) =>
+                  onReconcile(
+                    accounts.find((x) => x.id === a.id)!,
+                    e.currentTarget,
+                  )
+                }
+              >
+                Reconcile
+              </button>
             </div>
           ))}
-          {debt === 0 && <p className="empty">No credit balances or liabilities.</p>}
-        </section>
+        {liabilityRecords.map((l) => (
+          <div className="account" key={l.id}>
+            <span className="transaction-icon">
+              <Building2 size={17} />
+            </span>
+            <div>
+              <strong>{l.name}</strong>
+              <small>Liability</small>
+            </div>
+            <b>{money(l.balanceCents)}</b>
+            <button
+              data-search-kind="Debt"
+              data-search-id={l.id}
+              onClick={(e) => onEditLiability(l, e.currentTarget)}
+            >
+              Edit
+            </button>
+          </div>
+        ))}
+        {debt === 0 && (
+          <p className="empty">No credit balances or liabilities.</p>
+        )}
+      </section>
     </div>
   );
 }

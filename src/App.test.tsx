@@ -117,7 +117,7 @@ describe("LifeLook shell", () => {
   it("keeps only genuinely unavailable controls disabled", async () => {
     render(<App repository={testRepository}/>);
     await screen.findByRole("heading",{name:"Overview"});
-    expect(screen.getByRole("button",{name:/Search \(not yet available\)/})).toBeDisabled();
+    expect(screen.getByRole("button",{name:"Search workspace"})).toBeEnabled();
     expect(screen.getByRole("button",{name:"Add"})).toBeEnabled();
     expect(screen.getByRole("button",{name:/Test Person/})).toBeDisabled();
     fireEvent.click(screen.getByRole("button",{name:/Net Worth/}));

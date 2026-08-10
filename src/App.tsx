@@ -55,6 +55,7 @@ import {
   type LiabilityInput,
   type TaxProfile,
   type ScenarioRecord,
+  type WorkspaceInfo,
   emptySettings,
 } from "./repository";
 import { ScenarioPlanningDialog } from "./ScenarioPlanningDialog";
@@ -65,6 +66,7 @@ import {
 } from "./GlobalSearch";
 
 type View = "Overview" | "Activity" | "Plan" | "Net Worth" | "Settings";
+const localIsoDate=()=>{const now=new Date(),offset=now.getTimezoneOffset()*60000;return new Date(now.valueOf()-offset).toISOString().slice(0,10)};
 const nav: [View, typeof LayoutDashboard][] = [
   ["Overview", LayoutDashboard],
   ["Activity", Activity],
@@ -84,8 +86,10 @@ const baseline: Scenario = {
   id: "base",
   name: "Baseline",
   assumptions: { inflationBps: 250, thresholdInflationBps: 250 },
+  assumptionsInherited: true,
   events: [],
   allocations: [{ accountId: "savings", percentBps: 10000, priority: 1 }],
+  withdrawals: [],
   horizon: { start: "2025-01", months: 120 },
 };
 const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
@@ -96,6 +100,7 @@ const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
   recurring: (value.recurring ?? []).map((entry) => ({
     ...entry,
     frequency: entry.frequency ?? "monthly",
+    taxTreatment: entry.taxTreatment ?? "none",
   })),
   assets: value.assets ?? [],
   liabilities: value.liabilities ?? [],
@@ -262,6 +267,13 @@ function Workspace({
   const searchIndex = useMemo(() => buildSearchIndex(bootstrap), [bootstrap]);
   const searchButton = useRef<HTMLButtonElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
+  const profileButton = useRef<HTMLButtonElement>(null);
+  const profileMenu = useRef<HTMLDivElement>(null);
+  const [profileOpen,setProfileOpen]=useState(false);
+  const [workspaceInfo,setWorkspaceInfo]=useState<WorkspaceInfo|null>(null);
+  const [profileResult,setProfileResult]=useState("");
+  useEffect(()=>{if(!profileOpen)return;repository.workspaceInfo?.().then(setWorkspaceInfo).catch(error=>setProfileResult(errorMessage(error,"Could not read workspace information.")));requestAnimationFrame(()=>profileMenu.current?.querySelector<HTMLElement>("button")?.focus());const dismiss=(event:MouseEvent)=>{if(!profileMenu.current?.contains(event.target as Node)&&!profileButton.current?.contains(event.target as Node)){setProfileOpen(false);profileButton.current?.focus()}};const escape=(event:globalThis.KeyboardEvent)=>{if(event.key==="Escape"){setProfileOpen(false);profileButton.current?.focus()}};document.addEventListener("mousedown",dismiss);document.addEventListener("keydown",escape);return()=>{document.removeEventListener("mousedown",dismiss);document.removeEventListener("keydown",escape)}},[profileOpen,repository]);
+  async function backupFromProfile(){setProfileResult("");try{const destination=await repository.selectBackupDestination?.();if(!destination)return;await repository.backupDatabase?.(destination);setProfileResult("Backup created successfully.")}catch(error){setProfileResult(errorMessage(error,"Could not create the backup."))}}
   const openDialog = (state: DialogState, invoker?: HTMLElement | null) =>
     setDialog({
       ...state,
@@ -329,6 +341,7 @@ function Workspace({
         ...r,
         accountId: r.accountId ?? undefined,
         endDate: r.endDate ?? undefined,
+        taxTreatment: r.taxTreatment ?? "none",
         kind:
           bootstrap.categories.find((c) => c.id === r.categoryId)?.kind ===
           "income"
@@ -346,6 +359,7 @@ function Workspace({
             }
           : undefined,
       })),
+      actuals: bootstrap.activity.map((posting) => ({date:posting.occurredOn,kind:posting.kind,amountCents:posting.amountCents})),
     }),
     [bootstrap],
   );
@@ -359,11 +373,13 @@ function Workspace({
           thresholdInflationBps:
             record.assumptions.thresholdInflationBps ?? 250,
         },
+        assumptionsInherited: false,
         events: record.events,
         allocations: record.allocations.map((rule) => ({
           ...rule,
           targetBalanceCents: rule.targetBalanceCents ?? undefined,
         })),
+        withdrawals: record.withdrawals ?? [],
         horizon: {
           start: new Date().toISOString().slice(0, 7),
           months: record.horizonMonths,
@@ -387,7 +403,7 @@ function Workspace({
   const projections = useMemo(
     () =>
       bootstrap.taxProfile
-        ? ProjectionEngine.calculate(snapshot, selectedScenario)
+        ? ProjectionEngine.calculate(snapshot, selectedScenario, localIsoDate())
         : null,
     [snapshot, bootstrap.taxProfile, selectedScenario],
   );
@@ -421,9 +437,11 @@ function Workspace({
         </nav>
         <div className="aside-bottom">
           <button
+            ref={profileButton}
             className="profile"
-            disabled
-            title="Profile menu is not available in this build"
+            aria-haspopup="menu"
+            aria-expanded={profileOpen}
+            onClick={()=>setProfileOpen(open=>!open)}
           >
             <span>
               {bootstrap.people[0]?.name.slice(0, 2).toUpperCase() || "LL"}
@@ -434,6 +452,7 @@ function Workspace({
             </div>
             <MoreHorizontal size={17} />
           </button>
+          {profileOpen&&<div className="profile-menu card" role="menu" aria-label="Workspace" ref={profileMenu}><strong>{workspaceInfo?.householdName??bootstrap.household?.name??"Local household"}</strong><small>Local workspace</small><code>{workspaceInfo?.profilePath??"Loading profile path…"}</code><button role="menuitem" onClick={()=>{setProfileOpen(false);setView("Settings")}}>Open Settings</button><button role="menuitem" onClick={backupFromProfile}>Create Backup</button>{profileResult&&<p role="status" aria-live="polite">{profileResult}</p>}</div>}
         </div>
       </aside>
       <main>
@@ -4094,7 +4113,7 @@ function PlanView({
     .filter((s) => comparisonIds.includes(s.id))
     .map((s) => ({
       scenario: s,
-      years: ProjectionEngine.calculate(snapshot, s),
+      years: ProjectionEngine.calculate(snapshot, s, localIsoDate()),
     }));
   const comparisonYears = [
     ...new Set(comparisons.flatMap((x) => x.years.map((y) => y.year))),
@@ -4182,7 +4201,7 @@ function PlanView({
                   return (
                     <span key={x.scenario.id}>
                       {row
-                        ? `${money(row.endingNetWorthCents, true)} · deficit ${money(row.unfundedDeficitCents, true)}`
+                        ? `${row.endingNetWorthCents === null ? "Unavailable" : money(row.endingNetWorthCents, true)} · deficit ${money(row.unfundedDeficitCents, true)}`
                         : "—"}
                     </span>
                   );
@@ -4292,7 +4311,7 @@ function PlanView({
                 <span>{money(year.incomeCents, true)}</span>
                 <span>{money(year.expenseCents, true)}</span>
                 <span>{money(year.taxCents, true)}</span>
-                <strong>{money(year.endingNetWorthCents, true)}</strong>
+                <strong>{year.endingNetWorthCents === null ? "Unavailable" : money(year.endingNetWorthCents, true)}</strong>
               </button>
               {expanded === year.year && (
                 <div
@@ -4311,7 +4330,7 @@ function PlanView({
                       <span>{money(m.incomeCents, true)}</span>
                       <span>{money(m.expenseCents, true)}</span>
                       <span>{money(m.taxCents, true)}</span>
-                      <strong>{money(m.netWorthCents, true)}</strong>
+                      <strong>{m.netWorthCents === null ? "Unavailable" : money(m.netWorthCents, true)}</strong>
                     </div>
                   ))}
                 </div>

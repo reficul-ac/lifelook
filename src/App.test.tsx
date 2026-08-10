@@ -76,11 +76,12 @@ describe("LifeLook shell", () => {
     const repository={...testRepository,bootstrap:async()=>({...data,taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})};
     render(<App repository={repository}/>);
     fireEvent.click(await screen.findByRole("button",{name:/Plan/}));
-    const disclosure=screen.getByRole("button",{name:/2025/});
+    const year=String(new Date().getFullYear());
+    const disclosure=screen.getByRole("button",{name:new RegExp(year)});
     expect(disclosure).toHaveAttribute("aria-expanded","false");
     fireEvent.click(disclosure);
     expect(disclosure).toHaveAttribute("aria-expanded","true");
-    const region=screen.getByRole("region",{name:"2025 monthly detail"});
+    const region=screen.getByRole("region",{name:`${year} monthly detail`});
     expect(disclosure).toHaveAttribute("aria-controls",region.id);
   });
 
@@ -119,7 +120,7 @@ describe("LifeLook shell", () => {
     await screen.findByRole("heading",{name:"Overview"});
     expect(screen.getByRole("button",{name:"Search workspace"})).toBeEnabled();
     expect(screen.getByRole("button",{name:"Add"})).toBeEnabled();
-    expect(screen.getByRole("button",{name:/Test Person/})).toBeDisabled();
+    expect(screen.getByRole("button",{name:/Test Person/})).toBeEnabled();
     fireEvent.click(screen.getByRole("button",{name:/Net Worth/}));
     expect(screen.getByRole("button",{name:"Add account"})).toBeEnabled();
     fireEvent.click(screen.getByRole("button",{name:/Settings/}));

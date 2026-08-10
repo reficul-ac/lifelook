@@ -27,7 +27,7 @@ fi
 cd "$repo_root"
 
 run_scenario() {
-  LIFELOOK_E2E_SCENARIO="$1" xvfb-run -a --server-args="-screen 0 1280x820x24" npm exec wdio run ./wdio.conf.js
+  LIFELOOK_E2E_SCENARIO="$1" xvfb-run -a --server-args="-screen 0 1280x820x24" npm run test:e2e:scenario
 }
 
 reset_profile() {
@@ -66,7 +66,7 @@ reset_profile
 export LIFELOOK_E2E_STRICT_OFFLINE=1
 LIFELOOK_E2E_SCENARIO=offline-onboarding bwrap --unshare-net --bind / / \
   --dev-bind /dev /dev --proc /proc \
-  xvfb-run -a --server-args="-screen 0 1280x820x24" npm exec wdio run ./wdio.conf.js
+  xvfb-run -a --server-args="-screen 0 1280x820x24" npm run test:e2e:scenario
 unset LIFELOOK_E2E_STRICT_OFFLINE
 
 app_data="$XDG_DATA_HOME/com.lifelook.desktop"

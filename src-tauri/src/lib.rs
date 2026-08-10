@@ -10,12 +10,19 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 6;
+const SCHEMA_VERSION: i64 = 7;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
     path: PathBuf,
     state: Mutex<DatabaseState>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceInfo {
+    household_name: String,
+    profile_path: String,
 }
 
 enum DatabaseState {
@@ -170,6 +177,7 @@ struct Category {
     name: String,
     kind: String,
     revision: i64,
+    archived: bool,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -204,6 +212,7 @@ struct RecurringEntry {
     end_date: Option<String>,
     annual_growth_bps: i64,
     revision: i64,
+    tax_treatment: String,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -214,6 +223,7 @@ struct Asset {
     value_cents: i64,
     annual_growth_bps: i64,
     revision: i64,
+    housing_costs: serde_json::Value,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -247,6 +257,7 @@ struct ScenarioRecord {
     revision: i64,
     events: Vec<serde_json::Value>,
     allocations: Vec<serde_json::Value>,
+    withdrawals: Vec<serde_json::Value>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -260,7 +271,12 @@ struct RecurringInput {
     start_date: String,
     end_date: Option<String>,
     annual_growth_bps: i64,
+    #[serde(default = "default_tax_treatment")]
+    tax_treatment: String,
     expected_revision: Option<i64>,
+}
+fn default_tax_treatment() -> String {
+    "none".to_owned()
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -278,6 +294,8 @@ struct ScenarioUpdateInput {
     horizon_months: i64,
     events: Vec<serde_json::Value>,
     allocations: Vec<serde_json::Value>,
+    #[serde(default)]
+    withdrawals: Vec<serde_json::Value>,
     expected_revision: i64,
 }
 #[derive(Debug, Deserialize)]
@@ -367,6 +385,8 @@ struct AssetInput {
     name: String,
     value_cents: i64,
     annual_growth_bps: i64,
+    #[serde(default)]
+    housing_costs: Option<serde_json::Value>,
     expected_revision: Option<i64>,
 }
 #[derive(Debug, Deserialize)]
@@ -553,6 +573,36 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         )?;
         transaction.execute("INSERT INTO schema_migrations(version) VALUES(6)", [])?;
     }
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 7 {
+        let columns = |table: &str| -> Result<Vec<String>, rusqlite::Error> {
+            transaction
+                .prepare(&format!("PRAGMA table_info({table})"))?
+                .query_map([], |r| r.get(1))?
+                .collect()
+        };
+        if !columns("categories")?.iter().any(|x| x == "archived") {
+            transaction.execute("ALTER TABLE categories ADD COLUMN archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1))",[])?;
+        }
+        if !columns("recurring_entries")?
+            .iter()
+            .any(|x| x == "tax_treatment")
+        {
+            transaction.execute("ALTER TABLE recurring_entries ADD COLUMN tax_treatment TEXT NOT NULL DEFAULT 'none' CHECK(tax_treatment IN ('none','pretax'))",[])?;
+        }
+        if !columns("assets")?.iter().any(|x| x == "housing_costs_json") {
+            transaction.execute("ALTER TABLE assets ADD COLUMN housing_costs_json TEXT NOT NULL DEFAULT '{\"propertyTaxRateBps\":0,\"insuranceMonthlyCents\":0,\"insuranceAnnualGrowthBps\":0,\"hoaMonthlyCents\":0,\"hoaAnnualGrowthBps\":0}'",[])?;
+        }
+        transaction.execute_batch("CREATE TABLE IF NOT EXISTS withdrawal_rules(id TEXT PRIMARY KEY,scenario_id TEXT NOT NULL REFERENCES scenarios(id) ON DELETE RESTRICT,account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,priority INTEGER NOT NULL CHECK(priority>0),UNIQUE(scenario_id,priority),UNIQUE(scenario_id,account_id));
+          INSERT OR IGNORE INTO withdrawal_rules(id,scenario_id,account_id,priority)
+          SELECT 'withdraw-'||s.id||'-'||a.id,s.id,a.id,ROW_NUMBER() OVER(PARTITION BY s.id ORDER BY CASE a.kind WHEN 'checking' THEN 0 WHEN 'savings' THEN 1 ELSE 2 END,a.rowid)
+          FROM scenarios s JOIN accounts a ON a.household_id=s.household_id WHERE a.liquid=1;")?;
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(7)", [])?;
+    }
     transaction.commit()?;
     Ok(())
 }
@@ -633,7 +683,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,COALESCE(household_id,?),name,kind,revision FROM categories WHERE household_id=? OR household_id IS NULL ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,COALESCE(household_id,?),name,kind,revision,archived FROM categories WHERE household_id=? OR household_id IS NULL ORDER BY name")?;
         categories = q
             .query_map([&h.id, &h.id], |r| {
                 Ok(Category {
@@ -642,6 +692,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     name: r.get(2)?,
                     kind: r.get(3)?,
                     revision: r.get(4)?,
+                    archived: r.get::<_, i64>(5)? != 0,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -667,7 +718,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,category_id,account_id,name,amount_cents,frequency,start_date,end_date,annual_growth_bps,revision FROM recurring_entries WHERE household_id=? ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,household_id,category_id,account_id,name,amount_cents,frequency,start_date,end_date,annual_growth_bps,revision,tax_treatment FROM recurring_entries WHERE household_id=? ORDER BY name")?;
         recurring = q
             .query_map([&h.id], |r| {
                 Ok(RecurringEntry {
@@ -682,10 +733,11 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     end_date: r.get(8)?,
                     annual_growth_bps: r.get(9)?,
                     revision: r.get(10)?,
+                    tax_treatment: r.get(11)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision FROM assets WHERE household_id=? ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision,housing_costs_json FROM assets WHERE household_id=? ORDER BY name")?;
         assets = q
             .query_map([&h.id], |r| {
                 Ok(Asset {
@@ -695,6 +747,8 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     value_cents: r.get(3)?,
                     annual_growth_bps: r.get(4)?,
                     revision: r.get(5)?,
+                    housing_costs: serde_json::from_str(&r.get::<_, String>(6)?)
+                        .unwrap_or_default(),
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -745,6 +799,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     revision: r.get(6)?,
                     events: vec![],
                     allocations: vec![],
+                    withdrawals: vec![],
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -759,6 +814,13 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 .collect::<Result<Vec<_>, _>>()?;
             let mut allocations = connection.prepare("SELECT json_object('id',id,'accountId',account_id,'priority',priority,'percentBps',percent_bps,'targetBalanceCents',target_balance_cents) FROM allocations WHERE scenario_id=? ORDER BY priority")?;
             scenario.allocations = allocations
+                .query_map([&scenario.id], |r| {
+                    let raw: String = r.get(0)?;
+                    Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut withdrawals = connection.prepare("SELECT json_object('id',id,'accountId',account_id,'priority',priority) FROM withdrawal_rules WHERE scenario_id=? ORDER BY priority")?;
+            scenario.withdrawals = withdrawals
                 .query_map([&scenario.id], |r| {
                     let raw: String = r.get(0)?;
                     Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null))
@@ -786,6 +848,24 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
 #[tauri::command]
 fn get_bootstrap(database: tauri::State<Database>) -> Result<WorkspaceSnapshot, AppError> {
     with_db(&database, |db| bootstrap(db))
+}
+
+#[tauri::command]
+fn get_workspace_info(database: tauri::State<Database>) -> Result<WorkspaceInfo, AppError> {
+    let household_name = with_db(&database, |connection| {
+        Ok(connection
+            .query_row(
+                "SELECT name FROM households ORDER BY rowid LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?
+            .unwrap_or_else(|| "Local household".to_owned()))
+    })?;
+    Ok(WorkspaceInfo {
+        household_name,
+        profile_path: database.path.to_string_lossy().into_owned(),
+    })
 }
 
 #[tauri::command]
@@ -1047,6 +1127,26 @@ fn validate_recurring(input: &RecurringInput) -> Result<(), AppError> {
     if !(-10000..=100000).contains(&input.annual_growth_bps) {
         return Err(AppError::Validation("annual growth is out of range".into()));
     }
+    if !matches!(input.tax_treatment.as_str(), "none" | "pretax") {
+        return Err(AppError::Validation(
+            "invalid recurring tax treatment".into(),
+        ));
+    }
+    Ok(())
+}
+fn validate_recurring_tax_treatment(
+    db: &Connection,
+    input: &RecurringInput,
+) -> Result<(), AppError> {
+    if input.tax_treatment != "pretax" {
+        return Ok(());
+    }
+    let valid: bool = db.query_row("SELECT EXISTS(SELECT 1 FROM categories c JOIN accounts a ON a.id=?2 AND a.household_id=c.household_id WHERE c.id=?1 AND c.kind='expense' AND a.kind='retirement')", params![input.category_id,input.account_id], |row| row.get(0))?;
+    if !valid {
+        return Err(AppError::Validation(
+            "pre-tax treatment requires an expense deposited into a retirement account".into(),
+        ));
+    }
     Ok(())
 }
 #[tauri::command]
@@ -1056,8 +1156,9 @@ fn create_recurring(
 ) -> Result<(), AppError> {
     with_db(&database, |db| {
         validate_recurring(&input)?;
+        validate_recurring_tax_treatment(db, &input)?;
         let hid: String = db.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
-        db.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,frequency,start_date,end_date,annual_growth_bps) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10 WHERE EXISTS(SELECT 1 FROM categories WHERE id=?3 AND household_id=?2) AND (?4 IS NULL OR EXISTS(SELECT 1 FROM accounts WHERE id=?4 AND household_id=?2))",params![input.id,hid,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.start_date,input.end_date,input.annual_growth_bps]).and_then(|n|if n==1{Ok(n)}else{Err(rusqlite::Error::QueryReturnedNoRows)}).map_err(|_|AppError::Validation("category or account does not belong to this household".into()))?;
+        db.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,frequency,start_date,end_date,annual_growth_bps,tax_treatment) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11 WHERE EXISTS(SELECT 1 FROM categories WHERE id=?3 AND household_id=?2) AND (?4 IS NULL OR EXISTS(SELECT 1 FROM accounts WHERE id=?4 AND household_id=?2))",params![input.id,hid,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment]).and_then(|n|if n==1{Ok(n)}else{Err(rusqlite::Error::QueryReturnedNoRows)}).map_err(|_|AppError::Validation("category or account does not belong to this household".into()))?;
         Ok(())
     })
 }
@@ -1068,10 +1169,11 @@ fn update_recurring(
 ) -> Result<(), AppError> {
     with_db(&database, |db| {
         validate_recurring(&input)?;
+        validate_recurring_tax_treatment(db, &input)?;
         let revision = input
             .expected_revision
             .ok_or_else(|| AppError::Validation("expected revision is required".into()))?;
-        let n=db.execute("UPDATE recurring_entries SET category_id=?2,account_id=?3,name=?4,amount_cents=?5,frequency=?6,start_date=?7,end_date=?8,annual_growth_bps=?9,revision=revision+1 WHERE id=?1 AND revision=?10 AND EXISTS(SELECT 1 FROM categories c WHERE c.id=?2 AND c.household_id=recurring_entries.household_id) AND (?3 IS NULL OR EXISTS(SELECT 1 FROM accounts a WHERE a.id=?3 AND a.household_id=recurring_entries.household_id))",params![input.id,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.start_date,input.end_date,input.annual_growth_bps,revision])?;
+        let n=db.execute("UPDATE recurring_entries SET category_id=?2,account_id=?3,name=?4,amount_cents=?5,frequency=?6,start_date=?7,end_date=?8,annual_growth_bps=?9,tax_treatment=?10,revision=revision+1 WHERE id=?1 AND revision=?11 AND EXISTS(SELECT 1 FROM categories c WHERE c.id=?2 AND c.household_id=recurring_entries.household_id) AND (?3 IS NULL OR EXISTS(SELECT 1 FROM accounts a WHERE a.id=?3 AND a.household_id=recurring_entries.household_id))",params![input.id,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment,revision])?;
         if n == 0 {
             return Err(AppError::Conflict);
         }
@@ -1126,6 +1228,7 @@ fn create_scenario(
             tx.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months) VALUES(?1,?2,?3,0,?4,?5)",params![input.id,hid,name,assumptions,horizon])?;
             tx.execute("INSERT INTO scenario_events(id,scenario_id,event_date,kind,payload_json) SELECT ?1||'-'||id,?1,event_date,kind,payload_json FROM scenario_events WHERE scenario_id=?2",params![input.id,source])?;
             tx.execute("INSERT INTO allocations(id,scenario_id,account_id,priority,percent_bps,target_balance_cents) SELECT ?1||'-'||id,?1,account_id,priority,percent_bps,target_balance_cents FROM allocations WHERE scenario_id=?2",params![input.id,source])?;
+            tx.execute("INSERT INTO withdrawal_rules(id,scenario_id,account_id,priority) SELECT ?1||'-'||id,?1,account_id,priority FROM withdrawal_rules WHERE scenario_id=?2",params![input.id,source])?;
         } else {
             tx.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months) VALUES(?1,?2,?3,0,'{\"inflationBps\":250,\"thresholdInflationBps\":250}',120)",params![input.id,hid,name])?;
         }
@@ -1531,6 +1634,26 @@ fn update_scenario(
             if inserted != 1 {
                 return Err(AppError::Validation(
                     "allocation account does not belong to this household".into(),
+                ));
+            }
+        }
+        tx.execute(
+            "DELETE FROM withdrawal_rules WHERE scenario_id=?",
+            [&input.id],
+        )?;
+        for (index, rule) in input.withdrawals.iter().enumerate() {
+            let account = rule
+                .get("accountId")
+                .and_then(|x| x.as_str())
+                .ok_or_else(|| AppError::Validation("withdrawal account is required".into()))?;
+            let priority = json_i64(rule, "priority").unwrap_or(index as i64 + 1);
+            if priority < 1 {
+                return Err(AppError::Validation("invalid withdrawal priority".into()));
+            }
+            let inserted=tx.execute("INSERT INTO withdrawal_rules(id,scenario_id,account_id,priority) SELECT ?1,?2,?3,?4 WHERE EXISTS(SELECT 1 FROM accounts a JOIN scenarios s ON s.household_id=a.household_id WHERE a.id=?3 AND a.liquid=1 AND s.id=?2)",params![rule.get("id").and_then(|x|x.as_str()).map(str::to_owned).unwrap_or_else(||format!("withdraw-{}-{index}",input.id)),input.id,account,priority])?;
+            if inserted != 1 {
+                return Err(AppError::Validation(
+                    "withdrawal account must be a liquid household account".into(),
                 ));
             }
         }
@@ -2108,14 +2231,34 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
     }
     validate_nonnegative_money(input.value_cents, "asset value")?;
     validate_rate(input.annual_growth_bps, -10_000, "annual growth")?;
+    let housing = input.housing_costs.clone().unwrap_or_else(|| serde_json::json!({"propertyTaxRateBps":0,"insuranceMonthlyCents":0,"insuranceAnnualGrowthBps":0,"hoaMonthlyCents":0,"hoaAnnualGrowthBps":0}));
+    for field in [
+        "propertyTaxRateBps",
+        "insuranceMonthlyCents",
+        "insuranceAnnualGrowthBps",
+        "hoaMonthlyCents",
+        "hoaAnnualGrowthBps",
+    ] {
+        let value = json_i64(&housing, field)
+            .ok_or_else(|| AppError::Validation(format!("{field} must be an integer")))?;
+        if value < 0
+            || (field.ends_with("Cents") && value > MAX_MONEY_CENTS)
+            || (field.ends_with("Bps") && value > 100_000)
+        {
+            return Err(AppError::Validation(format!(
+                "{field} is outside the supported range"
+            )));
+        }
+    }
+    let housing_json = serde_json::to_string(&housing)?;
     let hid = active_household(db)?;
     if update {
-        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,revision=revision+1 WHERE id=?4 AND household_id=?5 AND revision=?6",params![input.name.trim(),input.value_cents,input.annual_growth_bps,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
+        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,revision=revision+1 WHERE id=?5 AND household_id=?6 AND revision=?7",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
         if changed == 0 {
             return Err(AppError::Conflict);
         }
     } else {
-        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps) VALUES(?1,?2,?3,?4,?5)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps])?;
+        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json) VALUES(?1,?2,?3,?4,?5,?6)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json])?;
     }
     Ok(())
 }
@@ -3164,6 +3307,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_bootstrap,
+            get_workspace_info,
             save_onboarding_step,
             complete_onboarding,
             create_transaction,
@@ -3710,6 +3854,7 @@ mod tests {
             name: " Home ".into(),
             value_cents: 50_000_000,
             annual_growth_bps: 350,
+            housing_costs: None,
             expected_revision: None,
         };
         save_asset(&c, &asset, false).unwrap();
@@ -3800,6 +3945,7 @@ mod tests {
             name: "Asset".into(),
             value_cents: 1,
             annual_growth_bps: -10_001,
+            housing_costs: None,
             expected_revision: None,
         };
         assert!(matches!(
@@ -3811,6 +3957,7 @@ mod tests {
             name: "Asset".into(),
             value_cents: 100,
             annual_growth_bps: 0,
+            housing_costs: None,
             expected_revision: None,
         };
         save_asset(&c, &valid_asset, false).unwrap();
@@ -3938,6 +4085,7 @@ mod tests {
             horizon_months: 480,
             events: vec![],
             allocations: vec![],
+            withdrawals: vec![],
             expected_revision: 1,
         };
         assert!(validate_scenario_update(&input).is_ok());
@@ -3971,6 +4119,7 @@ mod tests {
             horizon_months: 12,
             events: vec![base.clone(), base],
             allocations: vec![],
+            withdrawals: vec![],
             expected_revision: 1,
         };
         assert!(matches!(

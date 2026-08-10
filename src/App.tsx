@@ -53,6 +53,7 @@ import {
   type ScenarioRecord,
   emptySettings,
 } from "./repository";
+import { ScenarioPlanningDialog } from "./ScenarioPlanningDialog";
 
 type View = "Overview" | "Activity" | "Plan" | "Net Worth" | "Settings";
 const nav: [View, typeof LayoutDashboard][] = [
@@ -389,6 +390,7 @@ function Workspace({
           <ActivityView
             activity={bootstrap.activity}
             accounts={bootstrap.accounts}
+            repository={repository}
             onImport={(el) => openDialog({ type: "import" }, el)}
             onEdit={(entry) =>
               openDialog({
@@ -414,6 +416,7 @@ function Workspace({
             onEditRecurring={(recurring, el) => openDialog({ type: "recurring", recurring }, el)}
             onAddScenario={(el) => openDialog({ type: "scenario-create", scenario: bootstrap.scenarios.find(s => s.id === selectedScenario.id) }, el)}
             onEditScenario={(el) => openDialog({ type: "scenario-edit", scenario: bootstrap.scenarios.find(s => s.id === selectedScenario.id) }, el)}
+            onPlanScenario={(el) => openDialog({ type: "scenario-plan", scenario: bootstrap.scenarios.find(s => s.id === selectedScenario.id) }, el)}
           />
         )}
         {view === "Plan" && !projections && (
@@ -462,6 +465,8 @@ function Workspace({
         <RecurringDialog state={dialog} bootstrap={bootstrap} repository={repository} close={closeDialog} refresh={onRefresh} />
       ) : dialog?.type === "scenario-create" || dialog?.type === "scenario-edit" ? (
         <ScenarioDialog state={dialog} scenarios={bootstrap.scenarios} repository={repository} close={closeDialog} refresh={onRefresh} select={setSelectedScenarioId} />
+      ) : dialog?.type === "scenario-plan" && dialog.scenario ? (
+        <ScenarioPlanningDialog record={dialog.scenario} bootstrap={bootstrap} repository={repository} close={closeDialog} refresh={onRefresh} />
       ) : dialog?.type === "import" ? (
         <CsvImportWizard
           bootstrap={bootstrap}
@@ -496,7 +501,7 @@ function Workspace({
 
 type DialogState = {
   type:
-    "chooser" | "transaction" | "transfer" | "account" | "reconcile" | "import" | "asset" | "liability" | "recurring" | "scenario-create" | "scenario-edit";
+    "chooser" | "transaction" | "transfer" | "account" | "reconcile" | "import" | "asset" | "liability" | "recurring" | "scenario-create" | "scenario-edit" | "scenario-plan";
   kind?: "income" | "expense";
   entry?: ActivityPosting[];
   account?: BootstrapAccount;
@@ -2287,17 +2292,21 @@ function CsvImportWizard({
 function ActivityView({
   activity,
   accounts,
+  repository,
   onEdit,
   onImport,
 }: {
   activity: ActivityPosting[];
   accounts: BootstrapAccount[];
+  repository: Repository;
   onEdit: (entry: ActivityPosting[]) => void;
   onImport: (el: HTMLElement) => void;
 }) {
   const [query, setQuery] = useState("");
   const [account, setAccount] = useState("all");
   const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [exporting,setExporting]=useState(false);
+  const [exportError,setExportError]=useState("");
   const grouped = [
     ...activity
       .reduce(
@@ -2323,6 +2332,18 @@ function ActivityView({
   const years = [...new Set(activity.map((x) => x.occurredOn.slice(0, 4)))]
     .sort()
     .reverse();
+  async function exportCsv(){
+    if(exporting || !rows.length || !repository.selectActivityExportDestination || !repository.exportActivityCsv)return;
+    setExportError("");
+    setExporting(true);
+    try{
+      const destination=await repository.selectActivityExportDestination();
+      if(!destination)return;
+      await repository.exportActivityCsv(destination,rows.flat().map(row=>row.postingId));
+    }
+    catch(error){setExportError(errorMessage(error,"Could not export Activity CSV. Choose another location and try again."));}
+    finally{setExporting(false);}
+  }
   return (
     <div className="content">
       <div className="toolbar">
@@ -2364,7 +2385,9 @@ function ActivityView({
           ))}
         </select>
         <button onClick={(e) => onImport(e.currentTarget)}>Import CSV</button>
+        <button onClick={exportCsv} disabled={!rows.length || exporting}>{exporting?"Exporting…":"Export CSV"}</button>
       </div>
+      {exportError && <p className="form-error" role="alert">{exportError}</p>}
       <section className="card wide">
         <div className="card-title">
           <div>
@@ -2462,6 +2485,7 @@ function PlanView({
   onEditRecurring,
   onAddScenario,
   onEditScenario,
+  onPlanScenario,
 }: {
   projections: ReturnType<typeof ProjectionEngine.calculate>;
   scenarios: Scenario[];
@@ -2477,6 +2501,7 @@ function PlanView({
   onEditRecurring: (entry: RecurringEntry, el: HTMLElement) => void;
   onAddScenario: (el: HTMLElement) => void;
   onEditScenario: (el: HTMLElement) => void;
+  onPlanScenario: (el: HTMLElement) => void;
 }) {
   const [comparisonIds, setComparisonIds] = useState<string[]>([]);
   const comparisons = scenarios.filter(s => comparisonIds.includes(s.id)).map(s => ({ scenario: s, years: ProjectionEngine.calculate(snapshot, s) }));
@@ -2488,7 +2513,7 @@ function PlanView({
           <span className="label assumption">Assumptions</span>
           <h3>{scenarios.find(s => s.id === selectedScenarioId)?.name ?? "Baseline"} plan</h3>
           {scenarios.length > 0 && <select aria-label="Active scenario" value={selectedScenarioId} onChange={event => onSelectScenario(event.target.value)}>{scenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
-          <div className="inline-actions"><button onClick={e => onAddScenario(e.currentTarget)}>New scenario</button><button disabled={!scenarios.length} onClick={e => onEditScenario(e.currentTarget)}>Edit scenario</button></div>
+          <div className="inline-actions"><button onClick={e => onAddScenario(e.currentTarget)}>New scenario</button><button disabled={!scenarios.length} onClick={e => onEditScenario(e.currentTarget)}>Edit scenario</button><button disabled={!scenarios.length} onClick={e => onPlanScenario(e.currentTarget)}>Events &amp; allocations</button></div>
         </div>
         <div aria-label="Compare scenarios">{scenarios.map(s => <label key={s.id}><input type="checkbox" checked={comparisonIds.includes(s.id)} disabled={!comparisonIds.includes(s.id) && comparisonIds.length >= 3} onChange={() => setComparisonIds(ids => ids.includes(s.id) ? ids.filter(id => id !== s.id) : [...ids, s.id])}/>{s.name}</label>)}</div>
       </div>
@@ -2801,6 +2826,9 @@ function SettingsView({
     message: string;
   } | null>(null);
   const memberAlert = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (memberResult?.kind === "error") memberAlert.current?.focus();
+  }, [memberResult]);
   useEffect(
     () =>
       setPeople(
@@ -2894,7 +2922,6 @@ function SettingsView({
         kind: "error",
         message: "Every household member needs a name.",
       });
-      queueMicrotask(() => memberAlert.current?.focus());
       return;
     }
     const invalidDate = people.findIndex(
@@ -2905,7 +2932,6 @@ function SettingsView({
         kind: "error",
         message: `Member ${invalidDate + 1}: enter a valid birth date as MM/DD/YYYY.`,
       });
-      queueMicrotask(() => memberAlert.current?.focus());
       return;
     }
     setMemberSaving(true);
@@ -2924,7 +2950,6 @@ function SettingsView({
         kind: "error",
         message: errorMessage(error, "Could not save household members."),
       });
-      queueMicrotask(() => memberAlert.current?.focus());
     } finally {
       setMemberSaving(false);
     }

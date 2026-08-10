@@ -2,6 +2,7 @@ use rusqlite::{backup::Backup, params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::Mutex,
@@ -696,12 +697,28 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
         scenarios = q
             .query_map([&h.id], |r| {
                 let raw: String = r.get(4)?;
+                let mut assumptions: serde_json::Value =
+                    serde_json::from_str(&raw).unwrap_or_default();
+                if assumptions
+                    .get("inflationBps")
+                    .and_then(|value| value.as_i64())
+                    .is_none()
+                {
+                    assumptions["inflationBps"] = serde_json::json!(250);
+                }
+                if assumptions
+                    .get("thresholdInflationBps")
+                    .and_then(|value| value.as_i64())
+                    .is_none()
+                {
+                    assumptions["thresholdInflationBps"] = serde_json::json!(250);
+                }
                 Ok(ScenarioRecord {
                     id: r.get(0)?,
                     household_id: r.get(1)?,
                     name: r.get(2)?,
                     is_baseline: r.get::<_, i64>(3)? != 0,
-                    assumptions: serde_json::from_str(&raw).unwrap_or_default(),
+                    assumptions,
                     horizon_months: r.get(5)?,
                     revision: r.get(6)?,
                     events: vec![],
@@ -895,7 +912,7 @@ fn complete_onboarding(database: tauri::State<Database>) -> Result<(), AppError>
                 params![format!("{id}-{hid}"), hid, name, kind],
             )?;
         }
-        tx.execute("INSERT OR IGNORE INTO scenarios(id,household_id,name,is_baseline,assumptions_json) VALUES(?1,?2,'Baseline',1,'{\"inflationBps\":250}')",params![format!("baseline-{hid}"),hid])?;
+        tx.execute("INSERT OR IGNORE INTO scenarios(id,household_id,name,is_baseline,assumptions_json) VALUES(?1,?2,'Baseline',1,'{\"inflationBps\":250,\"thresholdInflationBps\":250}')",params![format!("baseline-{hid}"),hid])?;
         tx.execute(
             "UPDATE households SET onboarding_complete=1,onboarding_step=8 WHERE id=?",
             [hid],
@@ -1043,6 +1060,174 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
             )));
         }
     }
+    let mut event_ids = HashSet::new();
+    let supported = [
+        "recurring-change",
+        "income-change",
+        "one-time-income",
+        "one-time-expense",
+        "account-transfer",
+        "account-contribution",
+        "asset-purchase",
+        "asset-sale",
+        "debt-origination",
+        "debt-payoff",
+    ];
+    for event in &input.events {
+        let id = event
+            .get("id")
+            .and_then(|x| x.as_str())
+            .filter(|x| !x.trim().is_empty())
+            .ok_or_else(|| AppError::Validation("event id is required".into()))?;
+        if !event_ids.insert(id) {
+            return Err(AppError::Validation("event ids must be unique".into()));
+        }
+        let kind = event
+            .get("type")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| AppError::Validation("event type is required".into()))?;
+        if !supported.contains(&kind) {
+            return Err(AppError::Validation("event type is invalid".into()));
+        }
+        let date = event
+            .get("date")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| AppError::Validation("event date is required".into()))?;
+        if !valid_iso_date(date) {
+            return Err(AppError::Validation("event date is invalid".into()));
+        }
+        let positive =
+            |key: &str| json_i64(event, key).is_some_and(|x| (1..=MAX_MONEY_CENTS).contains(&x));
+        let required_money: &[&str] = match kind {
+            "recurring-change"
+            | "income-change"
+            | "one-time-income"
+            | "one-time-expense"
+            | "account-transfer"
+            | "account-contribution" => &["amountCents"],
+            "asset-purchase" => &["valueCents", "downPaymentCents", "costsCents"],
+            "asset-sale" => &["proceedsCents", "costsCents"],
+            "debt-origination" => &["principalCents", "minimumPaymentCents"],
+            _ => &[],
+        };
+        if required_money.iter().any(|key| !positive(key)) {
+            return Err(AppError::Validation(format!(
+                "{kind} requires exact positive money values"
+            )));
+        }
+        for rate_key in ["annualGrowthBps", "annualRateBps"] {
+            if let Some(rate) = json_i64(event, rate_key) {
+                if !(-10000..=100000).contains(&rate) {
+                    return Err(AppError::Validation(format!(
+                        "{rate_key} is outside the supported rate range"
+                    )));
+                }
+            }
+        }
+        if kind == "account-transfer" && event.get("fromAccountId") == event.get("toAccountId") {
+            return Err(AppError::Validation(
+                "transfer accounts must be different".into(),
+            ));
+        }
+        if kind == "asset-purchase" {
+            if event
+                .get("name")
+                .and_then(|x| x.as_str())
+                .is_none_or(|x| x.trim().is_empty())
+            {
+                return Err(AppError::Validation("asset name is required".into()));
+            }
+            if let Some(financing) = event.get("financing") {
+                for key in ["principalCents", "minimumPaymentCents"] {
+                    if !json_i64(financing, key).is_some_and(|x| (1..=MAX_MONEY_CENTS).contains(&x))
+                    {
+                        return Err(AppError::Validation(format!(
+                            "financing {key} must be a positive exact amount"
+                        )));
+                    }
+                }
+                let rate = json_i64(financing, "annualRateBps").ok_or_else(|| {
+                    AppError::Validation("financing annual rate is required".into())
+                })?;
+                if !(-10000..=100000).contains(&rate) {
+                    return Err(AppError::Validation(
+                        "financing annual rate is invalid".into(),
+                    ));
+                }
+                if financing
+                    .get("name")
+                    .and_then(|x| x.as_str())
+                    .is_none_or(|x| x.trim().is_empty())
+                {
+                    return Err(AppError::Validation("financing name is required".into()));
+                }
+            }
+        }
+        if kind == "asset-sale" {
+            if let Some(payoff) = event.get("payoff") {
+                let mode = payoff
+                    .get("mode")
+                    .and_then(|x| x.as_str())
+                    .ok_or_else(|| AppError::Validation("payoff mode is required".into()))?;
+                if !["none", "partial", "full"].contains(&mode) {
+                    return Err(AppError::Validation("payoff mode is invalid".into()));
+                }
+                if mode != "none"
+                    && payoff
+                        .get("liabilityId")
+                        .and_then(|x| x.as_str())
+                        .is_none_or(str::is_empty)
+                {
+                    return Err(AppError::Validation("payoff liability is required".into()));
+                }
+                if mode == "partial"
+                    && !json_i64(payoff, "amountCents")
+                        .is_some_and(|x| (1..=MAX_MONEY_CENTS).contains(&x))
+                {
+                    return Err(AppError::Validation(
+                        "partial payoff amount must be positive".into(),
+                    ));
+                }
+            }
+        }
+    }
+    let mut allocation_ids = HashSet::new();
+    let mut allocation_accounts = HashSet::new();
+    for (index, rule) in input.allocations.iter().enumerate() {
+        let account = rule
+            .get("accountId")
+            .and_then(|x| x.as_str())
+            .filter(|x| !x.is_empty())
+            .ok_or_else(|| AppError::Validation("allocation account is required".into()))?;
+        if !allocation_accounts.insert(account) {
+            return Err(AppError::Validation(
+                "allocation accounts must be unique".into(),
+            ));
+        }
+        if let Some(id) = rule.get("id").and_then(|x| x.as_str()) {
+            if !allocation_ids.insert(id) {
+                return Err(AppError::Validation("allocation ids must be unique".into()));
+            }
+        }
+        if json_i64(rule, "priority") != Some(index as i64 + 1) {
+            return Err(AppError::Validation(
+                "allocation priorities must be contiguous and ordered".into(),
+            ));
+        }
+        let percent = json_i64(rule, "percentBps")
+            .ok_or_else(|| AppError::Validation("allocation percentage is required".into()))?;
+        if !(0..=10000).contains(&percent) {
+            return Err(AppError::Validation(
+                "allocation percentage is invalid".into(),
+            ));
+        }
+        if json_i64(rule, "targetBalanceCents").is_some_and(|x| !(0..=MAX_MONEY_CENTS).contains(&x))
+        {
+            return Err(AppError::Validation(
+                "allocation target balance is invalid".into(),
+            ));
+        }
+    }
     if !input.allocations.is_empty()
         && input
             .allocations
@@ -1065,11 +1250,11 @@ fn update_scenario(
         let name = scenario_name(&input.name)?;
         validate_scenario_update(&input)?;
         let tx = db.transaction()?;
-        let baseline: bool = tx
+        let (baseline, household_id): (bool, String) = tx
             .query_row(
-                "SELECT is_baseline FROM scenarios WHERE id=?",
+                "SELECT is_baseline,household_id FROM scenarios WHERE id=?",
                 [&input.id],
-                |r| Ok(r.get::<_, i64>(0)? != 0),
+                |r| Ok((r.get::<_, i64>(0)? != 0, r.get(1)?)),
             )
             .map_err(|_| AppError::Conflict)?;
         if baseline && name != "Baseline" {
@@ -1086,6 +1271,127 @@ fn update_scenario(
             return Err(AppError::Validation(
                 "a scenario with this name already exists".into(),
             ));
+        }
+        let owns = |table: &str, id: &str| -> Result<bool, AppError> {
+            if !["accounts", "recurring_entries", "assets", "liabilities"].contains(&table) {
+                return Ok(false);
+            }
+            Ok(tx.query_row(
+                &format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE id=?1 AND household_id=?2)"),
+                params![id, household_id],
+                |r| r.get(0),
+            )?)
+        };
+        let mut ordered = input.events.iter().collect::<Vec<_>>();
+        ordered.sort_by_key(|e| {
+            (
+                e.get("date").and_then(|x| x.as_str()).unwrap_or(""),
+                e.get("id").and_then(|x| x.as_str()).unwrap_or(""),
+            )
+        });
+        let mut created_assets: HashMap<&str, &str> = HashMap::new();
+        let mut created_debts: HashMap<&str, &str> = HashMap::new();
+        for event in ordered {
+            let date = event["date"].as_str().unwrap();
+            let in_horizon:bool=tx.query_row("SELECT date(?1)>=date('now','start of month') AND date(?1)<date('now','start of month',?2)",params![date,format!("+{} months",input.horizon_months)],|r|r.get(0))?;
+            if !in_horizon {
+                return Err(AppError::Validation(
+                    "event date must be within the active projection horizon".into(),
+                ));
+            }
+            let kind = event["type"].as_str().unwrap();
+            let account_keys: &[&str] = match kind {
+                "account-transfer" => &["fromAccountId", "toAccountId"],
+                "account-contribution" => &["accountId"],
+                "asset-purchase" => &["fundingAccountId"],
+                "asset-sale" => &["destinationAccountId"],
+                "debt-origination" | "debt-payoff" => &["accountId"],
+                _ => &[],
+            };
+            for key in account_keys {
+                let id = event.get(key).and_then(|x| x.as_str()).unwrap_or("");
+                if !owns("accounts", id)? {
+                    return Err(AppError::Validation(format!(
+                        "{key} does not belong to this household"
+                    )));
+                }
+            }
+            if matches!(kind, "recurring-change" | "income-change") {
+                let id = event.get("entryId").and_then(|x| x.as_str()).unwrap_or("");
+                if !owns("recurring_entries", id)? {
+                    return Err(AppError::Validation(
+                        "recurring entry does not belong to this household".into(),
+                    ));
+                }
+            }
+            if kind == "asset-sale" {
+                let id = event.get("assetId").and_then(|x| x.as_str()).unwrap_or("");
+                if !created_assets
+                    .get(id)
+                    .is_some_and(|created| *created < date)
+                    && !owns("assets", id)?
+                {
+                    return Err(AppError::Validation("asset sale must reference an existing asset or a strictly earlier purchase".into()));
+                }
+                if let Some(payoff) = event
+                    .get("payoff")
+                    .filter(|x| x.get("mode").and_then(|v| v.as_str()) != Some("none"))
+                {
+                    let liability_id = payoff
+                        .get("liabilityId")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("");
+                    if !created_debts
+                        .get(liability_id)
+                        .is_some_and(|created| *created < date)
+                        && !owns("liabilities", liability_id)?
+                    {
+                        return Err(AppError::Validation("sale payoff must reference an existing liability or a strictly earlier origination".into()));
+                    }
+                }
+            }
+            if kind == "debt-payoff" {
+                let id = event
+                    .get("liabilityId")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("");
+                if !created_debts.get(id).is_some_and(|created| *created < date)
+                    && !owns("liabilities", id)?
+                {
+                    return Err(AppError::Validation("debt payoff must reference an existing liability or a strictly earlier origination".into()));
+                }
+            }
+            if kind == "asset-purchase" {
+                let id = event.get("assetId").and_then(|x| x.as_str()).unwrap_or("");
+                if id.is_empty() || owns("assets", id)? || created_assets.insert(id, date).is_some()
+                {
+                    return Err(AppError::Validation("asset ids must be unique".into()));
+                }
+                if let Some(financing) = event.get("financing") {
+                    let id = financing
+                        .get("liabilityId")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("");
+                    if id.is_empty()
+                        || owns("liabilities", id)?
+                        || created_debts.insert(id, date).is_some()
+                    {
+                        return Err(AppError::Validation("liability ids must be unique".into()));
+                    }
+                }
+            }
+            if kind == "debt-origination" {
+                let id = event
+                    .get("liabilityId")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("");
+                if id.is_empty()
+                    || owns("liabilities", id)?
+                    || created_debts.insert(id, date).is_some()
+                {
+                    return Err(AppError::Validation("liability ids must be unique".into()));
+                }
+            }
         }
         let n=tx.execute("UPDATE scenarios SET name=?2,assumptions_json=?3,horizon_months=?4,revision=revision+1 WHERE id=?1 AND revision=?5",params![input.id,name,serde_json::to_string(&input.assumptions)?,input.horizon_months,input.expected_revision])?;
         if n == 0 {
@@ -2295,6 +2601,117 @@ fn backup_database(destination: PathBuf, database: tauri::State<Database>) -> Re
         safe_backup(db, &database.path, &destination)
     })
 }
+
+fn csv_field(value: &str) -> String {
+    if value.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_owned()
+    }
+}
+
+fn csv_amount(cents: i64) -> String {
+    let sign = if cents < 0 { "-" } else { "" };
+    let absolute = i128::from(cents).abs();
+    format!("{sign}{}.{:02}", absolute / 100, absolute % 100)
+}
+
+type ActivityCsvRow = (String, String, String, String, String, String, i64, String);
+
+fn write_activity_csv(
+    db: &Connection,
+    destination: &Path,
+    posting_ids: &[i64],
+) -> Result<(), AppError> {
+    if posting_ids.is_empty() {
+        return Err(AppError::Validation(
+            "select at least one activity posting".into(),
+        ));
+    }
+    let mut unique = std::collections::HashSet::new();
+    if posting_ids.iter().any(|id| *id <= 0 || !unique.insert(*id)) {
+        return Err(AppError::Validation(
+            "activity posting IDs must be unique".into(),
+        ));
+    }
+    let household_id: String = db
+        .query_row(
+            "SELECT id FROM households ORDER BY rowid LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|_| {
+            AppError::Validation("complete onboarding before exporting activity".into())
+        })?;
+    let mut statement = db.prepare("SELECT e.occurred_on,e.kind,e.description,COALESCE(e.note,''),a.name,COALESCE(c.name,''),p.amount_cents,COALESCE(e.transfer_group_id,'') FROM postings p JOIN transaction_entries e ON e.id=p.entry_id JOIN accounts a ON a.id=p.account_id LEFT JOIN categories c ON c.id=p.category_id WHERE p.id=?1 AND e.household_id=?2")?;
+    let mut output =
+        String::from("date,type,description,note,account,category,amount,transfer group\r\n");
+    for posting_id in posting_ids {
+        let row: Option<ActivityCsvRow> = statement
+            .query_row(params![posting_id, household_id], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                ))
+            })
+            .optional()?;
+        let (date, kind, description, note, account, category, amount, transfer_group) = row
+            .ok_or_else(|| {
+                AppError::Validation("one or more activity postings are unavailable".into())
+            })?;
+        let fields = [
+            date,
+            kind,
+            description,
+            note,
+            account,
+            category,
+            csv_amount(amount),
+            transfer_group,
+        ];
+        output.push_str(
+            &fields
+                .iter()
+                .map(|value| csv_field(value))
+                .collect::<Vec<_>>()
+                .join(","),
+        );
+        output.push_str("\r\n");
+    }
+    let parent = destination.parent().unwrap_or_else(|| Path::new("."));
+    if !parent.is_dir() {
+        return Err(AppError::Validation(
+            "the export folder does not exist".into(),
+        ));
+    }
+    let staging = unique_sibling(destination, "csv-staging");
+    let result = (|| {
+        fs::write(&staging, output.as_bytes())?;
+        fs::rename(&staging, destination)?;
+        Ok(())
+    })();
+    if staging.exists() {
+        let _ = fs::remove_file(&staging);
+    }
+    result
+}
+
+#[tauri::command]
+fn export_activity_csv(
+    destination: PathBuf,
+    posting_ids: Vec<i64>,
+    database: tauri::State<Database>,
+) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        write_activity_csv(db, &destination, &posting_ids)
+    })
+}
 #[tauri::command]
 fn inspect_backup(source: PathBuf) -> Result<(), AppError> {
     validate_backup(&source)
@@ -2681,6 +3098,7 @@ pub fn run() {
             inspect_csv,
             preview_csv,
             commit_csv,
+            export_activity_csv,
             update_settings,
             backup_database,
             inspect_backup,
@@ -3430,7 +3848,8 @@ mod tests {
             expected_revision: 1,
         };
         assert!(validate_scenario_update(&input).is_ok());
-        input.allocations = vec![serde_json::json!({"accountId":"a","percentBps":5000})];
+        input.allocations =
+            vec![serde_json::json!({"id":"rule","accountId":"a","priority":1,"percentBps":5000})];
         assert!(matches!(
             validate_scenario_update(&input),
             Err(AppError::Validation(_))
@@ -3447,5 +3866,87 @@ mod tests {
             validate_scenario_update(&input),
             Err(AppError::Validation(_))
         ));
+    }
+
+    #[test]
+    fn scenario_aggregate_rejects_duplicate_and_malformed_events_and_allocations() {
+        let base = serde_json::json!({"id":"event","date":"2026-09-01","type":"one-time-income","amountCents":100});
+        let mut input = ScenarioUpdateInput {
+            id: "s".into(),
+            name: "Plan".into(),
+            assumptions: serde_json::json!({"inflationBps":250,"thresholdInflationBps":250}),
+            horizon_months: 12,
+            events: vec![base.clone(), base],
+            allocations: vec![],
+            expected_revision: 1,
+        };
+        assert!(matches!(
+            validate_scenario_update(&input),
+            Err(AppError::Validation(_))
+        ));
+        input.events = vec![
+            serde_json::json!({"id":"bad","date":"2026-09-01","type":"account-transfer","fromAccountId":"a","toAccountId":"a","amountCents":100}),
+        ];
+        assert!(matches!(
+            validate_scenario_update(&input),
+            Err(AppError::Validation(_))
+        ));
+        input.events.clear();
+        input.allocations =
+            vec![serde_json::json!({"id":"one","accountId":"a","priority":2,"percentBps":10000})];
+        assert!(matches!(
+            validate_scenario_update(&input),
+            Err(AppError::Validation(_))
+        ));
+    }
+
+    #[test]
+    fn activity_csv_is_rfc4180_utf8_signed_and_atomic() {
+        let c = seeded();
+        c.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description,note,transfer_group_id) VALUES('x','h','2026-08-09','expense','Café, \"lunch\"','line 1\nline 2',NULL),('t','h','2026-08-08','transfer','Transfer',NULL,'group-1')",[]).unwrap();
+        c.execute("INSERT INTO postings(entry_id,account_id,category_id,amount_cents) VALUES('x','a','c',-1250),('t','a',NULL,-5000),('t','b',NULL,5000)",[]).unwrap();
+        let ids: Vec<i64> = c
+            .prepare("SELECT id FROM postings ORDER BY id")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        let dir = test_dir("activity-export");
+        let destination = dir.join("activity.csv");
+        write_activity_csv(&c, &destination, &ids).unwrap();
+        let csv = fs::read_to_string(&destination).unwrap();
+        assert!(csv
+            .starts_with("date,type,description,note,account,category,amount,transfer group\r\n"));
+        assert!(csv.contains("\"Café, \"\"lunch\"\"\""));
+        assert!(csv.contains("\"line 1\nline 2\""));
+        assert!(csv.contains(",-12.50,"));
+        assert!(csv.contains(",-50.00,group-1\r\n"));
+        assert!(csv.contains(",50.00,group-1\r\n"));
+        fs::write(&destination, "keep me").unwrap();
+        assert!(write_activity_csv(&c, &destination, &[ids[0], ids[0]]).is_err());
+        assert_eq!(fs::read_to_string(&destination).unwrap(), "keep me");
+        assert!(write_activity_csv(&c, &destination, &[999_999]).is_err());
+        assert_eq!(fs::read_to_string(&destination).unwrap(), "keep me");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn activity_csv_rejects_empty_selection_and_foreign_household_posting() {
+        let c = seeded();
+        assert!(write_activity_csv(&c, Path::new("ignored.csv"), &[]).is_err());
+        c.execute(
+            "INSERT INTO households(id,name,state) VALUES('foreign','Other','CA')",
+            [],
+        )
+        .unwrap();
+        c.execute("INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,liquid) VALUES('foreign-a','foreign','Other','checking',0,1)",[]).unwrap();
+        c.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description) VALUES('foreign-x','foreign','2026-01-01','income','Other')",[]).unwrap();
+        c.execute("INSERT INTO postings(entry_id,account_id,amount_cents) VALUES('foreign-x','foreign-a',100)",[]).unwrap();
+        let id = c.last_insert_rowid();
+        let dir = test_dir("activity-foreign");
+        assert!(write_activity_csv(&c, &dir.join("out.csv"), &[id]).is_err());
+        assert!(!dir.join("out.csv").exists());
+        fs::remove_dir_all(dir).unwrap();
     }
 }

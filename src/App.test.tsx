@@ -148,6 +148,23 @@ describe("LifeLook shell", () => {
     render(<App repository={{...testRepository,bootstrap:async()=>({...data,accounts:[a,b],activity:[{...base,accountId:a.id,accountName:a.name,amountCents:-1000},{...base,postingId:2,accountId:b.id,accountName:b.name,amountCents:1000}]})}}/>);fireEvent.click(await screen.findByRole("button",{name:/Activity/}));
     expect(screen.getAllByRole("button",{name:"Edit Transfer"})).toHaveLength(1);fireEvent.click(screen.getByRole("button",{name:"Edit Transfer"}));expect(screen.getByRole("heading",{name:"Edit transfer"})).toBeInTheDocument();expect(screen.getByLabelText("From account")).toHaveValue(a.id);expect(screen.getByLabelText("To account")).toHaveValue(b.id);
   });
+  it("exports exactly the filtered Activity postings and disables empty exports",async()=>{
+    const data=await testRepository.bootstrap(), a=data.accounts[0], b={...a,id:"b",name:"Savings"};
+    const activity=[
+      {postingId:1,entryId:"meal",occurredOn:"2026-04-02",kind:"expense" as const,description:"Café lunch",note:"team",accountId:a.id,accountName:a.name,categoryId:"food",categoryName:"Food",amountCents:-1250,revision:1},
+      {postingId:2,entryId:"transfer",occurredOn:"2026-04-01",kind:"transfer" as const,description:"Transfer",transferGroupId:"group",accountId:a.id,accountName:a.name,amountCents:-5000,revision:1},
+      {postingId:3,entryId:"transfer",occurredOn:"2026-04-01",kind:"transfer" as const,description:"Transfer",transferGroupId:"group",accountId:b.id,accountName:b.name,amountCents:5000,revision:1},
+      {postingId:4,entryId:"old",occurredOn:"2025-01-01",kind:"income" as const,description:"Old pay",accountId:a.id,accountName:a.name,categoryId:"pay",categoryName:"Pay",amountCents:10000,revision:1},
+    ];
+    const exportActivityCsv=vi.fn(),selectActivityExportDestination=vi.fn().mockResolvedValue("/tmp/activity.csv");
+    render(<App repository={{...testRepository,bootstrap:async()=>({...data,accounts:[a,b],activity}),selectActivityExportDestination,exportActivityCsv}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Activity/}));
+    fireEvent.change(screen.getByLabelText("Search activity"),{target:{value:"transfer"}});
+    fireEvent.click(screen.getByRole("button",{name:"Export CSV"}));
+    await waitFor(()=>expect(exportActivityCsv).toHaveBeenCalledWith("/tmp/activity.csv",[2,3]));
+    fireEvent.change(screen.getByLabelText("Search activity"),{target:{value:"no matches"}});
+    expect(screen.getByRole("button",{name:"Export CSV"})).toBeDisabled();
+  });
   it("silently cancels backup and restore dialogs", async () => {
     const backupDatabase=vi.fn();const restoreDatabase=vi.fn();
     const repository={...testRepository,selectBackupDestination:vi.fn().mockResolvedValue(null),selectRestoreSource:vi.fn().mockResolvedValue(null),backupDatabase,restoreDatabase};

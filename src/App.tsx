@@ -49,6 +49,8 @@ import {
   type CsvPreview,
   type Asset,
   type Liability,
+  type RecurringEntry,
+  type ScenarioRecord,
   emptySettings,
 } from "./repository";
 
@@ -215,7 +217,7 @@ function Workspace({
 }: {
   bootstrap: Bootstrap;
   repository: Repository;
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
   onRestore: (value: BootstrapInput) => void;
 }) {
   const [view, setView] = useState<View>("Overview");
@@ -405,6 +407,13 @@ function Workspace({
             snapshot={snapshot}
             expanded={expanded}
             setExpanded={setExpanded}
+            recurring={bootstrap.recurring}
+            categories={bootstrap.categories}
+            accounts={bootstrap.accounts}
+            onAddRecurring={(kind, el) => openDialog({ type: "recurring", kind }, el)}
+            onEditRecurring={(recurring, el) => openDialog({ type: "recurring", recurring }, el)}
+            onAddScenario={(el) => openDialog({ type: "scenario-create", scenario: bootstrap.scenarios.find(s => s.id === selectedScenario.id) }, el)}
+            onEditScenario={(el) => openDialog({ type: "scenario-edit", scenario: bootstrap.scenarios.find(s => s.id === selectedScenario.id) }, el)}
           />
         )}
         {view === "Plan" && !projections && (
@@ -449,7 +458,11 @@ function Workspace({
           />
         )}
       </main>
-      {dialog?.type === "import" ? (
+      {dialog?.type === "recurring" ? (
+        <RecurringDialog state={dialog} bootstrap={bootstrap} repository={repository} close={closeDialog} refresh={onRefresh} />
+      ) : dialog?.type === "scenario-create" || dialog?.type === "scenario-edit" ? (
+        <ScenarioDialog state={dialog} scenarios={bootstrap.scenarios} repository={repository} close={closeDialog} refresh={onRefresh} select={setSelectedScenarioId} />
+      ) : dialog?.type === "import" ? (
         <CsvImportWizard
           bootstrap={bootstrap}
           repository={repository}
@@ -483,12 +496,14 @@ function Workspace({
 
 type DialogState = {
   type:
-    "chooser" | "transaction" | "transfer" | "account" | "reconcile" | "import" | "asset" | "liability";
+    "chooser" | "transaction" | "transfer" | "account" | "reconcile" | "import" | "asset" | "liability" | "recurring" | "scenario-create" | "scenario-edit";
   kind?: "income" | "expense";
   entry?: ActivityPosting[];
   account?: BootstrapAccount;
   asset?: Asset;
   liability?: Liability;
+  recurring?: RecurringEntry;
+  scenario?: ScenarioRecord;
   invoker?: HTMLElement | null;
 };
 
@@ -2410,6 +2425,28 @@ function ActivityView({
   );
 }
 
+const horizonLabel = (months: number) => months % 12 === 0 ? `${months / 12}-year` : `${months}-month`;
+
+function RecurringDialog({state,bootstrap,repository,close,refresh}:{state:DialogState;bootstrap:Bootstrap;repository:Repository;close:()=>void;refresh:()=>Promise<void>}) {
+  const record=state.recurring;
+  const initialKind=record ? (bootstrap.categories.find(c=>c.id===record.categoryId)?.kind === "income" ? "income" : "expense") : state.kind ?? "expense";
+  const [kind,setKind]=useState<"income"|"expense">(initialKind);
+  const available=bootstrap.categories.filter(c=>c.kind===kind);
+  const [name,setName]=useState(record?.name ?? ""),[categoryId,setCategoryId]=useState(record?.categoryId ?? available[0]?.id ?? ""),[accountId,setAccountId]=useState(record?.accountId ?? ""),[amount,setAmount]=useState(record ? String(record.amountCents/100) : ""),[frequency,setFrequency]=useState(record?.frequency ?? "monthly"),[startDate,setStartDate]=useState(record?.startDate ?? today()),[endDate,setEndDate]=useState(record?.endDate ?? ""),[growth,setGrowth]=useState(String((record?.annualGrowthBps ?? 0)/100));
+  const [busy,setBusy]=useState(false),[error,setError]=useState(""),[confirmDelete,setConfirmDelete]=useState(false); const errorRef=useRef<HTMLParagraphElement>(null);
+  useEffect(()=>{if(!available.some(c=>c.id===categoryId))setCategoryId(available[0]?.id??"")},[kind]); useEffect(()=>{if(error)errorRef.current?.focus()},[error]);
+  async function submit(e:FormEvent){e.preventDefault();setError("");const cents=parseMoney(amount),bps=parsePercent(growth);if(!name.trim())return setError("Name is required.");if(!categoryId)return setError(`Create an ${kind} category before adding this input.`);if(cents==null||cents<=0)return setError("Enter a positive USD amount with no more than two decimal places.");if(!startDate||endDate&&endDate<startDate)return setError("End date must be on or after the start date.");if(bps==null||bps < -10000||bps > 100000)return setError("Enter an annual growth rate within the supported range.");setBusy(true);try{const input={id:record?.id??crypto.randomUUID(),categoryId,accountId:accountId||null,name:name.trim(),amountCents:cents,frequency,startDate,endDate:endDate||null,annualGrowthBps:bps};if(record)await repository.updateRecurring?.({...input,expectedRevision:record.revision});else await repository.createRecurring?.(input);await refresh();close()}catch(x){setError(errorMessage(x,"Could not save this planning input."))}finally{setBusy(false)}}
+  async function remove(){setBusy(true);setError("");try{await repository.deleteRecurring?.({id:record!.id,expectedRevision:record!.revision});await refresh();close()}catch(x){setError(errorMessage(x,"Could not delete this planning input."));setConfirmDelete(false)}finally{setBusy(false)}}
+  return <div className="modal-backdrop"><section className="card modal entry-modal" role={confirmDelete?"alertdialog":"dialog"} aria-modal="true" aria-labelledby="recurring-title"><h2 id="recurring-title">{confirmDelete?"Delete planning input?":record?"Edit planning input":"Add planning input"}</h2>{error&&<p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}{confirmDelete?<><p>This permanently removes {record?.name} from future projections.</p><div className="actions"><button disabled={busy} onClick={()=>setConfirmDelete(false)}>Cancel</button><button className="danger" disabled={busy} onClick={remove}>{busy?"Deleting…":"Delete permanently"}</button></div></>:<form onSubmit={submit}><label>Type<select value={kind} onChange={e=>setKind(e.target.value as typeof kind)}><option value="income">Income</option><option value="expense">Expense</option></select></label><label>Name<input required value={name} onChange={e=>setName(e.target.value)}/></label><label>Category<select aria-label="Recurring category" value={categoryId} onChange={e=>setCategoryId(e.target.value)}>{available.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Account (optional)<select value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">No specific account</option>{bootstrap.accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label>Amount (USD)<input required inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)}/></label><label>Frequency<select value={frequency} onChange={e=>setFrequency(e.target.value as typeof frequency)}><option value="weekly">Weekly</option><option value="biweekly">Every two weeks</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annual">Annual</option></select></label><label>Start date<input required type="date" value={startDate} onChange={e=>setStartDate(e.target.value)}/></label><label>End date (optional)<input type="date" value={endDate} min={startDate} onChange={e=>setEndDate(e.target.value)}/></label><label>Annual growth (%)<input required inputMode="decimal" value={growth} onChange={e=>setGrowth(e.target.value)}/></label><div className="actions">{record&&<button type="button" className="danger-link" disabled={busy} onClick={()=>setConfirmDelete(true)}>Delete</button>}<button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy?"Saving…":"Save"}</button></div></form>}</section></div>
+}
+
+function ScenarioDialog({state,scenarios,repository,close,refresh,select}:{state:DialogState;scenarios:ScenarioRecord[];repository:Repository;close:()=>void;refresh:()=>Promise<void>;select:(id:string)=>void}) {
+  const editing=state.type==="scenario-edit", record=state.scenario; const [name,setName]=useState(editing?record?.name??"":`${record?.name ?? "Baseline"} copy`),[clone,setClone]=useState(true),[inflation,setInflation]=useState(String((record?.assumptions.inflationBps??250)/100)),[threshold,setThreshold]=useState(String((record?.assumptions.thresholdInflationBps??250)/100)),[horizon,setHorizon]=useState(String(record?.horizonMonths??120)),[busy,setBusy]=useState(false),[error,setError]=useState(""),[confirmDelete,setConfirmDelete]=useState(false);const errorRef=useRef<HTMLParagraphElement>(null);useEffect(()=>{if(error)errorRef.current?.focus()},[error]);
+  async function submit(e:FormEvent){e.preventDefault();setError("");if(!name.trim())return setError("Scenario name is required.");if(scenarios.some(s=>s.id!==record?.id&&s.name.trim().toLowerCase()===name.trim().toLowerCase()))return setError("A scenario with this name already exists.");setBusy(true);try{if(editing){const i=parsePercent(inflation),t=parsePercent(threshold),h=/^\d+$/.test(horizon)?Number(horizon):0;if(i==null||t==null||i < -10000||i > 100000||t < -10000||t > 100000)throw {message:"Enter assumption rates within the supported range."};if(h<1||h>480)throw {message:"Projection horizon must be between 1 and 480 months."};await repository.updateScenario?.({id:record!.id,name:name.trim(),assumptions:{inflationBps:i,thresholdInflationBps:t},horizonMonths:h,events:record!.events,allocations:record!.allocations,expectedRevision:record!.revision});await refresh();select(record!.id)}else{const id=crypto.randomUUID();await repository.createScenario?.({id,name:name.trim(),cloneFromId:clone?record?.id??null:null});await refresh();select(id)}close()}catch(x){setError(errorMessage(x,"Could not save this scenario."))}finally{setBusy(false)}}
+  async function remove(){setBusy(true);setError("");try{await repository.deleteScenario?.({id:record!.id,expectedRevision:record!.revision});await refresh();const next=scenarios.find(s=>s.id!==record!.id)?.id??"";select(next);close()}catch(x){setError(errorMessage(x,"Could not delete this scenario."));setConfirmDelete(false)}finally{setBusy(false)}}
+  return <div className="modal-backdrop"><section className="card modal entry-modal" role={confirmDelete?"alertdialog":"dialog"} aria-modal="true" aria-labelledby="scenario-title"><h2 id="scenario-title">{confirmDelete?"Delete scenario?":editing?"Edit scenario":"New scenario"}</h2>{error&&<p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}{confirmDelete?<><p>This permanently removes {record?.name}. The baseline and planning inputs remain.</p><div className="actions"><button disabled={busy} onClick={()=>setConfirmDelete(false)}>Cancel</button><button className="danger" disabled={busy} onClick={remove}>{busy?"Deleting…":"Delete permanently"}</button></div></>:<form onSubmit={submit}><label>Name<input required disabled={record?.isBaseline} value={name} onChange={e=>setName(e.target.value)}/></label>{!editing&&<label className="check"><input type="checkbox" checked={clone} onChange={e=>setClone(e.target.checked)}/> Clone active scenario settings</label>}{editing&&<><label>Inflation (%)<input inputMode="decimal" required value={inflation} onChange={e=>setInflation(e.target.value)}/></label><label>Tax-threshold inflation (%)<input inputMode="decimal" required value={threshold} onChange={e=>setThreshold(e.target.value)}/></label><label>Projection horizon (months)<input type="number" min="1" max="480" required value={horizon} onChange={e=>setHorizon(e.target.value)}/></label></>}<div className="actions">{editing&&!record?.isBaseline&&<button type="button" className="danger-link" disabled={busy} onClick={()=>setConfirmDelete(true)}>Delete</button>}<button type="button" disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy}>{busy?"Saving…":editing?"Save":"Create scenario"}</button></div></form>}</section></div>
+}
+
 function PlanView({
   projections,
   scenarios,
@@ -2418,6 +2455,13 @@ function PlanView({
   snapshot,
   expanded,
   setExpanded,
+  recurring,
+  categories,
+  accounts,
+  onAddRecurring,
+  onEditRecurring,
+  onAddScenario,
+  onEditScenario,
 }: {
   projections: ReturnType<typeof ProjectionEngine.calculate>;
   scenarios: Scenario[];
@@ -2426,6 +2470,13 @@ function PlanView({
   snapshot: FinancialSnapshot;
   expanded: number | null;
   setExpanded: (x: number | null) => void;
+  recurring: RecurringEntry[];
+  categories: Bootstrap["categories"];
+  accounts: BootstrapAccount[];
+  onAddRecurring: (kind: "income" | "expense", el: HTMLElement) => void;
+  onEditRecurring: (entry: RecurringEntry, el: HTMLElement) => void;
+  onAddScenario: (el: HTMLElement) => void;
+  onEditScenario: (el: HTMLElement) => void;
 }) {
   const [comparisonIds, setComparisonIds] = useState<string[]>([]);
   const comparisons = scenarios.filter(s => comparisonIds.includes(s.id)).map(s => ({ scenario: s, years: ProjectionEngine.calculate(snapshot, s) }));
@@ -2437,15 +2488,23 @@ function PlanView({
           <span className="label assumption">Assumptions</span>
           <h3>{scenarios.find(s => s.id === selectedScenarioId)?.name ?? "Baseline"} plan</h3>
           {scenarios.length > 0 && <select aria-label="Active scenario" value={selectedScenarioId} onChange={event => onSelectScenario(event.target.value)}>{scenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
+          <div className="inline-actions"><button onClick={e => onAddScenario(e.currentTarget)}>New scenario</button><button disabled={!scenarios.length} onClick={e => onEditScenario(e.currentTarget)}>Edit scenario</button></div>
         </div>
         <div aria-label="Compare scenarios">{scenarios.map(s => <label key={s.id}><input type="checkbox" checked={comparisonIds.includes(s.id)} disabled={!comparisonIds.includes(s.id) && comparisonIds.length >= 3} onChange={() => setComparisonIds(ids => ids.includes(s.id) ? ids.filter(id => id !== s.id) : [...ids, s.id])}/>{s.name}</label>)}</div>
       </div>
       {comparisons.length > 1 && <section className="card wide" aria-label="Scenario comparison"><h3>Scenario comparison</h3><div className="year-table"><div className="year-row table-head"><span>Year</span>{comparisons.map(x => <span key={x.scenario.id}>{x.scenario.name}</span>)}</div>{comparisonYears.map(year => <div className="year-row" key={year}><span>{year}</span>{comparisons.map(x => { const row=x.years.find(y => y.year===year); return <span key={x.scenario.id}>{row ? `${money(row.endingNetWorthCents,true)} · deficit ${money(row.unfundedDeficitCents,true)}` : "—"}</span>})}</div>)}</div></section>}
+      <section className="card wide" aria-label="Planning inputs">
+        <div className="card-title"><div><span className="label assumption">Inputs</span><h3>Planning inputs</h3></div><div className="inline-actions"><button onClick={e => onAddRecurring("income", e.currentTarget)}>Add income</button><button onClick={e => onAddRecurring("expense", e.currentTarget)}>Add expense</button></div></div>
+        <div className="planning-inputs">
+          {recurring.map(entry => { const category=categories.find(c=>c.id===entry.categoryId); const account=accounts.find(a=>a.id===entry.accountId); return <button className="transaction transaction-action" key={entry.id} onClick={e=>onEditRecurring(entry,e.currentTarget)} aria-label={`Edit recurring ${entry.name}`}><span className="transaction-icon">{category?.kind === "income" ? <ArrowDownRight size={17}/> : <ArrowUpRight size={17}/>}</span><div><strong>{entry.name}</strong><small>{category?.name ?? "Uncategorized"}{account ? ` · ${account.name}` : ""} · {entry.frequency}</small></div><b className={category?.kind === "income" ? "positive" : ""}>{money(category?.kind === "income" ? entry.amountCents : -entry.amountCents)}</b></button>})}
+          {!recurring.length && <p className="empty">No recurring planning inputs yet.</p>}
+        </div>
+      </section>
       <section className="card wide">
         <div className="card-title">
           <div>
             <span className="label projected">Projected</span>
-            <h3>10-year outlook</h3>
+            <h3>{horizonLabel(scenarios.find(s => s.id === selectedScenarioId)?.horizon.months ?? 120)} outlook</h3>
           </div>
           <small>Click a year for monthly detail</small>
         </div>

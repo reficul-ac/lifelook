@@ -36,17 +36,17 @@ The AppImage is written under `src-tauri/target/release/bundle/appimage/`. This 
 5. Choose System, Light, or Dark appearance and reduced motion in Settings; these choices persist locally.
 6. In Settings, choose **Back up data** to save a portable `.lifelook` file. Choose **Restore** to replace the current workspace after reviewing the confirmation warning.
 
-CSV export and scenario editing/comparison are not available in the current pre-release interface.
+CSV export is not available in the current pre-release interface. Dated scenario events and allocation editing remain follow-up work.
 
 ## Feature guide
 
 - **Overview** shows current cash flow, savings, taxes, and net-worth direction without burying the headline in transaction detail.
 - **Activity** supports manual income, expense, and transfer creation, editing, and deletion. Imported rows are read-only for editing but individually deletable; transfers are deleted as one atomic event. Transfers are grouped as one balance-neutral event, with text, account, and year filters.
-- **Plan** starts with years and expands into deterministic monthly calculations. Actuals fill elapsed periods while assumptions drive future projections.
+- **Plan** manages recurring income and expenses and projects them by exact amount, frequency, date range, and annual growth. Create scenarios from defaults or clone the active plan, edit inflation/tax-threshold assumptions and a 1–480 month horizon, and compare up to three saved scenarios.
 - **Net Worth** brings liquid accounts, investments, assets, mortgages, and other liabilities into one balance sheet. Assets and debts support create, edit, and confirmed deletion. Mortgage projections amortize principal and interest from the recorded current balance; taxes, insurance, and escrow are excluded. Accounts can be added, renamed, retyped, and reconciled with an auditable adjustment. Only empty, non-final accounts with no financial references can be deleted.
 - **CSV import** supports UTF-8 files up to 10 MiB and 50,000 rows, saved mappings, ISO or US dates, signed or debit/credit amounts, category review, duplicate warnings with explicit override, and all-or-nothing commits. CSV export remains future work.
 - **Tax estimates** apply versioned federal, payroll, and California planning rules. Explanations disclose the source year, effective and marginal rates, projected threshold growth, and exclusions.
-- **Scenario comparison** is future work; saved baseline data can be loaded but cannot yet be edited in the interface.
+- **Scenario comparison** shows annual net worth and unfunded deficits for up to three selected scenarios. Baseline is fixed; other scenarios can be cloned, renamed, edited, and deleted.
 - **Backup/restore** creates portable, unencrypted `.lifelook` snapshots. Restore validates and stages the selected backup before replacing the current local workspace; the selected backup itself is not modified.
 
 ### Actuals, assumptions, and projections
@@ -69,4 +69,4 @@ LifeLook provides planning estimates, not tax, legal, accounting, or investment 
 
 ## Status
 
-The repository contains the Tauri/React foundation, local SQLite migration and state commands, manual ledger and account/asset/liability management, guarded deletion, CSV import, deterministic asset growth and debt/mortgage amortization, a pure typed projection/tax domain, an accessible responsive interface, and unit/component/native tests. Scenario editing, CSV export, allocation waterfalls, escrow-aware mortgage modeling, and official tax-fixture validation remain pre-release work tracked in [PLAN.md](PLAN.md).
+The repository contains the Tauri/React foundation, local SQLite migration and state commands, manual ledger, recurring cash-flow, scenario, and account/asset/liability management, guarded deletion, CSV import, deterministic asset growth and debt/mortgage amortization, a pure typed projection/tax domain, an accessible responsive interface, and unit/component/native tests. CSV export, dated scenario events, allocation editing, escrow-aware mortgage modeling, and official tax-fixture validation remain pre-release work tracked in [PLAN.md](PLAN.md).

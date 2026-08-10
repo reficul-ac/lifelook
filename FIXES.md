@@ -6,7 +6,7 @@ This is a current-branch backlog, not a snapshot of the original audit. `PLAN.md
 
 - Reconciled branch: current worktree based on `d81bbf1855dfcc694f8970898f40db4d780b8314`.
 - Reconciliation date: 2026-08-09 America/Los_Angeles.
-- Current automated baseline: 35 frontend tests, 23 Rust tests, and 5 native WebDriver scenarios.
+- Current automated baseline: 44 frontend tests, 24 Rust tests, and 5 native WebDriver scenarios.
 - Native evidence: `artifacts/native-e2e/`, generated from the release binary with isolated profiles.
 - Terms used below:
   - **Implemented/component-tested** means code or an injected-repository test passed; it is not persistence evidence.
@@ -23,7 +23,7 @@ No P0 defect is known. Native acceptance covers onboarding through relaunch, mem
 | Shell/navigation | All five destinations, the six-mode Add menu, and honest disabled controls are implemented | Navigation, current state, focus, and 920×650 minimum accepted | Profile and global-search implementations |
 | Overview | Current balances/activity totals are derived; projections require a saved tax profile | Transaction-driven income, spending, saved amount, and net worth survive relaunch | Broader planning inputs |
 | Activity | Manual/import/transfer deletion and reviewed CSV import are implemented with component and persistence-backed Rust coverage | Native mutation, editing, deletion, grouped transfers, mixed-file CSV import, search/account/year filters, exact totals, and relaunch persistence accepted | CSV export and broader planning inputs |
-| Plan | Saved tax/current domain snapshot feeds deterministic projection; disclosure semantics implemented | Expanded rows accepted at 920×650, 1024×768, and 1280×820 with long names | Scenario selection/editing and full domain-entry UI |
+| Plan | Recurring income/expense CRUD, scenario create/clone/edit/delete, dynamic horizons, selection, and three-way comparison feed deterministic projections | Expanded rows accepted at 920×650, 1024×768, and 1280×820 with long names | Dated scenario events, allocation editing, and native planning-mutation acceptance |
 | Net Worth | Account, asset, and liability CRUD; mortgage terms; signed credit balances; reconciliation; and guarded empty-account deletion are implemented/component/Rust-tested | Account/asset/liability creation and editing, mortgage persistence, deletion, exact balances/net worth, and relaunch persistence accepted | Scenario-linked asset/liability events |
 | Settings members | Save busy/error/retry behavior is component-tested | Edited long member name survives relaunch | Native write-failure injection and calendar coverage |
 | Appearance | System/light/dark and reduced motion persist | Dark and reduced motion survive process relaunch | Native OS preference-change simulation |
@@ -47,7 +47,7 @@ No P0 defect is known. Native acceptance covers onboarding through relaunch, mem
 | I-009 | Overview current net worth/cash flow/tax labels | Implemented/component-tested | Derived from bootstrap; tax output withheld without profile |
 | I-010 | Activity creation/editing/deletion, grouped transfers, mixed CSV import, search, account/year filters | Native accepted | Exact edited ledger balances, atomic transfer deletion, duplicate override, filter isolation, grouped rendering, dynamic years, and relaunch persistence covered |
 | I-011 | Plan expanders and monthly regions | Native accepted | Three supported viewports, including expanded rows |
-| I-012 | Scenario comparison | Honestly unavailable | Selection/editing remains open |
+| I-012 | Scenario comparison | Implemented/component-tested | Select and compare up to three persisted scenarios; native mutation/relaunch coverage remains open |
 | I-013 | Net Worth current balances and credit/liability sections | Native accepted for account, asset, generic liability, and mortgage CRUD/persistence, including exact totals and relaunch | Scenario-linked asset/liability events remain open |
 | I-014 | Net Worth zero-account action | Implemented/component-tested | Add account opens the shared account dialog |
 | I-015 | Settings member save, rejection, retained draft, retry | Implemented/component-tested | Successful member edit survives native relaunch |
@@ -87,7 +87,7 @@ No P0 defect is known. Native acceptance covers onboarding through relaunch, mem
 - **Status:** Narrowed; ledger/account-derived views native accepted.
 - Bootstrap includes current account balances, tax profile, activity, recurring items, assets, liabilities, and scenarios. Overview/Plan/Net Worth consume that snapshot.
 - Release-binary acceptance proves exact Overview and Net Worth values after transaction/transfer edits, second-account rename, reconciliation, and process relaunch.
-- Scenario selection/editing remains blocked. Asset and liability CRUD, mortgage terms, independent asset growth, and monthly debt amortization are implemented.
+- Scenario selection/comparison and create/clone/edit/delete are implemented. Recurring cash-flow CRUD drives projections. Asset and liability CRUD, mortgage terms, independent asset growth, and monthly debt amortization are implemented.
 
 ### F-006 — Credit-card sign handling increased net worth
 
@@ -159,11 +159,11 @@ No P0 defect is known. Native acceptance covers onboarding through relaunch, mem
 ### F-020 — README mixed shipped and future flows
 
 - **Status:** Reconciled.
-- The quick start describes reachable onboarding, creation/editing, CSV, current-balance, appearance, and backup/restore behavior; scenario comparison and CSV export remain explicitly unavailable.
+- The quick start describes reachable onboarding, recurring and scenario planning, creation/editing, CSV, current-balance, appearance, and backup/restore behavior; CSV export remains explicitly unavailable.
 
 ## Prioritized repair sequence
 
-1. Implement scenario selection/editing and expose remaining recurring income/expense and scenario-event inputs (F-005/F-008).
+1. Add dated scenario-event and allocation-rule editors plus native planning mutation/relaunch evidence (F-005/F-008).
 2. Add the chart nonvisual alternative, strict offline test, and remaining native failure/calendar variants (F-013/F-014).
 3. Extend AppImage acceptance to mutation/relaunch and export/file-dialog behavior (F-019).
 

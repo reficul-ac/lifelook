@@ -1688,6 +1688,8 @@ fn update_scenario(
             "major-purchase",
         ];
         let mut priorities = HashSet::new();
+        let mut goal_ids = HashSet::new();
+        let mut earmarks: HashMap<String, i64> = HashMap::new();
         for goal in &input.goals {
             let id = goal
                 .get("id")
@@ -1703,22 +1705,46 @@ fn update_scenario(
                 .get("targetDate")
                 .and_then(|x| x.as_str())
                 .unwrap_or("");
+            let name = goal
+                .get("name")
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .trim();
+            let scenario_id = goal
+                .get("scenarioId")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
+            let earmark = json_i64(goal, "startingEarmarkedCents").unwrap_or(-1);
             if !supported_goals.contains(&kind)
+                || id.trim().is_empty()
+                || !goal_ids.insert(id)
+                || name.is_empty()
+                || scenario_id != input.id
                 || priority < 1
                 || !priorities.insert(priority)
                 || !valid_iso_date(date)
+                || !(0..=MAX_MONEY_CENTS).contains(&earmark)
+                || !goal.get("enabled").is_some_and(|x| x.is_boolean())
+                || !goal.get("todayDollarBasis").is_some_and(|x| x.is_boolean())
+                || !goal
+                    .get("allowCashShortfall")
+                    .is_some_and(|x| x.is_boolean())
             {
                 return Err(AppError::Validation(
-                    "goal type, priority, or target date is invalid".into(),
+                    "goal identity, name, priority, date, or common funding fields are invalid"
+                        .into(),
                 ));
             }
-            if let Some(destination) = goal.get("destinationAccountId").and_then(|x| x.as_str()) {
-                if !owns("accounts", destination)? {
-                    return Err(AppError::Validation(
-                        "goal destination account does not belong to this household".into(),
-                    ));
-                }
+            let destination = goal
+                .get("destinationAccountId")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
+            if !owns("accounts", destination)? {
+                return Err(AppError::Validation(
+                    "goal destination account does not belong to this household".into(),
+                ));
             }
+            *earmarks.entry(destination.to_owned()).or_default() += earmark;
             if kind == "debt-payoff" {
                 let liability = goal
                     .get("liabilityId")
@@ -1730,7 +1756,164 @@ fn update_scenario(
                     ));
                 }
             }
+            if kind == "emergency-fund" {
+                let months = json_i64(goal, "coverageMonths").unwrap_or(0);
+                let expenses = goal
+                    .get("expenseEntryIds")
+                    .and_then(|x| x.as_array())
+                    .ok_or_else(|| {
+                        AppError::Validation("emergency expenses are required".into())
+                    })?;
+                if !(1..=120).contains(&months)
+                    || expenses.is_empty()
+                    || json_i64(goal, "minimumTargetCents")
+                        .is_some_and(|x| !(0..=MAX_MONEY_CENTS).contains(&x))
+                {
+                    return Err(AppError::Validation("invalid emergency goal".into()));
+                }
+                for expense in expenses {
+                    let id = expense.as_str().unwrap_or("");
+                    if !owns("recurring_entries", id)? {
+                        return Err(AppError::Validation(
+                            "goal expense does not belong to this household".into(),
+                        ));
+                    }
+                    let expense_kind: String = tx.query_row("SELECT c.kind FROM recurring_entries r JOIN categories c ON c.id=r.category_id WHERE r.id=?",[id],|row|row.get(0))?;
+                    if expense_kind != "expense" {
+                        return Err(AppError::Validation(
+                            "emergency goals can reference only recurring expenses".into(),
+                        ));
+                    }
+                }
+            } else if kind == "education" {
+                let beneficiary = goal
+                    .get("beneficiary")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .trim();
+                let start = goal
+                    .get("attendanceStartDate")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("");
+                let end = goal
+                    .get("attendanceEndDate")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("");
+                if beneficiary.is_empty()
+                    || !valid_iso_date(start)
+                    || !valid_iso_date(end)
+                    || end < start
+                    || !json_i64(goal, "annualCostCents")
+                        .is_some_and(|x| (1..=MAX_MONEY_CENTS).contains(&x))
+                    || !json_i64(goal, "educationInflationBps")
+                        .is_some_and(|x| (0..=100_000).contains(&x))
+                {
+                    return Err(AppError::Validation("invalid education goal".into()));
+                }
+            } else if kind == "major-purchase" {
+                let purchase = goal
+                    .get("purchaseDate")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("");
+                if purchase != date
+                    || !json_i64(goal, "costCents")
+                        .is_some_and(|x| (1..=MAX_MONEY_CENTS).contains(&x))
+                {
+                    return Err(AppError::Validation("invalid major purchase goal".into()));
+                }
+            } else if kind == "retirement" {
+                let participants = goal
+                    .get("participantIds")
+                    .and_then(|x| x.as_array())
+                    .ok_or_else(|| {
+                        AppError::Validation("retirement participants are required".into())
+                    })?;
+                let dates = goal
+                    .get("retirementDates")
+                    .and_then(|x| x.as_object())
+                    .ok_or_else(|| AppError::Validation("retirement dates are required".into()))?;
+                let ages = goal
+                    .get("planningThroughAges")
+                    .and_then(|x| x.as_object())
+                    .ok_or_else(|| AppError::Validation("planning ages are required".into()))?;
+                if participants.is_empty()
+                    || !json_i64(goal, "desiredSpendingCents")
+                        .is_some_and(|x| (0..=MAX_MONEY_CENTS).contains(&x))
+                    || !json_i64(goal, "healthcareCents")
+                        .is_some_and(|x| (0..=MAX_MONEY_CENTS).contains(&x))
+                    || !json_i64(goal, "healthcareGrowthBps")
+                        .is_some_and(|x| (0..=100_000).contains(&x))
+                {
+                    return Err(AppError::Validation("invalid retirement goal".into()));
+                }
+                if json_i64(goal, "desiredSpendingCents").unwrap_or(0)
+                    + json_i64(goal, "healthcareCents").unwrap_or(0)
+                    <= 0
+                {
+                    return Err(AppError::Validation(
+                        "retirement spending or healthcare must be positive".into(),
+                    ));
+                }
+                for participant in participants {
+                    let id = participant.as_str().unwrap_or("");
+                    let retirement = dates.get(id).and_then(|x| x.as_str()).unwrap_or("");
+                    let age = ages.get(id).and_then(|x| x.as_i64()).unwrap_or(0);
+                    if !owns("people", id)?
+                        || !valid_iso_date(retirement)
+                        || !(1..=120).contains(&age)
+                    {
+                        return Err(AppError::Validation(
+                            "invalid retirement participant".into(),
+                        ));
+                    }
+                    let birth: Option<String> =
+                        tx.query_row("SELECT birth_date FROM people WHERE id=?", [id], |row| {
+                            row.get(0)
+                        })?;
+                    if birth.is_none() {
+                        return Err(AppError::Validation(
+                            "retirement participants need birth dates".into(),
+                        ));
+                    }
+                }
+                let pensions =
+                    goal.get("pensions")
+                        .and_then(|x| x.as_array())
+                        .ok_or_else(|| {
+                            AppError::Validation("retirement pensions are required".into())
+                        })?;
+                let mut pension_ids = HashSet::new();
+                for pension in pensions {
+                    let id = pension.get("id").and_then(|x| x.as_str()).unwrap_or("");
+                    let name = pension
+                        .get("name")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .trim();
+                    let start = pension
+                        .get("startDate")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("");
+                    if id.is_empty()
+                        || !pension_ids.insert(id)
+                        || name.is_empty()
+                        || !valid_iso_date(start)
+                        || !json_i64(pension, "monthlyCents")
+                            .is_some_and(|x| (1..=MAX_MONEY_CENTS).contains(&x))
+                    {
+                        return Err(AppError::Validation("invalid retirement pension".into()));
+                    }
+                }
+            }
             tx.execute("INSERT INTO scenario_goals(id,scenario_id,goal_type,priority,payload_json,revision) VALUES(?1,?2,?3,?4,?5,1)",params![id,input.id,kind,priority,serde_json::to_string(goal)?])?;
+        }
+        for (account_id, earmark) in earmarks {
+            let balance:i64=tx.query_row("SELECT opening_balance_cents+COALESCE((SELECT SUM(p.amount_cents) FROM postings p WHERE p.account_id=accounts.id),0) FROM accounts WHERE id=?",[account_id],|row|row.get(0))?;
+            if earmark > balance.max(0) {
+                return Err(AppError::Validation(
+                    "combined goal earmarks exceed the destination account balance".into(),
+                ));
+            }
         }
         tx.commit()?;
         Ok(())
@@ -3364,6 +3547,22 @@ fn retry_database(database: &Database) -> Result<WorkspaceSnapshot, AppError> {
     }
 }
 
+#[tauri::command]
+fn system_theme_dark() -> Option<bool> {
+    let output = std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", "color-scheme"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value = String::from_utf8(output.stdout).ok()?;
+    Some(
+        value.trim_matches(|character: char| character.is_whitespace() || character == '\'')
+            == "prefer-dark",
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -3419,7 +3618,8 @@ pub fn run() {
             backup_database,
             inspect_backup,
             restore_database,
-            retry_startup
+            retry_startup,
+            system_theme_dark
         ])
         .run(tauri::generate_context!())
         .expect("failed to run LifeLook")

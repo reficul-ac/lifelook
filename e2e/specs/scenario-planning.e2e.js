@@ -29,7 +29,7 @@ describe("LifeLook native scenario planning",()=>{
   assert.equal(await $("aria/Allocation 1 percent").getValue(),"100");
   assert.equal(await $("aria/Allocation 1 percent").isEnabled(),false);
   await $("aria/Save plan").click();
-  await browser.waitUntil(async()=>!(await $('//section[@role="dialog" and .//*[contains(normalize-space(),"Plan events")]]').isExisting()),{timeout:5_000,timeoutMsg:`Planning dialog did not close: ${(await $$('[role="alert"]')).length ? await (await $$('[role="alert"]'))[0].getText() : "no error shown"}`});
+  await browser.waitUntil(async()=>!(await $('//section[@role="dialog" and .//*[contains(normalize-space(),"Plan goals")]]').isExisting()),{timeout:5_000,timeoutMsg:`Planning dialog did not close: ${(await $$('[role="alert"]')).length ? await (await $$('[role="alert"]'))[0].getText() : "no error shown"}`});
   await browser.waitUntil(async()=>/\$12K|\$12,000/.test(await firstYearIncome()),{timeout:10_000,timeoutMsg:`Projected first-year income did not change (last value: ${await firstYearIncome()})`});
 
   await $("aria/Active scenario").selectByVisibleText("Baseline");

@@ -5,8 +5,8 @@ This is a current-branch backlog, not a snapshot of the original audit. `PLAN.md
 ## Verification record
 
 - Reconciled branch: current worktree based on `d81bbf1855dfcc694f8970898f40db4d780b8314`.
-- Reconciliation date: 2026-08-09 America/Los_Angeles.
-- Current automated baseline: 52 frontend tests, 27 Rust tests, 9 isolated release-binary WebDriver scenarios, and 1 packaged AppImage acceptance scenario.
+- Reconciliation date: 2026-08-10 America/Los_Angeles.
+- Current automated baseline: 58 frontend tests and 27 Rust tests. The release binary passed the general acceptance, financial-record, and live System-theme scenarios in this worktree; the built AppImage passed validation plus both isolated recovery variants. A complete native-suite rerun is still required before updating the final tested commit and aggregate native count.
 - Native evidence: `artifacts/native-e2e/`, generated from the release binary with isolated profiles.
 - Terms used below:
   - **Implemented/component-tested** means code or an injected-repository test passed; it is not persistence evidence.
@@ -20,17 +20,17 @@ No P0 defect is known. Native acceptance covers onboarding variants and interrup
 | Screen or flow | Current implementation | Native acceptance | Still blocked |
 |---|---|---|---|
 | Onboarding | Household, members, filing status, typed accounts, recurring income/expenses, assets, debts, exact money parsing, and credit signs are implemented/component-tested | Add/remove/Back, guided financial inputs, calendar birth date, interruption/relaunch, and credit/investment/retirement accounts accepted | None for current scope |
-| Shell/navigation | All five destinations, local global search, the six-mode Add menu, and an accessible Workspace menu are implemented | Navigation, search navigation/focus, current state, focus, and 920×650 minimum accepted | Native Workspace-menu coverage |
+| Shell/navigation | All five destinations, local global search, the six-mode Add menu, and an accessible keyboard-complete Workspace menu with path, Settings, and backup feedback are implemented/component-tested | Navigation, search navigation/focus, current state, focus, and 920×650 minimum accepted | Native Workspace-menu coverage |
 | Overview | Current balances/activity totals are derived; projections require a saved tax profile | Transaction-driven income, spending, saved amount, and net worth survive relaunch | None for current scope |
 | Activity | Manual/import/export/transfer deletion and reviewed CSV import are implemented with component and persistence-backed Rust coverage | Native filtering/export, global-search focus, mutation, editing, deletion, grouped transfers, mixed-file CSV import, exact totals, and relaunch persistence accepted | None for current scope |
-| Plan | Recurring CRUD, all dated event variants, ordered surplus allocations, scenario CRUD/clone, dynamic horizons, selection, and comparison feed deterministic projections | Planning mutation, clone isolation, changed totals, allocations, and relaunch persistence accepted | None for current scope |
+| Plan | Recurring CRUD, all dated event variants, ordered surplus allocations, scenario CRUD/clone, dynamic horizons, selection, comparison, and all five priority-ordered funding-goal variants feed deterministic projections | Planning mutation, clone isolation, changed totals, allocations, and relaunch persistence accepted | Native five-goal persistence and clone-isolation coverage |
 | Net Worth | Account, asset, liability, and scenario-linked asset/debt lifecycle editing; mortgage terms; signed credit balances; reconciliation; and guarded deletion are implemented/component/Rust-tested | Current-record CRUD and general scenario mutation/relaunch accepted | Native coverage of every scenario lifecycle variant |
 | Settings members | Save busy/error/retry behavior is component-tested | Real SQLite failure, announced/focused error, retained draft, retry, calendar date, and relaunch persistence accepted | None for current scope |
-| Appearance | System/light/dark and reduced motion persist | Dark and reduced motion survive process relaunch | Native OS preference-change simulation |
+| Appearance | System/light/dark and reduced motion persist; System follows GNOME `color-scheme` changes through the native bridge while retaining media-query support | Dark and reduced motion survive process relaunch; both live System changes passed under D-Bus | None for current scope |
 | Backup/restore | Staged atomic backup/restore, confirmation, error recovery, and refresh are implemented | Native and packaged AppImage dialog round trips accepted, including relaunch persistence | None for current scope |
-| Startup recovery | Structured corrupt/unwritable recovery and Retry are component/Rust-tested | Corrupt bytes retain the same SHA-256; repaired permissions reopen the same profile | Packaged/AppImage recovery variant |
+| Startup recovery | Structured corrupt/unwritable recovery and Retry are component/Rust-tested | Release and AppImage recovery runs preserve corrupt bytes and reopen the repaired same path | Full CI rerun/upload confirmation |
 | Supply chain/CI | Zero-advisory production/full npm gates and pinned Rust audits gate CI; native tests use standalone WebdriverIO with Node's test runner | Not applicable | None for current scope |
-| AppImage | Build, content validation, visible-window smoke, packaged mutation/export/restore/relaunch, and artifact upload gate CI | Packaged isolated-profile acceptance | Packaged recovery variant |
+| AppImage | Build, content validation, visible-window smoke, packaged mutation/export/restore/relaunch, reusable packaged recovery, and artifact upload gate CI | Packaged isolated-profile acceptance; both recovery variants passed locally with `APPIMAGE_EXTRACT_AND_RUN=1` | Full CI rerun/upload confirmation |
 
 ## Interaction inventory
 
@@ -65,9 +65,9 @@ No P0 defect is known. Native acceptance covers onboarding variants and interrup
 
 ## Deduplicated findings
 
-### F-002 — Remaining unavailable profile control
+### F-002 — Workspace control
 
-- **Status:** Narrowed to Profile, which remains honestly disabled. Global Search and Add are implemented and tested.
+- **Status:** Implemented/component-tested. The local Workspace menu is the Profile finding's resolution; it exposes the household, local profile path, Settings navigation, and backup action with keyboard navigation, focus restoration, loading, success, and error feedback. Native menu coverage remains to be added.
 - Add now opens income, expense, transfer, account, asset, and debt creation. Net Worth creation controls and backup/restore selection are functional.
 - Global Search indexes the current bootstrap snapshot locally, deduplicates transfers, and navigates to and focuses Activity, Plan, and Net Worth records. Release-binary acceptance covers `Ctrl+K` activation against a persisted transaction.
 
@@ -164,6 +164,7 @@ No P0 defect is known. Native acceptance covers onboarding variants and interrup
 
 ## Prioritized repair sequence
 
-1. Add broader planning inputs beyond the currently supported scenario, recurring, asset, liability, account, and tax-profile editors.
+1. Native-accept all five shipped funding-goal variants, including edit/reorder/disable/delete, relaunch persistence, and clone isolation.
+2. Add native Workspace-menu coverage and complete the full native/AppImage CI evidence rerun.
 
 A finding is complete only when its observable acceptance criteria pass at the appropriate layer. Source inspection and component tests are never labeled as native persistence or packaged-runtime evidence.

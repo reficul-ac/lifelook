@@ -13,6 +13,6 @@ describe("LifeLook unwritable-profile recovery", () => {
     await $("aria/Retry").click();
     await $("aria/Tell us about your household").waitForDisplayed();
     assert.equal(existsSync(profile), true);
-    await browser.saveScreenshot(resolve("artifacts/native-e2e/08-unwritable-profile-repaired.png"));
+    await browser.saveScreenshot(resolve(process.env.LIFELOOK_E2E_ARTIFACT_DIR ?? "artifacts/native-e2e", "08-unwritable-profile-repaired.png"));
   });
 });

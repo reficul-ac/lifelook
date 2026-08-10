@@ -57,6 +57,9 @@ reset_profile
 run_scenario scenario-planning
 
 reset_profile
+LIFELOOK_E2E_SCENARIO=system-theme dbus-run-session -- xvfb-run -a --server-args="-screen 0 1280x820x24" npm run test:e2e:scenario
+
+reset_profile
 export LIFELOOK_E2E_PROFILE="$XDG_DATA_HOME/com.lifelook.desktop/lifelook.db"
 run_scenario member-save-failure
 
@@ -69,20 +72,5 @@ LIFELOOK_E2E_SCENARIO=offline-onboarding bwrap --unshare-net --bind / / \
   xvfb-run -a --server-args="-screen 0 1280x820x24" npm run test:e2e:scenario
 unset LIFELOOK_E2E_STRICT_OFFLINE
 
-app_data="$XDG_DATA_HOME/com.lifelook.desktop"
-profile="$app_data/lifelook.db"
-
-rm -rf -- "$XDG_DATA_HOME"
-mkdir -p "$app_data"
-printf 'LifeLook corrupt profile fixture\000\377' > "$profile"
-export LIFELOOK_E2E_PROFILE="$profile"
-export LIFELOOK_E2E_CORRUPT_SHA256="$(sha256sum "$profile" | cut -d ' ' -f 1)"
-run_scenario corrupt-profile
-test "$(sha256sum "$profile" | cut -d ' ' -f 1)" = "$LIFELOOK_E2E_CORRUPT_SHA256"
-
-rm -rf -- "$XDG_DATA_HOME"
-mkdir -p "$app_data"
-chmod 0555 "$app_data"
-export LIFELOOK_E2E_PROFILE="$profile"
-run_scenario unwritable-profile
-test -f "$profile"
+LIFELOOK_E2E_ARTIFACT_DIR="${LIFELOOK_E2E_ARTIFACT_DIR:-$repo_root/artifacts/native-e2e}" LIFELOOK_E2E_BINARY="$LIFELOOK_E2E_BINARY" bash scripts/run-recovery-acceptance.sh corrupt-profile
+LIFELOOK_E2E_ARTIFACT_DIR="${LIFELOOK_E2E_ARTIFACT_DIR:-$repo_root/artifacts/native-e2e}" LIFELOOK_E2E_BINARY="$LIFELOOK_E2E_BINARY" bash scripts/run-recovery-acceptance.sh unwritable-profile

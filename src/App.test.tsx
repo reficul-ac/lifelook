@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { testRepository } from "./repository";
@@ -389,5 +389,47 @@ describe("LifeLook shell", () => {
     fireEvent.keyDown(screen.getByRole("dialog"),{key:"Escape"});
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(importButton).toHaveFocus();
+  });
+  it("creates an exact asset from the shared Add menu",async()=>{
+    const createAsset=vi.fn();
+    render(<App repository={{...testRepository,createAsset}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:"Add"}));
+    fireEvent.click(screen.getByRole("button",{name:"Asset"}));
+    fireEvent.change(screen.getByLabelText("Asset name"),{target:{value:"Home"}});
+    fireEvent.change(screen.getByLabelText("Current value (USD)"),{target:{value:"500000.25"}});
+    fireEvent.change(screen.getByLabelText("Annual growth (%)"),{target:{value:"3.50"}});
+    fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(createAsset).toHaveBeenCalledWith(expect.objectContaining({name:"Home",valueCents:50000025,annualGrowthBps:350})));
+  });
+  it("calculates mortgage P&I and supports a custom payment override",async()=>{
+    const createLiability=vi.fn();
+    render(<App repository={{...testRepository,createLiability}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:"Add"}));
+    fireEvent.click(screen.getByRole("button",{name:"Debt"}));
+    fireEvent.change(screen.getByLabelText("Debt name"),{target:{value:"Mortgage"}});
+    fireEvent.change(screen.getByLabelText("Current balance (USD)"),{target:{value:"350000"}});
+    fireEvent.change(screen.getByLabelText("Annual interest rate (%)"),{target:{value:"6.5"}});
+    fireEvent.click(screen.getByLabelText("Include mortgage details"));
+    fireEvent.change(screen.getByLabelText("Original principal (USD)"),{target:{value:"400000"}});
+    fireEvent.change(screen.getByLabelText("Mortgage start date"),{target:{value:"2020-01-15"}});
+    expect(screen.getByRole("status")).toHaveTextContent(/\$2,528\.27/);
+    fireEvent.click(screen.getByLabelText("Use custom monthly payment"));
+    fireEvent.change(screen.getByLabelText("Custom monthly payment (USD)"),{target:{value:"3000"}});
+    fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(createLiability).toHaveBeenCalledWith(expect.objectContaining({balanceCents:35000000,annualRateBps:650,minimumPaymentCents:300000,mortgage:expect.objectContaining({originalPrincipalCents:40000000,termMonths:360,paymentOverrideCents:300000})})));
+  });
+  it("confirms asset deletion and restores focus to its Edit button",async()=>{
+    const data=await testRepository.bootstrap();
+    const asset={id:"home",householdId:"test",name:"Home",valueCents:50000000,annualGrowthBps:300,revision:2};
+    const deleteAsset=vi.fn();
+    render(<App repository={{...testRepository,deleteAsset,bootstrap:async()=>({...data,assets:[asset]})}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Net Worth/}));
+    const row=screen.getByText("Home").closest<HTMLElement>(".account")!;
+    const edit=within(row).getByRole("button",{name:"Edit"});
+    fireEvent.click(edit);fireEvent.click(screen.getByRole("button",{name:"Delete"}));
+    await waitFor(()=>expect(screen.getByRole("heading",{name:"Delete asset?"})).toHaveFocus());
+    fireEvent.click(screen.getByRole("button",{name:"Delete permanently"}));
+    await waitFor(()=>expect(deleteAsset).toHaveBeenCalledWith({id:"home",expectedRevision:2}));
+    await waitFor(()=>expect(edit).toHaveFocus());
   });
 });

@@ -210,6 +210,14 @@ struct Asset {
     annual_growth_bps: i64,
     revision: i64,
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MortgageTerms {
+    original_principal_cents: i64,
+    term_months: i64,
+    start_date: String,
+    payment_override_cents: Option<i64>,
+}
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Liability {
@@ -219,6 +227,7 @@ struct Liability {
     balance_cents: i64,
     annual_rate_bps: i64,
     minimum_payment_cents: i64,
+    mortgage: Option<MortgageTerms>,
     revision: i64,
 }
 #[derive(Debug, Serialize)]
@@ -304,6 +313,26 @@ struct ReconcileAccountInput {
 struct DeleteInput {
     id: String,
     expected_revision: i64,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AssetInput {
+    id: String,
+    name: String,
+    value_cents: i64,
+    annual_growth_bps: i64,
+    expected_revision: Option<i64>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LiabilityInput {
+    id: String,
+    name: String,
+    balance_cents: i64,
+    annual_rate_bps: i64,
+    minimum_payment_cents: i64,
+    mortgage: Option<MortgageTerms>,
+    expected_revision: Option<i64>,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -587,7 +616,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,name,balance_cents,annual_rate_bps,minimum_payment_cents,revision FROM liabilities WHERE household_id=? ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,household_id,name,balance_cents,annual_rate_bps,minimum_payment_cents,mortgage_json,revision FROM liabilities WHERE household_id=? ORDER BY name")?;
         liabilities = q
             .query_map([&h.id], |r| {
                 Ok(Liability {
@@ -597,7 +626,10 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     balance_cents: r.get(3)?,
                     annual_rate_bps: r.get(4)?,
                     minimum_payment_cents: r.get(5)?,
-                    revision: r.get(6)?,
+                    mortgage: r
+                        .get::<_, Option<String>>(6)?
+                        .and_then(|raw| serde_json::from_str(&raw).ok()),
+                    revision: r.get(7)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -1253,6 +1285,169 @@ fn delete_account_from(db: &mut Connection, input: &DeleteInput) -> Result<(), A
     }
     Ok(())
 }
+fn validate_rate(value: i64, minimum: i64, label: &str) -> Result<(), AppError> {
+    if !(minimum..=100_000).contains(&value) {
+        return Err(AppError::Validation(format!(
+            "{label} must be between {}% and 1000%",
+            minimum / 100
+        )));
+    }
+    Ok(())
+}
+fn validate_nonnegative_money(value: i64, label: &str) -> Result<(), AppError> {
+    if !(0..=MAX_MONEY_CENTS).contains(&value) {
+        return Err(AppError::Validation(format!(
+            "{label} is outside the supported money range"
+        )));
+    }
+    Ok(())
+}
+fn calculated_mortgage_payment(principal: i64, rate_bps: i64, months: i64) -> i64 {
+    if rate_bps == 0 {
+        return ((principal as f64) / (months as f64)).round() as i64;
+    }
+    let rate = rate_bps as f64 / 120_000.0;
+    ((principal as f64 * rate) / (1.0 - (1.0 + rate).powi(-(months as i32)))).round() as i64
+}
+fn validate_liability(input: &LiabilityInput) -> Result<(i64, Option<String>), AppError> {
+    if input.name.trim().is_empty() {
+        return Err(AppError::Validation("liability name is required".into()));
+    }
+    validate_nonnegative_money(input.balance_cents, "balance")?;
+    validate_rate(input.annual_rate_bps, 0, "annual rate")?;
+    let (payment, mortgage_json) = if let Some(mortgage) = &input.mortgage {
+        validate_nonnegative_money(mortgage.original_principal_cents, "original principal")?;
+        if mortgage.original_principal_cents == 0 {
+            return Err(AppError::Validation(
+                "original principal must be positive".into(),
+            ));
+        }
+        if input.balance_cents > mortgage.original_principal_cents {
+            return Err(AppError::Validation(
+                "current balance cannot exceed original principal".into(),
+            ));
+        }
+        if !(1..=480).contains(&mortgage.term_months) {
+            return Err(AppError::Validation(
+                "mortgage term must be between 1 and 480 months".into(),
+            ));
+        }
+        validate_date(&mortgage.start_date)?;
+        if let Some(override_cents) = mortgage.payment_override_cents {
+            validate_nonnegative_money(override_cents, "payment override")?;
+            if override_cents == 0 {
+                return Err(AppError::Validation(
+                    "payment override must be positive".into(),
+                ));
+            }
+        }
+        let payment = mortgage.payment_override_cents.unwrap_or_else(|| {
+            calculated_mortgage_payment(
+                mortgage.original_principal_cents,
+                input.annual_rate_bps,
+                mortgage.term_months,
+            )
+        });
+        (
+            payment,
+            Some(
+                serde_json::to_string(mortgage)
+                    .map_err(|_| AppError::Validation("could not save mortgage terms".into()))?,
+            ),
+        )
+    } else {
+        validate_nonnegative_money(input.minimum_payment_cents, "minimum payment")?;
+        (input.minimum_payment_cents, None)
+    };
+    if input.balance_cents > 0 && payment <= 0 {
+        return Err(AppError::Validation(
+            "a nonzero liability requires a positive monthly payment".into(),
+        ));
+    }
+    Ok((payment, mortgage_json))
+}
+fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), AppError> {
+    if input.name.trim().is_empty() {
+        return Err(AppError::Validation("asset name is required".into()));
+    }
+    validate_nonnegative_money(input.value_cents, "asset value")?;
+    validate_rate(input.annual_growth_bps, -10_000, "annual growth")?;
+    let hid = active_household(db)?;
+    if update {
+        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,revision=revision+1 WHERE id=?4 AND household_id=?5 AND revision=?6",params![input.name.trim(),input.value_cents,input.annual_growth_bps,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
+        if changed == 0 {
+            return Err(AppError::Conflict);
+        }
+    } else {
+        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps) VALUES(?1,?2,?3,?4,?5)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps])?;
+    }
+    Ok(())
+}
+#[tauri::command]
+fn create_asset(input: AssetInput, database: tauri::State<Database>) -> Result<(), AppError> {
+    with_db(&database, |db| save_asset(db, &input, false))
+}
+#[tauri::command]
+fn update_asset(input: AssetInput, database: tauri::State<Database>) -> Result<(), AppError> {
+    with_db(&database, |db| save_asset(db, &input, true))
+}
+#[tauri::command]
+fn delete_asset(input: DeleteInput, database: tauri::State<Database>) -> Result<(), AppError> {
+    with_db(&database, |db| delete_asset_from(db, &input))
+}
+fn delete_asset_from(db: &Connection, input: &DeleteInput) -> Result<(), AppError> {
+    let hid = active_household(db)?;
+    let changed = db.execute(
+        "DELETE FROM assets WHERE id=?1 AND household_id=?2 AND revision=?3",
+        params![input.id, hid, input.expected_revision],
+    )?;
+    if changed == 0 {
+        return Err(AppError::Conflict);
+    }
+    Ok(())
+}
+fn save_liability(db: &Connection, input: &LiabilityInput, update: bool) -> Result<(), AppError> {
+    let (payment, mortgage_json) = validate_liability(input)?;
+    let hid = active_household(db)?;
+    if update {
+        let changed=db.execute("UPDATE liabilities SET name=?1,balance_cents=?2,annual_rate_bps=?3,minimum_payment_cents=?4,mortgage_json=?5,revision=revision+1 WHERE id=?6 AND household_id=?7 AND revision=?8",params![input.name.trim(),input.balance_cents,input.annual_rate_bps,payment,mortgage_json,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
+        if changed == 0 {
+            return Err(AppError::Conflict);
+        }
+    } else {
+        db.execute("INSERT INTO liabilities(id,household_id,name,balance_cents,annual_rate_bps,minimum_payment_cents,mortgage_json) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![input.id,hid,input.name.trim(),input.balance_cents,input.annual_rate_bps,payment,mortgage_json])?;
+    }
+    Ok(())
+}
+#[tauri::command]
+fn create_liability(
+    input: LiabilityInput,
+    database: tauri::State<Database>,
+) -> Result<(), AppError> {
+    with_db(&database, |db| save_liability(db, &input, false))
+}
+#[tauri::command]
+fn update_liability(
+    input: LiabilityInput,
+    database: tauri::State<Database>,
+) -> Result<(), AppError> {
+    with_db(&database, |db| save_liability(db, &input, true))
+}
+#[tauri::command]
+fn delete_liability(input: DeleteInput, database: tauri::State<Database>) -> Result<(), AppError> {
+    with_db(&database, |db| delete_liability_from(db, &input))
+}
+fn delete_liability_from(db: &Connection, input: &DeleteInput) -> Result<(), AppError> {
+    let hid = active_household(db)?;
+    let changed = db.execute(
+        "DELETE FROM liabilities WHERE id=?1 AND household_id=?2 AND revision=?3",
+        params![input.id, hid, input.expected_revision],
+    )?;
+    if changed == 0 {
+        return Err(AppError::Conflict);
+    }
+    Ok(())
+}
 #[tauri::command]
 fn reconcile_account(
     input: ReconcileAccountInput,
@@ -1395,7 +1590,7 @@ fn parse_csv_money(value: &str) -> Result<i64, String> {
     if parens {
         s = s[1..s.len() - 1].to_string()
     }
-    s = s.replace('$', "").replace(',', "").trim().to_string();
+    s = s.replace(['$', ','], "").trim().to_string();
     if s.is_empty() {
         return Ok(0);
     }
@@ -1526,8 +1721,8 @@ fn make_preview(
         if description.is_empty() {
             error = Some("Description is required".into())
         }
-        if parsed_date.is_err() {
-            error = Some(parsed_date.as_ref().unwrap_err().clone())
+        if let Err(message) = &parsed_date {
+            error = Some(message.clone())
         }
         if parsed_amount.as_ref().is_err() {
             error = Some(parsed_amount.as_ref().unwrap_err().clone())
@@ -1649,6 +1844,7 @@ fn commit_csv(
             .as_nanos();
         let batch_id = format!("import-{nonce}");
         tx.execute("INSERT INTO import_batches(id,account_id,profile_id,row_count,status) VALUES(?1,?2,?3,?4,'complete')",params![batch_id,preview.mapping.account_id,actual_profile,selected.len()])?;
+        let mut inserted_fingerprints = std::collections::HashSet::new();
         for choice in selected {
             let row = fresh
                 .rows
@@ -1676,7 +1872,17 @@ fn commit_csv(
                 row.amount_cents.unwrap(),
                 &row.description,
             );
-            tx.execute("INSERT INTO postings(entry_id,account_id,category_id,amount_cents,fingerprint) VALUES(?1,?2,?3,?4,?5)",params![eid,preview.mapping.account_id,choice.category_id,row.amount_cents,fp])?;
+            let existing: i64 = tx.query_row(
+                "SELECT count(*) FROM postings WHERE account_id=?1 AND fingerprint=?2",
+                params![preview.mapping.account_id, fp],
+                |r| r.get(0),
+            )?;
+            let stored_fingerprint = if existing == 0 && inserted_fingerprints.insert(fp.clone()) {
+                Some(fp)
+            } else {
+                None
+            };
+            tx.execute("INSERT INTO postings(entry_id,account_id,category_id,amount_cents,fingerprint) VALUES(?1,?2,?3,?4,?5)",params![eid,preview.mapping.account_id,choice.category_id,row.amount_cents,stored_fingerprint])?;
         }
         tx.commit()?;
         Ok(CsvImportResult {
@@ -2123,6 +2329,12 @@ pub fn run() {
             reconcile_account,
             account_deletion_impact,
             delete_account,
+            create_asset,
+            update_asset,
+            delete_asset,
+            create_liability,
+            update_liability,
+            delete_liability,
             inspect_csv,
             preview_csv,
             commit_csv,
@@ -2634,6 +2846,144 @@ mod tests {
             .blockers
             .iter()
             .any(|x| x.contains("import batch")));
+    }
+
+    #[test]
+    fn assets_and_mortgages_round_trip_update_and_delete() {
+        let c = seeded();
+        let asset = AssetInput {
+            id: "home".into(),
+            name: " Home ".into(),
+            value_cents: 50_000_000,
+            annual_growth_bps: 350,
+            expected_revision: None,
+        };
+        save_asset(&c, &asset, false).unwrap();
+        let mortgage = MortgageTerms {
+            original_principal_cents: 40_000_000,
+            term_months: 360,
+            start_date: "2020-01-15".into(),
+            payment_override_cents: None,
+        };
+        let liability = LiabilityInput {
+            id: "mortgage".into(),
+            name: "Mortgage".into(),
+            balance_cents: 35_000_000,
+            annual_rate_bps: 650,
+            minimum_payment_cents: 1,
+            mortgage: Some(mortgage.clone()),
+            expected_revision: None,
+        };
+        save_liability(&c, &liability, false).unwrap();
+        let expected_payment = calculated_mortgage_payment(40_000_000, 650, 360);
+        assert_eq!(
+            c.query_row(
+                "SELECT minimum_payment_cents FROM liabilities WHERE id='mortgage'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            expected_payment
+        );
+        let json: String = c
+            .query_row(
+                "SELECT mortgage_json FROM liabilities WHERE id='mortgage'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<MortgageTerms>(&json)
+                .unwrap()
+                .term_months,
+            360
+        );
+
+        save_asset(
+            &c,
+            &AssetInput {
+                expected_revision: Some(1),
+                value_cents: 51_000_000,
+                ..asset
+            },
+            true,
+        )
+        .unwrap();
+        delete_asset_from(
+            &c,
+            &DeleteInput {
+                id: "home".into(),
+                expected_revision: 2,
+            },
+        )
+        .unwrap();
+        delete_liability_from(
+            &c,
+            &DeleteInput {
+                id: "mortgage".into(),
+                expected_revision: 1,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            c.query_row("SELECT count(*) FROM assets", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            c.query_row("SELECT count(*) FROM liabilities", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn financial_records_validate_rates_terms_and_revisions() {
+        let c = seeded();
+        let bad_asset = AssetInput {
+            id: "bad".into(),
+            name: "Asset".into(),
+            value_cents: 1,
+            annual_growth_bps: -10_001,
+            expected_revision: None,
+        };
+        assert!(matches!(
+            save_asset(&c, &bad_asset, false),
+            Err(AppError::Validation(_))
+        ));
+        let valid_asset = AssetInput {
+            id: "valid".into(),
+            name: "Asset".into(),
+            value_cents: 100,
+            annual_growth_bps: 0,
+            expected_revision: None,
+        };
+        save_asset(&c, &valid_asset, false).unwrap();
+        assert!(matches!(
+            save_asset(
+                &c,
+                &AssetInput {
+                    expected_revision: Some(9),
+                    ..valid_asset
+                },
+                true
+            ),
+            Err(AppError::Conflict)
+        ));
+        let bad_debt = LiabilityInput {
+            id: "bad".into(),
+            name: "Debt".into(),
+            balance_cents: 100,
+            annual_rate_bps: 100,
+            minimum_payment_cents: 0,
+            mortgage: None,
+            expected_revision: None,
+        };
+        assert!(matches!(
+            save_liability(&c, &bad_debt, false),
+            Err(AppError::Validation(_))
+        ));
     }
 
     #[test]

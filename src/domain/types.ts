@@ -14,7 +14,7 @@ export interface RecurringEntry { id: string; name: string; amountCents: Cents; 
 export interface ImportProfile { id: string; name: string; columns: Readonly<Record<string, string>> }
 export interface ImportBatch { id: string; importedAt: string; profileId?: string; rowCount: number }
 export interface Asset { id: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints }
-export interface MortgageTerms { originalPrincipalCents: Cents; annualRateBps: BasisPoints; termMonths: number; startDate: string }
+export interface MortgageTerms { originalPrincipalCents: Cents; termMonths: number; startDate: string; paymentOverrideCents?: Cents }
 export interface Liability { id: string; name: string; balanceCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; mortgage?: MortgageTerms }
 export interface GrowthAssumption { inflationBps: BasisPoints; thresholdInflationBps: BasisPoints }
 export interface AllocationRule { accountId: string; percentBps: BasisPoints; priority: number }

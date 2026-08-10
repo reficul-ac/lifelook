@@ -13,7 +13,10 @@ export interface Category { id:string; householdId:string; name:string; kind:"in
 export interface ActivityPosting { postingId:number; entryId:string; occurredOn:string; kind:"income"|"expense"|"transfer"|"adjustment"; origin?:"manual"|"import"|"reconciliation"; canDelete?:boolean; description:string; note?:string|null; transferGroupId?:string|null; accountId:string; accountName:string; categoryId?:string|null; categoryName?:string|null; amountCents:number; revision:number }
 export interface RecurringEntry { id:string; householdId:string; categoryId:string; accountId?:string|null; name:string; amountCents:number; startDate:string; endDate?:string|null; annualGrowthBps:number; revision:number }
 export interface Asset { id:string; householdId:string; name:string; valueCents:number; annualGrowthBps:number; revision:number }
-export interface Liability { id:string; householdId:string; name:string; balanceCents:number; annualRateBps:number; minimumPaymentCents:number; revision:number }
+export interface MortgageTerms { originalPrincipalCents:number; termMonths:number; startDate:string; paymentOverrideCents?:number|null }
+export interface Liability { id:string; householdId:string; name:string; balanceCents:number; annualRateBps:number; minimumPaymentCents:number; mortgage?:MortgageTerms|null; revision:number }
+export interface AssetInput { id:string;name:string;valueCents:number;annualGrowthBps:number }
+export interface LiabilityInput { id:string;name:string;balanceCents:number;annualRateBps:number;minimumPaymentCents:number;mortgage?:MortgageTerms|null }
 export interface ScenarioRecord { id:string; householdId:string; name:string; isBaseline:boolean; assumptions:{inflationBps:number;thresholdInflationBps:number}; horizonMonths:number; revision:number; events:unknown[]; allocations:unknown[] }
 export interface WorkspaceSnapshot {
   onboardingStep:number; onboardingComplete:boolean;
@@ -53,6 +56,12 @@ export interface Repository {
   reconcileAccount?(input:{id:string;occurredOn:string;targetBalanceCents:number;expectedBalanceCents:number}):Promise<void>;
   accountDeletionImpact?(accountId:string):Promise<AccountDeletionImpact>;
   deleteAccount?(input:{id:string;expectedRevision:number}):Promise<void>;
+  createAsset?(input:AssetInput):Promise<void>;
+  updateAsset?(input:AssetInput&{expectedRevision:number}):Promise<void>;
+  deleteAsset?(input:{id:string;expectedRevision:number}):Promise<void>;
+  createLiability?(input:LiabilityInput):Promise<void>;
+  updateLiability?(input:LiabilityInput&{expectedRevision:number}):Promise<void>;
+  deleteLiability?(input:{id:string;expectedRevision:number}):Promise<void>;
   selectCsvSource?():Promise<string|null>;
   inspectCsv?(path:string):Promise<CsvInspection>;
   previewCsv?(path:string,fileHash:string,mapping:CsvMapping):Promise<CsvPreview>;
@@ -82,6 +91,12 @@ export const tauriRepository:Repository = {
   reconcileAccount:(input)=>invoke("reconcile_account",{input}),
   accountDeletionImpact:(accountId)=>invoke("account_deletion_impact",{accountId}),
   deleteAccount:(input)=>invoke("delete_account",{input}),
+  createAsset:(input)=>invoke("create_asset",{input}),
+  updateAsset:(input)=>invoke("update_asset",{input}),
+  deleteAsset:(input)=>invoke("delete_asset",{input}),
+  createLiability:(input)=>invoke("create_liability",{input}),
+  updateLiability:(input)=>invoke("update_liability",{input}),
+  deleteLiability:(input)=>invoke("delete_liability",{input}),
   selectCsvSource:async()=>{const selected=await open({multiple:false,directory:false,filters:[{name:"CSV files",extensions:["csv"]}]});return typeof selected==="string"?selected:null},
   inspectCsv:(path)=>invoke("inspect_csv",{path}),
   previewCsv:(path,fileHash,mapping)=>invoke("preview_csv",{path,fileHash,mapping}),
@@ -99,7 +114,7 @@ export const tauriRepository:Repository = {
 export const emptySettings:Settings={theme:"system",reducedMotion:false,revision:1};
 export const testRepository:Repository = {
   async bootstrap(){return {onboardingStep:8,onboardingComplete:true,household:{id:"test",name:"Test household",state:"CA"},people:[{id:"person",householdId:"test",name:"Test Person"}],taxProfile:null,settings:emptySettings,accounts:[{id:"cash",householdId:"test",name:"Test checking",kind:"checking",openingBalanceCents:0,balanceCents:0,annualReturnBps:0,liquid:true,revision:1}],categories:[],activity:[],recurring:[],assets:[],liabilities:[],scenarios:[]}},
-  async retryStartup(){return this.bootstrap()}, async saveOnboardingStep(){}, async completeOnboarding(){}, async createTransaction(){}, async updateTransaction(){}, async createTransfer(){}, async updateTransfer(){},async createAccount(){},async updateAccount(){},async reconcileAccount(){},
+  async retryStartup(){return this.bootstrap()}, async saveOnboardingStep(){}, async completeOnboarding(){}, async createTransaction(){}, async updateTransaction(){}, async createTransfer(){}, async updateTransfer(){},async createAccount(){},async updateAccount(){},async reconcileAccount(){},async createAsset(){},async updateAsset(){},async deleteAsset(){},async createLiability(){},async updateLiability(){},async deleteLiability(){},
   async updateSettings(input){return {...input,revision:input.expectedRevision+1}},
   async selectBackupDestination(){return null}, async selectRestoreSource(){return null},
   async backupDatabase(){}, async restoreDatabase(){return this.bootstrap()}

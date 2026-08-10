@@ -14,6 +14,9 @@ export XDG_DATA_DIRS="${XDG_DATA_DIRS_VSCODE_SNAP_ORIG:-/usr/local/share:/usr/sh
 unset GTK_EXE_PREFIX GTK_PATH GTK_IM_MODULE_FILE GIO_MODULE_DIR
 mkdir -p "$XDG_DATA_HOME"
 export LIFELOOK_E2E_BACKUP="$profile_root/round-trip.lifelook"
+export LIFELOOK_E2E_CSV="$profile_root/mixed.csv"
+fixture_date="$(date +%Y)-02-15"
+printf 'Date,Description,Amount\n%s,Imported pay,500.00\nnot-a-date,Invalid row,-5.00\n%s,Imported pay,500.00\n%s,Imported meal,-20.00\n' "$fixture_date" "$fixture_date" "$fixture_date" > "$LIFELOOK_E2E_CSV"
 
 if [[ ! -x "$LIFELOOK_E2E_BINARY" ]]; then
   echo "Native release binary is missing or not executable: $LIFELOOK_E2E_BINARY" >&2
@@ -28,6 +31,14 @@ run_scenario() {
 
 # The acceptance session deliberately relaunches against one isolated profile.
 run_scenario acceptance
+
+rm -rf -- "$XDG_DATA_HOME"
+mkdir -p "$XDG_DATA_HOME"
+run_scenario financial-records
+
+rm -rf -- "$XDG_DATA_HOME"
+mkdir -p "$XDG_DATA_HOME"
+run_scenario ledger-deletion-import
 
 app_data="$XDG_DATA_HOME/com.lifelook.desktop"
 profile="$app_data/lifelook.db"

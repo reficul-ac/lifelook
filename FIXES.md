@@ -6,7 +6,7 @@ This is a current-branch backlog, not a snapshot of the original audit. `PLAN.md
 
 - Reconciled branch: current worktree based on `d81bbf1855dfcc694f8970898f40db4d780b8314`.
 - Reconciliation date: 2026-08-09 America/Los_Angeles.
-- Current automated baseline: 50 frontend tests, 27 Rust tests, 9 isolated release-binary WebDriver scenarios, and 1 packaged AppImage acceptance scenario.
+- Current automated baseline: 52 frontend tests, 27 Rust tests, 9 isolated release-binary WebDriver scenarios, and 1 packaged AppImage acceptance scenario.
 - Native evidence: `artifacts/native-e2e/`, generated from the release binary with isolated profiles.
 - Terms used below:
   - **Implemented/component-tested** means code or an injected-repository test passed; it is not persistence evidence.
@@ -20,7 +20,7 @@ No P0 defect is known. Native acceptance covers onboarding variants and interrup
 | Screen or flow | Current implementation | Native acceptance | Still blocked |
 |---|---|---|---|
 | Onboarding | Household, members, filing status, typed accounts, recurring income/expenses, assets, debts, exact money parsing, and credit signs are implemented/component-tested | Add/remove/Back, guided financial inputs, calendar birth date, interruption/relaunch, and credit/investment/retirement accounts accepted | None for current scope |
-| Shell/navigation | All five destinations, local global search, the six-mode Add menu, and honest disabled Profile are implemented | Navigation, search navigation/focus, current state, focus, and 920×650 minimum accepted | Profile implementation |
+| Shell/navigation | All five destinations, local global search, the six-mode Add menu, and an accessible Workspace menu are implemented | Navigation, search navigation/focus, current state, focus, and 920×650 minimum accepted | Native Workspace-menu coverage |
 | Overview | Current balances/activity totals are derived; projections require a saved tax profile | Transaction-driven income, spending, saved amount, and net worth survive relaunch | None for current scope |
 | Activity | Manual/import/export/transfer deletion and reviewed CSV import are implemented with component and persistence-backed Rust coverage | Native filtering/export, global-search focus, mutation, editing, deletion, grouped transfers, mixed-file CSV import, exact totals, and relaunch persistence accepted | None for current scope |
 | Plan | Recurring CRUD, all dated event variants, ordered surplus allocations, scenario CRUD/clone, dynamic horizons, selection, and comparison feed deterministic projections | Planning mutation, clone isolation, changed totals, allocations, and relaunch persistence accepted | None for current scope |
@@ -29,7 +29,7 @@ No P0 defect is known. Native acceptance covers onboarding variants and interrup
 | Appearance | System/light/dark and reduced motion persist | Dark and reduced motion survive process relaunch | Native OS preference-change simulation |
 | Backup/restore | Staged atomic backup/restore, confirmation, error recovery, and refresh are implemented | Native and packaged AppImage dialog round trips accepted, including relaunch persistence | None for current scope |
 | Startup recovery | Structured corrupt/unwritable recovery and Retry are component/Rust-tested | Corrupt bytes retain the same SHA-256; repaired permissions reopen the same profile | Packaged/AppImage recovery variant |
-| Supply chain/CI | Production npm, policy-aware full npm, and pinned Rust audits gate CI | Not applicable | Temporary WebDriver-only exception tracked in `SECURITY.md` |
+| Supply chain/CI | Zero-advisory production/full npm gates and pinned Rust audits gate CI; native tests use standalone WebdriverIO with Node's test runner | Not applicable | None for current scope |
 | AppImage | Build, content validation, visible-window smoke, packaged mutation/export/restore/relaunch, and artifact upload gate CI | Packaged isolated-profile acceptance | Packaged recovery variant |
 
 ## Interaction inventory

@@ -11,7 +11,7 @@ describe("LifeLook native scenario planning",()=>{
   assert.match(await firstYearIncome(),/^\$0$/);
   await $("aria/New scenario").click();
   await setReactInput(await $('//section[@role="dialog"]//label[starts-with(normalize-space(.),"Name")]/input'),"Opportunity");
-  assert.equal(await $("aria/Clone active scenario settings").isSelected(),true);
+  assert.equal(await $('//label[contains(normalize-space(.),"Clone active scenario settings")]//input').isSelected(),true);
   await $("aria/Create scenario").click();
   await $("aria/Active scenario").waitForExist();
   assert.equal(await $('aria/Active scenario').$('option:checked').getText(),"Opportunity");
@@ -29,7 +29,7 @@ describe("LifeLook native scenario planning",()=>{
   assert.equal(await $("aria/Allocation 1 percent").getValue(),"100");
   assert.equal(await $("aria/Allocation 1 percent").isEnabled(),false);
   await $("aria/Save plan").click();
-  await browser.waitUntil(async()=>!(await $("aria/Plan events and allocations").isExisting()),{timeout:5_000,timeoutMsg:`Planning dialog did not close: ${(await $$('[role="alert"]')).length ? await (await $$('[role="alert"]'))[0].getText() : "no error shown"}`});
+  await browser.waitUntil(async()=>!(await $('//section[@role="dialog" and .//*[contains(normalize-space(),"Plan events")]]').isExisting()),{timeout:5_000,timeoutMsg:`Planning dialog did not close: ${(await $$('[role="alert"]')).length ? await (await $$('[role="alert"]'))[0].getText() : "no error shown"}`});
   await browser.waitUntil(async()=>/\$12K|\$12,000/.test(await firstYearIncome()),{timeout:10_000,timeoutMsg:`Projected first-year income did not change (last value: ${await firstYearIncome()})`});
 
   await $("aria/Active scenario").selectByVisibleText("Baseline");

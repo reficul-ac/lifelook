@@ -121,8 +121,10 @@ nav button i {
   padding: 2px 6px;
 }
 .aside-bottom {
+  position: relative;
   margin-top: auto;
 }
+.profile-menu{position:absolute;left:0;bottom:calc(100% + 8px);z-index:20;width:min(320px,calc(100vw - 32px));display:grid;gap:8px;padding:14px}.profile-menu code{overflow-wrap:anywhere;font-size:.72rem;color:var(--muted)}.profile-menu button{text-align:left}
 .profile {
   width: 100%;
   display: flex;

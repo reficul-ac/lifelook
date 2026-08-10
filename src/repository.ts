@@ -5,19 +5,20 @@ export type Theme = "system" | "light" | "dark";
 export type AccountKind = "checking" | "savings" | "investment" | "retirement" | "credit";
 export interface RepositoryError { code:string; message:string; field?:string; details?:unknown }
 export interface StartupError extends RepositoryError { profilePath?:string; retryable:boolean }
+export interface WorkspaceInfo { householdName:string; profilePath:string }
 export interface BootstrapPerson { id:string; householdId:string; name:string; birthDate?:string|null; revision?:number }
 export interface BootstrapAccount { id:string; householdId:string; name:string; kind:AccountKind; openingBalanceCents:number; balanceCents:number; annualReturnBps:number; liquid:boolean; revision:number }
 export interface TaxProfile { filingStatus:"single"|"married-joint"|"married-separate"|"head-of-household"; state:"CA"; taxYear:2025|2026; thresholdInflationBps:number; revision:number }
 export interface Settings { theme:Theme; reducedMotion:boolean; revision:number }
-export interface Category { id:string; householdId:string; name:string; kind:"income"|"expense"|"transfer"; revision:number }
+export interface Category { id:string; householdId:string; name:string; kind:"income"|"expense"|"transfer"; revision:number; archived?:boolean }
 export interface ActivityPosting { postingId:number; entryId:string; occurredOn:string; kind:"income"|"expense"|"transfer"|"adjustment"; origin?:"manual"|"import"|"reconciliation"; canDelete?:boolean; description:string; note?:string|null; transferGroupId?:string|null; accountId:string; accountName:string; categoryId?:string|null; categoryName?:string|null; amountCents:number; revision:number }
 export type RecurringFrequency="weekly"|"biweekly"|"monthly"|"quarterly"|"annual";
-export interface RecurringEntry { id:string; householdId:string; categoryId:string; accountId?:string|null; name:string; amountCents:number; frequency:RecurringFrequency; startDate:string; endDate?:string|null; annualGrowthBps:number; revision:number }
-export interface RecurringInput { id:string;categoryId:string;accountId?:string|null;name:string;amountCents:number;frequency:RecurringFrequency;startDate:string;endDate?:string|null;annualGrowthBps:number }
-export interface Asset { id:string; householdId:string; name:string; valueCents:number; annualGrowthBps:number; revision:number }
+export interface RecurringEntry { id:string; householdId:string; categoryId:string; accountId?:string|null; name:string; amountCents:number; frequency:RecurringFrequency; startDate:string; endDate?:string|null; annualGrowthBps:number; taxTreatment?:"none"|"pretax"; revision:number }
+export interface RecurringInput { id:string;categoryId:string;accountId?:string|null;name:string;amountCents:number;frequency:RecurringFrequency;startDate:string;endDate?:string|null;annualGrowthBps:number;taxTreatment?:"none"|"pretax" }
+export interface Asset { id:string; householdId:string; name:string; valueCents:number; annualGrowthBps:number; housingCosts?:import("./domain/types").HousingCosts; revision:number }
 export interface MortgageTerms { originalPrincipalCents:number; termMonths:number; startDate:string; paymentOverrideCents?:number|null }
 export interface Liability { id:string; householdId:string; name:string; balanceCents:number; annualRateBps:number; minimumPaymentCents:number; mortgage?:MortgageTerms|null; revision:number }
-export interface AssetInput { id:string;name:string;valueCents:number;annualGrowthBps:number }
+export interface AssetInput { id:string;name:string;valueCents:number;annualGrowthBps:number;housingCosts?:import("./domain/types").HousingCosts }
 export interface LiabilityInput { id:string;name:string;balanceCents:number;annualRateBps:number;minimumPaymentCents:number;mortgage?:MortgageTerms|null }
 export interface OnboardingStepPayload {
   household?:{id:string;name:string;state:"CA"};
@@ -29,7 +30,7 @@ export interface OnboardingStepPayload {
   liabilities?:LiabilityInput[];
 }
 export interface ScenarioAllocation { id?:string;accountId:string;priority:number;percentBps:number;targetBalanceCents?:number|null }
-export interface ScenarioRecord { id:string; householdId:string; name:string; isBaseline:boolean; assumptions:{inflationBps:number;thresholdInflationBps:number}; horizonMonths:number; revision:number; events:import("./domain/types").ScenarioEvent[]; allocations:ScenarioAllocation[] }
+export interface ScenarioRecord { id:string; householdId:string; name:string; isBaseline:boolean; assumptions:{inflationBps:number;thresholdInflationBps:number}; horizonMonths:number; revision:number; events:import("./domain/types").ScenarioEvent[]; allocations:ScenarioAllocation[]; withdrawals?:import("./domain/types").WithdrawalRule[] }
 export interface WorkspaceSnapshot {
   onboardingStep:number; onboardingComplete:boolean;
   household?:{id:string;name:string;state:string}; people:BootstrapPerson[];
@@ -55,6 +56,7 @@ export interface CsvImportResult { batchId:string; importedCount:number; skipped
 export interface AccountDeletionImpact { accountId:string; canDelete:boolean; blockers:string[] }
 export interface Repository {
   bootstrap():Promise<BootstrapInput>;
+  workspaceInfo?():Promise<WorkspaceInfo>;
   retryStartup():Promise<BootstrapInput>;
   saveOnboardingStep(step:number,payload:OnboardingStepPayload):Promise<void>;
   completeOnboarding():Promise<void>;
@@ -78,7 +80,7 @@ export interface Repository {
   updateRecurring?(input:RecurringInput&{expectedRevision:number}):Promise<void>;
   deleteRecurring?(input:{id:string;expectedRevision:number}):Promise<void>;
   createScenario?(input:{id:string;name:string;cloneFromId?:string|null}):Promise<void>;
-  updateScenario?(input:{id:string;name:string;assumptions:ScenarioRecord["assumptions"];horizonMonths:number;events:ScenarioRecord["events"];allocations:ScenarioAllocation[];expectedRevision:number}):Promise<void>;
+  updateScenario?(input:{id:string;name:string;assumptions:ScenarioRecord["assumptions"];horizonMonths:number;events:ScenarioRecord["events"];allocations:ScenarioAllocation[];withdrawals?:import("./domain/types").WithdrawalRule[];expectedRevision:number}):Promise<void>;
   deleteScenario?(input:{id:string;expectedRevision:number}):Promise<void>;
   selectCsvSource?():Promise<string|null>;
   inspectCsv?(path:string):Promise<CsvInspection>;
@@ -98,6 +100,7 @@ const backupFilename=()=>`LifeLook-backup-${new Date().toISOString().slice(0,10)
 
 export const tauriRepository:Repository = {
   bootstrap:()=>invoke("get_bootstrap"),
+  workspaceInfo:()=>invoke("get_workspace_info"),
   retryStartup:()=>invoke("retry_startup"),
   saveOnboardingStep:(step,payload)=>invoke("save_onboarding_step",{step,payload}),
   completeOnboarding:()=>invoke("complete_onboarding"),

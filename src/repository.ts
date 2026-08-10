@@ -19,6 +19,15 @@ export interface MortgageTerms { originalPrincipalCents:number; termMonths:numbe
 export interface Liability { id:string; householdId:string; name:string; balanceCents:number; annualRateBps:number; minimumPaymentCents:number; mortgage?:MortgageTerms|null; revision:number }
 export interface AssetInput { id:string;name:string;valueCents:number;annualGrowthBps:number }
 export interface LiabilityInput { id:string;name:string;balanceCents:number;annualRateBps:number;minimumPaymentCents:number;mortgage?:MortgageTerms|null }
+export interface OnboardingStepPayload {
+  household?:{id:string;name:string;state:"CA"};
+  people?:BootstrapPerson[];
+  taxProfile?:TaxProfile;
+  accounts?:BootstrapAccount[];
+  recurring?:{kind:"income"|"expense";items:RecurringInput[]};
+  assets?:AssetInput[];
+  liabilities?:LiabilityInput[];
+}
 export interface ScenarioAllocation { id?:string;accountId:string;priority:number;percentBps:number;targetBalanceCents?:number|null }
 export interface ScenarioRecord { id:string; householdId:string; name:string; isBaseline:boolean; assumptions:{inflationBps:number;thresholdInflationBps:number}; horizonMonths:number; revision:number; events:import("./domain/types").ScenarioEvent[]; allocations:ScenarioAllocation[] }
 export interface WorkspaceSnapshot {
@@ -47,7 +56,7 @@ export interface AccountDeletionImpact { accountId:string; canDelete:boolean; bl
 export interface Repository {
   bootstrap():Promise<BootstrapInput>;
   retryStartup():Promise<BootstrapInput>;
-  saveOnboardingStep(step:number,payload:unknown):Promise<void>;
+  saveOnboardingStep(step:number,payload:OnboardingStepPayload):Promise<void>;
   completeOnboarding():Promise<void>;
   createTransaction?(input:TransactionInput):Promise<void>;
   updateTransaction?(input:UpdateTransactionInput):Promise<void>;

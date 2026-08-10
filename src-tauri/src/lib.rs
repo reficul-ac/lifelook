@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -287,6 +287,15 @@ struct OnboardingPayload {
     people: Option<Vec<Person>>,
     tax_profile: Option<TaxProfile>,
     accounts: Option<Vec<Account>>,
+    recurring: Option<OnboardingRecurring>,
+    assets: Option<Vec<AssetInput>>,
+    liabilities: Option<Vec<LiabilityInput>>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OnboardingRecurring {
+    kind: String,
+    items: Vec<RecurringInput>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -531,6 +540,19 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         "INSERT OR IGNORE INTO schema_migrations(version) VALUES(5)",
         [],
     )?;
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 6 {
+        transaction.execute("UPDATE households SET onboarding_step=3 WHERE onboarding_complete=0 AND onboarding_step=6", [])?;
+        transaction.execute(
+            "UPDATE households SET onboarding_step=8 WHERE onboarding_complete=1",
+            [],
+        )?;
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(6)", [])?;
+    }
     transaction.commit()?;
     Ok(())
 }
@@ -854,9 +876,80 @@ fn save_onboarding_step(
                 .join(",");
             let sql =
                 format!("DELETE FROM accounts WHERE household_id=? AND id NOT IN ({placeholders})");
+            let unlink_sql = format!("UPDATE recurring_entries SET account_id=NULL,revision=revision+1 WHERE household_id=? AND account_id NOT IN ({placeholders})");
             let mut values: Vec<&dyn rusqlite::ToSql> = vec![&household_id];
             values.extend(ids.iter().map(|id| id as &dyn rusqlite::ToSql));
+            tx.execute(&unlink_sql, values.as_slice())?;
             tx.execute(&sql, values.as_slice())?;
+        }
+        if let Some(batch) = payload.recurring {
+            if !matches!(batch.kind.as_str(), "income" | "expense") {
+                return Err(AppError::Validation("invalid recurring kind".into()));
+            }
+            let hid: String =
+                tx.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
+            let category_id = format!("{}-other-{}", batch.kind, hid);
+            let category_name = if batch.kind == "income" {
+                "Other income"
+            } else {
+                "Other expense"
+            };
+            tx.execute(
+                "INSERT OR IGNORE INTO categories(id,household_id,name,kind) VALUES(?1,?2,?3,?4)",
+                params![category_id, hid, category_name, batch.kind],
+            )?;
+            for item in &batch.items {
+                validate_recurring(item)?;
+                let valid_category: i64 = tx.query_row(
+                    "SELECT count(*) FROM categories WHERE id=?1 AND household_id=?2 AND kind=?3",
+                    params![item.category_id, hid, batch.kind],
+                    |r| r.get(0),
+                )?;
+                let valid_account: i64 = if let Some(account_id) = &item.account_id {
+                    tx.query_row(
+                        "SELECT count(*) FROM accounts WHERE id=?1 AND household_id=?2",
+                        params![account_id, hid],
+                        |r| r.get(0),
+                    )?
+                } else {
+                    1
+                };
+                if valid_category != 1 || valid_account != 1 {
+                    return Err(AppError::Validation(
+                        "category or account does not belong to this household".into(),
+                    ));
+                }
+            }
+            tx.execute("DELETE FROM recurring_entries WHERE household_id=?1 AND category_id IN (SELECT id FROM categories WHERE household_id=?1 AND kind=?2)", params![hid,batch.kind])?;
+            for item in batch.items {
+                tx.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,frequency,start_date,end_date,annual_growth_bps) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)", params![item.id,hid,item.category_id,item.account_id,item.name.trim(),item.amount_cents,item.frequency,item.start_date,item.end_date,item.annual_growth_bps])?;
+            }
+        }
+        if let Some(items) = payload.assets {
+            for item in &items {
+                if item.name.trim().is_empty() {
+                    return Err(AppError::Validation("asset name is required".into()));
+                }
+                validate_nonnegative_money(item.value_cents, "asset value")?;
+                validate_rate(item.annual_growth_bps, -10_000, "annual growth")?;
+            }
+            let hid: String =
+                tx.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
+            tx.execute("DELETE FROM assets WHERE household_id=?1", [&hid])?;
+            for item in &items {
+                save_asset(&tx, item, false)?;
+            }
+        }
+        if let Some(items) = payload.liabilities {
+            for item in &items {
+                validate_liability(item)?;
+            }
+            let hid: String =
+                tx.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
+            tx.execute("DELETE FROM liabilities WHERE household_id=?1", [&hid])?;
+            for item in &items {
+                save_liability(&tx, item, false)?;
+            }
         }
         tx.execute("UPDATE households SET onboarding_step=MAX(onboarding_step,?1) WHERE id=(SELECT id FROM households LIMIT 1)",[step])?;
         tx.commit()?;

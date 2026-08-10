@@ -81,7 +81,7 @@ const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
   settings: value.settings ?? emptySettings,
   taxProfile: value.taxProfile ?? null,
   activity: value.activity ?? [],
-  recurring: value.recurring ?? [],
+  recurring: (value.recurring ?? []).map((entry) => ({ ...entry, frequency: entry.frequency ?? "monthly" })),
   assets: value.assets ?? [],
   liabilities: value.liabilities ?? [],
   scenarios: value.scenarios ?? [],
@@ -235,6 +235,7 @@ function Workspace({
   const dark =
     settings.theme === "dark" || (settings.theme === "system" && osDark);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [selectedScenarioId, setSelectedScenarioId] = useState(bootstrap.scenarios[0]?.id ?? "");
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   const openDialog = (state: DialogState, invoker?: HTMLElement | null) =>
@@ -266,6 +267,7 @@ function Workspace({
       })),
       recurring: bootstrap.recurring.map((r) => ({
         ...r,
+        accountId: r.accountId ?? undefined,
         endDate: r.endDate ?? undefined,
         kind:
           bootstrap.categories.find((c) => c.id === r.categoryId)?.kind ===
@@ -287,13 +289,16 @@ function Workspace({
     }),
     [bootstrap],
   );
-  const projections = useMemo(
-    () =>
-      bootstrap.taxProfile
-        ? ProjectionEngine.calculate(snapshot, baseline)
-        : null,
-    [snapshot, bootstrap.taxProfile],
-  );
+  const scenarios = useMemo(() => bootstrap.scenarios.map((record): Scenario => ({
+    id: record.id,
+    name: record.name,
+    assumptions: { inflationBps: record.assumptions.inflationBps ?? 250, thresholdInflationBps: record.assumptions.thresholdInflationBps ?? 250 },
+    events: record.events,
+    allocations: record.allocations.map(rule => ({ ...rule, targetBalanceCents: rule.targetBalanceCents ?? undefined })),
+    horizon: { start: new Date().toISOString().slice(0, 7), months: record.horizonMonths },
+  })), [bootstrap.scenarios]);
+  const selectedScenario = scenarios.find(s => s.id === selectedScenarioId) ?? scenarios[0] ?? { ...baseline, allocations: snapshot.accounts[0] ? [{ accountId: snapshot.accounts[0].id, percentBps: 10000, priority: 1 }] : [] };
+  const projections = useMemo(() => bootstrap.taxProfile ? ProjectionEngine.calculate(snapshot, selectedScenario) : null, [snapshot, bootstrap.taxProfile, selectedScenario]);
   return (
     <div
       className={dark ? "app dark" : "app"}
@@ -394,6 +399,10 @@ function Workspace({
         {view === "Plan" && projections && (
           <PlanView
             projections={projections}
+            scenarios={scenarios}
+            selectedScenarioId={selectedScenario.id}
+            onSelectScenario={setSelectedScenarioId}
+            snapshot={snapshot}
             expanded={expanded}
             setExpanded={setExpanded}
           />
@@ -2403,27 +2412,35 @@ function ActivityView({
 
 function PlanView({
   projections,
+  scenarios,
+  selectedScenarioId,
+  onSelectScenario,
+  snapshot,
   expanded,
   setExpanded,
 }: {
   projections: ReturnType<typeof ProjectionEngine.calculate>;
+  scenarios: Scenario[];
+  selectedScenarioId: string;
+  onSelectScenario: (id: string) => void;
+  snapshot: FinancialSnapshot;
   expanded: number | null;
   setExpanded: (x: number | null) => void;
 }) {
+  const [comparisonIds, setComparisonIds] = useState<string[]>([]);
+  const comparisons = scenarios.filter(s => comparisonIds.includes(s.id)).map(s => ({ scenario: s, years: ProjectionEngine.calculate(snapshot, s) }));
+  const comparisonYears = [...new Set(comparisons.flatMap(x => x.years.map(y => y.year)))].sort();
   return (
     <div className="content">
       <div className="scenario-bar">
         <div>
           <span className="label assumption">Assumptions</span>
-          <h3>Baseline plan</h3>
+          <h3>{scenarios.find(s => s.id === selectedScenarioId)?.name ?? "Baseline"} plan</h3>
+          {scenarios.length > 0 && <select aria-label="Active scenario" value={selectedScenarioId} onChange={event => onSelectScenario(event.target.value)}>{scenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>}
         </div>
-        <button
-          disabled
-          title="Scenario comparison editor is not yet available"
-        >
-          Compare scenarios (unavailable)
-        </button>
+        <div aria-label="Compare scenarios">{scenarios.map(s => <label key={s.id}><input type="checkbox" checked={comparisonIds.includes(s.id)} disabled={!comparisonIds.includes(s.id) && comparisonIds.length >= 3} onChange={() => setComparisonIds(ids => ids.includes(s.id) ? ids.filter(id => id !== s.id) : [...ids, s.id])}/>{s.name}</label>)}</div>
       </div>
+      {comparisons.length > 1 && <section className="card wide" aria-label="Scenario comparison"><h3>Scenario comparison</h3><div className="year-table"><div className="year-row table-head"><span>Year</span>{comparisons.map(x => <span key={x.scenario.id}>{x.scenario.name}</span>)}</div>{comparisonYears.map(year => <div className="year-row" key={year}><span>{year}</span>{comparisons.map(x => { const row=x.years.find(y => y.year===year); return <span key={x.scenario.id}>{row ? `${money(row.endingNetWorthCents,true)} · deficit ${money(row.unfundedDeficitCents,true)}` : "—"}</span>})}</div>)}</div></section>}
       <section className="card wide">
         <div className="card-title">
           <div>

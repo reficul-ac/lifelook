@@ -338,4 +338,56 @@ describe("LifeLook shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.getByDisplayValue("Saved Person")).toBeInTheDocument();
   });
+
+  it("deletes an imported transaction individually through an alert dialog", async () => {
+    const data=await testRepository.bootstrap();
+    const imported={postingId:1,entryId:"import-1",occurredOn:"2026-08-01",kind:"expense" as const,origin:"import" as const,canDelete:true,description:"Imported lunch",accountId:"cash",accountName:"Test checking",categoryId:"food",categoryName:"Food",amountCents:-1250,revision:3};
+    const deleteTransaction=vi.fn();
+    render(<App repository={{...testRepository,deleteTransaction,bootstrap:async()=>({...data,categories:[{id:"food",householdId:"test",name:"Food",kind:"expense" as const,revision:1}],activity:[imported]})}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Activity/}));
+    fireEvent.click(screen.getByRole("button",{name:"Edit Imported lunch"}));
+    expect(screen.getByText(/delete this transaction individually/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button",{name:"Delete"}));
+    const confirmation=screen.getByRole("alertdialog");
+    await waitFor(()=>expect(screen.getByRole("heading",{name:"Delete transaction?"})).toHaveFocus());
+    fireEvent.click(screen.getByRole("button",{name:"Delete permanently"}));
+    await waitFor(()=>expect(deleteTransaction).toHaveBeenCalledWith({id:"import-1",expectedRevision:3}));
+    await waitFor(()=>expect(confirmation).not.toBeInTheDocument());
+  });
+
+  it("keeps a blocked account dialog open and focuses its blockers", async () => {
+    const data=await testRepository.bootstrap();
+    const accountDeletionImpact=vi.fn().mockResolvedValue({accountId:"cash",canDelete:false,blockers:["The account has transactions."]});
+    render(<App repository={{...testRepository,accountDeletionImpact,bootstrap:async()=>data}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Net Worth/}));
+    fireEvent.click(screen.getByRole("button",{name:"Edit"}));
+    fireEvent.click(screen.getByRole("button",{name:"Delete"}));
+    const alert=await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("The account has transactions.");
+    await waitFor(()=>expect(alert).toHaveFocus());
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("retains CSV preview choices after commit failure and restores focus on close", async () => {
+    const data=await testRepository.bootstrap();
+    const category={id:"food",householdId:"test",name:"Food",kind:"expense" as const,revision:1};
+    const preview={path:"/tmp/activity.csv",fileHash:"hash",mapping:{accountId:"cash",dateColumn:"Date",descriptionColumn:"Description",noteColumn:null,amountLayout:"signed" as const,amountColumn:"Amount",debitColumn:null,creditColumn:null,inflowPositive:true,dateFormat:"iso" as const},rows:[{rowNumber:2,occurredOn:"2026-08-01",description:"Lunch",amountCents:-1200,kind:"expense" as const,categoryId:"food",categoryName:"Food",valid:true,error:null,duplicate:"existing" as const,include:false}]};
+    const commitCsv=vi.fn().mockRejectedValue({message:"Database is busy"});
+    render(<App repository={{...testRepository,bootstrap:async()=>({...data,categories:[category]}),selectCsvSource:vi.fn().mockResolvedValue("/tmp/activity.csv"),inspectCsv:vi.fn().mockResolvedValue({path:"/tmp/activity.csv",fileHash:"hash",headers:["Date","Description","Amount"],rowCount:1}),previewCsv:vi.fn().mockResolvedValue(preview),commitCsv}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Activity/}));
+    const importButton=screen.getByRole("button",{name:"Import CSV"});
+    fireEvent.click(importButton);fireEvent.click(screen.getByRole("button",{name:"Choose CSV…"}));
+    fireEvent.click(await screen.findByRole("button",{name:"Preview"}));
+    const include=await screen.findByRole("checkbox",{name:"Include row 2"});
+    expect(include).not.toBeChecked();
+    fireEvent.click(include);
+    fireEvent.click(screen.getByRole("button",{name:"Import selected"}));
+    const alert=await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Database is busy");
+    expect(include).toBeChecked();
+    await waitFor(()=>expect(alert).toHaveFocus());
+    fireEvent.keyDown(screen.getByRole("dialog"),{key:"Escape"});
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(importButton).toHaveFocus();
+  });
 });

@@ -1079,35 +1079,36 @@ fn delete_transaction(
     input: DeleteInput,
     database: tauri::State<Database>,
 ) -> Result<(), AppError> {
-    with_db(&database, |db| {
-        let tx = db.transaction()?;
-        let hid = active_household(&tx)?;
-        let (kind, revision): (String, i64) = tx
-            .query_row(
-                "SELECT kind,revision FROM transaction_entries WHERE id=?1 AND household_id=?2",
-                params![input.id, hid],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
-            .map_err(|_| AppError::Validation("transaction was not found".into()))?;
-        if kind == "adjustment" {
-            return Err(AppError::Validation(
-                "reconciliation adjustments cannot be deleted".into(),
-            ));
-        }
-        if revision != input.expected_revision {
-            return Err(AppError::Conflict);
-        }
-        tx.execute("DELETE FROM postings WHERE entry_id=?", [&input.id])?;
-        let changed = tx.execute(
-            "DELETE FROM transaction_entries WHERE id=?1 AND household_id=?2 AND revision=?3",
-            params![input.id, hid, input.expected_revision],
-        )?;
-        if changed == 0 {
-            return Err(AppError::Conflict);
-        }
-        tx.commit()?;
-        Ok(())
-    })
+    with_db(&database, |db| delete_transaction_from(db, &input))
+}
+fn delete_transaction_from(db: &mut Connection, input: &DeleteInput) -> Result<(), AppError> {
+    let tx = db.transaction()?;
+    let hid = active_household(&tx)?;
+    let (kind, revision): (String, i64) = tx
+        .query_row(
+            "SELECT kind,revision FROM transaction_entries WHERE id=?1 AND household_id=?2",
+            params![input.id, hid],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(|_| AppError::Validation("transaction was not found".into()))?;
+    if kind == "adjustment" {
+        return Err(AppError::Validation(
+            "reconciliation adjustments cannot be deleted".into(),
+        ));
+    }
+    if revision != input.expected_revision {
+        return Err(AppError::Conflict);
+    }
+    tx.execute("DELETE FROM postings WHERE entry_id=?", [&input.id])?;
+    let changed = tx.execute(
+        "DELETE FROM transaction_entries WHERE id=?1 AND household_id=?2 AND revision=?3",
+        params![input.id, hid, input.expected_revision],
+    )?;
+    if changed == 0 {
+        return Err(AppError::Conflict);
+    }
+    tx.commit()?;
+    Ok(())
 }
 fn account_properties(kind: &str) -> Result<bool, AppError> {
     match kind {
@@ -1180,6 +1181,14 @@ fn account_impact(db: &Connection, account_id: &str) -> Result<AccountDeletionIm
     if accounts <= 1 {
         blockers.push("This is the household's last account.".into())
     }
+    let opening_balance: i64 = db.query_row(
+        "SELECT opening_balance_cents FROM accounts WHERE id=?",
+        [account_id],
+        |r| r.get(0),
+    )?;
+    if opening_balance != 0 {
+        blockers.push("The account has a non-zero opening balance.".into())
+    }
     let postings: i64 = db.query_row(
         "SELECT count(*) FROM postings WHERE account_id=?",
         [account_id],
@@ -1227,21 +1236,22 @@ fn account_deletion_impact(
 }
 #[tauri::command]
 fn delete_account(input: DeleteInput, database: tauri::State<Database>) -> Result<(), AppError> {
-    with_db(&database, |db| {
-        let impact = account_impact(db, &input.id)?;
-        if !impact.can_delete {
-            return Err(AppError::Validation(impact.blockers.join(" ")));
-        }
-        let hid = active_household(db)?;
-        let changed = db.execute(
-            "DELETE FROM accounts WHERE id=?1 AND household_id=?2 AND revision=?3",
-            params![input.id, hid, input.expected_revision],
-        )?;
-        if changed == 0 {
-            return Err(AppError::Conflict);
-        }
-        Ok(())
-    })
+    with_db(&database, |db| delete_account_from(db, &input))
+}
+fn delete_account_from(db: &mut Connection, input: &DeleteInput) -> Result<(), AppError> {
+    let impact = account_impact(db, &input.id)?;
+    if !impact.can_delete {
+        return Err(AppError::Validation(impact.blockers.join(" ")));
+    }
+    let hid = active_household(db)?;
+    let changed = db.execute(
+        "DELETE FROM accounts WHERE id=?1 AND household_id=?2 AND revision=?3",
+        params![input.id, hid, input.expected_revision],
+    )?;
+    if changed == 0 {
+        return Err(AppError::Conflict);
+    }
+    Ok(())
 }
 #[tauri::command]
 fn reconcile_account(
@@ -1309,6 +1319,21 @@ fn csv_headers(bytes: &[u8]) -> Result<(Vec<String>, usize), AppError> {
     if headers.is_empty() || headers.iter().all(|x| x.is_empty()) {
         return Err(AppError::Validation("CSV has no header row".into()));
     }
+    let normalized = headers
+        .iter()
+        .map(|x| x.trim().to_lowercase())
+        .collect::<Vec<_>>();
+    if normalized.iter().any(|x| x.is_empty()) {
+        return Err(AppError::Validation(
+            "CSV headers must all have names".into(),
+        ));
+    }
+    let unique = normalized.iter().collect::<std::collections::HashSet<_>>();
+    if unique.len() != normalized.len() {
+        return Err(AppError::Validation(
+            "CSV headers are ambiguous after ignoring case and whitespace".into(),
+        ));
+    }
     let mut count = 0;
     for row in rdr.records() {
         row.map_err(|e| AppError::Validation(format!("Malformed CSV row: {e}")))?;
@@ -1352,12 +1377,14 @@ fn inspect_csv(path: String, database: tauri::State<Database>) -> Result<CsvInsp
 fn parse_csv_date(value: &str, format: &str) -> Result<String, String> {
     let iso = if format == "iso" {
         value.to_string()
-    } else {
+    } else if format == "us" {
         let p = value.split('/').collect::<Vec<_>>();
         if p.len() != 3 {
             return Err("Invalid US date".into());
         }
         format!("{:0>4}-{:0>2}-{:0>2}", p[2], p[0], p[1])
+    } else {
+        return Err("Unsupported date format".into());
     };
     validate_date(&iso).map_err(|_| "Invalid calendar date".to_string())?;
     Ok(iso)
@@ -1436,11 +1463,21 @@ fn make_preview(
     let ai = mapping.amount_column.as_deref().map(col).transpose()?;
     let debit = mapping.debit_column.as_deref().map(col).transpose()?;
     let credit = mapping.credit_column.as_deref().map(col).transpose()?;
+    if mapping.amount_layout != "signed" && mapping.amount_layout != "debitCredit" {
+        return Err(AppError::Validation(
+            "Choose a supported amount layout".into(),
+        ));
+    }
     if mapping.amount_layout == "signed" && ai.is_none()
         || mapping.amount_layout == "debitCredit" && (debit.is_none() || credit.is_none())
     {
         return Err(AppError::Validation(
             "Choose the required amount columns".into(),
+        ));
+    }
+    if mapping.amount_layout == "debitCredit" && debit == credit {
+        return Err(AppError::Validation(
+            "Debit and credit must use different columns".into(),
         ));
     }
     let hid = active_household(db)?;
@@ -1469,7 +1506,7 @@ fn make_preview(
             .filter(|x| !x.is_empty())
             .map(str::to_string);
         let parsed_date = parse_csv_date(rec.get(di).unwrap_or(""), &mapping.date_format);
-        let parsed_amount: Result<i64,String> = (|| {
+        let parsed_amount: Result<i64, String> = (|| {
             if mapping.amount_layout == "signed" {
                 let v = parse_csv_money(rec.get(ai.unwrap()).unwrap_or(""))?;
                 Ok(if mapping.inflow_positive { v } else { -v })
@@ -1517,6 +1554,8 @@ fn make_preview(
             if let Some((id, name)) = suggested.or_else(|| fallback().ok().flatten()) {
                 category_id = Some(id);
                 category_name = Some(name)
+            } else if error.is_none() {
+                error = Some(format!("No compatible {k} category is available"));
             }
         }
         let mut duplicate = "none".to_string();
@@ -2448,10 +2487,165 @@ mod tests {
         let impact = account_impact(&c, "a").unwrap();
         assert!(!impact.can_delete);
         assert!(impact.blockers.iter().any(|x| x.contains("last account")));
-        let input=TransactionInput{id:"history".into(),occurred_on:"2026-01-01".into(),account_id:"a".into(),category_id:"c".into(),amount_cents:100,description:"History".into(),note:None};
-        insert_transaction(&mut c,&input).unwrap();
+        let input = TransactionInput {
+            id: "history".into(),
+            occurred_on: "2026-01-01".into(),
+            account_id: "a".into(),
+            category_id: "c".into(),
+            amount_cents: 100,
+            description: "History".into(),
+            note: None,
+        };
+        insert_transaction(&mut c, &input).unwrap();
         let impact = account_impact(&c, "a").unwrap();
         assert!(impact.blockers.iter().any(|x| x.contains("transactions")));
+    }
+
+    #[test]
+    fn transaction_deletion_is_atomic_and_preserves_import_audit_history() {
+        let mut c = seeded();
+        c.execute("INSERT INTO import_profiles(id,household_id,normalized_headers,parsing_json) VALUES('profile','h','date','{}')",[]).unwrap();
+        c.execute("INSERT INTO import_batches(id,account_id,profile_id,row_count,status) VALUES('batch','a','profile',1,'complete')",[]).unwrap();
+        for (id, kind, batch) in [
+            ("manual", "expense", None),
+            ("transfer", "transfer", None),
+            ("imported", "expense", Some("batch")),
+        ] {
+            c.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description,import_batch_id,revision) VALUES(?1,'h','2026-01-01',?2,'Entry',?3,2)",params![id,kind,batch]).unwrap();
+        }
+        c.execute("INSERT INTO postings(entry_id,account_id,category_id,amount_cents) VALUES('manual','a','c',-100),('transfer','a',NULL,-200),('transfer','b',NULL,200),('imported','a','c',-300)",[]).unwrap();
+        for id in ["manual", "transfer", "imported"] {
+            delete_transaction_from(
+                &mut c,
+                &DeleteInput {
+                    id: id.into(),
+                    expected_revision: 2,
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                c.query_row(
+                    "SELECT count(*) FROM postings WHERE entry_id=?",
+                    [id],
+                    |r| r.get::<_, i64>(0)
+                )
+                .unwrap(),
+                0
+            );
+        }
+        assert_eq!(
+            c.query_row(
+                "SELECT count(*) FROM import_batches WHERE id='batch'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn transaction_deletion_rejects_adjustments_and_stale_revisions() {
+        let mut c = seeded();
+        c.execute("INSERT INTO transaction_entries(id,household_id,occurred_on,kind,description,revision) VALUES('adjust','h','2026-01-01','adjustment','Reconcile',1),('stale','h','2026-01-01','expense','Old',2)",[]).unwrap();
+        c.execute("INSERT INTO postings(entry_id,account_id,category_id,amount_cents) VALUES('adjust','a','c',100),('stale','a','c',-100)",[]).unwrap();
+        assert!(matches!(
+            delete_transaction_from(
+                &mut c,
+                &DeleteInput {
+                    id: "adjust".into(),
+                    expected_revision: 1
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            delete_transaction_from(
+                &mut c,
+                &DeleteInput {
+                    id: "stale".into(),
+                    expected_revision: 1
+                }
+            ),
+            Err(AppError::Conflict)
+        ));
+        assert_eq!(
+            c.query_row(
+                "SELECT count(*) FROM postings WHERE entry_id IN ('adjust','stale')",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            2
+        );
+    }
+
+    #[test]
+    fn account_deletion_checks_each_reference_and_revision() {
+        let mut c = seeded();
+        delete_account_from(
+            &mut c,
+            &DeleteInput {
+                id: "b".into(),
+                expected_revision: 1,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            c.query_row("SELECT count(*) FROM accounts WHERE id='b'", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+
+        let mut stale = seeded();
+        assert!(matches!(
+            delete_account_from(
+                &mut stale,
+                &DeleteInput {
+                    id: "b".into(),
+                    expected_revision: 9
+                }
+            ),
+            Err(AppError::Conflict)
+        ));
+
+        let recurring = seeded();
+        recurring.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,start_date) VALUES('r','h','c','b','Rent',1,'2026-01-01')",[]).unwrap();
+        assert!(account_impact(&recurring, "b")
+            .unwrap()
+            .blockers
+            .iter()
+            .any(|x| x.contains("recurring")));
+
+        let allocated = seeded();
+        allocated.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json) VALUES('s','h','Base',1,'{}')",[]).unwrap();
+        allocated.execute("INSERT INTO allocations(id,scenario_id,account_id,priority,percent_bps) VALUES('al','s','b',1,10000)",[]).unwrap();
+        assert!(account_impact(&allocated, "b")
+            .unwrap()
+            .blockers
+            .iter()
+            .any(|x| x.contains("allocations")));
+
+        let imported = seeded();
+        imported.execute("INSERT INTO import_batches(id,account_id,row_count,status) VALUES('batch','b',0,'complete')",[]).unwrap();
+        assert!(account_impact(&imported, "b")
+            .unwrap()
+            .blockers
+            .iter()
+            .any(|x| x.contains("import batch")));
+    }
+
+    #[test]
+    fn csv_rejects_ambiguous_headers_and_unsupported_formats() {
+        assert!(matches!(
+            csv_headers(b"Date, date ,Amount\n2026-01-01,x,1\n"),
+            Err(AppError::Validation(_))
+        ));
+        assert_eq!(
+            parse_csv_date("2026-01-01", "unknown").unwrap_err(),
+            "Unsupported date format"
+        );
     }
 
     #[test]

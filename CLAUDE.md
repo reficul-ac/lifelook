@@ -1,8 +1,14 @@
-# Development Instructions
+# IMPORTANT: NO GIT BRANCHES — COMMIT AND PUSH ONLY TO `MAIN`
+
+> **Do not create or use feature/development branches. Perform work on `main`, commit it there, and push only to `origin/main`. The repository owner grants standing permission to push this repository to `origin/main` without asking again.**
+
+---
+
+## Development Instructions
 
 - Always perform development work directly on the `main` branch.
 - Push completed work directly to `origin/main`; do not create development or feature branches.
-- Before every push, obtain explicit confirmation for the exact repository, remote, and branch, as required by the repository's global agent instructions.
+- The repository owner grants standing permission to push `reficul-ac/lifelook` to remote `origin`, branch `main`, without asking again.
 
 ## Basic App Usage
 

@@ -40,6 +40,8 @@ export const ProjectionEngine = {
     const accounts = new Map(snapshot.accounts.map(a => [a.id, { ...a, balance: a.balanceCents }]));
     const assets = new Map(snapshot.assets.map(a => [a.id, { ...a, value: a.valueCents }]));
     const debts = new Map(snapshot.liabilities.map(l => [l.id, { ...l, balance: l.balanceCents, payment: l.minimumPaymentCents }]));
+    // Stored JSON array order is not part of the calculation contract.
+    const events = [...scenario.events].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
     const months: MonthlyProjection[] = [];
     let cumulativeDeficit = 0;
     for (let index = 0; index < scenario.horizon.months; index++) {
@@ -51,12 +53,12 @@ export const ProjectionEngine = {
       for (const entry of snapshot.recurring) {
         const count = occurrences(entry, key);
         if (!count) continue;
-        const changes = scenario.events.filter(e => (e.type === "recurring-change" || e.type === "income-change") && e.entryId === entry.id && e.date.slice(0, 7) <= key);
+        const changes = events.filter(e => (e.type === "recurring-change" || e.type === "income-change") && e.entryId === entry.id && e.date.slice(0, 7) <= key);
         const base = changes.length ? (changes.at(-1)! as { amountCents: number }).amountCents : entry.amountCents;
         const value = grow(base, entry.annualGrowthBps ?? (entry.kind === "expense" ? scenario.assumptions.inflationBps : 0), index) * count;
         if (entry.kind === "income") income += value; else expense += value;
       }
-      const currentEvents = scenario.events.filter(e => e.date.slice(0, 7) === key);
+      const currentEvents = events.filter(e => e.date.slice(0, 7) === key);
       const account = (id: string) => { const value = accounts.get(id); if (!value) throw new RangeError(`Unknown account: ${id}`); return value; };
       const debt = (id: string) => { const value = debts.get(id); if (!value) throw new RangeError(`Unknown liability: ${id}`); return value; };
       for (const event of currentEvents) {

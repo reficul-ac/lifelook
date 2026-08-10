@@ -11,7 +11,7 @@ jobs:
         with: { node-version: 20, cache: npm }
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Tauri system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev webkit2gtk-driver build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb openbox xdotool imagemagick
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev webkit2gtk-driver build-essential bubblewrap curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb openbox xdotool imagemagick
       - run: npm ci
       - name: Audit production npm dependencies
         run: npm audit --omit=dev
@@ -38,6 +38,20 @@ jobs:
         run: cargo install tauri-driver --locked
       - name: Run native WebDriver accessibility suite
         run: npm run test:e2e:native
+      - name: Run packaged AppImage mutation, export, restore, and relaunch acceptance
+        run: |
+          appimage="$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
+          test -n "$appimage"
+          profile_root="$(mktemp -d)"
+          export XDG_DATA_HOME="$profile_root/data"
+          export LIFELOOK_E2E_BINARY="$appimage"
+          export LIFELOOK_E2E_BACKUP="$profile_root/round-trip.lifelook"
+          export LIFELOOK_E2E_ACTIVITY_EXPORT="$profile_root/activity-export.csv"
+          export LIFELOOK_E2E_SCENARIO=acceptance
+          export LIFELOOK_E2E_ARTIFACT_DIR=artifacts/packaged-e2e
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          mkdir -p "$XDG_DATA_HOME" "$LIFELOOK_E2E_ARTIFACT_DIR"
+          xvfb-run -a --server-args="-screen 0 1280x820x24" npm exec wdio run ./wdio.conf.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -46,4 +60,5 @@ jobs:
             src-tauri/target/release/bundle/appimage/*.AppImage
             artifacts/appimage-smoke/*.png
             artifacts/native-e2e/*.png
+            artifacts/packaged-e2e/*.png
           if-no-files-found: error

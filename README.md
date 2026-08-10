@@ -25,6 +25,8 @@ npm run web:dev
 npm run appimage
 ```
 
+`npm run test:e2e:native` runs release-binary WebDriver scenarios in isolated local profiles. Its offline scenario uses Bubblewrap (`bwrap`) to launch the driver and app in a network namespace with no host or external network interfaces.
+
 The AppImage is written under `src-tauri/target/release/bundle/appimage/`. This repository does not install Rust automatically; use [rustup](https://rustup.rs/) if `rustc` is unavailable.
 
 ## User quick start
@@ -36,7 +38,7 @@ The AppImage is written under `src-tauri/target/release/bundle/appimage/`. This 
 5. Choose System, Light, or Dark appearance and reduced motion in Settings; these choices persist locally.
 6. In Settings, choose **Back up data** to save a portable `.lifelook` file. Choose **Restore** to replace the current workspace after reviewing the confirmation warning.
 
-CSV export is not available in the current pre-release interface. Dated scenario events and allocation editing remain follow-up work.
+Activity can export exactly the current search/account/year results to an unencrypted UTF-8 CSV. Transfers export as their two signed posting rows. Plan scenarios support dated recurring changes, one-time income/expenses, contributions/transfers, asset purchases/sales, debt originations/payoffs, and ordered surplus allocations with a final 100% catch-all.
 
 ## Feature guide
 
@@ -44,7 +46,7 @@ CSV export is not available in the current pre-release interface. Dated scenario
 - **Activity** supports manual income, expense, and transfer creation, editing, and deletion. Imported rows are read-only for editing but individually deletable; transfers are deleted as one atomic event. Transfers are grouped as one balance-neutral event, with text, account, and year filters.
 - **Plan** manages recurring income and expenses and projects them by exact amount, frequency, date range, and annual growth. Create scenarios from defaults or clone the active plan, edit inflation/tax-threshold assumptions and a 1–480 month horizon, and compare up to three saved scenarios.
 - **Net Worth** brings liquid accounts, investments, assets, mortgages, and other liabilities into one balance sheet. Assets and debts support create, edit, and confirmed deletion. Mortgage projections amortize principal and interest from the recorded current balance; taxes, insurance, and escrow are excluded. Accounts can be added, renamed, retyped, and reconciled with an auditable adjustment. Only empty, non-final accounts with no financial references can be deleted.
-- **CSV import** supports UTF-8 files up to 10 MiB and 50,000 rows, saved mappings, ISO or US dates, signed or debit/credit amounts, category review, duplicate warnings with explicit override, and all-or-nothing commits. CSV export remains future work.
+- **CSV import** supports UTF-8 files up to 10 MiB and 50,000 rows, saved mappings, ISO or US dates, signed or debit/credit amounts, category review, duplicate warnings with explicit override, and all-or-nothing commits. **CSV export** follows the active Activity filters and writes auditable RFC 4180 posting rows through a staged atomic replacement.
 - **Tax estimates** apply versioned federal, payroll, and California planning rules. Explanations disclose the source year, effective and marginal rates, projected threshold growth, and exclusions.
 - **Scenario comparison** shows annual net worth and unfunded deficits for up to three selected scenarios. Baseline is fixed; other scenarios can be cloned, renamed, edited, and deleted.
 - **Backup/restore** creates portable, unencrypted `.lifelook` snapshots. Restore validates and stages the selected backup before replacing the current local workspace; the selected backup itself is not modified.
@@ -69,4 +71,4 @@ LifeLook provides planning estimates, not tax, legal, accounting, or investment 
 
 ## Status
 
-The repository contains the Tauri/React foundation, local SQLite migration and state commands, manual ledger, recurring cash-flow, scenario, and account/asset/liability management, guarded deletion, CSV import, deterministic asset growth and debt/mortgage amortization, a pure typed projection/tax domain, an accessible responsive interface, and unit/component/native tests. CSV export, dated scenario events, allocation editing, escrow-aware mortgage modeling, and official tax-fixture validation remain pre-release work tracked in [PLAN.md](PLAN.md).
+The repository contains the Tauri/React foundation, local SQLite migration and state commands, manual ledger, recurring cash-flow, dated scenario events and allocations, account/asset/liability management, guarded deletion, filtered CSV import/export, deterministic asset growth and debt/mortgage amortization, a pure typed projection/tax domain, an accessible responsive interface, and unit/component/native/packaged tests. Escrow-aware mortgage modeling and official tax-fixture validation remain pre-release work tracked in [PLAN.md](PLAN.md).

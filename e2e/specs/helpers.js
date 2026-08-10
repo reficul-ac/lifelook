@@ -27,7 +27,14 @@ export async function openAdd(kind) {
 }
 
 export async function onboard({ secondAccount = false } = {}) {
-  await $("aria/Household name").setValue("Hybrid native household");
+  const household = await $("aria/Household name");
+  try {
+    await household.waitForDisplayed();
+  } catch (error) {
+    console.error(await browser.getPageSource());
+    throw error;
+  }
+  await household.setValue("Hybrid native household");
   await $('[aria-label="Person 1 name"]').setValue("Native Person");
   await $("aria/Save & Continue").click();
   await $("aria/Filing status").selectByAttribute("value", "single");

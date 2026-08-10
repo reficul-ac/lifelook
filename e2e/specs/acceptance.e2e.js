@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
-const artifact = (name) => resolve("artifacts/native-e2e", name);
+const artifact = (name) => resolve(process.env.LIFELOOK_E2E_ARTIFACT_DIR ?? "artifacts/native-e2e", name);
 const currentYear = String(new Date().getFullYear());
 const priorYear = String(new Date().getFullYear() - 1);
 const currentDate = `${currentYear}-02-15`;
@@ -219,6 +220,22 @@ describe("LifeLook native acceptance", () => {
     await assertActivity({ total: "-$40.00", rows: 1, present: ["Prior year parking"], absent: ["Native salary", "Transfer"] });
     await $("#activity-year").selectByVisibleText("All years");
     await assertActivity({ total: "$1,860.00", rows: 5, present: ["Native salary", "Edited groceries", "Transfer", "Prior year parking", "Balance reconciliation"] });
+
+    const exportPath = process.env.LIFELOOK_E2E_ACTIVITY_EXPORT;
+    assert.ok(exportPath);
+    await setReactInput(searchActivity, "Transfer");
+    await $("aria/Export CSV").click();
+    // GTK applies the active CSV filter's extension when the name is accepted.
+    // Enter the basename so the resulting destination is exactly exportPath.
+    await chooseNativeFile(exportPath.replace(/\.csv$/i, ""));
+    await browser.waitUntil(() => {
+      try { return readFileSync(exportPath, "utf8").split("\r\n").length === 4; } catch { return false; }
+    }, { timeout: 5_000, timeoutMsg: "Activity export was not written" });
+    const exported = readFileSync(exportPath, "utf8");
+    assert.equal(exported.split("\r\n")[0], "date,type,description,note,account,category,amount,transfer group");
+    assert.ok(exported.includes(",transfer,Transfer,,Everyday checking,,-250.00,"));
+    assert.ok(exported.includes(",transfer,Transfer,,Rainy day savings,,250.00,"));
+    await setReactInput(searchActivity, "");
 
     await assertDerivedViews();
     await browser.saveScreenshot(artifact("05-native-net-worth-920x650.png"));

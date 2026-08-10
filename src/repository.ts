@@ -75,6 +75,8 @@ export interface Repository {
   inspectCsv?(path:string):Promise<CsvInspection>;
   previewCsv?(path:string,fileHash:string,mapping:CsvMapping):Promise<CsvPreview>;
   commitCsv?(preview:CsvPreview,rows:CsvCommitRow[]):Promise<CsvImportResult>;
+  selectActivityExportDestination?():Promise<string|null>;
+  exportActivityCsv?(destination:string,postingIds:number[]):Promise<void>;
   updateSettings?(input:{theme:Theme;reducedMotion:boolean;expectedRevision:number}):Promise<Settings>;
   selectBackupDestination?():Promise<string|null>;
   selectRestoreSource?():Promise<string|null>;
@@ -116,6 +118,8 @@ export const tauriRepository:Repository = {
   inspectCsv:(path)=>invoke("inspect_csv",{path}),
   previewCsv:(path,fileHash,mapping)=>invoke("preview_csv",{path,fileHash,mapping}),
   commitCsv:(preview,rows)=>invoke("commit_csv",{preview,rows}),
+  selectActivityExportDestination:()=>save({defaultPath:`LifeLook-activity-${new Date().toISOString().slice(0,10)}.csv`,filters:[{name:"CSV files",extensions:["csv"]}]}),
+  exportActivityCsv:(destination,postingIds)=>invoke("export_activity_csv",{destination,postingIds}),
   updateSettings:(input)=>invoke("update_settings",{input}),
   selectBackupDestination:()=>save({defaultPath:backupFilename(),filters:backupFilters}),
   selectRestoreSource:async()=>{
@@ -131,6 +135,7 @@ export const testRepository:Repository = {
   async bootstrap(){return {onboardingStep:8,onboardingComplete:true,household:{id:"test",name:"Test household",state:"CA"},people:[{id:"person",householdId:"test",name:"Test Person"}],taxProfile:null,settings:emptySettings,accounts:[{id:"cash",householdId:"test",name:"Test checking",kind:"checking",openingBalanceCents:0,balanceCents:0,annualReturnBps:0,liquid:true,revision:1}],categories:[],activity:[],recurring:[],assets:[],liabilities:[],scenarios:[]}},
   async retryStartup(){return this.bootstrap()}, async saveOnboardingStep(){}, async completeOnboarding(){}, async createTransaction(){}, async updateTransaction(){}, async createTransfer(){}, async updateTransfer(){},async createAccount(){},async updateAccount(){},async reconcileAccount(){},async createAsset(){},async updateAsset(){},async deleteAsset(){},async createLiability(){},async updateLiability(){},async deleteLiability(){},
   async updateSettings(input){return {...input,revision:input.expectedRevision+1}},
-  async selectBackupDestination(){return null}, async selectRestoreSource(){return null},
+  async selectActivityExportDestination(){return null}, async selectBackupDestination(){return null}, async selectRestoreSource(){return null},
+  async exportActivityCsv(){},
   async backupDatabase(){}, async restoreDatabase(){return this.bootstrap()}
 };

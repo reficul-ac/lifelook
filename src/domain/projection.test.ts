@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ProjectionEngine } from "./projection";
+import { ProjectionEngine, requiredMonthlyFunding } from "./projection";
 import { estimateTax, TAX_RULES_2025 } from "./tax";
 import type { FinancialSnapshot, Scenario } from "./types";
 
@@ -8,6 +8,25 @@ const scenario: Scenario = {id:"s",name:"Base",assumptions:{inflationBps:0,thres
 const calculate=(financial:FinancialSnapshot=snapshot,planned:Scenario=scenario)=>ProjectionEngine.calculate(financial,planned,"2025-01-15");
 
 describe("ProjectionEngine",()=>{
+  it("uses straight-line and future-value goal funding formulas",()=>{
+    expect(requiredMonthlyFunding(1200,12,0)).toBe(100);
+    expect(requiredMonthlyFunding(1200,12,1200)).toBeLessThan(100);
+    expect(requiredMonthlyFunding(1200,12,-1200)).toBeGreaterThan(100);
+    expect(requiredMonthlyFunding(1200,0,1200)).toBe(1200);
+  });
+  it("funds ordered goals before ordinary surplus allocations",()=>{
+    const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0},{...snapshot.accounts[0],id:"goal",name:"Goal",kind:"savings" as const,balanceCents:0}]};
+    const planned={...scenario,events:[{id:"cash",date:"2025-01-01",type:"one-time-income" as const,amountCents:1200}],allocations:[{accountId:"a",priority:1,percentBps:10000}],goals:[{id:"g",scenarioId:"s",type:"major-purchase" as const,name:"Purchase",priority:1,enabled:true,targetDate:"2025-12-15",purchaseDate:"2025-12-15",todayDollarBasis:true,startingEarmarkedCents:0,allowCashShortfall:false,revision:1,costCents:1200,destinationAccountId:"goal",mode:"expense" as const}],horizon:{start:"2025-01",months:1}};
+    const month=calculate(financial,planned)[0].months[0];
+    expect(month.goalFundingCents).toBe(100);
+    expect(month.allocationCents).toBe(month.surplusCents-100);
+    expect(month.goalResults?.[0]).toMatchObject({fundedCents:100,shortfallCents:0,targetResult:"on-track"});
+  });
+  it("rejects combined earmarks above a shared account balance",()=>{
+    const common={scenarioId:"s",type:"major-purchase" as const,enabled:true,targetDate:"2025-12-01",purchaseDate:"2025-12-01",todayDollarBasis:true,allowCashShortfall:false,revision:1,costCents:100,destinationAccountId:"a",mode:"expense" as const};
+    const goals=[{...common,id:"g1",name:"One",priority:1,startingEarmarkedCents:60_00},{...common,id:"g2",name:"Two",priority:2,startingEarmarkedCents:60_00}];
+    expect(()=>calculate(snapshot,{...scenario,goals})).toThrow(/earmarks/);
+  });
   it("keeps annual and monthly totals consistent",()=>{ const [year]=calculate(); expect(year.incomeCents).toBe(year.months.reduce((s,m)=>s+m.incomeCents,0)); expect(year.surplusCents).toBe(year.months.reduce((s,m)=>s+m.surplusCents,0)); });
   it("applies mid-year events only from their date",()=>{ const changed={...scenario,events:[{id:"x",type:"income-change" as const,date:"2025-07-01",entryId:"i",amountCents:2000_00}]}; const [year]=calculate(snapshot,changed); expect(year.months[5].incomeCents).toBe(1000_00); expect(year.months[6].incomeCents).toBe(2000_00); });
   it("sorts recurring changes deterministically rather than trusting payload order",()=>{ const events=[{id:"later",type:"income-change" as const,date:"2025-07-02",entryId:"i",amountCents:3000_00},{id:"earlier",type:"income-change" as const,date:"2025-07-01",entryId:"i",amountCents:2000_00}]; const [year]=calculate(snapshot,{...scenario,events}); expect(year.months[6].incomeCents).toBe(3000_00); });

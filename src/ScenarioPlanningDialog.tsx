@@ -123,6 +123,7 @@ export function ScenarioPlanningDialog({
         events: sorted(events),
         allocations: allocations.map((x, i) => ({ ...x, priority: i + 1 })),
         withdrawals: withdrawals.map((x, i) => ({ ...x, priority: i + 1 })),
+        goals: record.goals ?? [],
         expectedRevision: record.revision,
       });
       await refresh();

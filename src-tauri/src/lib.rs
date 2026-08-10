@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 7;
+const SCHEMA_VERSION: i64 = 8;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -258,6 +258,7 @@ struct ScenarioRecord {
     events: Vec<serde_json::Value>,
     allocations: Vec<serde_json::Value>,
     withdrawals: Vec<serde_json::Value>,
+    goals: Vec<serde_json::Value>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -296,6 +297,8 @@ struct ScenarioUpdateInput {
     allocations: Vec<serde_json::Value>,
     #[serde(default)]
     withdrawals: Vec<serde_json::Value>,
+    #[serde(default)]
+    goals: Vec<serde_json::Value>,
     expected_revision: i64,
 }
 #[derive(Debug, Deserialize)]
@@ -603,6 +606,11 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
           FROM scenarios s JOIN accounts a ON a.household_id=s.household_id WHERE a.liquid=1;")?;
         transaction.execute("INSERT INTO schema_migrations(version) VALUES(7)", [])?;
     }
+    transaction.execute_batch("CREATE TABLE IF NOT EXISTS scenario_goals(id TEXT PRIMARY KEY,scenario_id TEXT NOT NULL REFERENCES scenarios(id) ON DELETE RESTRICT,goal_type TEXT NOT NULL CHECK(goal_type IN ('retirement','emergency-fund','debt-payoff','education','major-purchase')),priority INTEGER NOT NULL CHECK(priority>0),payload_json TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,UNIQUE(scenario_id,priority));")?;
+    transaction.execute(
+        "INSERT OR IGNORE INTO schema_migrations(version) VALUES(8)",
+        [],
+    )?;
     transaction.commit()?;
     Ok(())
 }
@@ -800,6 +808,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     events: vec![],
                     allocations: vec![],
                     withdrawals: vec![],
+                    goals: vec![],
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -821,6 +830,15 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 .collect::<Result<Vec<_>, _>>()?;
             let mut withdrawals = connection.prepare("SELECT json_object('id',id,'accountId',account_id,'priority',priority) FROM withdrawal_rules WHERE scenario_id=? ORDER BY priority")?;
             scenario.withdrawals = withdrawals
+                .query_map([&scenario.id], |r| {
+                    let raw: String = r.get(0)?;
+                    Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut goals = connection.prepare(
+                "SELECT payload_json FROM scenario_goals WHERE scenario_id=? ORDER BY priority,id",
+            )?;
+            scenario.goals = goals
                 .query_map([&scenario.id], |r| {
                     let raw: String = r.get(0)?;
                     Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null))
@@ -1229,6 +1247,7 @@ fn create_scenario(
             tx.execute("INSERT INTO scenario_events(id,scenario_id,event_date,kind,payload_json) SELECT ?1||'-'||id,?1,event_date,kind,payload_json FROM scenario_events WHERE scenario_id=?2",params![input.id,source])?;
             tx.execute("INSERT INTO allocations(id,scenario_id,account_id,priority,percent_bps,target_balance_cents) SELECT ?1||'-'||id,?1,account_id,priority,percent_bps,target_balance_cents FROM allocations WHERE scenario_id=?2",params![input.id,source])?;
             tx.execute("INSERT INTO withdrawal_rules(id,scenario_id,account_id,priority) SELECT ?1||'-'||id,?1,account_id,priority FROM withdrawal_rules WHERE scenario_id=?2",params![input.id,source])?;
+            tx.execute("INSERT INTO scenario_goals(id,scenario_id,goal_type,priority,payload_json) SELECT ?1||'-'||id,?1,goal_type,priority,json_set(payload_json,'$.id',?1||'-'||id,'$.scenarioId',?1,'$.revision',1) FROM scenario_goals WHERE scenario_id=?2",params![input.id,source])?;
         } else {
             tx.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months) VALUES(?1,?2,?3,0,'{\"inflationBps\":250,\"thresholdInflationBps\":250}',120)",params![input.id,hid,name])?;
         }
@@ -1657,6 +1676,62 @@ fn update_scenario(
                 ));
             }
         }
+        tx.execute(
+            "DELETE FROM scenario_goals WHERE scenario_id=?",
+            [&input.id],
+        )?;
+        let supported_goals = [
+            "retirement",
+            "emergency-fund",
+            "debt-payoff",
+            "education",
+            "major-purchase",
+        ];
+        let mut priorities = HashSet::new();
+        for goal in &input.goals {
+            let id = goal
+                .get("id")
+                .and_then(|x| x.as_str())
+                .ok_or_else(|| AppError::Validation("goal id is required".into()))?;
+            let kind = goal
+                .get("type")
+                .and_then(|x| x.as_str())
+                .ok_or_else(|| AppError::Validation("goal type is required".into()))?;
+            let priority = json_i64(goal, "priority")
+                .ok_or_else(|| AppError::Validation("goal priority is required".into()))?;
+            let date = goal
+                .get("targetDate")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
+            if !supported_goals.contains(&kind)
+                || priority < 1
+                || !priorities.insert(priority)
+                || !valid_iso_date(date)
+            {
+                return Err(AppError::Validation(
+                    "goal type, priority, or target date is invalid".into(),
+                ));
+            }
+            if let Some(destination) = goal.get("destinationAccountId").and_then(|x| x.as_str()) {
+                if !owns("accounts", destination)? {
+                    return Err(AppError::Validation(
+                        "goal destination account does not belong to this household".into(),
+                    ));
+                }
+            }
+            if kind == "debt-payoff" {
+                let liability = goal
+                    .get("liabilityId")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("");
+                if !owns("liabilities", liability)? {
+                    return Err(AppError::Validation(
+                        "goal liability does not belong to this household".into(),
+                    ));
+                }
+            }
+            tx.execute("INSERT INTO scenario_goals(id,scenario_id,goal_type,priority,payload_json,revision) VALUES(?1,?2,?3,?4,?5,1)",params![id,input.id,kind,priority,serde_json::to_string(goal)?])?;
+        }
         tx.commit()?;
         Ok(())
     })
@@ -1682,6 +1757,10 @@ fn delete_scenario(input: DeleteInput, database: tauri::State<Database>) -> Resu
             [&input.id],
         )?;
         tx.execute("DELETE FROM allocations WHERE scenario_id=?", [&input.id])?;
+        tx.execute(
+            "DELETE FROM scenario_goals WHERE scenario_id=?",
+            [&input.id],
+        )?;
         tx.execute("DELETE FROM scenarios WHERE id=?", [&input.id])?;
         tx.commit()?;
         Ok(())
@@ -4086,6 +4165,7 @@ mod tests {
             events: vec![],
             allocations: vec![],
             withdrawals: vec![],
+            goals: vec![],
             expected_revision: 1,
         };
         assert!(validate_scenario_update(&input).is_ok());
@@ -4120,6 +4200,7 @@ mod tests {
             events: vec![base.clone(), base],
             allocations: vec![],
             withdrawals: vec![],
+            goals: vec![],
             expected_revision: 1,
         };
         assert!(matches!(

@@ -3,6 +3,20 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { testRepository } from "./repository";
 describe("LifeLook shell", () => {
+  it("creates exact recurring planning inputs and retains invalid date drafts", async () => {
+    const data=await testRepository.bootstrap(), category={id:"salary",householdId:"test",name:"Salary",kind:"income" as const,revision:1}, scenario={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:120,revision:1,events:[],allocations:[]};
+    const createRecurring=vi.fn(); render(<App repository={{...testRepository,createRecurring,bootstrap:async()=>({...data,categories:[category],scenarios:[scenario],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Plan/}));fireEvent.click(screen.getByRole("button",{name:"Add income"}));
+    fireEvent.change(screen.getByLabelText("Name"),{target:{value:"Paycheck"}});fireEvent.change(screen.getByLabelText("Amount (USD)"),{target:{value:"1234.56"}});fireEvent.change(screen.getByLabelText("Frequency"),{target:{value:"biweekly"}});fireEvent.change(screen.getByLabelText("Start date"),{target:{value:"2026-08-10"}});fireEvent.change(screen.getByLabelText("End date (optional)"),{target:{value:"2026-08-09"}});fireEvent.submit(screen.getByRole("button",{name:"Save"}).closest("form")!);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/on or after/);expect(screen.getByLabelText("Name")).toHaveValue("Paycheck");expect(createRecurring).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("End date (optional)"),{target:{value:"2027-08-09"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));await waitFor(()=>expect(createRecurring).toHaveBeenCalledWith(expect.objectContaining({name:"Paycheck",amountCents:123456,frequency:"biweekly",annualGrowthBps:0})));
+  });
+
+  it("clones, edits, compares, and protects planning scenarios", async () => {
+    const data=await testRepository.bootstrap(), base={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:18,revision:1,events:[],allocations:[]}, alt={...base,id:"alt",name:"Lean",isBaseline:false}; const createScenario=vi.fn(),updateScenario=vi.fn();
+    render(<App repository={{...testRepository,createScenario,updateScenario,bootstrap:async()=>({...data,scenarios:[base,alt],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})}}/>);fireEvent.click(await screen.findByRole("button",{name:/Plan/}));expect(screen.getByRole("heading",{name:"18-month outlook"})).toBeInTheDocument();
+    const checks=screen.getAllByRole("checkbox");fireEvent.click(checks[0]);fireEvent.click(checks[1]);expect(screen.getByRole("region",{name:"Scenario comparison"})).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"New scenario"}));expect(screen.getByLabelText(/Clone active/)).toBeChecked();fireEvent.change(screen.getByLabelText("Name"),{target:{value:"Growth"}});fireEvent.click(screen.getByRole("button",{name:"Create scenario"}));await waitFor(()=>expect(createScenario).toHaveBeenCalledWith(expect.objectContaining({name:"Growth",cloneFromId:"base"})));
+  });
   it("navigates with accessible buttons", async () => {
     render(<App repository={testRepository} />);
     expect(

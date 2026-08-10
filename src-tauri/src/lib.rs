@@ -249,13 +249,36 @@ struct ScenarioRecord {
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RecurringInput { id:String, category_id:String, account_id:Option<String>, name:String, amount_cents:i64, frequency:String, start_date:String, end_date:Option<String>, annual_growth_bps:i64, expected_revision:Option<i64> }
+struct RecurringInput {
+    id: String,
+    category_id: String,
+    account_id: Option<String>,
+    name: String,
+    amount_cents: i64,
+    frequency: String,
+    start_date: String,
+    end_date: Option<String>,
+    annual_growth_bps: i64,
+    expected_revision: Option<i64>,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ScenarioCreateInput { id:String, name:String, clone_from_id:Option<String> }
+struct ScenarioCreateInput {
+    id: String,
+    name: String,
+    clone_from_id: Option<String>,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ScenarioUpdateInput { id:String, name:String, assumptions:serde_json::Value, horizon_months:i64, events:Vec<serde_json::Value>, allocations:Vec<serde_json::Value>, expected_revision:i64 }
+struct ScenarioUpdateInput {
+    id: String,
+    name: String,
+    assumptions: serde_json::Value,
+    horizon_months: i64,
+    events: Vec<serde_json::Value>,
+    allocations: Vec<serde_json::Value>,
+    expected_revision: i64,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OnboardingPayload {
@@ -467,10 +490,23 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         "INSERT OR IGNORE INTO schema_migrations(version) VALUES(3)",
         [],
     )?;
-    let recurring_columns: Vec<String> = transaction.prepare("PRAGMA table_info(recurring_entries)")?.query_map([], |r| r.get(1))?.collect::<Result<_,_>>()?;
-    if !recurring_columns.iter().any(|x| x == "frequency") { transaction.execute("ALTER TABLE recurring_entries ADD COLUMN frequency TEXT NOT NULL DEFAULT 'monthly' CHECK(frequency IN ('weekly','biweekly','monthly','quarterly','annual'))", [])?; }
-    let allocation_columns: Vec<String> = transaction.prepare("PRAGMA table_info(allocations)")?.query_map([], |r| r.get(1))?.collect::<Result<_,_>>()?;
-    if !allocation_columns.iter().any(|x| x == "target_balance_cents") { transaction.execute("ALTER TABLE allocations ADD COLUMN target_balance_cents INTEGER CHECK(target_balance_cents>=0)", [])?; }
+    let recurring_columns: Vec<String> = transaction
+        .prepare("PRAGMA table_info(recurring_entries)")?
+        .query_map([], |r| r.get(1))?
+        .collect::<Result<_, _>>()?;
+    if !recurring_columns.iter().any(|x| x == "frequency") {
+        transaction.execute("ALTER TABLE recurring_entries ADD COLUMN frequency TEXT NOT NULL DEFAULT 'monthly' CHECK(frequency IN ('weekly','biweekly','monthly','quarterly','annual'))", [])?;
+    }
+    let allocation_columns: Vec<String> = transaction
+        .prepare("PRAGMA table_info(allocations)")?
+        .query_map([], |r| r.get(1))?
+        .collect::<Result<_, _>>()?;
+    if !allocation_columns
+        .iter()
+        .any(|x| x == "target_balance_cents")
+    {
+        transaction.execute("ALTER TABLE allocations ADD COLUMN target_balance_cents INTEGER CHECK(target_balance_cents>=0)", [])?;
+    }
     transaction.execute("CREATE UNIQUE INDEX IF NOT EXISTS scenario_name_per_household ON scenarios(household_id,name COLLATE NOCASE)", [])?;
     // Versions 1–2 accepted a positive credit opening balance. Version 3 defines
     // onboarding input as a positive amount owed and stores credit as signed debt.
@@ -490,7 +526,10 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
           CREATE VIEW account_balances AS SELECT a.id, a.opening_balance_cents + COALESCE(SUM(p.amount_cents),0) AS balance_cents FROM accounts a LEFT JOIN postings p ON p.account_id=a.id GROUP BY a.id;")?;
         transaction.execute("INSERT INTO schema_migrations(version) VALUES(4)", [])?;
     }
-    transaction.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES(5)", [])?;
+    transaction.execute(
+        "INSERT OR IGNORE INTO schema_migrations(version) VALUES(5)",
+        [],
+    )?;
     transaction.commit()?;
     Ok(())
 }
@@ -673,9 +712,19 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
         drop(q);
         for scenario in &mut scenarios {
             let mut events = connection.prepare("SELECT json_set(payload_json,'$.id',id,'$.date',event_date,'$.type',kind) FROM scenario_events WHERE scenario_id=? ORDER BY event_date,id")?;
-            scenario.events = events.query_map([&scenario.id], |r| { let raw:String=r.get(0)?; Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null)) })?.collect::<Result<Vec<_>,_>>()?;
+            scenario.events = events
+                .query_map([&scenario.id], |r| {
+                    let raw: String = r.get(0)?;
+                    Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
             let mut allocations = connection.prepare("SELECT json_object('id',id,'accountId',account_id,'priority',priority,'percentBps',percent_bps,'targetBalanceCents',target_balance_cents) FROM allocations WHERE scenario_id=? ORDER BY priority")?;
-            scenario.allocations = allocations.query_map([&scenario.id], |r| { let raw:String=r.get(0)?; Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null)) })?.collect::<Result<Vec<_>,_>>()?;
+            scenario.allocations = allocations
+                .query_map([&scenario.id], |r| {
+                    let raw: String = r.get(0)?;
+                    Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
         }
     }
     Ok(WorkspaceSnapshot {
@@ -856,29 +905,266 @@ fn complete_onboarding(database: tauri::State<Database>) -> Result<(), AppError>
     })
 }
 
-fn valid_iso_date(value: &str) -> bool { value.len()==10 && value.as_bytes().get(4)==Some(&b'-') && value.as_bytes().get(7)==Some(&b'-') && chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok() }
-fn validate_recurring(input:&RecurringInput) -> Result<(),AppError> {
-    if input.name.trim().is_empty() || input.amount_cents <= 0 || input.amount_cents > MAX_MONEY_CENTS { return Err(AppError::Validation("enter a name and a positive supported amount".into())); }
-    if !matches!(input.frequency.as_str(),"weekly"|"biweekly"|"monthly"|"quarterly"|"annual") { return Err(AppError::Validation("invalid recurring frequency".into())); }
-    if !valid_iso_date(&input.start_date) || input.end_date.as_deref().is_some_and(|x| !valid_iso_date(x) || x < input.start_date.as_str()) { return Err(AppError::Validation("invalid recurring date range".into())); }
-    if !(-10000..=100000).contains(&input.annual_growth_bps) { return Err(AppError::Validation("annual growth is out of range".into())); } Ok(())
+fn valid_iso_date(value: &str) -> bool {
+    value.len() == 10
+        && value.as_bytes().get(4) == Some(&b'-')
+        && value.as_bytes().get(7) == Some(&b'-')
+        && chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok()
+}
+fn validate_recurring(input: &RecurringInput) -> Result<(), AppError> {
+    if input.name.trim().is_empty()
+        || input.amount_cents <= 0
+        || input.amount_cents > MAX_MONEY_CENTS
+    {
+        return Err(AppError::Validation(
+            "enter a name and a positive supported amount".into(),
+        ));
+    }
+    if !matches!(
+        input.frequency.as_str(),
+        "weekly" | "biweekly" | "monthly" | "quarterly" | "annual"
+    ) {
+        return Err(AppError::Validation("invalid recurring frequency".into()));
+    }
+    if !valid_iso_date(&input.start_date)
+        || input
+            .end_date
+            .as_deref()
+            .is_some_and(|x| !valid_iso_date(x) || x < input.start_date.as_str())
+    {
+        return Err(AppError::Validation("invalid recurring date range".into()));
+    }
+    if !(-10000..=100000).contains(&input.annual_growth_bps) {
+        return Err(AppError::Validation("annual growth is out of range".into()));
+    }
+    Ok(())
 }
 #[tauri::command]
-fn create_recurring(input:RecurringInput,database:tauri::State<Database>)->Result<(),AppError>{with_db(&database,|db|{validate_recurring(&input)?;let hid:String=db.query_row("SELECT id FROM households LIMIT 1",[],|r|r.get(0))?;db.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,frequency,start_date,end_date,annual_growth_bps) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10 WHERE EXISTS(SELECT 1 FROM categories WHERE id=?3 AND household_id=?2) AND (?4 IS NULL OR EXISTS(SELECT 1 FROM accounts WHERE id=?4 AND household_id=?2))",params![input.id,hid,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.start_date,input.end_date,input.annual_growth_bps]).and_then(|n|if n==1{Ok(n)}else{Err(rusqlite::Error::QueryReturnedNoRows)}).map_err(|_|AppError::Validation("category or account does not belong to this household".into()))?;Ok(())})}
+fn create_recurring(
+    input: RecurringInput,
+    database: tauri::State<Database>,
+) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        validate_recurring(&input)?;
+        let hid: String = db.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
+        db.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,frequency,start_date,end_date,annual_growth_bps) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10 WHERE EXISTS(SELECT 1 FROM categories WHERE id=?3 AND household_id=?2) AND (?4 IS NULL OR EXISTS(SELECT 1 FROM accounts WHERE id=?4 AND household_id=?2))",params![input.id,hid,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.start_date,input.end_date,input.annual_growth_bps]).and_then(|n|if n==1{Ok(n)}else{Err(rusqlite::Error::QueryReturnedNoRows)}).map_err(|_|AppError::Validation("category or account does not belong to this household".into()))?;
+        Ok(())
+    })
+}
 #[tauri::command]
-fn update_recurring(input:RecurringInput,database:tauri::State<Database>)->Result<(),AppError>{with_db(&database,|db|{validate_recurring(&input)?;let revision=input.expected_revision.ok_or_else(||AppError::Validation("expected revision is required".into()))?;let n=db.execute("UPDATE recurring_entries SET category_id=?2,account_id=?3,name=?4,amount_cents=?5,frequency=?6,start_date=?7,end_date=?8,annual_growth_bps=?9,revision=revision+1 WHERE id=?1 AND revision=?10 AND EXISTS(SELECT 1 FROM categories c WHERE c.id=?2 AND c.household_id=recurring_entries.household_id) AND (?3 IS NULL OR EXISTS(SELECT 1 FROM accounts a WHERE a.id=?3 AND a.household_id=recurring_entries.household_id))",params![input.id,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.start_date,input.end_date,input.annual_growth_bps,revision])?;if n==0{return Err(AppError::Conflict)}Ok(())})}
+fn update_recurring(
+    input: RecurringInput,
+    database: tauri::State<Database>,
+) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        validate_recurring(&input)?;
+        let revision = input
+            .expected_revision
+            .ok_or_else(|| AppError::Validation("expected revision is required".into()))?;
+        let n=db.execute("UPDATE recurring_entries SET category_id=?2,account_id=?3,name=?4,amount_cents=?5,frequency=?6,start_date=?7,end_date=?8,annual_growth_bps=?9,revision=revision+1 WHERE id=?1 AND revision=?10 AND EXISTS(SELECT 1 FROM categories c WHERE c.id=?2 AND c.household_id=recurring_entries.household_id) AND (?3 IS NULL OR EXISTS(SELECT 1 FROM accounts a WHERE a.id=?3 AND a.household_id=recurring_entries.household_id))",params![input.id,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.start_date,input.end_date,input.annual_growth_bps,revision])?;
+        if n == 0 {
+            return Err(AppError::Conflict);
+        }
+        Ok(())
+    })
+}
 #[tauri::command]
-fn delete_recurring(input:DeleteInput,database:tauri::State<Database>)->Result<(),AppError>{with_db(&database,|db|{let n=db.execute("DELETE FROM recurring_entries WHERE id=? AND revision=?",params![input.id,input.expected_revision])?;if n==0{return Err(AppError::Conflict)}Ok(())})}
+fn delete_recurring(input: DeleteInput, database: tauri::State<Database>) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        let n = db.execute(
+            "DELETE FROM recurring_entries WHERE id=? AND revision=?",
+            params![input.id, input.expected_revision],
+        )?;
+        if n == 0 {
+            return Err(AppError::Conflict);
+        }
+        Ok(())
+    })
+}
 
-fn scenario_name(value:&str)->Result<&str,AppError>{let name=value.trim();if name.is_empty()||name.len()>100{Err(AppError::Validation("scenario name must be between 1 and 100 characters".into()))}else{Ok(name)}}
+fn scenario_name(value: &str) -> Result<&str, AppError> {
+    let name = value.trim();
+    if name.is_empty() || name.len() > 100 {
+        Err(AppError::Validation(
+            "scenario name must be between 1 and 100 characters".into(),
+        ))
+    } else {
+        Ok(name)
+    }
+}
 #[tauri::command]
-fn create_scenario(input:ScenarioCreateInput,database:tauri::State<Database>)->Result<(),AppError>{with_db(&database,|db|{let name=scenario_name(&input.name)?;let tx=db.transaction()?;let hid:String=tx.query_row("SELECT id FROM households LIMIT 1",[],|r|r.get(0))?;if let Some(source)=input.clone_from_id {let (assumptions,horizon):(String,i64)=tx.query_row("SELECT assumptions_json,horizon_months FROM scenarios WHERE id=? AND household_id=?",params![source,hid],|r|Ok((r.get(0)?,r.get(1)?))).map_err(|_|AppError::Validation("clone source does not belong to this household".into()))?;tx.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months) VALUES(?1,?2,?3,0,?4,?5)",params![input.id,hid,name,assumptions,horizon])?;tx.execute("INSERT INTO scenario_events(id,scenario_id,event_date,kind,payload_json) SELECT ?1||'-'||id,?1,event_date,kind,payload_json FROM scenario_events WHERE scenario_id=?2",params![input.id,source])?;tx.execute("INSERT INTO allocations(id,scenario_id,account_id,priority,percent_bps,target_balance_cents) SELECT ?1||'-'||id,?1,account_id,priority,percent_bps,target_balance_cents FROM allocations WHERE scenario_id=?2",params![input.id,source])?;}else{tx.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months) VALUES(?1,?2,?3,0,'{\"inflationBps\":250,\"thresholdInflationBps\":250}',120)",params![input.id,hid,name])?;}tx.commit()?;Ok(())})}
+fn create_scenario(
+    input: ScenarioCreateInput,
+    database: tauri::State<Database>,
+) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        let name = scenario_name(&input.name)?;
+        let tx = db.transaction()?;
+        let hid: String = tx.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
+        let duplicate: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM scenarios WHERE household_id=?1 AND name=?2 COLLATE NOCASE)",
+            params![hid, name],
+            |r| r.get(0),
+        )?;
+        if duplicate {
+            return Err(AppError::Validation(
+                "a scenario with this name already exists".into(),
+            ));
+        }
+        if let Some(source) = input.clone_from_id {
+            let (assumptions,horizon):(String,i64)=tx.query_row("SELECT assumptions_json,horizon_months FROM scenarios WHERE id=? AND household_id=?",params![source,hid],|r|Ok((r.get(0)?,r.get(1)?))).map_err(|_|AppError::Validation("clone source does not belong to this household".into()))?;
+            tx.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months) VALUES(?1,?2,?3,0,?4,?5)",params![input.id,hid,name,assumptions,horizon])?;
+            tx.execute("INSERT INTO scenario_events(id,scenario_id,event_date,kind,payload_json) SELECT ?1||'-'||id,?1,event_date,kind,payload_json FROM scenario_events WHERE scenario_id=?2",params![input.id,source])?;
+            tx.execute("INSERT INTO allocations(id,scenario_id,account_id,priority,percent_bps,target_balance_cents) SELECT ?1||'-'||id,?1,account_id,priority,percent_bps,target_balance_cents FROM allocations WHERE scenario_id=?2",params![input.id,source])?;
+        } else {
+            tx.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months) VALUES(?1,?2,?3,0,'{\"inflationBps\":250,\"thresholdInflationBps\":250}',120)",params![input.id,hid,name])?;
+        }
+        tx.commit()?;
+        Ok(())
+    })
+}
 
-fn json_i64(v:&serde_json::Value,key:&str)->Option<i64>{v.get(key)?.as_i64()}
+fn json_i64(v: &serde_json::Value, key: &str) -> Option<i64> {
+    v.get(key)?.as_i64()
+}
+fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError> {
+    if !(1..=480).contains(&input.horizon_months) {
+        return Err(AppError::Validation(
+            "projection horizon must be between 1 and 480 months".into(),
+        ));
+    }
+    for key in ["inflationBps", "thresholdInflationBps"] {
+        let rate = json_i64(&input.assumptions, key).ok_or_else(|| {
+            AppError::Validation(format!("{key} must be an integer number of basis points"))
+        })?;
+        if !(-10000..=100000).contains(&rate) {
+            return Err(AppError::Validation(format!(
+                "{key} is outside the supported rate range"
+            )));
+        }
+    }
+    if !input.allocations.is_empty()
+        && input
+            .allocations
+            .last()
+            .and_then(|v| json_i64(v, "percentBps"))
+            != Some(10000)
+    {
+        return Err(AppError::Validation(
+            "final allocation must be a 100% catch-all".into(),
+        ));
+    }
+    Ok(())
+}
 #[tauri::command]
-fn update_scenario(input:ScenarioUpdateInput,database:tauri::State<Database>)->Result<(),AppError>{with_db(&database,|db|{let name=scenario_name(&input.name)?;if !(1..=480).contains(&input.horizon_months){return Err(AppError::Validation("projection horizon must be between 1 and 480 months".into()))}if input.allocations.last().and_then(|v|json_i64(v,"percentBps"))!=Some(10000){return Err(AppError::Validation("final allocation must be a 100% catch-all".into()))}let tx=db.transaction()?;let baseline:bool=tx.query_row("SELECT is_baseline FROM scenarios WHERE id=?",[&input.id],|r|Ok(r.get::<_,i64>(0)?!=0)).map_err(|_|AppError::Conflict)?;if baseline&&name!="Baseline"{return Err(AppError::Validation("the baseline scenario cannot be renamed".into()))}let n=tx.execute("UPDATE scenarios SET name=?2,assumptions_json=?3,horizon_months=?4,revision=revision+1 WHERE id=?1 AND revision=?5",params![input.id,name,serde_json::to_string(&input.assumptions)?,input.horizon_months,input.expected_revision])?;if n==0{return Err(AppError::Conflict)}tx.execute("DELETE FROM scenario_events WHERE scenario_id=?",[&input.id])?;for event in input.events {let id=event.get("id").and_then(|x|x.as_str()).ok_or_else(||AppError::Validation("event id is required".into()))?;let date=event.get("date").and_then(|x|x.as_str()).ok_or_else(||AppError::Validation("event date is required".into()))?;let kind=event.get("type").and_then(|x|x.as_str()).ok_or_else(||AppError::Validation("event type is required".into()))?;if !valid_iso_date(date){return Err(AppError::Validation("event date is invalid".into()))}tx.execute("INSERT INTO scenario_events(id,scenario_id,event_date,kind,payload_json) VALUES(?1,?2,?3,?4,?5)",params![id,input.id,date,kind,serde_json::to_string(&event)?])?;}tx.execute("DELETE FROM allocations WHERE scenario_id=?",[&input.id])?;for (index,rule) in input.allocations.iter().enumerate(){let account=rule.get("accountId").and_then(|x|x.as_str()).ok_or_else(||AppError::Validation("allocation account is required".into()))?;let priority=json_i64(rule,"priority").unwrap_or(index as i64+1);let percent=json_i64(rule,"percentBps").ok_or_else(||AppError::Validation("allocation percentage is required".into()))?;let target=json_i64(rule,"targetBalanceCents");if !(0..=10000).contains(&percent)||target.is_some_and(|x|x<0||x>MAX_MONEY_CENTS){return Err(AppError::Validation("invalid allocation".into()))}tx.execute("INSERT INTO allocations(id,scenario_id,account_id,priority,percent_bps,target_balance_cents) SELECT ?1,?2,?3,?4,?5,?6 WHERE EXISTS(SELECT 1 FROM accounts WHERE id=?3)",params![rule.get("id").and_then(|x|x.as_str()).map(str::to_owned).unwrap_or_else(||format!("{}-{index}",input.id)),input.id,account,priority,percent,target])?;}tx.commit()?;Ok(())})}
+fn update_scenario(
+    input: ScenarioUpdateInput,
+    database: tauri::State<Database>,
+) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        let name = scenario_name(&input.name)?;
+        validate_scenario_update(&input)?;
+        let tx = db.transaction()?;
+        let baseline: bool = tx
+            .query_row(
+                "SELECT is_baseline FROM scenarios WHERE id=?",
+                [&input.id],
+                |r| Ok(r.get::<_, i64>(0)? != 0),
+            )
+            .map_err(|_| AppError::Conflict)?;
+        if baseline && name != "Baseline" {
+            return Err(AppError::Validation(
+                "the baseline scenario cannot be renamed".into(),
+            ));
+        }
+        let duplicate: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM scenarios current JOIN scenarios other ON other.household_id=current.household_id WHERE current.id=?1 AND other.id<>current.id AND other.name=?2 COLLATE NOCASE)",
+            params![input.id, name],
+            |r| r.get(0),
+        )?;
+        if duplicate {
+            return Err(AppError::Validation(
+                "a scenario with this name already exists".into(),
+            ));
+        }
+        let n=tx.execute("UPDATE scenarios SET name=?2,assumptions_json=?3,horizon_months=?4,revision=revision+1 WHERE id=?1 AND revision=?5",params![input.id,name,serde_json::to_string(&input.assumptions)?,input.horizon_months,input.expected_revision])?;
+        if n == 0 {
+            return Err(AppError::Conflict);
+        }
+        tx.execute(
+            "DELETE FROM scenario_events WHERE scenario_id=?",
+            [&input.id],
+        )?;
+        for event in input.events {
+            let id = event
+                .get("id")
+                .and_then(|x| x.as_str())
+                .ok_or_else(|| AppError::Validation("event id is required".into()))?;
+            let date = event
+                .get("date")
+                .and_then(|x| x.as_str())
+                .ok_or_else(|| AppError::Validation("event date is required".into()))?;
+            let kind = event
+                .get("type")
+                .and_then(|x| x.as_str())
+                .ok_or_else(|| AppError::Validation("event type is required".into()))?;
+            if !valid_iso_date(date) {
+                return Err(AppError::Validation("event date is invalid".into()));
+            }
+            tx.execute("INSERT INTO scenario_events(id,scenario_id,event_date,kind,payload_json) VALUES(?1,?2,?3,?4,?5)",params![id,input.id,date,kind,serde_json::to_string(&event)?])?;
+        }
+        tx.execute("DELETE FROM allocations WHERE scenario_id=?", [&input.id])?;
+        for (index, rule) in input.allocations.iter().enumerate() {
+            let account = rule
+                .get("accountId")
+                .and_then(|x| x.as_str())
+                .ok_or_else(|| AppError::Validation("allocation account is required".into()))?;
+            let priority = json_i64(rule, "priority").unwrap_or(index as i64 + 1);
+            let percent = json_i64(rule, "percentBps")
+                .ok_or_else(|| AppError::Validation("allocation percentage is required".into()))?;
+            let target = json_i64(rule, "targetBalanceCents");
+            if !(0..=10000).contains(&percent)
+                || target.is_some_and(|x| !(0..=MAX_MONEY_CENTS).contains(&x))
+            {
+                return Err(AppError::Validation("invalid allocation".into()));
+            }
+            let inserted=tx.execute("INSERT INTO allocations(id,scenario_id,account_id,priority,percent_bps,target_balance_cents) SELECT ?1,?2,?3,?4,?5,?6 WHERE EXISTS(SELECT 1 FROM accounts a JOIN scenarios s ON s.household_id=a.household_id WHERE a.id=?3 AND s.id=?2)",params![rule.get("id").and_then(|x|x.as_str()).map(str::to_owned).unwrap_or_else(||format!("{}-{index}",input.id)),input.id,account,priority,percent,target])?;
+            if inserted != 1 {
+                return Err(AppError::Validation(
+                    "allocation account does not belong to this household".into(),
+                ));
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    })
+}
 #[tauri::command]
-fn delete_scenario(input:DeleteInput,database:tauri::State<Database>)->Result<(),AppError>{with_db(&database,|db|{let tx=db.transaction()?;let baseline:bool=tx.query_row("SELECT is_baseline FROM scenarios WHERE id=? AND revision=?",params![input.id,input.expected_revision],|r|Ok(r.get::<_,i64>(0)?!=0)).map_err(|_|AppError::Conflict)?;if baseline{return Err(AppError::Validation("the baseline scenario cannot be deleted".into()))}tx.execute("DELETE FROM scenario_events WHERE scenario_id=?",[&input.id])?;tx.execute("DELETE FROM allocations WHERE scenario_id=?",[&input.id])?;tx.execute("DELETE FROM scenarios WHERE id=?",[&input.id])?;tx.commit()?;Ok(())})}
+fn delete_scenario(input: DeleteInput, database: tauri::State<Database>) -> Result<(), AppError> {
+    with_db(&database, |db| {
+        let tx = db.transaction()?;
+        let baseline: bool = tx
+            .query_row(
+                "SELECT is_baseline FROM scenarios WHERE id=? AND revision=?",
+                params![input.id, input.expected_revision],
+                |r| Ok(r.get::<_, i64>(0)? != 0),
+            )
+            .map_err(|_| AppError::Conflict)?;
+        if baseline {
+            return Err(AppError::Validation(
+                "the baseline scenario cannot be deleted".into(),
+            ));
+        }
+        tx.execute(
+            "DELETE FROM scenario_events WHERE scenario_id=?",
+            [&input.id],
+        )?;
+        tx.execute("DELETE FROM allocations WHERE scenario_id=?", [&input.id])?;
+        tx.execute("DELETE FROM scenarios WHERE id=?", [&input.id])?;
+        tx.commit()?;
+        Ok(())
+    })
+}
 
 fn insert_transaction(db: &mut Connection, input: &TransactionInput) -> Result<(), AppError> {
     validate_entry(input.amount_cents, &input.occurred_on, &input.description)?;
@@ -3130,5 +3416,36 @@ mod tests {
         retry_database(&database).unwrap();
         retry_database(&database).unwrap();
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn scenario_settings_accept_empty_allocations_and_validate_rates_and_catch_all() {
+        let mut input = ScenarioUpdateInput {
+            id: "scenario".into(),
+            name: "Plan".into(),
+            assumptions: serde_json::json!({"inflationBps": 250, "thresholdInflationBps": 300}),
+            horizon_months: 480,
+            events: vec![],
+            allocations: vec![],
+            expected_revision: 1,
+        };
+        assert!(validate_scenario_update(&input).is_ok());
+        input.allocations = vec![serde_json::json!({"accountId":"a","percentBps":5000})];
+        assert!(matches!(
+            validate_scenario_update(&input),
+            Err(AppError::Validation(_))
+        ));
+        input.allocations[0]["percentBps"] = serde_json::json!(10000);
+        assert!(validate_scenario_update(&input).is_ok());
+        input.assumptions["inflationBps"] = serde_json::json!(2.5);
+        assert!(matches!(
+            validate_scenario_update(&input),
+            Err(AppError::Validation(_))
+        ));
+        input.horizon_months = 481;
+        assert!(matches!(
+            validate_scenario_update(&input),
+            Err(AppError::Validation(_))
+        ));
     }
 }

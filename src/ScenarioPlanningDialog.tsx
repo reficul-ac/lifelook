@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { ScenarioEvent, WithdrawalRule } from "./domain/types";
+import type { GoalType, ScenarioEvent, ScenarioGoal, WithdrawalRule } from "./domain/types";
 import type {
   Bootstrap,
   Repository,
@@ -21,9 +21,7 @@ const labels: Record<Kind, string> = {
   "debt-payoff": "Debt payoff",
 };
 const cents = (value: string) =>
-  /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(value.trim())
-    ? Math.round(Number(value) * 100)
-    : null;
+  (()=>{const match=/^(0|[1-9]\d{0,11})(?:\.(\d{1,2}))?$/.exec(value.trim());if(!match)return null;const exact=BigInt(match[1])*100n+BigInt((match[2]??"").padEnd(2,"0"));return exact<=99_999_999_999_999n?Number(exact):null})();
 const bps = (value: string) =>
   /^-?(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(value.trim())
     ? Math.round(Number(value) * 100)
@@ -91,6 +89,8 @@ export function ScenarioPlanningDialog({
         .sort((a, b) => a.priority - b.priority)
         .map((x, i) => ({ ...x, priority: i + 1 })),
     ),
+    [goals,setGoals]=useState<ScenarioGoal[]>(()=>[...record.goals].sort((a,b)=>a.priority-b.priority)),
+    [goalEditing,setGoalEditing]=useState<ScenarioGoal|null|undefined>(undefined),
     [editing, setEditing] = useState<ScenarioEvent | null | undefined>(
       undefined,
     ),
@@ -123,7 +123,7 @@ export function ScenarioPlanningDialog({
         events: sorted(events),
         allocations: allocations.map((x, i) => ({ ...x, priority: i + 1 })),
         withdrawals: withdrawals.map((x, i) => ({ ...x, priority: i + 1 })),
-        goals: record.goals ?? [],
+        goals: goals.map((goal,index)=>({...goal,priority:index+1})),
         expectedRevision: record.revision,
       });
       await refresh();
@@ -158,7 +158,7 @@ export function ScenarioPlanningDialog({
         aria-modal="true"
         aria-labelledby="planning-title"
       >
-        <h2 id="planning-title">Plan events, allocations, and withdrawals</h2>
+        <h2 id="planning-title">Plan goals, events, allocations, and withdrawals</h2>
         {error && (
           <p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>
             {error}
@@ -178,8 +178,14 @@ export function ScenarioPlanningDialog({
               setEditing(undefined);
             }}
           />
-        ) : (
+        ) : goalEditing !== undefined ? <GoalEditor value={goalEditing} goals={goals} bootstrap={bootstrap} scenarioId={record.id} cancel={()=>setGoalEditing(undefined)} commit={(goal)=>{setGoals(items=>[...items.filter(item=>item.id!==goal.id),goal].sort((a,b)=>a.priority-b.priority).map((item,index)=>({...item,priority:index+1})));setGoalEditing(undefined)}}/> : (
           <>
+            <section aria-labelledby="goals-title">
+              <div className="card-title"><h3 id="goals-title">Funding goals</h3><button onClick={()=>setGoalEditing(null)}>Add goal</button></div>
+              <p className="muted">Goals reserve money for a target. Purchases, debt payments, and retirement changes happen only through separate dated events.</p>
+              {goals.map((goal,index)=><div className="transaction" key={goal.id}><div><strong>{goal.name}</strong><small>{goal.type.replaceAll("-"," ")} · due {goal.targetDate} · {goal.enabled?"Enabled":"Disabled"}</small></div><div className="inline-actions"><button aria-label={`${goal.enabled?"Disable":"Enable"} ${goal.name}`} onClick={()=>setGoals(items=>items.map(item=>item.id===goal.id?{...item,enabled:!item.enabled}:item))}>{goal.enabled?"Disable":"Enable"}</button><button disabled={index===0} onClick={()=>setGoals(items=>moveRule(items,index,-1))}>Move up</button><button disabled={index===goals.length-1} onClick={()=>setGoals(items=>moveRule(items,index,1))}>Move down</button><button onClick={()=>setGoalEditing(goal)}>Edit</button><button className="danger-link" onClick={()=>setGoals(items=>items.filter(item=>item.id!==goal.id).map((item,i)=>({...item,priority:i+1})))}>Delete</button></div></div>)}
+              {!goals.length&&<p className="empty">No funding goals yet.</p>}
+            </section>
             <section aria-labelledby="events-title">
               <div className="card-title">
                 <h3 id="events-title">Dated events</h3>
@@ -370,6 +376,41 @@ export function ScenarioPlanningDialog({
 }
 
 function moveRule<T extends {priority:number}>(rules:T[],index:number,delta:number){const target=index+delta;if(target<0||target>=rules.length)return rules;const next=[...rules];[next[index],next[target]]=[next[target],next[index]];return next.map((rule,priority)=>({...rule,priority:priority+1}));}
+
+const goalLabels:Record<GoalType,string>={"emergency-fund":"Emergency fund","debt-payoff":"Debt payoff",education:"Education","major-purchase":"Major purchase",retirement:"Retirement"};
+function GoalEditor({value,goals,bootstrap,scenarioId,cancel,commit}:{value:ScenarioGoal|null;goals:ScenarioGoal[];bootstrap:Bootstrap;scenarioId:string;cancel:()=>void;commit:(goal:ScenarioGoal)=>void}){
+  const [kind,setKind]=useState<GoalType>(value?.type??"emergency-fund");
+  const [name,setName]=useState(value?.name??"");
+  const [targetDate,setTargetDate]=useState(value?.targetDate??endDate(12));
+  const [destination,setDestination]=useState("destinationAccountId" in (value??{})?(value as {destinationAccountId:string}).destinationAccountId:(bootstrap.accounts[0]?.id??""));
+  const [earmark,setEarmark]=useState(dollars(value?.startingEarmarkedCents));
+  const [today,setToday]=useState(value?.todayDollarBasis??true),[shortfall,setShortfall]=useState(value?.allowCashShortfall??false);
+  const [expenseIds,setExpenseIds]=useState<string[]>(value?.type==="emergency-fund"?[...value.expenseEntryIds]:[]),[coverage,setCoverage]=useState(value?.type==="emergency-fund"?String(value.coverageMonths):"3"),[minimum,setMinimum]=useState(value?.type==="emergency-fund"?dollars(value.minimumTargetCents):"");
+  const [liability,setLiability]=useState(value?.type==="debt-payoff"?value.liabilityId:(bootstrap.liabilities[0]?.id??""));
+  const [beneficiary,setBeneficiary]=useState(value?.type==="education"?value.beneficiary:""),[attendanceStart,setAttendanceStart]=useState(value?.type==="education"?value.attendanceStartDate:targetDate),[attendanceEnd,setAttendanceEnd]=useState(value?.type==="education"?value.attendanceEndDate:targetDate),[annualCost,setAnnualCost]=useState(value?.type==="education"?dollars(value.annualCostCents):""),[educationRate,setEducationRate]=useState(value?.type==="education"?rate(value.educationInflationBps):"3.00");
+  const [cost,setCost]=useState(value?.type==="major-purchase"?dollars(value.costCents):"");
+  const [participants,setParticipants]=useState<string[]>(value?.type==="retirement"?[...value.participantIds]:[]),[retirementDates,setRetirementDates]=useState<Record<string,string>>(value?.type==="retirement"?{...value.retirementDates}:{}),[ages,setAges]=useState<Record<string,number>>(value?.type==="retirement"?{...value.planningThroughAges}:{}),[spending,setSpending]=useState(value?.type==="retirement"?dollars(value.desiredSpendingCents):""),[healthcare,setHealthcare]=useState(value?.type==="retirement"?dollars(value.healthcareCents):""),[healthRate,setHealthRate]=useState(value?.type==="retirement"?rate(value.healthcareGrowthBps):"5.00"),[pensions,setPensions]=useState(value?.type==="retirement"?[...value.pensions]:[]);
+  const [error,setError]=useState("");
+  const money=(text:string,optional=false)=>{if(optional&&text==="")return undefined;const result=cents(text);if(result===null||result<0||result>99_999_999_999_999)throw new Error("Enter money amounts with at most two decimal places.");return result};
+  function submit(event:FormEvent){event.preventDefault();try{
+    if(!name.trim())throw new Error("Goal name is required.");if(!/^\d{4}-\d{2}-\d{2}$/.test(targetDate))throw new Error("A valid target date is required.");if(!destination)throw new Error("A destination account is required.");
+    const common={id:value?.id??crypto.randomUUID(),scenarioId,type:kind,name:name.trim(),priority:value?.priority??goals.length+1,enabled:value?.enabled??true,targetDate,todayDollarBasis:today,startingEarmarkedCents:money(earmark||"0")!,allowCashShortfall:shortfall,revision:value?.revision??1};let goal:ScenarioGoal;
+    if(kind==="emergency-fund"){const months=Number(coverage);if(!expenseIds.length||!Number.isInteger(months)||months<1||months>120)throw new Error("Select expenses and enter 1–120 coverage months.");goal={...common,type:kind,destinationAccountId:destination,expenseEntryIds:expenseIds,coverageMonths:months,minimumTargetCents:money(minimum,true)}}
+    else if(kind==="debt-payoff"){if(!liability)throw new Error("Choose a liability.");goal={...common,type:kind,destinationAccountId:destination,liabilityId:liability}}
+    else if(kind==="education"){const inflation=bps(educationRate),annual=money(annualCost)!;if(!beneficiary.trim()||attendanceEnd<attendanceStart||annual<=0||inflation===null||inflation<0||inflation>100000)throw new Error("Enter a beneficiary, valid attendance dates, positive annual cost, and education inflation.");goal={...common,type:kind,destinationAccountId:destination,beneficiary:beneficiary.trim(),attendanceStartDate:attendanceStart,attendanceEndDate:attendanceEnd,annualCostCents:annual,educationInflationBps:inflation}}
+    else if(kind==="major-purchase"){const purchaseCost=money(cost)!;if(purchaseCost<=0)throw new Error("Purchase cost must be positive.");goal={...common,type:kind,targetDate,purchaseDate:targetDate,costCents:purchaseCost,destinationAccountId:destination};}
+    else {const growth=bps(healthRate),monthlySpending=money(spending)!,monthlyHealthcare=money(healthcare)!;if(!participants.length||monthlySpending+monthlyHealthcare<=0||growth===null||growth<0||growth>100000)throw new Error("Select participants and enter valid retirement costs.");for(const id of participants){if(!bootstrap.people.find(person=>person.id===id)?.birthDate)throw new Error("Each retirement participant needs a birth date.");if(!retirementDates[id]||!Number.isInteger(ages[id])||ages[id]<1||ages[id]>120)throw new Error("Each participant needs a retirement date and planning-through age.");}if(pensions.some(pension=>!pension.name.trim()||pension.monthlyCents<=0||!/^\d{4}-\d{2}-\d{2}$/.test(pension.startDate)))throw new Error("Each pension needs a name, positive amount, and valid start date.");const first=[...participants.map(id=>retirementDates[id])].sort()[0];goal={...common,type:kind,targetDate:first,destinationAccountId:destination,participantIds:participants,retirementDates,planningThroughAges:ages,desiredSpendingCents:monthlySpending,healthcareCents:monthlyHealthcare,healthcareGrowthBps:growth,pensions}}
+    const total=goals.filter(item=>item.id!==goal.id&&item.destinationAccountId===destination).reduce((sum,item)=>sum+item.startingEarmarkedCents,0)+goal.startingEarmarkedCents;const balance=bootstrap.accounts.find(account=>account.id===destination)?.balanceCents??0;if(total>balance)throw new Error("Combined starting earmarks cannot exceed the destination account balance.");commit(goal);
+  }catch(reason){setError(reason instanceof Error?reason.message:"Could not save goal.")}}
+  const checkbox=(id:string,label:string,selected:string[],setSelected:(v:string[])=>void)=><label key={id}><input type="checkbox" checked={selected.includes(id)} onChange={event=>setSelected(event.target.checked?[...selected,id]:selected.filter(item=>item!==id))}/>{label}</label>;
+  return <form onSubmit={submit}><h3>{value?"Edit":"Add"} funding goal</h3>{error&&<p className="form-error" role="alert">{error}</p>}<label>Goal type<select value={kind} disabled={!!value} onChange={event=>setKind(event.target.value as GoalType)}>{Object.entries(goalLabels).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label><label>Name<input autoFocus required value={name} onChange={event=>setName(event.target.value)}/></label>{kind!=="retirement"&&<label>Target date<input type="date" required value={targetDate} onChange={event=>setTargetDate(event.target.value)}/></label>}<label>Destination account<select required value={destination} onChange={event=>setDestination(event.target.value)}>{bootstrap.accounts.map(account=><option key={account.id} value={account.id}>{account.name}</option>)}</select></label><label>Starting earmarked balance<input inputMode="decimal" value={earmark} onChange={event=>setEarmark(event.target.value)}/></label><label><input type="checkbox" checked={today} onChange={event=>setToday(event.target.checked)}/>Amount is in today’s dollars</label><label><input type="checkbox" checked={shortfall} onChange={event=>setShortfall(event.target.checked)}/>Allow ordered account withdrawals when surplus is short</label>
+  {kind==="emergency-fund"&&<fieldset><legend>Emergency coverage</legend>{bootstrap.recurring.filter(item=>bootstrap.categories.find(category=>category.id===item.categoryId)?.kind==="expense").map(item=>checkbox(item.id,item.name,expenseIds,setExpenseIds))}<label>Coverage months<input type="number" min="1" max="120" value={coverage} onChange={event=>setCoverage(event.target.value)}/></label><label>Minimum target (optional)<input inputMode="decimal" value={minimum} onChange={event=>setMinimum(event.target.value)}/></label></fieldset>}
+  {kind==="debt-payoff"&&<label>Liability<select value={liability} onChange={event=>setLiability(event.target.value)}><option value="">Choose liability</option>{bootstrap.liabilities.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+  {kind==="education"&&<fieldset><legend>Education costs</legend><label>Beneficiary<input value={beneficiary} onChange={event=>setBeneficiary(event.target.value)}/></label><label>Attendance starts<input type="date" value={attendanceStart} onChange={event=>setAttendanceStart(event.target.value)}/></label><label>Attendance ends<input type="date" value={attendanceEnd} onChange={event=>setAttendanceEnd(event.target.value)}/></label><label>Annual cost<input inputMode="decimal" value={annualCost} onChange={event=>setAnnualCost(event.target.value)}/></label><label>Education inflation (%)<input inputMode="decimal" value={educationRate} onChange={event=>setEducationRate(event.target.value)}/></label></fieldset>}
+  {kind==="major-purchase"&&<label>Purchase cost<input inputMode="decimal" value={cost} onChange={event=>setCost(event.target.value)}/></label>}
+  {kind==="retirement"&&<fieldset><legend>Retirement plan</legend>{bootstrap.people.map(person=><div key={person.id}>{checkbox(person.id,person.name,participants,setParticipants)}{participants.includes(person.id)&&<><label>Retirement date for {person.name}<input type="date" value={retirementDates[person.id]??""} onChange={event=>setRetirementDates(current=>({...current,[person.id]:event.target.value}))}/></label><label>Plan through age for {person.name}<input type="number" min="1" max="120" value={ages[person.id]??""} onChange={event=>setAges(current=>({...current,[person.id]:Number(event.target.value)}))}/></label></>}</div>)}<label>Desired monthly spending<input inputMode="decimal" value={spending} onChange={event=>setSpending(event.target.value)}/></label><label>Monthly healthcare cost<input inputMode="decimal" value={healthcare} onChange={event=>setHealthcare(event.target.value)}/></label><label>Healthcare annual growth (%)<input inputMode="decimal" value={healthRate} onChange={event=>setHealthRate(event.target.value)}/></label><div className="card-title"><strong>Pensions</strong><button type="button" onClick={()=>setPensions(items=>[...items,{id:crypto.randomUUID(),name:"",monthlyCents:0,startDate:targetDate}])}>Add pension</button></div>{pensions.map((pension,index)=><fieldset key={pension.id}><label>Name<input value={pension.name} onChange={event=>setPensions(items=>items.map((item,i)=>i===index?{...item,name:event.target.value}:item))}/></label><label>Monthly amount<input inputMode="decimal" value={dollars(pension.monthlyCents)} onChange={event=>{const amount=cents(event.target.value);if(amount!==null)setPensions(items=>items.map((item,i)=>i===index?{...item,monthlyCents:amount}:item))}}/></label><label>Start date<input type="date" value={pension.startDate} onChange={event=>setPensions(items=>items.map((item,i)=>i===index?{...item,startDate:event.target.value}:item))}/></label><button type="button" className="danger-link" onClick={()=>setPensions(items=>items.filter((_,i)=>i!==index))}>Remove pension</button></fieldset>)}</fieldset>}
+  <div className="actions"><button type="button" onClick={cancel}>Cancel</button><button className="primary" type="submit">Save goal</button></div></form>
+}
 
 function EventEditor({
   value,

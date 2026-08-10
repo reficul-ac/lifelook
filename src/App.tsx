@@ -2,6 +2,7 @@ import {
   FormEvent,
   type KeyboardEvent,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -90,6 +91,7 @@ const baseline: Scenario = {
   events: [],
   allocations: [{ accountId: "savings", percentBps: 10000, priority: 1 }],
   withdrawals: [],
+  goals: [],
   horizon: { start: "2025-01", months: 120 },
 };
 const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
@@ -104,7 +106,7 @@ const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
   })),
   assets: value.assets ?? [],
   liabilities: value.liabilities ?? [],
-  scenarios: value.scenarios ?? [],
+  scenarios: (value.scenarios ?? []).map((scenario)=>({...scenario,withdrawals:scenario.withdrawals??[],goals:scenario.goals??[]})),
   accounts: value.accounts.map((a) => ({
     ...a,
     balanceCents: "balanceCents" in a ? a.balanceCents : a.openingBalanceCents,
@@ -252,6 +254,7 @@ function Workspace({
     media.addEventListener("change", change);
     return () => media.removeEventListener("change", change);
   }, []);
+  useEffect(()=>{if(settings.theme!=="system"||!repository.systemThemeDark)return;let active=true;const refresh=()=>repository.systemThemeDark?.().then(value=>{if(active&&value!==null&&value!==undefined)setOsDark(value)}).catch(()=>{});refresh();const timer=window.setInterval(refresh,500);return()=>{active=false;window.clearInterval(timer)}},[settings.theme,repository]);
   const dark =
     settings.theme === "dark" || (settings.theme === "system" && osDark);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -272,15 +275,17 @@ function Workspace({
   const [profileOpen,setProfileOpen]=useState(false);
   const [workspaceInfo,setWorkspaceInfo]=useState<WorkspaceInfo|null>(null);
   const [profileResult,setProfileResult]=useState("");
-  useEffect(()=>{if(!profileOpen)return;repository.workspaceInfo?.().then(setWorkspaceInfo).catch(error=>setProfileResult(errorMessage(error,"Could not read workspace information.")));requestAnimationFrame(()=>profileMenu.current?.querySelector<HTMLElement>("button")?.focus());const dismiss=(event:MouseEvent)=>{if(!profileMenu.current?.contains(event.target as Node)&&!profileButton.current?.contains(event.target as Node)){setProfileOpen(false);profileButton.current?.focus()}};const escape=(event:globalThis.KeyboardEvent)=>{if(event.key==="Escape"){setProfileOpen(false);profileButton.current?.focus()}};document.addEventListener("mousedown",dismiss);document.addEventListener("keydown",escape);return()=>{document.removeEventListener("mousedown",dismiss);document.removeEventListener("keydown",escape)}},[profileOpen,repository]);
-  async function backupFromProfile(){setProfileResult("");try{const destination=await repository.selectBackupDestination?.();if(!destination)return;await repository.backupDatabase?.(destination);setProfileResult("Backup created successfully.")}catch(error){setProfileResult(errorMessage(error,"Could not create the backup."))}}
+  const [profileBusy,setProfileBusy]=useState(false);
+  useEffect(()=>{if(!profileOpen)return;setProfileResult("");setWorkspaceInfo(null);repository.workspaceInfo?.().then(setWorkspaceInfo).catch(error=>setProfileResult(errorMessage(error,"Could not read workspace information.")));requestAnimationFrame(()=>profileMenu.current?.querySelector<HTMLElement>("button")?.focus());const dismiss=(event:MouseEvent)=>{if(!profileMenu.current?.contains(event.target as Node)&&!profileButton.current?.contains(event.target as Node)){setProfileOpen(false);profileButton.current?.focus()}};const escape=(event:globalThis.KeyboardEvent)=>{if(event.key==="Escape"){setProfileOpen(false);profileButton.current?.focus()}};document.addEventListener("mousedown",dismiss);document.addEventListener("keydown",escape);return()=>{document.removeEventListener("mousedown",dismiss);document.removeEventListener("keydown",escape)}},[profileOpen,repository]);
+  async function backupFromProfile(){setProfileResult("");setProfileBusy(true);try{const destination=await repository.selectBackupDestination?.();if(!destination)return;await repository.backupDatabase?.(destination);setProfileResult("Backup created successfully.")}catch(error){setProfileResult(errorMessage(error,"Could not create the backup."))}finally{setProfileBusy(false)}}
+  function profileMenuKey(event:React.KeyboardEvent){const items=[...profileMenu.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')??[]];const current=items.indexOf(document.activeElement as HTMLButtonElement);let next=current;if(event.key==="ArrowDown")next=(current+1)%items.length;else if(event.key==="ArrowUp")next=(current-1+items.length)%items.length;else if(event.key==="Home")next=0;else if(event.key==="End")next=items.length-1;else return;event.preventDefault();items[next]?.focus()}
   const openDialog = (state: DialogState, invoker?: HTMLElement | null) =>
     setDialog({
       ...state,
       invoker: invoker ?? (document.activeElement as HTMLElement),
     });
   const closeDialog = () => setDialog(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const key = (event: globalThis.KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -380,6 +385,7 @@ function Workspace({
           targetBalanceCents: rule.targetBalanceCents ?? undefined,
         })),
         withdrawals: record.withdrawals ?? [],
+        goals: record.goals ?? [],
         horizon: {
           start: new Date().toISOString().slice(0, 7),
           months: record.horizonMonths,
@@ -452,7 +458,7 @@ function Workspace({
             </div>
             <MoreHorizontal size={17} />
           </button>
-          {profileOpen&&<div className="profile-menu card" role="menu" aria-label="Workspace" ref={profileMenu}><strong>{workspaceInfo?.householdName??bootstrap.household?.name??"Local household"}</strong><small>Local workspace</small><code>{workspaceInfo?.profilePath??"Loading profile path…"}</code><button role="menuitem" onClick={()=>{setProfileOpen(false);setView("Settings")}}>Open Settings</button><button role="menuitem" onClick={backupFromProfile}>Create Backup</button>{profileResult&&<p role="status" aria-live="polite">{profileResult}</p>}</div>}
+          {profileOpen&&<div className="profile-menu card" role="menu" aria-label="Workspace" ref={profileMenu} onKeyDown={profileMenuKey}><strong>{workspaceInfo?.householdName??bootstrap.household?.name??"Local household"}</strong><small>Local workspace</small><code>{workspaceInfo?.profilePath??"Loading profile path…"}</code><button role="menuitem" onClick={()=>{setProfileOpen(false);setView("Settings")}}>Open Settings</button><button role="menuitem" disabled={profileBusy} onClick={backupFromProfile}>{profileBusy?"Creating backup…":"Create Backup"}</button>{profileResult&&<p role={profileResult.includes("successfully")?"status":"alert"} aria-live="polite">{profileResult}</p>}</div>}
         </div>
       </aside>
       <main>
@@ -3921,6 +3927,8 @@ function ScenarioDialog({
           horizonMonths: h,
           events: record!.events,
           allocations: record!.allocations,
+          withdrawals: record!.withdrawals,
+          goals: record!.goals,
           expectedRevision: record!.revision,
         });
         await refresh();
@@ -4109,6 +4117,8 @@ function PlanView({
   onPlanScenario: (el: HTMLElement) => void;
 }) {
   const [comparisonIds, setComparisonIds] = useState<string[]>([]);
+  const activeScenario=scenarios.find(s=>s.id===selectedScenarioId);
+  const latestGoalResults=projections.flatMap(year=>year.months).at(-1)?.goalResults??[];
   const comparisons = scenarios
     .filter((s) => comparisonIds.includes(s.id))
     .map((s) => ({
@@ -4183,6 +4193,7 @@ function PlanView({
           ))}
         </div>
       </div>
+      {activeScenario&&<section className="card wide" aria-labelledby="goal-summary-title"><div className="card-title"><div><span className="label assumption">Funding trackers</span><h3 id="goal-summary-title">Goals</h3></div><span>{money(projections.reduce((sum,year)=>sum+year.goalFundingCents,0),true)} projected funding</span></div>{activeScenario.goals.map(goal=>{const result=latestGoalResults.find(item=>item.goalId===goal.id);return <div className="transaction" key={goal.id}><div><strong>{goal.name}</strong><small>{goal.enabled?(result?.targetResult.replaceAll("-"," ")??"Waiting for projection"):"Disabled"}</small></div>{result&&<div><progress aria-label={`${goal.name} funding progress`} max={10000} value={result.completionBps}>{result.completionBps/100}%</progress><small>{money(result.earmarkedCents)} of {money(result.targetCents)} · {money(result.requiredCents)}/month required · {money(result.shortfallCents)} shortfall{result.projectedCompletionDate?` · completion ${result.projectedCompletionDate}`:""}</small></div>}</div>})}{!activeScenario.goals.length&&<p className="empty">No funding goals in this scenario.</p>}<p className="muted">Funding does not execute purchases, debt payoff, or retirement changes; add those separately as dated events.</p></section>}
       {comparisons.length > 1 && (
         <section className="card wide" aria-label="Scenario comparison">
           <h3>Scenario comparison</h3>
@@ -4201,7 +4212,7 @@ function PlanView({
                   return (
                     <span key={x.scenario.id}>
                       {row
-                        ? `${row.endingNetWorthCents === null ? "Unavailable" : money(row.endingNetWorthCents, true)} · deficit ${money(row.unfundedDeficitCents, true)}`
+                        ? `${row.endingNetWorthCents === null ? "Unavailable" : money(row.endingNetWorthCents, true)} · goals ${money(row.goalFundingCents,true)} · deficit ${money(row.unfundedDeficitCents, true)}`
                         : "—"}
                     </span>
                   );

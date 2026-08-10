@@ -470,4 +470,15 @@ describe("LifeLook shell", () => {
     await waitFor(()=>expect(deleteAsset).toHaveBeenCalledWith({id:"home",expectedRevision:2}));
     await waitFor(()=>expect(edit).toHaveFocus());
   });
+  it("provides a keyboard-complete local Workspace menu and backup feedback",async()=>{
+    const backupDatabase=vi.fn().mockResolvedValue(undefined),workspaceInfo=vi.fn().mockResolvedValue({householdName:"Test household",profilePath:"/tmp/lifelook.db"});
+    render(<App repository={{...testRepository,workspaceInfo,selectBackupDestination:vi.fn().mockResolvedValue("/tmp/backup.lifelook"),backupDatabase}}/>);
+    const trigger=await screen.findByRole("button",{name:/Local workspace/});trigger.focus();fireEvent.click(trigger);
+    const menu=await screen.findByRole("menu",{name:"Workspace"}),settings=within(menu).getByRole("menuitem",{name:"Open Settings"}),backup=within(menu).getByRole("menuitem",{name:"Create Backup"});
+    await waitFor(()=>expect(settings).toHaveFocus());await screen.findByText("/tmp/lifelook.db");
+    fireEvent.keyDown(menu,{key:"End"});expect(backup).toHaveFocus();fireEvent.keyDown(menu,{key:"Home"});expect(settings).toHaveFocus();fireEvent.keyDown(menu,{key:"ArrowDown"});expect(backup).toHaveFocus();
+    fireEvent.click(backup);await screen.findByRole("status");expect(backupDatabase).toHaveBeenCalledWith("/tmp/backup.lifelook");
+    fireEvent.keyDown(document,{key:"Escape"});expect(screen.queryByRole("menu")).not.toBeInTheDocument();expect(trigger).toHaveFocus();
+    fireEvent.click(trigger);fireEvent.click(within(await screen.findByRole("menu")).getByRole("menuitem",{name:"Open Settings"}));expect(await screen.findByRole("heading",{name:"Settings"})).toBeInTheDocument();
+  });
 });

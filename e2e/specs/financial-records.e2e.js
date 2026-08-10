@@ -18,12 +18,12 @@ describe("LifeLook native financial records", () => {
     await setLabeledValue("Debt name", "Mortgage");
     await setLabeledValue("Current balance (USD)", "80000.00");
     await setLabeledValue("Annual interest rate (%)", "6.50");
-    await $("aria/Include mortgage details").click();
+    await $('//label[contains(normalize-space(.),"Include mortgage details")]//input').click();
     await setLabeledValue("Original principal (USD)", "90000.00");
     await setLabeledValue("Mortgage start date", "2020-01-15");
     await setLabeledValue("Original term (months)", "360");
     assert.match(await $('[role="status"]').getText(), /principal and interest/i);
-    await $("aria/Use custom monthly payment").click();
+    await $('//label[contains(normalize-space(.),"Use custom monthly payment")]//input').click();
     await setLabeledValue("Custom monthly payment (USD)", "750.00");
     await saveDialog();
 

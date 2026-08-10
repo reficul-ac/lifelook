@@ -51,11 +51,13 @@ export const ProjectionEngine = {
     const accounts = new Map(snapshot.accounts.map(a => [a.id, { ...a, balance: a.balanceCents }]));
     const assets = new Map(snapshot.assets.map(a => [a.id, { ...a, value: a.valueCents }]));
     const debts = new Map(snapshot.liabilities.map(l => [l.id, { ...l, balance: l.balanceCents, payment: l.minimumPaymentCents }]));
-    const goals=[...(scenario.goals??[])].filter(x=>x.enabled).sort((a,b)=>a.priority-b.priority||a.id.localeCompare(b.id));
+    const allGoals=[...scenario.goals];
+    if(new Set(allGoals.map(x=>x.id)).size!==allGoals.length) throw new RangeError("Goal ids must be unique");
+    const goals=allGoals.filter(x=>x.enabled).sort((a,b)=>a.priority-b.priority||a.id.localeCompare(b.id));
     if(new Set(goals.map(x=>x.priority)).size!==goals.length) throw new RangeError("Goal priorities must be unique");
-    const earmarks=new Map(goals.map(x=>[x.id,x.startingEarmarkedCents]));
+    const earmarks=new Map(allGoals.map(x=>[x.id,x.startingEarmarkedCents]));
     const earmarkedByAccount=new Map<string,number>();
-    for(const goal of goals){const destination="destinationAccountId" in goal?goal.destinationAccountId:undefined;if(destination){const total=(earmarkedByAccount.get(destination)??0)+goal.startingEarmarkedCents;const current=accounts.get(destination);if(!current)throw new RangeError(`Unknown goal destination account: ${destination}`);if(total>current.balance)throw new RangeError("Combined starting goal earmarks exceed the destination account balance");earmarkedByAccount.set(destination,total);}}
+    for(const goal of allGoals){const destination=goal.destinationAccountId;const total=(earmarkedByAccount.get(destination)??0)+goal.startingEarmarkedCents;const current=accounts.get(destination);if(!current)throw new RangeError(`Unknown goal destination account: ${destination}`);if(total>current.balance)throw new RangeError("Combined starting goal earmarks exceed the destination account balance");earmarkedByAccount.set(destination,total);}
     // Stored JSON array order is not part of the calculation contract.
     const events = [...scenario.events].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
     const planned=[...Array(scenario.horizon.months)].map((_,index)=>{const date=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+index,1)),key=monthKey(date);let gross=0,pretax=0;for(const entry of snapshot.recurring){const count=occurrences(entry,key);if(!count)continue;const changes=events.filter(e=>(e.type==="recurring-change"||e.type==="income-change")&&e.entryId===entry.id&&e.date.slice(0,7)<=key);const base=changes.length?(changes.at(-1)! as {amountCents:number}).amountCents:entry.amountCents,value=grow(base,entry.annualGrowthBps??(entry.kind==="expense"?scenario.assumptions.inflationBps:0),index)*count;if(entry.kind==="income")gross+=value;else if(entry.taxTreatment==="pretax")pretax+=value;}for(const event of events.filter(e=>e.date.slice(0,7)===key))if(event.type==="one-time-income")gross+=event.amountCents;return {key,year:date.getUTCFullYear(),gross,pretax};});
@@ -67,7 +69,7 @@ export const ProjectionEngine = {
       const actual = snapshot.actuals?.filter(x => x.date.slice(0, 7) === key) ?? [];
       const income = actual.filter(x => x.kind === "income").reduce((s, x) => s + Math.abs(x.amountCents), 0);
       const expense = actual.filter(x => x.kind === "expense").reduce((s, x) => s + Math.abs(x.amountCents), 0);
-      months.push({month:key,status:"actual",incomeCents:income,expenseCents:expense,actualIncomeCents:income,actualExpenseCents:expense,incomeVarianceCents:0,expenseVarianceCents:0,taxCents:0,surplusCents:income-expense,liquidWorthCents:null,netWorthCents:null,debtCents:null,unfundedDeficitCents:0,allocationCents:0,principalAndInterestCents:0,housingCostCents:0,warnings:[]});
+      months.push({month:key,status:"actual",incomeCents:income,expenseCents:expense,actualIncomeCents:income,actualExpenseCents:expense,incomeVarianceCents:0,expenseVarianceCents:0,taxCents:0,surplusCents:income-expense,liquidWorthCents:null,netWorthCents:null,debtCents:null,unfundedDeficitCents:0,allocationCents:0,goalFundingCents:0,goalResults:[],principalAndInterestCents:0,housingCostCents:0,warnings:[]});
     }
     let cumulativeDeficit = 0;
     for (let index = 0; index < scenario.horizon.months; index++) {
@@ -76,6 +78,10 @@ export const ProjectionEngine = {
       const account = (id: string) => { const value = accounts.get(id); if (!value) throw new RangeError(`Unknown account: ${id}`); return value; };
       const debt = (id: string) => { const value = debts.get(id); if (!value) throw new RangeError(`Unknown liability: ${id}`); return value; };
       for (const account of accounts.values()) account.balance = grow(account.balance, account.annualReturnBps, 1);
+      for (const goal of goals) {
+        const destination=account(goal.destinationAccountId);
+        earmarks.set(goal.id,grow(earmarks.get(goal.id)??0,destination.annualReturnBps,1));
+      }
       for (const asset of assets.values()) asset.value = grow(asset.value, asset.annualGrowthBps, 1);
       let income = 0, expense = 0;
       for (const entry of snapshot.recurring) {
@@ -126,13 +132,13 @@ export const ProjectionEngine = {
         let target=goalTarget(goal,snapshot,debts,key,index,scenario.assumptions.inflationBps),returnBps=destination?.annualReturnBps??0;
         const remaining=Math.max(0,target-earmarked),left=monthsUntil(key,goal.targetDate);
         let required=requiredMonthlyFunding(remaining,left,returnBps);
-        if(goal.type==="debt-payoff"){const d=debt(goal.liabilityId);target=d.balance;const scheduled=Math.min(d.payment,d.balance+Math.round(d.balance*d.annualRateBps/120_000));required=Math.max(0,required-scheduled);}
         let funded=Math.min(required,availableSurplus);availableSurplus-=funded;
         if(funded<required&&goal.allowCashShortfall){let need=required-funded;for(const rule of [...scenario.withdrawals].sort((a,b)=>a.priority-b.priority)){if(destination&&rule.accountId===destination.id)continue;const source=account(rule.accountId),draw=Math.min(Math.max(0,source.balance),need);source.balance-=draw;funded+=draw;need-=draw;if(!need)break;}}
-        if(goal.type==="debt-payoff"){const d=debt(goal.liabilityId),paid=Math.min(d.balance,funded);d.balance-=paid;funded=paid;}else if(destination){destination.balance+=funded;earmarks.set(goal.id,earmarked+funded);}
-        goalFundingCents+=funded;const current=earmarks.get(goal.id)??Math.max(0,target-(debts.get(goal.type==="debt-payoff"?goal.liabilityId:"")?.balance??target));const shortfall=Math.max(0,required-funded),completion=target?Math.min(10000,Math.round(current*10000/target)):10000;const due=goal.targetDate.slice(0,7)<=key,result:GoalFundingResult={goalId:goal.id,requiredCents:required,fundedCents:funded,shortfallCents:shortfall,earmarkedCents:current,targetCents:target,completionBps:completion,targetResult:completion>=10000?"completed":due?"missed":shortfall?"infeasible":"on-track"};goalResults.push(result);
+        if(destination){destination.balance+=funded;earmarks.set(goal.id,earmarked+funded);}
+        goalFundingCents+=funded;const current=earmarks.get(goal.id)??0;const shortfall=Math.max(0,required-funded),completion=target?Math.min(10000,Math.round(current*10000/target)):10000;const due=goal.targetDate.slice(0,7)<=key;const horizonEnd=monthKey(addMonths(start,scenario.horizon.months-1));const outside=goal.targetDate.slice(0,7)>horizonEnd;const result:GoalFundingResult={goalId:goal.id,requiredCents:required,fundedCents:funded,shortfallCents:shortfall,earmarkedCents:current,targetCents:target,completionBps:completion,projectedCompletionDate:completion>=10000?key:(!shortfall?goal.targetDate.slice(0,7):undefined),targetResult:completion>=10000?"completed":due?"missed":outside?"outside-horizon":shortfall?"infeasible":"on-track"};goalResults.push(result);
         if(shortfall)warnings.push({code:"goal-shortfall",message:`${goal.name} is short by ${shortfall} cents this month.`,month:key,entityId:goal.id,inputField:"goals"});
         if(due&&completion<10000)warnings.push({code:"goal-missed",message:`${goal.name} missed its target.`,month:key,entityId:goal.id,inputField:"targetDate"});
+        if(outside&&index===0)warnings.push({code:"goal-outside-horizon",message:`${goal.name} is outside the scenario horizon.`,month:key,entityId:goal.id,inputField:"targetDate"});
       }
       let unfunded = 0, allocationCents=0;
       if (surplus > 0) {
@@ -149,7 +155,7 @@ export const ProjectionEngine = {
     }
     const grouped = new Map<number, MonthlyProjection[]>();
     for (const month of months) { const year = Number(month.month.slice(0, 4)); grouped.set(year, [...(grouped.get(year) ?? []), month]); }
-    return [...grouped].map(([year, items]) => {const income=sum(items,"incomeCents"),surplus=sum(items,"surplusCents");return ({ year, incomeCents:income,actualIncomeCents:sum(items,"actualIncomeCents"),actualExpenseCents:sum(items,"actualExpenseCents"), expenseCents: sum(items, "expenseCents"), taxCents: sum(items, "taxCents"), savingsRateBps:income?Math.round(Math.max(0,surplus)*10000/income):0,surplusCents:surplus,allocationCents:sum(items,"allocationCents"),goalFundingCents:items.reduce((s,x)=>s+(x.goalFundingCents??0),0),goalResults:items.at(-1)?.goalResults, liquidWorthCents: items.at(-1)!.liquidWorthCents, endingNetWorthCents: items.at(-1)!.netWorthCents, debtCents: items.at(-1)!.debtCents, debtPayoffMonth:items.find(x=>x.debtCents===0)?.month, unfundedDeficitCents: sum(items, "unfundedDeficitCents"), warnings: items.flatMap(x => x.warnings), months: items });});
+    return [...grouped].map(([year, items]) => {const income=sum(items,"incomeCents"),surplus=sum(items,"surplusCents");return ({ year, incomeCents:income,actualIncomeCents:sum(items,"actualIncomeCents"),actualExpenseCents:sum(items,"actualExpenseCents"), expenseCents: sum(items, "expenseCents"), taxCents: sum(items, "taxCents"), savingsRateBps:income?Math.round(Math.max(0,surplus)*10000/income):0,surplusCents:surplus,allocationCents:sum(items,"allocationCents"),goalFundingCents:items.reduce((s,x)=>s+x.goalFundingCents,0),goalResults:items.at(-1)?.goalResults??[], liquidWorthCents: items.at(-1)!.liquidWorthCents, endingNetWorthCents: items.at(-1)!.netWorthCents, debtCents: items.at(-1)!.debtCents, debtPayoffMonth:items.find(x=>x.debtCents===0)?.month, unfundedDeficitCents: sum(items, "unfundedDeficitCents"), warnings: items.flatMap(x => x.warnings), months: items });});
   }
 } as const;
 
@@ -157,8 +163,11 @@ function sum(items: MonthlyProjection[], key: "incomeCents" | "expenseCents" | "
 function accountKind(snapshot:FinancialSnapshot,id:string){return snapshot.accounts.find(x=>x.id===id)?.kind;}
 function goalTarget(goal:ScenarioGoal,snapshot:FinancialSnapshot,debts:Map<string,{balance:number}>,month:string,index:number,inflationBps:number){
   if(goal.type==="debt-payoff")return debts.get(goal.liabilityId)?.balance??0;
-  if(goal.type==="emergency-fund"){const monthly=snapshot.recurring.filter(x=>goal.expenseEntryIds.includes(x.id)&&x.kind==="expense").reduce((s,x)=>s+grow(x.amountCents,x.annualGrowthBps??inflationBps,index),0);return Math.max(goal.minimumTargetCents??0,monthly*goal.coverageMonths);}
-  if(goal.type==="education"){const start=isoDate(goal.attendanceStartDate),end=isoDate(goal.attendanceEndDate),years=Math.max(1,Math.ceil(((end.valueOf()-start.valueOf())/86400000+1)/365.25));return grow(goal.annualCostCents*years,goal.educationInflationBps,index+monthsUntil(month,goal.attendanceStartDate)-1);}
-  if(goal.type==="major-purchase")return grow(goal.costCents,inflationBps,index+monthsUntil(month,goal.purchaseDate)-1);
-  return grow(goal.desiredSpendingCents+goal.healthcareCents,inflationBps,index+monthsUntil(month,goal.targetDate)-1);
+  if(goal.type==="emergency-fund"){const targetIndex=index+monthsUntil(month,goal.targetDate)-1;const monthly=snapshot.recurring.filter(x=>goal.expenseEntryIds.includes(x.id)&&x.kind==="expense").reduce((s,x)=>s+grow(x.amountCents,goal.todayDollarBasis?(x.annualGrowthBps??inflationBps):0,targetIndex),0);return Math.max(goal.minimumTargetCents??0,monthly*goal.coverageMonths);}
+  if(goal.type==="education"){const start=isoDate(goal.attendanceStartDate),end=isoDate(goal.attendanceEndDate),years=Math.max(1,Math.ceil(((end.valueOf()-start.valueOf())/86400000+1)/365.25)),toStart=index+monthsUntil(month,goal.attendanceStartDate)-1;let total=0;for(let year=0;year<years;year++)total+=grow(goal.annualCostCents,goal.todayDollarBasis?goal.educationInflationBps:0,toStart+year*12);return total;}
+  if(goal.type==="major-purchase")return grow(goal.costCents,goal.todayDollarBasis?inflationBps:0,index+monthsUntil(month,goal.purchaseDate)-1);
+  const destination=snapshot.accounts.find(x=>x.id===goal.destinationAccountId);if(!destination)return 0;
+  const target=isoDate(goal.targetDate);let months=0;for(const personId of goal.participantIds){const person=snapshot.household.people.find(x=>x.id===personId);const age=goal.planningThroughAges[personId];if(!person?.birthDate)throw new RangeError("Retirement participants need birth dates when planning-through ages are used");const end=new Date(`${person.birthDate}T00:00:00Z`);end.setUTCFullYear(end.getUTCFullYear()+age);months=Math.max(months,(end.getUTCFullYear()-target.getUTCFullYear())*12+end.getUTCMonth()-target.getUTCMonth());}
+  const targetOffset=index+monthsUntil(month,goal.targetDate)-1;const spending=grow(goal.desiredSpendingCents,goal.todayDollarBasis?inflationBps:0,targetOffset),healthcare=grow(goal.healthcareCents,goal.todayDollarBasis?goal.healthcareGrowthBps:0,targetOffset);return retirementPresentValue(spending,healthcare,goal.pensions,target,months,destination.annualReturnBps,goal.healthcareGrowthBps);
 }
+function retirementPresentValue(spending:number,healthcare:number,pensions:readonly {monthlyCents:number;startDate:string}[],target:Date,months:number,annualReturnBps:number,healthcareGrowthBps:number){if(months<=0)return 0;const rate=Math.pow(1+annualReturnBps/10000,1/12)-1;let total=0;for(let index=0;index<months;index++){const date=addMonths(target,index),dateKey=monthKey(date),pension=pensions.filter(item=>item.startDate.slice(0,7)<=dateKey).reduce((sum,item)=>sum+item.monthlyCents,0),cost=spending+grow(healthcare,healthcareGrowthBps,index);total+=Math.max(0,cost-pension)/Math.pow(1+rate,index+1);}return Math.max(0,Math.round(total));}

@@ -30,7 +30,7 @@ export interface OnboardingStepPayload {
   liabilities?:LiabilityInput[];
 }
 export interface ScenarioAllocation { id?:string;accountId:string;priority:number;percentBps:number;targetBalanceCents?:number|null }
-export interface ScenarioRecord { id:string; householdId:string; name:string; isBaseline:boolean; assumptions:{inflationBps:number;thresholdInflationBps:number}; horizonMonths:number; revision:number; events:import("./domain/types").ScenarioEvent[]; allocations:ScenarioAllocation[]; withdrawals?:import("./domain/types").WithdrawalRule[]; goals?:import("./domain/types").ScenarioGoal[] }
+export interface ScenarioRecord { id:string; householdId:string; name:string; isBaseline:boolean; assumptions:{inflationBps:number;thresholdInflationBps:number}; horizonMonths:number; revision:number; events:import("./domain/types").ScenarioEvent[]; allocations:ScenarioAllocation[]; withdrawals:import("./domain/types").WithdrawalRule[]; goals:import("./domain/types").ScenarioGoal[] }
 export interface WorkspaceSnapshot {
   onboardingStep:number; onboardingComplete:boolean;
   household?:{id:string;name:string;state:string}; people:BootstrapPerson[];
@@ -39,7 +39,7 @@ export interface WorkspaceSnapshot {
   assets:Asset[]; liabilities:Liability[]; scenarios:ScenarioRecord[];
 }
 export type Bootstrap = WorkspaceSnapshot;
-export type BootstrapInput = Pick<WorkspaceSnapshot,"onboardingStep"|"onboardingComplete"|"people"|"categories"> & {accounts:(BootstrapAccount|Omit<BootstrapAccount,"balanceCents">)[]} & Partial<Omit<WorkspaceSnapshot,"onboardingStep"|"onboardingComplete"|"people"|"accounts"|"categories">>;
+export type BootstrapInput = Pick<WorkspaceSnapshot,"onboardingStep"|"onboardingComplete"|"people"|"categories"> & {accounts:(BootstrapAccount|Omit<BootstrapAccount,"balanceCents">)[];scenarios?:Array<Omit<ScenarioRecord,"withdrawals"|"goals">&{withdrawals?:ScenarioRecord["withdrawals"];goals?:ScenarioRecord["goals"]}>} & Partial<Omit<WorkspaceSnapshot,"onboardingStep"|"onboardingComplete"|"people"|"accounts"|"categories"|"scenarios">>;
 export interface TransactionInput { id:string; occurredOn:string; accountId:string; categoryId:string; amountCents:number; description:string; note?:string|null }
 export interface UpdateTransactionInput extends Omit<TransactionInput,"id"> { id:string; expectedRevision:number }
 export interface TransferInput { id:string;occurredOn:string;fromAccountId:string;toAccountId:string;amountCents:number;expectedRevision?:number }
@@ -57,6 +57,7 @@ export interface AccountDeletionImpact { accountId:string; canDelete:boolean; bl
 export interface Repository {
   bootstrap():Promise<BootstrapInput>;
   workspaceInfo?():Promise<WorkspaceInfo>;
+  systemThemeDark?():Promise<boolean|null>;
   retryStartup():Promise<BootstrapInput>;
   saveOnboardingStep(step:number,payload:OnboardingStepPayload):Promise<void>;
   completeOnboarding():Promise<void>;
@@ -80,7 +81,7 @@ export interface Repository {
   updateRecurring?(input:RecurringInput&{expectedRevision:number}):Promise<void>;
   deleteRecurring?(input:{id:string;expectedRevision:number}):Promise<void>;
   createScenario?(input:{id:string;name:string;cloneFromId?:string|null}):Promise<void>;
-  updateScenario?(input:{id:string;name:string;assumptions:ScenarioRecord["assumptions"];horizonMonths:number;events:ScenarioRecord["events"];allocations:ScenarioAllocation[];withdrawals?:import("./domain/types").WithdrawalRule[];goals?:import("./domain/types").ScenarioGoal[];expectedRevision:number}):Promise<void>;
+  updateScenario?(input:{id:string;name:string;assumptions:ScenarioRecord["assumptions"];horizonMonths:number;events:ScenarioRecord["events"];allocations:ScenarioAllocation[];withdrawals:import("./domain/types").WithdrawalRule[];goals:import("./domain/types").ScenarioGoal[];expectedRevision:number}):Promise<void>;
   deleteScenario?(input:{id:string;expectedRevision:number}):Promise<void>;
   selectCsvSource?():Promise<string|null>;
   inspectCsv?(path:string):Promise<CsvInspection>;
@@ -101,6 +102,7 @@ const backupFilename=()=>`LifeLook-backup-${new Date().toISOString().slice(0,10)
 export const tauriRepository:Repository = {
   bootstrap:()=>invoke("get_bootstrap"),
   workspaceInfo:()=>invoke("get_workspace_info"),
+  systemThemeDark:()=>invoke("system_theme_dark"),
   retryStartup:()=>invoke("retry_startup"),
   saveOnboardingStep:(step,payload)=>invoke("save_onboarding_step",{step,payload}),
   completeOnboarding:()=>invoke("complete_onboarding"),

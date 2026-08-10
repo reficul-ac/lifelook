@@ -52,6 +52,9 @@ jobs:
           export APPIMAGE_EXTRACT_AND_RUN=1
           mkdir -p "$XDG_DATA_HOME" "$LIFELOOK_E2E_ARTIFACT_DIR"
           xvfb-run -a --server-args="-screen 0 1280x820x24" npm run test:e2e:scenario
+          export LIFELOOK_E2E_ARTIFACT_DIR=artifacts/packaged-recovery
+          bash scripts/run-recovery-acceptance.sh corrupt-profile
+          bash scripts/run-recovery-acceptance.sh unwritable-profile
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -61,4 +64,5 @@ jobs:
             artifacts/appimage-smoke/*.png
             artifacts/native-e2e/*.png
             artifacts/packaged-e2e/*.png
+            artifacts/packaged-recovery/*.png
           if-no-files-found: error

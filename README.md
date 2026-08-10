@@ -35,8 +35,9 @@ The AppImage is written under `src-tauri/target/release/bundle/appimage/`. This 
 2. Choose a filing status and add at least one account with its current balance. Credit-card input is the positive amount owed.
 3. Use **Add** to record income, expenses, transfers, accounts, assets, or debts. Activity can be filtered by text, account, and year; select an entry to edit it or delete it when allowed. Use **Import CSV** for signed-amount or debit/credit files, review invalid and duplicate rows, then import the selected rows.
 4. In Net Worth, manage assets and liabilities, edit account names/types, reconcile a recorded balance to a dated target, or delete an empty unreferenced account. Mortgage details calculate principal-and-interest payments with an optional override; credit-card balances are entered as positive amounts owed.
-5. Choose System, Light, or Dark appearance and reduced motion in Settings; these choices persist locally.
-6. In Settings, choose **Back up data** to save a portable `.lifelook` file. Choose **Restore** to replace the current workspace after reviewing the confirmation warning.
+5. In Plan, add emergency-fund, debt-payoff, education, major-purchase, or retirement funding goals. Goals reserve projected money by priority; they never perform the purchase, payoff, or retirement change for you. Use a separate dated event for lifecycle changes.
+6. Choose System, Light, or Dark appearance and reduced motion in Settings; these choices persist locally.
+7. Open the Workspace menu at the bottom of the sidebar to see the local profile path, open Settings, or create a backup. Settings also provides restore after a confirmation warning.
 
 Activity can export exactly the current search/account/year results to an unencrypted UTF-8 CSV. Transfers export as their two signed posting rows. Plan scenarios support dated recurring changes, one-time income/expenses, contributions/transfers, asset purchases/sales, debt originations/payoffs, and ordered surplus allocations with a final 100% catch-all.
 
@@ -44,11 +45,11 @@ Activity can export exactly the current search/account/year results to an unencr
 
 - **Overview** shows current cash flow, savings, taxes, and net-worth direction without burying the headline in transaction detail.
 - **Activity** supports manual income, expense, and transfer creation, editing, and deletion. Imported rows are read-only for editing but individually deletable; transfers are deleted as one atomic event. Transfers are grouped as one balance-neutral event, with text, account, and year filters.
-- **Plan** manages recurring income and expenses and projects them by exact amount, frequency, date range, and annual growth. Create scenarios from defaults or clone the active plan, edit inflation/tax-threshold assumptions and a 1–480 month horizon, and compare up to three saved scenarios.
+- **Plan** manages recurring income and expenses and projects them by exact amount, frequency, date range, and annual growth. Create scenarios from defaults or clone the active plan, edit inflation/tax-threshold assumptions and a 1–480 month horizon, and compare up to three saved scenarios. Five goal trackers fund emergency reserves, debt payoff reserves, education, major purchases, and retirement in priority order before ordinary surplus allocations. Their semantic progress summaries show targets, earmarks, monthly requirements, shortfalls, projected completion, and status.
 - **Net Worth** brings liquid accounts, investments, assets, mortgages, and other liabilities into one balance sheet. Assets and debts support create, edit, and confirmed deletion. Mortgage projections separate principal and interest from optional property tax, insurance, and HOA assumptions; escrow itself is not modeled. Accounts can be added, renamed, retyped, and reconciled with an auditable adjustment. Only empty, non-final accounts with no financial references can be deleted.
 - **CSV import** supports UTF-8 files up to 10 MiB and 50,000 rows, saved mappings, ISO or US dates, signed or debit/credit amounts, category review, duplicate warnings with explicit override, and all-or-nothing commits. **CSV export** follows the active Activity filters and writes auditable RFC 4180 posting rows through a staged atomic replacement.
 - **Tax estimates** apply versioned federal, payroll, and California planning rules. Explanations disclose the source year, effective and marginal rates, projected threshold growth, and exclusions.
-- **Scenario comparison** shows annual net worth and unfunded deficits for up to three selected scenarios. Baseline is fixed; other scenarios can be cloned, renamed, edited, and deleted.
+- **Scenario comparison** shows annual net worth, goal funding, and unfunded deficits for up to three selected scenarios. Baseline is fixed; other scenarios can be cloned, renamed, edited, and deleted.
 - **Backup/restore** creates portable, unencrypted `.lifelook` snapshots. Restore validates and stages the selected backup before replacing the current local workspace; the selected backup itself is not modified.
 
 ### Actuals, assumptions, and projections
@@ -61,6 +62,8 @@ LifeLook has no user account, telemetry, advertising, cloud sync, or required ne
 
 LifeLook provides planning estimates, not tax, legal, accounting, or investment advice. It does not prepare returns and omits credits, itemized deductions, capital gains, and self-employment tax in v1.
 
+Goal funding is deterministic rather than Monte Carlo. Future withdrawal taxes, automatic purchases or sales, automatic debt payoff, and automatic retirement transitions are not modeled. Earmarked money remains part of its destination account, so it is not counted twice.
+
 ## Troubleshooting
 
 - **`rustc: command not found`:** install Rust stable with rustup, restart the shell, then run `rustc --version`.
@@ -71,4 +74,4 @@ LifeLook provides planning estimates, not tax, legal, accounting, or investment 
 
 ## Status
 
-The repository contains the Tauri/React foundation, local SQLite migration and state commands, manual ledger, recurring cash-flow, dated scenario events and allocations, account/asset/liability management, guarded deletion, filtered CSV import/export, local workspace search (`Ctrl+K`), deterministic asset growth and debt/mortgage amortization, a pure typed projection/tax domain, an accessible responsive interface, and unit/component/native/packaged tests. Search covers the records already loaded in the workspace and navigates to the existing focused record; it does not make network requests or persist queries. Escrow-aware mortgage modeling and official tax-fixture validation remain pre-release work tracked in [PLAN.md](PLAN.md).
+The repository contains the Tauri/React foundation, local SQLite migration and state commands, manual ledger, recurring cash-flow, dated scenario events and allocations, five funding-goal variants, account/asset/liability management, guarded deletion, filtered CSV import/export, local workspace search (`Ctrl+K`), deterministic asset growth and debt/mortgage amortization, a pure typed projection/tax domain, an accessible responsive interface, and unit/component/native/packaged tests. Search covers the records already loaded in the workspace and navigates to the existing focused record; it does not make network requests or persist queries. Escrow-aware mortgage modeling, Monte Carlo analysis, and official tax-fixture validation remain pre-release work tracked in [PLAN.md](PLAN.md).

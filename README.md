@@ -31,20 +31,20 @@ The AppImage is written under `src-tauri/target/release/bundle/appimage/`. This 
 
 1. Launch LifeLook and create a household with at least one member.
 2. Choose a filing status and add at least one account with its current balance. Credit-card input is the positive amount owed.
-3. Use **Add** to record income, expenses, transfers, or another account. Activity can be filtered by text, account, and year; select a manual entry to edit it.
-4. In Net Worth, edit account names/types or reconcile a recorded balance to a dated target. Credit-card balances are entered as positive amounts owed.
+3. Use **Add** to record income, expenses, transfers, or another account. Activity can be filtered by text, account, and year; select an entry to edit it or delete it when allowed. Use **Import CSV** for signed-amount or debit/credit files, review invalid and duplicate rows, then import the selected rows.
+4. In Net Worth, edit account names/types, reconcile a recorded balance to a dated target, or delete an empty unreferenced account. Credit-card balances are entered as positive amounts owed.
 5. Choose System, Light, or Dark appearance and reduced motion in Settings; these choices persist locally.
 6. In Settings, choose **Back up data** to save a portable `.lifelook` file. Choose **Restore** to replace the current workspace after reviewing the confirmation warning.
 
-Transaction/account deletion, CSV import/export, and scenario editing/comparison are not available in the current pre-release interface.
+CSV export and scenario editing/comparison are not available in the current pre-release interface.
 
 ## Feature guide
 
 - **Overview** shows current cash flow, savings, taxes, and net-worth direction without burying the headline in transaction detail.
-- **Activity** supports manual income, expense, and transfer creation and editing. Transfers are grouped as one balance-neutral event, with text, account, and year filters.
+- **Activity** supports manual income, expense, and transfer creation, editing, and deletion. Imported rows are read-only for editing but individually deletable; transfers are deleted as one atomic event. Transfers are grouped as one balance-neutral event, with text, account, and year filters.
 - **Plan** starts with years and expands into deterministic monthly calculations. Actuals fill elapsed periods while assumptions drive future projections.
-- **Net Worth** brings liquid accounts, investments, assets, mortgages, and other liabilities into one balance sheet. Accounts can be added, renamed, retyped, and reconciled with an auditable adjustment.
-- **CSV import/export** is future work and is not currently exposed.
+- **Net Worth** brings liquid accounts, investments, assets, mortgages, and other liabilities into one balance sheet. Accounts can be added, renamed, retyped, and reconciled with an auditable adjustment. Only empty, non-final accounts with no financial references can be deleted.
+- **CSV import** supports UTF-8 files up to 10 MiB and 50,000 rows, saved mappings, ISO or US dates, signed or debit/credit amounts, category review, duplicate warnings with explicit override, and all-or-nothing commits. CSV export remains future work.
 - **Tax estimates** apply versioned federal, payroll, and California planning rules. Explanations disclose the source year, effective and marginal rates, projected threshold growth, and exclusions.
 - **Scenario comparison** is future work; saved baseline data can be loaded but cannot yet be edited in the interface.
 - **Backup/restore** creates portable, unencrypted `.lifelook` snapshots. Restore validates and stages the selected backup before replacing the current local workspace; the selected backup itself is not modified.
@@ -69,4 +69,4 @@ LifeLook provides planning estimates, not tax, legal, accounting, or investment 
 
 ## Status
 
-The repository contains the Tauri/React foundation, local SQLite migration and state commands, manual ledger and account management, a pure typed projection/tax domain, an accessible responsive interface, and unit/component tests. Transaction/account deletion, production CSV import, complete mortgage/allocation math, and official tax-fixture validation remain pre-release work tracked in [PLAN.md](PLAN.md).
+The repository contains the Tauri/React foundation, local SQLite migration and state commands, manual ledger and account management, guarded deletion, CSV import, a pure typed projection/tax domain, an accessible responsive interface, and unit/component tests. Scenario and asset/liability editing, CSV export, complete mortgage/allocation math, and official tax-fixture validation remain pre-release work tracked in [PLAN.md](PLAN.md).

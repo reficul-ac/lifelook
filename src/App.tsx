@@ -1,4 +1,11 @@
-import { FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  type KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Activity,
   ArrowDownRight,
@@ -67,12 +74,19 @@ const baseline: Scenario = {
   allocations: [{ accountId: "savings", percentBps: 10000, priority: 1 }],
   horizon: { start: "2025-01", months: 120 },
 };
-const normalizeBootstrap=(value:BootstrapInput):Bootstrap=>({
+const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
   ...value,
-  settings:value.settings??emptySettings,
-  taxProfile:value.taxProfile??null,
-  activity:value.activity??[],recurring:value.recurring??[],assets:value.assets??[],liabilities:value.liabilities??[],scenarios:value.scenarios??[],
-  accounts:value.accounts.map(a=>({...a,balanceCents:"balanceCents" in a?a.balanceCents:a.openingBalanceCents})),
+  settings: value.settings ?? emptySettings,
+  taxProfile: value.taxProfile ?? null,
+  activity: value.activity ?? [],
+  recurring: value.recurring ?? [],
+  assets: value.assets ?? [],
+  liabilities: value.liabilities ?? [],
+  scenarios: value.scenarios ?? [],
+  accounts: value.accounts.map((a) => ({
+    ...a,
+    balanceCents: "balanceCents" in a ? a.balanceCents : a.openingBalanceCents,
+  })),
 });
 
 export function App({
@@ -108,11 +122,27 @@ export function App({
         <section className="card">
           <h1>LifeLook couldn’t open your data</h1>
           <p role="alert">{loadError.message}</p>
-          <p>{startupGuidance[loadError.code] ?? startupGuidance.startup_failed}</p>
-          {loadError.profilePath && <p><strong>Local profile:</strong> <code>{loadError.profilePath}</code></p>}
-          <p>Your existing profile has not been deleted, renamed, replaced, or changed by this recovery screen.</p>
-          {loadError.retryable && <button disabled={retrying} onClick={retryStartup}>{retrying ? "Retrying…" : "Retry"}</button>}
-          <p className="muted">You can safely close this window and try again later.</p>
+          <p>
+            {startupGuidance[loadError.code] ?? startupGuidance.startup_failed}
+          </p>
+          {loadError.profilePath && (
+            <p>
+              <strong>Local profile:</strong>{" "}
+              <code>{loadError.profilePath}</code>
+            </p>
+          )}
+          <p>
+            Your existing profile has not been deleted, renamed, replaced, or
+            changed by this recovery screen.
+          </p>
+          {loadError.retryable && (
+            <button disabled={retrying} onClick={retryStartup}>
+              {retrying ? "Retrying…" : "Retry"}
+            </button>
+          )}
+          <p className="muted">
+            You can safely close this window and try again later.
+          </p>
         </section>
       </main>
     );
@@ -127,31 +157,52 @@ export function App({
       <Onboarding
         initial={bootstrap}
         repository={repository}
-        onComplete={() => repository.bootstrap().then((value)=>setBootstrap(normalizeBootstrap(value)))}
+        onComplete={() =>
+          repository
+            .bootstrap()
+            .then((value) => setBootstrap(normalizeBootstrap(value)))
+        }
       />
     );
   return (
     <Workspace
       bootstrap={bootstrap}
       repository={repository}
-      onRefresh={() => repository.bootstrap().then((value)=>setBootstrap(normalizeBootstrap(value)))}
+      onRefresh={() =>
+        repository
+          .bootstrap()
+          .then((value) => setBootstrap(normalizeBootstrap(value)))
+      }
       onRestore={(value) => setBootstrap(normalizeBootstrap(value))}
     />
   );
 }
 
-const startupGuidance:Record<string,string> = {
-  corrupt:"The profile appears damaged. Restore access to a known-good copy or contact support before retrying.",
-  unwritable:"Check the profile and folder permissions, free disk space if needed, then retry.",
-  incompatible:"Open this profile with the newer LifeLook version that created it.",
-  startup_failed:"Resolve the reported local profile problem, then retry.",
+const startupGuidance: Record<string, string> = {
+  corrupt:
+    "The profile appears damaged. Restore access to a known-good copy or contact support before retrying.",
+  unwritable:
+    "Check the profile and folder permissions, free disk space if needed, then retry.",
+  incompatible:
+    "Open this profile with the newer LifeLook version that created it.",
+  startup_failed: "Resolve the reported local profile problem, then retry.",
 };
-function normalizeStartupError(error:unknown):StartupError {
+function normalizeStartupError(error: unknown): StartupError {
   if (error && typeof error === "object") {
-    const value=error as Partial<StartupError>;
-    return {code:value.code??"startup_failed",message:value.message??"Could not open the local database",profilePath:value.profilePath,retryable:value.retryable??true};
+    const value = error as Partial<StartupError>;
+    return {
+      code: value.code ?? "startup_failed",
+      message: value.message ?? "Could not open the local database",
+      profilePath: value.profilePath,
+      retryable: value.retryable ?? true,
+    };
   }
-  return {code:"startup_failed",message:typeof error==="string"?error:"Could not open the local database",retryable:true};
+  return {
+    code: "startup_failed",
+    message:
+      typeof error === "string" ? error : "Could not open the local database",
+    retryable: true,
+  };
 }
 
 function Workspace({
@@ -167,16 +218,29 @@ function Workspace({
 }) {
   const [view, setView] = useState<View>("Overview");
   const [settings, setSettings] = useState(bootstrap.settings);
-  useEffect(()=>setSettings(bootstrap.settings),[bootstrap.settings]);
-  const systemDark=()=>typeof matchMedia==="function"&&matchMedia("(prefers-color-scheme: dark)").matches;
-  const [osDark,setOsDark]=useState(systemDark);
-  useEffect(()=>{if(typeof matchMedia!=="function")return;const media=matchMedia("(prefers-color-scheme: dark)");const change=()=>setOsDark(media.matches);media.addEventListener("change",change);return()=>media.removeEventListener("change",change)},[]);
-  const dark=settings.theme==="dark"||(settings.theme==="system"&&osDark);
+  useEffect(() => setSettings(bootstrap.settings), [bootstrap.settings]);
+  const systemDark = () =>
+    typeof matchMedia === "function" &&
+    matchMedia("(prefers-color-scheme: dark)").matches;
+  const [osDark, setOsDark] = useState(systemDark);
+  useEffect(() => {
+    if (typeof matchMedia !== "function") return;
+    const media = matchMedia("(prefers-color-scheme: dark)");
+    const change = () => setOsDark(media.matches);
+    media.addEventListener("change", change);
+    return () => media.removeEventListener("change", change);
+  }, []);
+  const dark =
+    settings.theme === "dark" || (settings.theme === "system" && osDark);
   const [expanded, setExpanded] = useState<number | null>(null);
-  const [dialog,setDialog]=useState<DialogState|null>(null);
-  const addButton=useRef<HTMLButtonElement>(null);
-  const openDialog=(state:DialogState,invoker?:HTMLElement|null)=>setDialog({...state,invoker:invoker??document.activeElement as HTMLElement});
-  const closeDialog=()=>setDialog(null);
+  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const openDialog = (state: DialogState, invoker?: HTMLElement | null) =>
+    setDialog({
+      ...state,
+      invoker: invoker ?? (document.activeElement as HTMLElement),
+    });
+  const closeDialog = () => setDialog(null);
   const snapshot = useMemo<FinancialSnapshot>(
     () => ({
       household: {
@@ -198,15 +262,32 @@ function Workspace({
         annualReturnBps: a.annualReturnBps,
         liquid: a.liquid,
       })),
-      recurring: bootstrap.recurring.map(r=>({...r,endDate:r.endDate??undefined,kind:bootstrap.categories.find(c=>c.id===r.categoryId)?.kind==="income"?"income":"expense"})),
+      recurring: bootstrap.recurring.map((r) => ({
+        ...r,
+        endDate: r.endDate ?? undefined,
+        kind:
+          bootstrap.categories.find((c) => c.id === r.categoryId)?.kind ===
+          "income"
+            ? "income"
+            : "expense",
+      })),
       assets: bootstrap.assets,
       liabilities: bootstrap.liabilities,
     }),
     [bootstrap],
   );
-  const projections = useMemo(() => bootstrap.taxProfile ? ProjectionEngine.calculate(snapshot, baseline) : null,[snapshot,bootstrap.taxProfile]);
+  const projections = useMemo(
+    () =>
+      bootstrap.taxProfile
+        ? ProjectionEngine.calculate(snapshot, baseline)
+        : null,
+    [snapshot, bootstrap.taxProfile],
+  );
   return (
-    <div className={dark ? "app dark" : "app"} data-reduced-motion={settings.reducedMotion||undefined}>
+    <div
+      className={dark ? "app dark" : "app"}
+      data-reduced-motion={settings.reducedMotion || undefined}
+    >
       <aside>
         <div className="brand">
           <span className="brandmark">
@@ -224,12 +305,18 @@ function Workspace({
             >
               <Icon size={18} />
               <span>{name}</span>
-              {name === "Activity" && bootstrap.activity.length>0 && <i>{new Set(bootstrap.activity.map(x=>x.entryId)).size}</i>}
+              {name === "Activity" && bootstrap.activity.length > 0 && (
+                <i>{new Set(bootstrap.activity.map((x) => x.entryId)).size}</i>
+              )}
             </button>
           ))}
         </nav>
         <div className="aside-bottom">
-          <button className="profile" disabled title="Profile menu is not available in this build">
+          <button
+            className="profile"
+            disabled
+            title="Profile menu is not available in this build"
+          >
             <span>
               {bootstrap.people[0]?.name.slice(0, 2).toUpperCase() || "LL"}
             </span>
@@ -248,23 +335,51 @@ function Workspace({
             <h1>{view}</h1>
           </div>
           <div className="header-actions">
-            <button className="icon" aria-label="Search (not yet available)" disabled>
+            <button
+              className="icon"
+              aria-label="Search (not yet available)"
+              disabled
+            >
               <Search size={18} />
             </button>
             <button
               className="icon"
-              onClick={() => setSettings(s=>({...s,theme:dark?"light":"dark"}))}
+              onClick={() =>
+                setSettings((s) => ({ ...s, theme: dark ? "light" : "dark" }))
+              }
               aria-label="Toggle theme"
             >
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <button ref={addButton} className="add" onClick={()=>openDialog({type:"chooser"},addButton.current)}>
+            <button
+              ref={addButton}
+              className="add"
+              onClick={() => openDialog({ type: "chooser" }, addButton.current)}
+            >
               <Plus size={17} /> Add
             </button>
           </div>
         </header>
-        {view === "Overview" && <Overview bootstrap={bootstrap} projections={projections} navigate={setView} />}
-        {view === "Activity" && <ActivityView activity={bootstrap.activity} accounts={bootstrap.accounts} onImport={(el)=>openDialog({type:"import"},el)} onEdit={(entry)=>openDialog({type:entry[0].kind==="transfer"?"transfer":"transaction",entry})} />}
+        {view === "Overview" && (
+          <Overview
+            bootstrap={bootstrap}
+            projections={projections}
+            navigate={setView}
+          />
+        )}
+        {view === "Activity" && (
+          <ActivityView
+            activity={bootstrap.activity}
+            accounts={bootstrap.accounts}
+            onImport={(el) => openDialog({ type: "import" }, el)}
+            onEdit={(entry) =>
+              openDialog({
+                type: entry[0].kind === "transfer" ? "transfer" : "transaction",
+                entry,
+              })
+            }
+          />
+        )}
         {view === "Plan" && projections && (
           <PlanView
             projections={projections}
@@ -272,8 +387,31 @@ function Workspace({
             setExpanded={setExpanded}
           />
         )}
-        {view === "Plan" && !projections && <div className="content"><section className="card"><h2>Complete your tax profile</h2><p>Projected plan values are hidden until a filing status and supported tax year are saved.</p><button onClick={()=>setView("Settings")}>Open Settings</button></section></div>}
-        {view === "Net Worth" && <NetWorth snapshot={snapshot} accounts={bootstrap.accounts} onAdd={(el)=>openDialog({type:"account"},el)} onEdit={(account,el)=>openDialog({type:"account",account},el)} onReconcile={(account,el)=>openDialog({type:"reconcile",account},el)} />}
+        {view === "Plan" && !projections && (
+          <div className="content">
+            <section className="card">
+              <h2>Complete your tax profile</h2>
+              <p>
+                Projected plan values are hidden until a filing status and
+                supported tax year are saved.
+              </p>
+              <button onClick={() => setView("Settings")}>Open Settings</button>
+            </section>
+          </div>
+        )}
+        {view === "Net Worth" && (
+          <NetWorth
+            snapshot={snapshot}
+            accounts={bootstrap.accounts}
+            onAdd={(el) => openDialog({ type: "account" }, el)}
+            onEdit={(account, el) =>
+              openDialog({ type: "account", account }, el)
+            }
+            onReconcile={(account, el) =>
+              openDialog({ type: "reconcile", account }, el)
+            }
+          />
+        )}
         {view === "Settings" && (
           <SettingsView
             settings={settings}
@@ -285,45 +423,618 @@ function Workspace({
           />
         )}
       </main>
-      {dialog?.type==="import"?<CsvImportWizard bootstrap={bootstrap} repository={repository} close={closeDialog} refresh={onRefresh}/>:dialog&&<EntryDialog key={`${dialog.type}-${dialog.kind??""}-${dialog.entry?.[0]?.entryId??dialog.account?.id??"new"}`} state={dialog} bootstrap={bootstrap} repository={repository} close={closeDialog} refresh={onRefresh} open={(state)=>setDialog({...state,invoker:dialog.invoker})}/>}
+      {dialog?.type === "import" ? (
+        <CsvImportWizard
+          bootstrap={bootstrap}
+          repository={repository}
+          close={closeDialog}
+          refresh={onRefresh}
+          invoker={dialog.invoker}
+        />
+      ) : (
+        dialog && (
+          <EntryDialog
+            key={`${dialog.type}-${dialog.kind ?? ""}-${dialog.entry?.[0]?.entryId ?? dialog.account?.id ?? "new"}`}
+            state={dialog}
+            bootstrap={bootstrap}
+            repository={repository}
+            close={closeDialog}
+            refresh={onRefresh}
+            open={(state) => setDialog({ ...state, invoker: dialog.invoker })}
+          />
+        )
+      )}
     </div>
   );
 }
 
-type DialogState={type:"chooser"|"transaction"|"transfer"|"account"|"reconcile"|"import";kind?:"income"|"expense";entry?:ActivityPosting[];account?:BootstrapAccount;invoker?:HTMLElement|null};
+type DialogState = {
+  type:
+    "chooser" | "transaction" | "transfer" | "account" | "reconcile" | "import";
+  kind?: "income" | "expense";
+  entry?: ActivityPosting[];
+  account?: BootstrapAccount;
+  invoker?: HTMLElement | null;
+};
 
-const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`};
-function EntryDialog({state,bootstrap,repository,close,refresh,open}:{state:DialogState;bootstrap:Bootstrap;repository:Repository;close:()=>void;refresh:()=>void;open:(s:DialogState)=>void}){
-  const modal=useRef<HTMLElement>(null),errorRef=useRef<HTMLParagraphElement>(null);const [busy,setBusy]=useState(false),[error,setError]=useState("");
-  const [confirmDelete,setConfirmDelete]=useState(false),[blockers,setBlockers]=useState<string[]>([]);
-  const entry=state.entry?.[0],isTransfer=state.type==="transfer",isAccount=state.type==="account",isReconcile=state.type==="reconcile";
-  const transferRows=state.entry??[];const debit=transferRows.find(x=>x.amountCents<0),credit=transferRows.find(x=>x.amountCents>0);
-  const [kind,setKind]=useState<"income"|"expense">(state.kind??(entry?.kind==="income"?"income":"expense"));
-  const [date,setDate]=useState(entry?.occurredOn??today()),[amount,setAmount]=useState(entry?String(Math.abs(entry.amountCents)/100):""),[accountId,setAccountId]=useState(entry?.accountId??bootstrap.accounts[0]?.id??""),[categoryId,setCategoryId]=useState(entry?.categoryId??""),[description,setDescription]=useState(entry?.description??""),[note,setNote]=useState(entry?.note??"");
-  const [from,setFrom]=useState(debit?.accountId??bootstrap.accounts[0]?.id??""),[to,setTo]=useState(credit?.accountId??bootstrap.accounts[1]?.id??"");
-  const [name,setName]=useState(state.account?.name??""),[accountKind,setAccountKind]=useState<AccountKind>(state.account?.kind??"checking"),[balance,setBalance]=useState(state.account?String(Math.abs(state.account.balanceCents)/100):"");
-  const categories=bootstrap.categories.filter(c=>c.kind===kind);
-  useEffect(()=>{if(!categories.some(c=>c.id===categoryId))setCategoryId(categories[0]?.id??"")},[kind,bootstrap.categories]);
-  useEffect(()=>{const node=modal.current;const initial=node?.querySelector<HTMLElement>("button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])");initial?.focus();return()=>state.invoker?.focus()},[]);
-  useEffect(()=>{if(error)queueMicrotask(()=>errorRef.current?.focus())},[error]);
-  function keyDown(e:KeyboardEvent){if(e.key==="Escape"&&!busy){e.preventDefault();close()}if(e.key==="Tab"&&modal.current){const f=[...modal.current.querySelectorAll<HTMLElement>("button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])")];if(!f.length)return;const first=f[0],last=f[f.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}}
-  async function submit(e:FormEvent){e.preventDefault();if(busy)return;setError("");const cents=parseMoney(amount);if((state.type==="transaction"||isTransfer)&&(cents===undefined||cents<=0)){setError("Enter a positive USD amount with no more than two decimal places.");return}if(!isAccount&&!isReconcile&&!date){setError("Choose a valid date.");return}if(isTransfer&&from===to){setError("Choose two different accounts for a transfer.");return}if(state.type==="transaction"&&!description.trim()){setError("Description is required.");return}setBusy(true);try{
-    if(state.type==="transaction"){const input={id:entry?.entryId??crypto.randomUUID(),occurredOn:date,accountId,categoryId,amountCents:cents!,description:description.trim(),note:note.trim()||null};if(entry)await repository.updateTransaction?.({...input,expectedRevision:entry.revision});else await repository.createTransaction?.(input)}
-    else if(state.type==="transfer"){const input={id:entry?.entryId??crypto.randomUUID(),occurredOn:date,fromAccountId:from,toAccountId:to,amountCents:cents!};if(entry)await repository.updateTransfer?.({...input,expectedRevision:entry.revision});else await repository.createTransfer?.(input)}
-    else if(state.type==="account"){if(!name.trim())throw {message:"Account name is required."};if(state.account)await repository.updateAccount?.({id:state.account.id,name:name.trim(),kind:accountKind,expectedRevision:state.account.revision});else{const opening=parseMoney(balance);if(opening===undefined)throw {message:"Enter an exact USD opening balance."};await repository.createAccount?.({id:crypto.randomUUID(),name:name.trim(),kind:accountKind,openingBalanceCents:accountKind==="credit"?Math.abs(opening):opening})}}
-    else if(state.type==="reconcile"){const target=parseMoney(balance);if(target===undefined)throw {message:"Enter an exact USD current balance."};await repository.reconcileAccount?.({id:state.account!.id,occurredOn:date,targetBalanceCents:state.account!.kind==="credit"?-Math.abs(target):target,expectedBalanceCents:state.account!.balanceCents})}
-    await Promise.resolve(refresh());close();
-  }catch(x){setError(errorMessage(x,"Could not save your changes."))}finally{setBusy(false)}}
-  async function beginDelete(){setError("");setBlockers([]);if(isAccount){setBusy(true);try{const impact=await repository.accountDeletionImpact?.(state.account!.id);if(impact&&!impact.canDelete){setBlockers(impact.blockers);return}setConfirmDelete(true)}catch(x){setError(errorMessage(x,"Could not check this account."))}finally{setBusy(false)}}else setConfirmDelete(true)}
-  async function remove(){setBusy(true);setError("");try{if(isAccount)await repository.deleteAccount?.({id:state.account!.id,expectedRevision:state.account!.revision});else await repository.deleteTransaction?.({id:entry!.entryId,expectedRevision:entry!.revision});await Promise.resolve(refresh());close()}catch(x){setError(errorMessage(x,"Could not delete this record."))}finally{setBusy(false)}}
-  if(state.type==="chooser")return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)close()}}><section ref={modal} className="card modal" role="dialog" aria-modal="true" aria-labelledby="add-title" onKeyDown={keyDown}><h2 id="add-title">What would you like to add?</h2><div className="add-choices"><button onClick={()=>open({type:"transaction",kind:"income"})}>Income</button><button onClick={()=>open({type:"transaction",kind:"expense"})}>Expense</button><button onClick={()=>open({type:"transfer"})}>Transfer</button><button onClick={()=>open({type:"account"})}>Account</button></div><div className="actions"><button onClick={close}>Cancel</button></div></section></div>;
-  const title=isTransfer?(entry?"Edit transfer":"Add transfer"):isAccount?(state.account?"Edit account":"Add account"):isReconcile?`Reconcile ${state.account?.name}`:(entry?"Edit transaction":`Add ${kind}`);
-  return <div className="modal-backdrop"><section ref={modal} className="card modal entry-modal" role="dialog" aria-modal="true" aria-labelledby="entry-title" onKeyDown={keyDown}><h2 id="entry-title">{confirmDelete?`Delete ${isAccount?"account":"transaction"}?`:title}</h2>{entry?.origin==="import"&&!confirmDelete&&<p className="muted">Imported transactions are read-only. You can delete this row from its original import batch.</p>}{error&&<p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>{error}</p>}{blockers.length>0&&<div role="alert"><p>This account cannot be deleted:</p><ul>{blockers.map(x=><li key={x}>{x}</li>)}</ul></div>}{confirmDelete?<><p>This permanently removes {isAccount?state.account?.name:(entry?.description||"this entry")}. Financial history is never cascaded.</p><div className="actions"><button disabled={busy} onClick={()=>setConfirmDelete(false)}>Cancel</button><button className="danger" disabled={busy} onClick={remove}>{busy?"Deleting…":"Delete permanently"}</button></div></>:<form onSubmit={submit}><fieldset disabled={entry?.origin==="import"}>
-    {(state.type==="transaction")&&<><label>Type<select value={kind} onChange={e=>setKind(e.target.value as "income"|"expense")}><option value="income">Income</option><option value="expense">Expense</option></select></label><label>Date<input type="date" required value={date} onChange={e=>setDate(e.target.value)}/></label><label>Amount (USD)<input inputMode="decimal" required value={amount} onChange={e=>setAmount(e.target.value)}/></label><label>Account<select value={accountId} onChange={e=>setAccountId(e.target.value)}>{bootstrap.accounts.map(a=><option value={a.id} key={a.id}>{a.name}</option>)}</select></label><label>Category<select value={categoryId} required onChange={e=>setCategoryId(e.target.value)}>{categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label><label>Description<input required value={description} onChange={e=>setDescription(e.target.value)}/></label><label>Note <span className="optional">optional</span><textarea value={note??""} onChange={e=>setNote(e.target.value)}/></label></>}
-    {isTransfer&&<><label>Date<input type="date" required value={date} onChange={e=>setDate(e.target.value)}/></label><label>Amount (USD)<input inputMode="decimal" required value={amount} onChange={e=>setAmount(e.target.value)}/></label><label>From account<select value={from} onChange={e=>setFrom(e.target.value)}>{bootstrap.accounts.map(a=><option value={a.id} key={a.id}>{a.name}</option>)}</select></label><label>To account<select value={to} onChange={e=>setTo(e.target.value)}>{bootstrap.accounts.map(a=><option value={a.id} key={a.id}>{a.name}</option>)}</select></label></>}
-    {isAccount&&<><label>Account name<input required value={name} onChange={e=>setName(e.target.value)}/></label><label>Account type<select value={accountKind} onChange={e=>setAccountKind(e.target.value as AccountKind)}>{accountKinds.map(k=><option value={k.value} key={k.value}>{k.label}</option>)}</select></label>{!state.account&&<label>{accountKind==="credit"?"Amount owed (USD)":"Opening balance (USD)"}<input inputMode="decimal" required value={balance} onChange={e=>setBalance(e.target.value)}/></label>}</>}
-    {isReconcile&&<><p className="muted">Current recorded balance: {money(state.account!.kind==="credit"?-state.account!.balanceCents:state.account!.balanceCents)}</p><label>Date<input type="date" required value={date} onChange={e=>setDate(e.target.value)}/></label><label>{state.account!.kind==="credit"?"Target amount owed (USD)":"Target current balance (USD)"}<input inputMode="decimal" required value={balance} onChange={e=>setBalance(e.target.value)}/></label></>}
-    </fieldset><div className="actions">{((entry?.canDelete)||(isAccount&&state.account))&&<button type="button" className="danger" disabled={busy} onClick={beginDelete}>Delete</button>}<button type="button" disabled={busy} onClick={close}>Cancel</button>{entry?.origin!=="import"&&<button className="primary" disabled={busy}>{busy?"Saving…":"Save"}</button>}</div></form>}</section></div>
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+function EntryDialog({
+  state,
+  bootstrap,
+  repository,
+  close,
+  refresh,
+  open,
+}: {
+  state: DialogState;
+  bootstrap: Bootstrap;
+  repository: Repository;
+  close: () => void;
+  refresh: () => void;
+  open: (s: DialogState) => void;
+}) {
+  const modal = useRef<HTMLElement>(null),
+    errorRef = useRef<HTMLParagraphElement>(null),
+    noticeRef = useRef<HTMLDivElement>(null),
+    confirmRef = useRef<HTMLHeadingElement>(null);
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false),
+    [blockers, setBlockers] = useState<string[]>([]);
+  const entry = state.entry?.[0],
+    isTransfer = state.type === "transfer",
+    isAccount = state.type === "account",
+    isReconcile = state.type === "reconcile";
+  const transferRows = state.entry ?? [];
+  const debit = transferRows.find((x) => x.amountCents < 0),
+    credit = transferRows.find((x) => x.amountCents > 0);
+  const [kind, setKind] = useState<"income" | "expense">(
+    state.kind ?? (entry?.kind === "income" ? "income" : "expense"),
+  );
+  const [date, setDate] = useState(entry?.occurredOn ?? today()),
+    [amount, setAmount] = useState(
+      entry ? String(Math.abs(entry.amountCents) / 100) : "",
+    ),
+    [accountId, setAccountId] = useState(
+      entry?.accountId ?? bootstrap.accounts[0]?.id ?? "",
+    ),
+    [categoryId, setCategoryId] = useState(entry?.categoryId ?? ""),
+    [description, setDescription] = useState(entry?.description ?? ""),
+    [note, setNote] = useState(entry?.note ?? "");
+  const [from, setFrom] = useState(
+      debit?.accountId ?? bootstrap.accounts[0]?.id ?? "",
+    ),
+    [to, setTo] = useState(
+      credit?.accountId ?? bootstrap.accounts[1]?.id ?? "",
+    );
+  const [name, setName] = useState(state.account?.name ?? ""),
+    [accountKind, setAccountKind] = useState<AccountKind>(
+      state.account?.kind ?? "checking",
+    ),
+    [balance, setBalance] = useState(
+      state.account ? String(Math.abs(state.account.balanceCents) / 100) : "",
+    );
+  const categories = bootstrap.categories.filter((c) => c.kind === kind);
+  useEffect(() => {
+    if (!categories.some((c) => c.id === categoryId))
+      setCategoryId(categories[0]?.id ?? "");
+  }, [kind, bootstrap.categories]);
+  useEffect(() => {
+    const node = modal.current;
+    const initial = node?.querySelector<HTMLElement>(
+      "button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])",
+    );
+    initial?.focus();
+    return () => state.invoker?.focus();
+  }, []);
+  useEffect(() => {
+    if (error) queueMicrotask(() => errorRef.current?.focus());
+  }, [error]);
+  useEffect(() => {
+    if (blockers.length) queueMicrotask(() => noticeRef.current?.focus());
+  }, [blockers]);
+  useEffect(() => {
+    if (confirmDelete) queueMicrotask(() => confirmRef.current?.focus());
+  }, [confirmDelete]);
+  function keyDown(e: KeyboardEvent) {
+    if (e.key === "Escape" && !busy) {
+      e.preventDefault();
+      close();
+    }
+    if (e.key === "Tab" && modal.current) {
+      const f = [
+        ...modal.current.querySelectorAll<HTMLElement>(
+          "button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])",
+        ),
+      ];
+      if (!f.length) return;
+      const first = f[0],
+        last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setError("");
+    const cents = parseMoney(amount);
+    if (
+      (state.type === "transaction" || isTransfer) &&
+      (cents === undefined || cents <= 0)
+    ) {
+      setError(
+        "Enter a positive USD amount with no more than two decimal places.",
+      );
+      return;
+    }
+    if (!isAccount && !isReconcile && !date) {
+      setError("Choose a valid date.");
+      return;
+    }
+    if (isTransfer && from === to) {
+      setError("Choose two different accounts for a transfer.");
+      return;
+    }
+    if (state.type === "transaction" && !description.trim()) {
+      setError("Description is required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (state.type === "transaction") {
+        const input = {
+          id: entry?.entryId ?? crypto.randomUUID(),
+          occurredOn: date,
+          accountId,
+          categoryId,
+          amountCents: cents!,
+          description: description.trim(),
+          note: note.trim() || null,
+        };
+        if (entry)
+          await repository.updateTransaction?.({
+            ...input,
+            expectedRevision: entry.revision,
+          });
+        else await repository.createTransaction?.(input);
+      } else if (state.type === "transfer") {
+        const input = {
+          id: entry?.entryId ?? crypto.randomUUID(),
+          occurredOn: date,
+          fromAccountId: from,
+          toAccountId: to,
+          amountCents: cents!,
+        };
+        if (entry)
+          await repository.updateTransfer?.({
+            ...input,
+            expectedRevision: entry.revision,
+          });
+        else await repository.createTransfer?.(input);
+      } else if (state.type === "account") {
+        if (!name.trim()) throw { message: "Account name is required." };
+        if (state.account)
+          await repository.updateAccount?.({
+            id: state.account.id,
+            name: name.trim(),
+            kind: accountKind,
+            expectedRevision: state.account.revision,
+          });
+        else {
+          const opening = parseMoney(balance);
+          if (opening === undefined)
+            throw { message: "Enter an exact USD opening balance." };
+          await repository.createAccount?.({
+            id: crypto.randomUUID(),
+            name: name.trim(),
+            kind: accountKind,
+            openingBalanceCents:
+              accountKind === "credit" ? Math.abs(opening) : opening,
+          });
+        }
+      } else if (state.type === "reconcile") {
+        const target = parseMoney(balance);
+        if (target === undefined)
+          throw { message: "Enter an exact USD current balance." };
+        await repository.reconcileAccount?.({
+          id: state.account!.id,
+          occurredOn: date,
+          targetBalanceCents:
+            state.account!.kind === "credit" ? -Math.abs(target) : target,
+          expectedBalanceCents: state.account!.balanceCents,
+        });
+      }
+      await Promise.resolve(refresh());
+      close();
+    } catch (x) {
+      setError(errorMessage(x, "Could not save your changes."));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function beginDelete() {
+    setError("");
+    setBlockers([]);
+    if (isAccount) {
+      setBusy(true);
+      try {
+        const impact = await repository.accountDeletionImpact?.(
+          state.account!.id,
+        );
+        if (impact && !impact.canDelete) {
+          setBlockers(impact.blockers);
+          return;
+        }
+        setConfirmDelete(true);
+      } catch (x) {
+        setError(errorMessage(x, "Could not check this account."));
+      } finally {
+        setBusy(false);
+      }
+    } else setConfirmDelete(true);
+  }
+  async function remove() {
+    setBusy(true);
+    setError("");
+    try {
+      if (isAccount)
+        await repository.deleteAccount?.({
+          id: state.account!.id,
+          expectedRevision: state.account!.revision,
+        });
+      else
+        await repository.deleteTransaction?.({
+          id: entry!.entryId,
+          expectedRevision: entry!.revision,
+        });
+      await Promise.resolve(refresh());
+      close();
+    } catch (x) {
+      setError(errorMessage(x, "Could not delete this record."));
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (state.type === "chooser")
+    return (
+      <div
+        className="modal-backdrop"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) close();
+        }}
+      >
+        <section
+          ref={modal}
+          className="card modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-title"
+          onKeyDown={keyDown}
+        >
+          <h2 id="add-title">What would you like to add?</h2>
+          <div className="add-choices">
+            <button
+              onClick={() => open({ type: "transaction", kind: "income" })}
+            >
+              Income
+            </button>
+            <button
+              onClick={() => open({ type: "transaction", kind: "expense" })}
+            >
+              Expense
+            </button>
+            <button onClick={() => open({ type: "transfer" })}>Transfer</button>
+            <button onClick={() => open({ type: "account" })}>Account</button>
+          </div>
+          <div className="actions">
+            <button onClick={close}>Cancel</button>
+          </div>
+        </section>
+      </div>
+    );
+  const title = isTransfer
+    ? entry
+      ? "Edit transfer"
+      : "Add transfer"
+    : isAccount
+      ? state.account
+        ? "Edit account"
+        : "Add account"
+      : isReconcile
+        ? `Reconcile ${state.account?.name}`
+        : entry
+          ? "Edit transaction"
+          : `Add ${kind}`;
+  return (
+    <div className="modal-backdrop">
+      <section
+        ref={modal}
+        className="card modal entry-modal"
+        role={confirmDelete ? "alertdialog" : "dialog"}
+        aria-modal="true"
+        aria-labelledby="entry-title"
+        onKeyDown={keyDown}
+      >
+        <h2
+          id="entry-title"
+          ref={confirmRef}
+          tabIndex={confirmDelete ? -1 : undefined}
+        >
+          {confirmDelete
+            ? `Delete ${isAccount ? "account" : "transaction"}?`
+            : title}
+        </h2>
+        {entry?.origin === "import" && !confirmDelete && (
+          <p className="muted">
+            Imported transactions are read-only for editing, but you can delete
+            this transaction individually. Its import-batch audit record will
+            remain.
+          </p>
+        )}
+        {error && (
+          <p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>
+            {error}
+          </p>
+        )}
+        {blockers.length > 0 && (
+          <div role="alert" tabIndex={-1} ref={noticeRef}>
+            <p>This account cannot be deleted:</p>
+            <ul>
+              {blockers.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {confirmDelete ? (
+          <>
+            <p>
+              This permanently removes{" "}
+              {isAccount
+                ? state.account?.name
+                : entry?.description || "this entry"}
+              . Financial history is never cascaded.
+            </p>
+            <div className="actions">
+              <button disabled={busy} onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </button>
+              <button className="danger" disabled={busy} onClick={remove}>
+                {busy ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={submit}>
+            <fieldset disabled={entry?.origin === "import"}>
+              {state.type === "transaction" && (
+                <>
+                  <label>
+                    Type
+                    <select
+                      value={kind}
+                      onChange={(e) =>
+                        setKind(e.target.value as "income" | "expense")
+                      }
+                    >
+                      <option value="income">Income</option>
+                      <option value="expense">Expense</option>
+                    </select>
+                  </label>
+                  <label>
+                    Date
+                    <input
+                      type="date"
+                      required
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Amount (USD)
+                    <input
+                      inputMode="decimal"
+                      required
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Account
+                    <select
+                      value={accountId}
+                      onChange={(e) => setAccountId(e.target.value)}
+                    >
+                      {bootstrap.accounts.map((a) => (
+                        <option value={a.id} key={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Category
+                    <select
+                      value={categoryId}
+                      required
+                      onChange={(e) => setCategoryId(e.target.value)}
+                    >
+                      {categories.map((c) => (
+                        <option value={c.id} key={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Description
+                    <input
+                      required
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Note <span className="optional">optional</span>
+                    <textarea
+                      value={note ?? ""}
+                      onChange={(e) => setNote(e.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+              {isTransfer && (
+                <>
+                  <label>
+                    Date
+                    <input
+                      type="date"
+                      required
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Amount (USD)
+                    <input
+                      inputMode="decimal"
+                      required
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    From account
+                    <select
+                      value={from}
+                      onChange={(e) => setFrom(e.target.value)}
+                    >
+                      {bootstrap.accounts.map((a) => (
+                        <option value={a.id} key={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    To account
+                    <select value={to} onChange={(e) => setTo(e.target.value)}>
+                      {bootstrap.accounts.map((a) => (
+                        <option value={a.id} key={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
+              {isAccount && (
+                <>
+                  <label>
+                    Account name
+                    <input
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Account type
+                    <select
+                      value={accountKind}
+                      onChange={(e) =>
+                        setAccountKind(e.target.value as AccountKind)
+                      }
+                    >
+                      {accountKinds.map((k) => (
+                        <option value={k.value} key={k.value}>
+                          {k.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {!state.account && (
+                    <label>
+                      {accountKind === "credit"
+                        ? "Amount owed (USD)"
+                        : "Opening balance (USD)"}
+                      <input
+                        inputMode="decimal"
+                        required
+                        value={balance}
+                        onChange={(e) => setBalance(e.target.value)}
+                      />
+                    </label>
+                  )}
+                </>
+              )}
+              {isReconcile && (
+                <>
+                  <p className="muted">
+                    Current recorded balance:{" "}
+                    {money(
+                      state.account!.kind === "credit"
+                        ? -state.account!.balanceCents
+                        : state.account!.balanceCents,
+                    )}
+                  </p>
+                  <label>
+                    Date
+                    <input
+                      type="date"
+                      required
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    {state.account!.kind === "credit"
+                      ? "Target amount owed (USD)"
+                      : "Target current balance (USD)"}
+                    <input
+                      inputMode="decimal"
+                      required
+                      value={balance}
+                      onChange={(e) => setBalance(e.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+            </fieldset>
+            <div className="actions">
+              {(entry?.canDelete || (isAccount && state.account)) && (
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={busy}
+                  onClick={beginDelete}
+                >
+                  Delete
+                </button>
+              )}
+              <button type="button" disabled={busy} onClick={close}>
+                Cancel
+              </button>
+              {entry?.origin !== "import" && (
+                <button className="primary" disabled={busy}>
+                  {busy ? "Saving…" : "Save"}
+                </button>
+              )}
+            </div>
+          </form>
+        )}
+      </section>
+    </div>
+  );
 }
 
 function Onboarding({
@@ -354,7 +1065,7 @@ function Onboarding({
         }))
       : [newAccount(householdId.current)],
   );
-  const [filingStatus,setFilingStatus]=useState("");
+  const [filingStatus, setFilingStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   async function submit(event: FormEvent) {
@@ -377,7 +1088,10 @@ function Onboarding({
       }
     }
     if (step === 2) {
-      if(!filingStatus){setError("Select a filing status before finishing setup.");return;}
+      if (!filingStatus) {
+        setError("Select a filing status before finishing setup.");
+        return;
+      }
       const invalid = accounts.findIndex(
         (a) => !a.kind || !a.name.trim() || !validMoney(a.balance),
       );
@@ -407,7 +1121,13 @@ function Onboarding({
       } else {
         await repository.saveOnboardingStep(6, {
           accounts: accounts.map(toAccount),
-          taxProfile:{filingStatus,state:"CA",taxYear:2026,thresholdInflationBps:250,revision:1},
+          taxProfile: {
+            filingStatus,
+            state: "CA",
+            taxYear: 2026,
+            thresholdInflationBps: 250,
+            revision: 1,
+          },
         });
         await repository.completeOnboarding();
         onComplete();
@@ -498,21 +1218,47 @@ function Onboarding({
             </>
           ) : (
             <>
-              <label>Filing status<select aria-label="Filing status" value={filingStatus} onChange={e=>setFilingStatus(e.target.value)}><option value="">Select…</option><option value="single">Single</option><option value="married-joint">Married filing jointly</option><option value="married-separate">Married filing separately</option><option value="head-of-household">Head of household</option></select></label>
-              <p className="muted">Required for tax-dependent projections. California and the 2026 rule pack are used.</p>
+              <label>
+                Filing status
+                <select
+                  aria-label="Filing status"
+                  value={filingStatus}
+                  onChange={(e) => setFilingStatus(e.target.value)}
+                >
+                  <option value="">Select…</option>
+                  <option value="single">Single</option>
+                  <option value="married-joint">Married filing jointly</option>
+                  <option value="married-separate">
+                    Married filing separately
+                  </option>
+                  <option value="head-of-household">Head of household</option>
+                </select>
+              </label>
+              <p className="muted">
+                Required for tax-dependent projections. California and the 2026
+                rule pack are used.
+              </p>
               {accounts.map((a, i) => (
                 <fieldset className="repeat-row" key={a.id}>
                   <legend>Account {i + 1}</legend>
-                  <fieldset
-                    className="account-types"
-                  >
+                  <fieldset className="account-types">
                     <legend>Account {i + 1} type</legend>
                     {accountKinds.map((k) => (
                       <label
                         className={a.kind === k.value ? "selected" : ""}
                         key={k.value}
                       >
-                        <input type="radio" name={`account-${i}-type`} value={k.value} checked={a.kind===k.value} onChange={()=>setAccounts(updateAt(accounts,i,{kind:k.value}))}/>
+                        <input
+                          type="radio"
+                          name={`account-${i}-type`}
+                          value={k.value}
+                          checked={a.kind === k.value}
+                          onChange={() =>
+                            setAccounts(
+                              updateAt(accounts, i, { kind: k.value }),
+                            )
+                          }
+                        />
                         <strong>{k.label}</strong>
                         <small>{k.help}</small>
                       </label>
@@ -630,26 +1376,32 @@ const newAccount = (householdId: string): AccountDraft => ({
   kind: "" as BootstrapAccount["kind"],
   balance: "",
   openingBalanceCents: 0,
-  balanceCents:0,
+  balanceCents: 0,
   annualReturnBps: 0,
   liquid: true,
   revision: 1,
 });
 const updateAt = <T,>(items: T[], index: number, patch: Partial<T>) =>
   items.map((item, i) => (i === index ? { ...item, ...patch } : item));
-const validMoney = (value: string) =>
-  parseMoney(value)!==undefined;
-function parseMoney(value:string):number|undefined{
-  const match=/^(-?)(\d{1,12})(?:\.(\d{1,2}))?$/.exec(value.trim());
-  if(!match)return undefined;
-  const cents=BigInt(match[2])*100n+BigInt((match[3]??"").padEnd(2,"0"));
-  if(cents>99_999_999_999_999n)return undefined;
-  return Number((match[1]? -cents:cents));
+const validMoney = (value: string) => parseMoney(value) !== undefined;
+function parseMoney(value: string): number | undefined {
+  const match = /^(-?)(\d{1,12})(?:\.(\d{1,2}))?$/.exec(value.trim());
+  if (!match) return undefined;
+  const cents =
+    BigInt(match[2]) * 100n + BigInt((match[3] ?? "").padEnd(2, "0"));
+  if (cents > 99_999_999_999_999n) return undefined;
+  return Number(match[1] ? -cents : cents);
 }
 const toAccount = (a: AccountDraft): BootstrapAccount => ({
   ...a,
-  openingBalanceCents:a.kind==="credit"?-Math.abs(parseMoney(a.balance)!):parseMoney(a.balance)!,
-  balanceCents:a.kind==="credit"?-Math.abs(parseMoney(a.balance)!):parseMoney(a.balance)!,
+  openingBalanceCents:
+    a.kind === "credit"
+      ? -Math.abs(parseMoney(a.balance)!)
+      : parseMoney(a.balance)!,
+  balanceCents:
+    a.kind === "credit"
+      ? -Math.abs(parseMoney(a.balance)!)
+      : parseMoney(a.balance)!,
   liquid: a.kind === "checking" || a.kind === "savings" || a.kind === "credit",
 });
 const displayBirthDate = (value?: string | null) =>
@@ -717,15 +1469,24 @@ function Overview({
   projections,
   navigate,
 }: {
-  bootstrap:Bootstrap;
-  projections: ReturnType<typeof ProjectionEngine.calculate>|null;
-  navigate:(view:View)=>void;
+  bootstrap: Bootstrap;
+  projections: ReturnType<typeof ProjectionEngine.calculate> | null;
+  navigate: (view: View) => void;
 }) {
-  const currentNetWorth=bootstrap.accounts.reduce((sum,a)=>sum+a.balanceCents,0)+bootstrap.assets.reduce((sum,a)=>sum+a.valueCents,0)-bootstrap.liabilities.reduce((sum,a)=>sum+a.balanceCents,0);
-  const year=String(new Date().getFullYear());
-  const actual=bootstrap.activity.filter(x=>x.occurredOn.startsWith(year)&&x.kind!=="transfer");
-  const income=actual.filter(x=>x.kind==="income").reduce((s,x)=>s+x.amountCents,0);
-  const spending=-actual.filter(x=>x.kind==="expense").reduce((s,x)=>s+x.amountCents,0);
+  const currentNetWorth =
+    bootstrap.accounts.reduce((sum, a) => sum + a.balanceCents, 0) +
+    bootstrap.assets.reduce((sum, a) => sum + a.valueCents, 0) -
+    bootstrap.liabilities.reduce((sum, a) => sum + a.balanceCents, 0);
+  const year = String(new Date().getFullYear());
+  const actual = bootstrap.activity.filter(
+    (x) => x.occurredOn.startsWith(year) && x.kind !== "transfer",
+  );
+  const income = actual
+    .filter((x) => x.kind === "income")
+    .reduce((s, x) => s + x.amountCents, 0);
+  const spending = -actual
+    .filter((x) => x.kind === "expense")
+    .reduce((s, x) => s + x.amountCents, 0);
   return (
     <div className="content">
       <section className="hero">
@@ -733,31 +1494,43 @@ function Overview({
           <span className="label actual">Current balance</span>
           <p className="hero-label">Net worth</p>
           <h2>{money(currentNetWorth)}</h2>
-          <p className="muted">Based on current account, asset, and liability balances.</p>
+          <p className="muted">
+            Based on current account, asset, and liability balances.
+          </p>
         </div>
-        <div className="hero-chart"><p className="muted">Historical net-worth trend unavailable: no dated balance history has been recorded.</p></div>
+        <div className="hero-chart">
+          <p className="muted">
+            Historical net-worth trend unavailable: no dated balance history has
+            been recorded.
+          </p>
+        </div>
       </section>
       <div className="metrics">
         <Metric
           title="Income"
-          value={money(income)} change={`${year} actual`}
+          value={money(income)}
+          change={`${year} actual`}
           icon={ArrowDownRight}
         />
         <Metric
           title="Spending"
-          value={money(spending)} change={`${year} actual`}
+          value={money(spending)}
+          change={`${year} actual`}
           icon={ArrowUpRight}
           negative
         />
         <Metric
           title="Saved"
-          value={money(income-spending)} change="Income minus spending"
+          value={money(income - spending)}
+          change="Income minus spending"
           icon={PiggyBank}
         />
         <Metric
           title="Taxes"
-          value={projections?money(projections[0]?.taxCents??0):"Unavailable"}
-          change={projections?"Projected":"Tax profile required"}
+          value={
+            projections ? money(projections[0]?.taxCents ?? 0) : "Unavailable"
+          }
+          change={projections ? "Projected" : "Tax profile required"}
           icon={CircleDollarSign}
           neutral
         />
@@ -769,13 +1542,11 @@ function Overview({
               <span className="label actual">Actual</span>
               <h3>Recent activity</h3>
             </div>
-            <button onClick={()=>navigate("Activity")}>
+            <button onClick={() => navigate("Activity")}>
               View all <ChevronRight size={14} />
             </button>
           </div>
-          <p className="empty">
-            No transactions have been recorded.
-          </p>
+          <p className="empty">No transactions have been recorded.</p>
         </section>
         <section className="card">
           <div className="card-title">
@@ -783,11 +1554,20 @@ function Overview({
               <span className="label assumption">Assumption</span>
               <h3>Your plan at a glance</h3>
             </div>
-            <button onClick={()=>navigate("Plan")}>
+            <button onClick={() => navigate("Plan")}>
               Open plan <ChevronRight size={14} />
             </button>
           </div>
-          {projections?<p>Projected values use your saved tax profile and planning assumptions. Open Plan for the monthly reconciliation.</p>:<p>Complete your tax profile before LifeLook calculates projections.</p>}
+          {projections ? (
+            <p>
+              Projected values use your saved tax profile and planning
+              assumptions. Open Plan for the monthly reconciliation.
+            </p>
+          ) : (
+            <p>
+              Complete your tax profile before LifeLook calculates projections.
+            </p>
+          )}
         </section>
       </div>
     </div>
@@ -850,22 +1630,469 @@ function Transaction({
   );
 }
 
-function CsvImportWizard({bootstrap,repository,close,refresh}:{bootstrap:Bootstrap;repository:Repository;close:()=>void;refresh:()=>void}){
-  const [inspection,setInspection]=useState<CsvInspection|null>(null),[mapping,setMapping]=useState<CsvMapping|null>(null),[preview,setPreview]=useState<CsvPreview|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
-  async function choose(){setBusy(true);setError("");try{const path=await repository.selectCsvSource?.();if(!path)return;const info=await repository.inspectCsv?.(path);if(!info)return;setInspection(info);setPreview(null);setMapping(info.savedMapping??{accountId:bootstrap.accounts[0]?.id??"",dateColumn:info.headers[0]??"",descriptionColumn:info.headers[1]??info.headers[0]??"",noteColumn:null,amountLayout:"signed",amountColumn:info.headers[2]??info.headers[0]??"",debitColumn:null,creditColumn:null,inflowPositive:true,dateFormat:"iso"})}catch(x){setError(errorMessage(x,"Could not read this CSV."))}finally{setBusy(false)}}
-  async function showPreview(){if(!inspection||!mapping)return;setBusy(true);setError("");try{setPreview(await repository.previewCsv?.(inspection.path,inspection.fileHash,mapping)??null)}catch(x){setError(errorMessage(x,"Could not preview this CSV."))}finally{setBusy(false)}}
-  function updateRow(rowNumber:number,patch:Partial<CsvPreview["rows"][number]>){setPreview(p=>p?{...p,rows:p.rows.map(r=>r.rowNumber===rowNumber?{...r,...patch}:r)}:p)}
-  async function commit(){if(!preview)return;setBusy(true);setError("");try{await repository.commitCsv?.(preview,preview.rows.map(r=>({rowNumber:r.rowNumber,categoryId:r.categoryId??"",include:r.include})));await Promise.resolve(refresh());close()}catch(x){setError(errorMessage(x,"Could not import this CSV."))}finally{setBusy(false)}}
-  const columns=inspection?.headers??[],option=(blank=false)=><>{blank&&<option value="">None</option>}{columns.map(x=><option key={x}>{x}</option>)}</>;
-  return <div className="modal-backdrop"><section className="card modal import-modal" role="dialog" aria-modal="true" aria-labelledby="import-title"><h2 id="import-title">Import CSV</h2>{error&&<p className="form-error" role="alert">{error}</p>}{!inspection?<><p>Choose a UTF-8 CSV up to 10 MiB and 50,000 rows.</p><div className="actions"><button disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy} onClick={choose}>{busy?"Reading…":"Choose CSV…"}</button></div></>:!preview&&mapping?<><p>{inspection.rowCount} data rows found.{inspection.savedMapping&&" A saved mapping was restored."}</p><div className="import-grid"><label>Destination account<select value={mapping.accountId} onChange={e=>setMapping({...mapping,accountId:e.target.value})}>{bootstrap.accounts.map(a=><option value={a.id} key={a.id}>{a.name}</option>)}</select></label><label>Date column<select value={mapping.dateColumn} onChange={e=>setMapping({...mapping,dateColumn:e.target.value})}>{option()}</select></label><label>Description column<select value={mapping.descriptionColumn} onChange={e=>setMapping({...mapping,descriptionColumn:e.target.value})}>{option()}</select></label><label>Note column<select value={mapping.noteColumn??""} onChange={e=>setMapping({...mapping,noteColumn:e.target.value||null})}>{option(true)}</select></label><label>Date format<select value={mapping.dateFormat} onChange={e=>setMapping({...mapping,dateFormat:e.target.value as CsvMapping["dateFormat"]})}><option value="iso">YYYY-MM-DD</option><option value="us">M/D/YYYY</option></select></label><label>Amount layout<select value={mapping.amountLayout} onChange={e=>setMapping({...mapping,amountLayout:e.target.value as CsvMapping["amountLayout"]})}><option value="signed">Signed amount</option><option value="debitCredit">Debit and credit</option></select></label>{mapping.amountLayout==="signed"?<><label>Amount column<select value={mapping.amountColumn??""} onChange={e=>setMapping({...mapping,amountColumn:e.target.value})}>{option()}</select></label><label>Positive values are<select value={mapping.inflowPositive?"inflow":"outflow"} onChange={e=>setMapping({...mapping,inflowPositive:e.target.value==="inflow"})}><option value="inflow">Inflows</option><option value="outflow">Outflows</option></select></label></>:<><label>Debit column<select value={mapping.debitColumn??""} onChange={e=>setMapping({...mapping,debitColumn:e.target.value})}>{option()}</select></label><label>Credit column<select value={mapping.creditColumn??""} onChange={e=>setMapping({...mapping,creditColumn:e.target.value})}>{option()}</select></label></>}</div><div className="actions"><button disabled={busy} onClick={close}>Cancel</button><button className="primary" disabled={busy} onClick={showPreview}>{busy?"Previewing…":"Preview"}</button></div></>:preview&&<><p>{preview.rows.filter(r=>r.include).length} of {preview.rows.length} rows selected. Duplicates are skipped by default.</p><div className="import-preview"><table><thead><tr><th>Include</th><th>Date</th><th>Description</th><th>Amount</th><th>Category</th><th>Status</th></tr></thead><tbody>{preview.rows.map(r=><tr key={r.rowNumber}><td><input type="checkbox" aria-label={`Include row ${r.rowNumber}`} checked={r.include} disabled={!r.valid} onChange={e=>updateRow(r.rowNumber,{include:e.target.checked})}/></td><td>{r.occurredOn??"—"}</td><td>{r.description}</td><td>{r.amountCents==null?"—":money(r.amountCents)}</td><td><select aria-label={`Category row ${r.rowNumber}`} value={r.categoryId??""} disabled={!r.valid} onChange={e=>updateRow(r.rowNumber,{categoryId:e.target.value})}>{bootstrap.categories.filter(c=>c.kind===r.kind).map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></td><td>{r.error??(r.duplicate!=="none"?`Duplicate (${r.duplicate})`:"Ready")}</td></tr>)}</tbody></table></div><div className="actions"><button disabled={busy} onClick={()=>setPreview(null)}>Back</button><button className="primary" disabled={busy||!preview.rows.some(r=>r.include)} onClick={commit}>{busy?"Importing…":"Import selected"}</button></div></>}</section></div>
+function CsvImportWizard({
+  bootstrap,
+  repository,
+  close,
+  refresh,
+  invoker,
+}: {
+  bootstrap: Bootstrap;
+  repository: Repository;
+  close: () => void;
+  refresh: () => void;
+  invoker?: HTMLElement | null;
+}) {
+  const modal = useRef<HTMLElement>(null),
+    errorRef = useRef<HTMLParagraphElement>(null);
+  const [inspection, setInspection] = useState<CsvInspection | null>(null),
+    [mapping, setMapping] = useState<CsvMapping | null>(null),
+    [preview, setPreview] = useState<CsvPreview | null>(null),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  useEffect(() => {
+    modal.current
+      ?.querySelector<HTMLElement>(
+        "button:not([disabled]),input:not([disabled]),select:not([disabled])",
+      )
+      ?.focus();
+    return () => invoker?.focus();
+  }, []);
+  useEffect(() => {
+    if (error) queueMicrotask(() => errorRef.current?.focus());
+  }, [error]);
+  function keyDown(e: KeyboardEvent) {
+    if (e.key === "Escape" && !busy) {
+      e.preventDefault();
+      close();
+    }
+    if (e.key === "Tab" && modal.current) {
+      const f = [
+        ...modal.current.querySelectorAll<HTMLElement>(
+          "button:not([disabled]),input:not([disabled]),select:not([disabled])",
+        ),
+      ];
+      if (!f.length) return;
+      const first = f[0],
+        last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+  async function choose() {
+    setBusy(true);
+    setError("");
+    try {
+      const path = await repository.selectCsvSource?.();
+      if (!path) return;
+      const info = await repository.inspectCsv?.(path);
+      if (!info) return;
+      setInspection(info);
+      setPreview(null);
+      setMapping(
+        info.savedMapping ?? {
+          accountId: bootstrap.accounts[0]?.id ?? "",
+          dateColumn: info.headers[0] ?? "",
+          descriptionColumn: info.headers[1] ?? info.headers[0] ?? "",
+          noteColumn: null,
+          amountLayout: "signed",
+          amountColumn: info.headers[2] ?? info.headers[0] ?? "",
+          debitColumn: null,
+          creditColumn: null,
+          inflowPositive: true,
+          dateFormat: "iso",
+        },
+      );
+    } catch (x) {
+      setError(errorMessage(x, "Could not read this CSV."));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function showPreview() {
+    if (!inspection || !mapping) return;
+    setBusy(true);
+    setError("");
+    try {
+      setPreview(
+        (await repository.previewCsv?.(
+          inspection.path,
+          inspection.fileHash,
+          mapping,
+        )) ?? null,
+      );
+    } catch (x) {
+      setError(errorMessage(x, "Could not preview this CSV."));
+    } finally {
+      setBusy(false);
+    }
+  }
+  function updateRow(
+    rowNumber: number,
+    patch: Partial<CsvPreview["rows"][number]>,
+  ) {
+    setPreview((p) =>
+      p
+        ? {
+            ...p,
+            rows: p.rows.map((r) =>
+              r.rowNumber === rowNumber ? { ...r, ...patch } : r,
+            ),
+          }
+        : p,
+    );
+  }
+  async function commit() {
+    if (!preview) return;
+    setBusy(true);
+    setError("");
+    try {
+      await repository.commitCsv?.(
+        preview,
+        preview.rows.map((r) => ({
+          rowNumber: r.rowNumber,
+          categoryId: r.categoryId ?? "",
+          include: r.include,
+        })),
+      );
+      await Promise.resolve(refresh());
+      close();
+    } catch (x) {
+      setError(errorMessage(x, "Could not import this CSV."));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const columns = inspection?.headers ?? [],
+    option = (blank = false) => (
+      <>
+        {blank && <option value="">None</option>}
+        {columns.map((x) => (
+          <option key={x}>{x}</option>
+        ))}
+      </>
+    );
+  return (
+    <div className="modal-backdrop">
+      <section
+        ref={modal}
+        className="card modal import-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-title"
+        onKeyDown={keyDown}
+      >
+        <h2 id="import-title">Import CSV</h2>
+        {error && (
+          <p className="form-error" role="alert" tabIndex={-1} ref={errorRef}>
+            {error}
+          </p>
+        )}
+        {!inspection ? (
+          <>
+            <p>Choose a UTF-8 CSV up to 10 MiB and 50,000 rows.</p>
+            <div className="actions">
+              <button disabled={busy} onClick={close}>
+                Cancel
+              </button>
+              <button className="primary" disabled={busy} onClick={choose}>
+                {busy ? "Reading…" : "Choose CSV…"}
+              </button>
+            </div>
+          </>
+        ) : !preview && mapping ? (
+          <>
+            <p>
+              {inspection.rowCount} data rows found.
+              {inspection.savedMapping && " A saved mapping was restored."}
+            </p>
+            <div className="import-grid">
+              <label>
+                Destination account
+                <select
+                  value={mapping.accountId}
+                  onChange={(e) =>
+                    setMapping({ ...mapping, accountId: e.target.value })
+                  }
+                >
+                  {bootstrap.accounts.map((a) => (
+                    <option value={a.id} key={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Date column
+                <select
+                  value={mapping.dateColumn}
+                  onChange={(e) =>
+                    setMapping({ ...mapping, dateColumn: e.target.value })
+                  }
+                >
+                  {option()}
+                </select>
+              </label>
+              <label>
+                Description column
+                <select
+                  value={mapping.descriptionColumn}
+                  onChange={(e) =>
+                    setMapping({
+                      ...mapping,
+                      descriptionColumn: e.target.value,
+                    })
+                  }
+                >
+                  {option()}
+                </select>
+              </label>
+              <label>
+                Note column
+                <select
+                  value={mapping.noteColumn ?? ""}
+                  onChange={(e) =>
+                    setMapping({
+                      ...mapping,
+                      noteColumn: e.target.value || null,
+                    })
+                  }
+                >
+                  {option(true)}
+                </select>
+              </label>
+              <label>
+                Date format
+                <select
+                  value={mapping.dateFormat}
+                  onChange={(e) =>
+                    setMapping({
+                      ...mapping,
+                      dateFormat: e.target.value as CsvMapping["dateFormat"],
+                    })
+                  }
+                >
+                  <option value="iso">YYYY-MM-DD</option>
+                  <option value="us">M/D/YYYY</option>
+                </select>
+              </label>
+              <label>
+                Amount layout
+                <select
+                  value={mapping.amountLayout}
+                  onChange={(e) =>
+                    setMapping({
+                      ...mapping,
+                      amountLayout: e.target
+                        .value as CsvMapping["amountLayout"],
+                    })
+                  }
+                >
+                  <option value="signed">Signed amount</option>
+                  <option value="debitCredit">Debit and credit</option>
+                </select>
+              </label>
+              {mapping.amountLayout === "signed" ? (
+                <>
+                  <label>
+                    Amount column
+                    <select
+                      value={mapping.amountColumn ?? ""}
+                      onChange={(e) =>
+                        setMapping({ ...mapping, amountColumn: e.target.value })
+                      }
+                    >
+                      {option()}
+                    </select>
+                  </label>
+                  <label>
+                    Positive values are
+                    <select
+                      value={mapping.inflowPositive ? "inflow" : "outflow"}
+                      onChange={(e) =>
+                        setMapping({
+                          ...mapping,
+                          inflowPositive: e.target.value === "inflow",
+                        })
+                      }
+                    >
+                      <option value="inflow">Inflows</option>
+                      <option value="outflow">Outflows</option>
+                    </select>
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label>
+                    Debit column
+                    <select
+                      value={mapping.debitColumn ?? ""}
+                      onChange={(e) =>
+                        setMapping({ ...mapping, debitColumn: e.target.value })
+                      }
+                    >
+                      {option()}
+                    </select>
+                  </label>
+                  <label>
+                    Credit column
+                    <select
+                      value={mapping.creditColumn ?? ""}
+                      onChange={(e) =>
+                        setMapping({ ...mapping, creditColumn: e.target.value })
+                      }
+                    >
+                      {option()}
+                    </select>
+                  </label>
+                </>
+              )}
+            </div>
+            <div className="actions">
+              <button disabled={busy} onClick={close}>
+                Cancel
+              </button>
+              <button className="primary" disabled={busy} onClick={showPreview}>
+                {busy ? "Previewing…" : "Preview"}
+              </button>
+            </div>
+          </>
+        ) : (
+          preview && (
+            <>
+              <p>
+                {preview.rows.filter((r) => r.include).length} of{" "}
+                {preview.rows.length} rows selected. Duplicates are skipped by
+                default.
+              </p>
+              <div className="import-preview">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Include</th>
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th>Amount</th>
+                      <th>Category</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.rows.map((r) => (
+                      <tr key={r.rowNumber}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            aria-label={`Include row ${r.rowNumber}`}
+                            checked={r.include}
+                            disabled={!r.valid}
+                            onChange={(e) =>
+                              updateRow(r.rowNumber, {
+                                include: e.target.checked,
+                              })
+                            }
+                          />
+                        </td>
+                        <td>{r.occurredOn ?? "—"}</td>
+                        <td>{r.description}</td>
+                        <td>
+                          {r.amountCents == null ? "—" : money(r.amountCents)}
+                        </td>
+                        <td>
+                          <select
+                            aria-label={`Category row ${r.rowNumber}`}
+                            value={r.categoryId ?? ""}
+                            disabled={!r.valid}
+                            onChange={(e) =>
+                              updateRow(r.rowNumber, {
+                                categoryId: e.target.value,
+                              })
+                            }
+                          >
+                            {bootstrap.categories
+                              .filter((c) => c.kind === r.kind)
+                              .map((c) => (
+                                <option value={c.id} key={c.id}>
+                                  {c.name}
+                                </option>
+                              ))}
+                          </select>
+                        </td>
+                        <td>
+                          {r.error ??
+                            (r.duplicate !== "none"
+                              ? `Duplicate (${r.duplicate})`
+                              : "Ready")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="actions">
+                <button disabled={busy} onClick={() => setPreview(null)}>
+                  Back
+                </button>
+                <button
+                  className="primary"
+                  disabled={busy || !preview.rows.some((r) => r.include)}
+                  onClick={commit}
+                >
+                  {busy ? "Importing…" : "Import selected"}
+                </button>
+              </div>
+            </>
+          )
+        )}
+      </section>
+    </div>
+  );
 }
 
-function ActivityView({activity,accounts,onEdit,onImport}:{activity:ActivityPosting[];accounts:BootstrapAccount[];onEdit:(entry:ActivityPosting[])=>void;onImport:(el:HTMLElement)=>void}) {
-  const [query,setQuery]=useState(""); const [account,setAccount]=useState("all"); const [year,setYear]=useState(String(new Date().getFullYear()));
-  const grouped=[...activity.reduce((map,row)=>map.set(row.entryId,[...(map.get(row.entryId)??[]),row]),new Map<string,ActivityPosting[]>()).values()];
-  const rows=grouped.filter(group=>(account==="all"||group.some(x=>x.accountId===account))&&(year==="all"||group[0].occurredOn.startsWith(year))&&group.some(x=>`${x.description} ${x.accountName} ${x.categoryName??""}`.toLowerCase().includes(query.toLowerCase())));
-  const total=rows.filter(x=>x[0].kind!=="transfer").reduce((sum,x)=>sum+x[0].amountCents,0);
-  const years=[...new Set(activity.map(x=>x.occurredOn.slice(0,4)))].sort().reverse();
+function ActivityView({
+  activity,
+  accounts,
+  onEdit,
+  onImport,
+}: {
+  activity: ActivityPosting[];
+  accounts: BootstrapAccount[];
+  onEdit: (entry: ActivityPosting[]) => void;
+  onImport: (el: HTMLElement) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [account, setAccount] = useState("all");
+  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const grouped = [
+    ...activity
+      .reduce(
+        (map, row) =>
+          map.set(row.entryId, [...(map.get(row.entryId) ?? []), row]),
+        new Map<string, ActivityPosting[]>(),
+      )
+      .values(),
+  ];
+  const rows = grouped.filter(
+    (group) =>
+      (account === "all" || group.some((x) => x.accountId === account)) &&
+      (year === "all" || group[0].occurredOn.startsWith(year)) &&
+      group.some((x) =>
+        `${x.description} ${x.accountName} ${x.categoryName ?? ""}`
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+      ),
+  );
+  const total = rows
+    .filter((x) => x[0].kind !== "transfer")
+    .reduce((sum, x) => sum + x[0].amountCents, 0);
+  const years = [...new Set(activity.map((x) => x.occurredOn.slice(0, 4)))]
+    .sort()
+    .reverse();
   return (
     <div className="content">
       <div className="toolbar">
@@ -874,12 +2101,39 @@ function ActivityView({activity,accounts,onEdit,onImport}:{activity:ActivityPost
           <input
             aria-label="Search activity"
             placeholder="Search transactions"
-            value={query} onChange={e=>setQuery(e.target.value)}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <label className="sr-only" htmlFor="activity-account">Account</label><select id="activity-account" value={account} onChange={e=>setAccount(e.target.value)}><option value="all">All accounts</option>{accounts.map(a=><option value={a.id} key={a.id}>{a.name}</option>)}</select>
-        <label className="sr-only" htmlFor="activity-year">Year</label><select id="activity-year" value={year} onChange={e=>setYear(e.target.value)}><option value="all">All years</option>{years.map(y=><option key={y}>{y}</option>)}</select>
-        <button onClick={e=>onImport(e.currentTarget)}>Import CSV</button>
+        <label className="sr-only" htmlFor="activity-account">
+          Account
+        </label>
+        <select
+          id="activity-account"
+          value={account}
+          onChange={(e) => setAccount(e.target.value)}
+        >
+          <option value="all">All accounts</option>
+          {accounts.map((a) => (
+            <option value={a.id} key={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+        <label className="sr-only" htmlFor="activity-year">
+          Year
+        </label>
+        <select
+          id="activity-year"
+          value={year}
+          onChange={(e) => setYear(e.target.value)}
+        >
+          <option value="all">All years</option>
+          {years.map((y) => (
+            <option key={y}>{y}</option>
+          ))}
+        </select>
+        <button onClick={(e) => onImport(e.currentTarget)}>Import CSV</button>
       </div>
       <section className="card wide">
         <div className="card-title">
@@ -887,10 +2141,55 @@ function ActivityView({activity,accounts,onEdit,onImport}:{activity:ActivityPost
             <span className="label actual">Actual</span>
             <h3>Activity</h3>
           </div>
-          <strong className={total<0?"negative":"positive"}>{money(total)}</strong>
+          <strong className={total < 0 ? "negative" : "positive"}>
+            {money(total)}
+          </strong>
         </div>
-        {rows.map((group) => {const row=group[0],transfer=row.kind==="transfer",from=group.find(x=>x.amountCents<0),to=group.find(x=>x.amountCents>0);return <button className="transaction transaction-action" key={row.entryId} onClick={()=>onEdit(group)} aria-label={`Edit ${row.description||row.kind}`}><span className="transaction-icon">{row.kind==="income"?<ArrowDownRight size={17}/>:transfer?<WalletCards size={17}/>:<ArrowUpRight size={17}/>}</span><div><strong>{row.description||row.kind}</strong><small>{transfer?`${from?.accountName} to ${to?.accountName}`:`${row.accountName} · ${row.categoryName}`} · {row.occurredOn}</small></div><b className={row.amountCents>0&&!transfer?"positive":""}>{transfer?money(Math.abs(from?.amountCents??0)):money(row.amountCents)}</b></button>})}
-        {!rows.length&&<p className="empty">{activity.length?"No activity matches these filters.":"No transactions have been recorded."}</p>}
+        {rows.map((group) => {
+          const row = group[0],
+            transfer = row.kind === "transfer",
+            from = group.find((x) => x.amountCents < 0),
+            to = group.find((x) => x.amountCents > 0);
+          return (
+            <button
+              className="transaction transaction-action"
+              key={row.entryId}
+              onClick={() => onEdit(group)}
+              aria-label={`Edit ${row.description || row.kind}`}
+            >
+              <span className="transaction-icon">
+                {row.kind === "income" ? (
+                  <ArrowDownRight size={17} />
+                ) : transfer ? (
+                  <WalletCards size={17} />
+                ) : (
+                  <ArrowUpRight size={17} />
+                )}
+              </span>
+              <div>
+                <strong>{row.description || row.kind}</strong>
+                <small>
+                  {transfer
+                    ? `${from?.accountName} to ${to?.accountName}`
+                    : `${row.accountName} · ${row.categoryName}`}{" "}
+                  · {row.occurredOn}
+                </small>
+              </div>
+              <b className={row.amountCents > 0 && !transfer ? "positive" : ""}>
+                {transfer
+                  ? money(Math.abs(from?.amountCents ?? 0))
+                  : money(row.amountCents)}
+              </b>
+            </button>
+          );
+        })}
+        {!rows.length && (
+          <p className="empty">
+            {activity.length
+              ? "No activity matches these filters."
+              : "No transactions have been recorded."}
+          </p>
+        )}
       </section>
     </div>
   );
@@ -912,7 +2211,12 @@ function PlanView({
           <span className="label assumption">Assumptions</span>
           <h3>Baseline plan</h3>
         </div>
-        <button disabled title="Scenario comparison editor is not yet available">Compare scenarios (unavailable)</button>
+        <button
+          disabled
+          title="Scenario comparison editor is not yet available"
+        >
+          Compare scenarios (unavailable)
+        </button>
       </div>
       <section className="card wide">
         <div className="card-title">
@@ -954,7 +2258,12 @@ function PlanView({
                 <strong>{money(year.endingNetWorthCents, true)}</strong>
               </button>
               {expanded === year.year && (
-                <div className="months" id={`plan-months-${year.year}`} role="region" aria-label={`${year.year} monthly detail`}>
+                <div
+                  className="months"
+                  id={`plan-months-${year.year}`}
+                  role="region"
+                  aria-label={`${year.year} monthly detail`}
+                >
                   {year.months.map((m) => (
                     <div key={m.month}>
                       <span>
@@ -977,12 +2286,29 @@ function PlanView({
     </div>
   );
 }
-function NetWorth({ snapshot,accounts,onAdd,onEdit,onReconcile }: { snapshot: FinancialSnapshot;accounts:BootstrapAccount[];onAdd:(el:HTMLElement)=>void;onEdit:(a:BootstrapAccount,el:HTMLElement)=>void;onReconcile:(a:BootstrapAccount,el:HTMLElement)=>void }) {
+function NetWorth({
+  snapshot,
+  accounts,
+  onAdd,
+  onEdit,
+  onReconcile,
+}: {
+  snapshot: FinancialSnapshot;
+  accounts: BootstrapAccount[];
+  onAdd: (el: HTMLElement) => void;
+  onEdit: (a: BootstrapAccount, el: HTMLElement) => void;
+  onReconcile: (a: BootstrapAccount, el: HTMLElement) => void;
+}) {
   const assets =
-      snapshot.accounts.reduce((s, a) => s + Math.max(0,a.balanceCents), 0) +
+      snapshot.accounts.reduce((s, a) => s + Math.max(0, a.balanceCents), 0) +
       snapshot.assets.reduce((s, a) => s + a.valueCents, 0),
-    debt = snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0)+snapshot.accounts.reduce((s,a)=>s+Math.max(0,-a.balanceCents),0),
-    netWorth=snapshot.accounts.reduce((s,a)=>s+a.balanceCents,0)+snapshot.assets.reduce((s,a)=>s+a.valueCents,0)-snapshot.liabilities.reduce((s,l)=>s+l.balanceCents,0);
+    debt =
+      snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0) +
+      snapshot.accounts.reduce((s, a) => s + Math.max(0, -a.balanceCents), 0),
+    netWorth =
+      snapshot.accounts.reduce((s, a) => s + a.balanceCents, 0) +
+      snapshot.assets.reduce((s, a) => s + a.valueCents, 0) -
+      snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0);
   return (
     <div className="content">
       <div className="metrics">
@@ -1013,23 +2339,44 @@ function NetWorth({ snapshot,accounts,onAdd,onEdit,onReconcile }: { snapshot: Fi
             <span className="label actual">Current balance</span>
             <h3>Accounts & assets</h3>
           </div>
-          <button onClick={e=>onAdd(e.currentTarget)}>
+          <button onClick={(e) => onAdd(e.currentTarget)}>
             <Plus size={14} /> Add account
           </button>
         </div>
-        {snapshot.accounts.filter(a=>a.balanceCents>=0).map((a) => (
-          <div className="account" key={a.id}>
-            <span className="transaction-icon">
-              <WalletCards size={17} />
-            </span>
-            <div>
-              <strong>{a.name}</strong>
-              <small>{a.kind}</small>
+        {snapshot.accounts
+          .filter((a) => a.balanceCents >= 0)
+          .map((a) => (
+            <div className="account" key={a.id}>
+              <span className="transaction-icon">
+                <WalletCards size={17} />
+              </span>
+              <div>
+                <strong>{a.name}</strong>
+                <small>{a.kind}</small>
+              </div>
+              <b>{money(a.balanceCents)}</b>
+              <button
+                onClick={(e) =>
+                  onEdit(
+                    accounts.find((x) => x.id === a.id)!,
+                    e.currentTarget,
+                  )
+                }
+              >
+                Edit
+              </button>
+              <button
+                onClick={(e) =>
+                  onReconcile(
+                    accounts.find((x) => x.id === a.id)!,
+                    e.currentTarget,
+                  )
+                }
+              >
+                Reconcile
+              </button>
             </div>
-            <b>{money(a.balanceCents)}</b>
-            <button onClick={e=>onEdit(accounts.find(x=>x.id===a.id)!,e.currentTarget)}>Edit</button><button onClick={e=>onReconcile(accounts.find(x=>x.id===a.id)!,e.currentTarget)}>Reconcile</button>
-          </div>
-        ))}
+          ))}
         {snapshot.assets.map((a) => (
           <div className="account" key={a.id}>
             <span className="transaction-icon">
@@ -1042,15 +2389,77 @@ function NetWorth({ snapshot,accounts,onAdd,onEdit,onReconcile }: { snapshot: Fi
             <b>{money(a.valueCents)}</b>
           </div>
         ))}
-        {!snapshot.accounts.length&&!snapshot.assets.length&&<p className="empty">No accounts or assets yet.</p>}
+        {!snapshot.accounts.length && !snapshot.assets.length && (
+          <p className="empty">No accounts or assets yet.</p>
+        )}
       </section>
-      {(debt>0)&&<section className="card wide"><div className="card-title"><div><span className="label actual">Current balance</span><h3>Credit & liabilities</h3></div></div>{snapshot.accounts.filter(a=>a.balanceCents<0).map(a=><div className="account" key={a.id}><span className="transaction-icon"><WalletCards size={17}/></span><div><strong>{a.name}</strong><small>Credit balance</small></div><b>{money(-a.balanceCents)}</b><button onClick={e=>onEdit(accounts.find(x=>x.id===a.id)!,e.currentTarget)}>Edit</button><button onClick={e=>onReconcile(accounts.find(x=>x.id===a.id)!,e.currentTarget)}>Reconcile</button></div>)}{snapshot.liabilities.map(l=><div className="account" key={l.id}><span className="transaction-icon"><Building2 size={17}/></span><div><strong>{l.name}</strong><small>Liability</small></div><b>{money(l.balanceCents)}</b></div>)}</section>}
+      {debt > 0 && (
+        <section className="card wide">
+          <div className="card-title">
+            <div>
+              <span className="label actual">Current balance</span>
+              <h3>Credit & liabilities</h3>
+            </div>
+          </div>
+          {snapshot.accounts
+            .filter((a) => a.balanceCents < 0)
+            .map((a) => (
+              <div className="account" key={a.id}>
+                <span className="transaction-icon">
+                  <WalletCards size={17} />
+                </span>
+                <div>
+                  <strong>{a.name}</strong>
+                  <small>Credit balance</small>
+                </div>
+                <b>{money(-a.balanceCents)}</b>
+                <button
+                  onClick={(e) =>
+                    onEdit(
+                      accounts.find((x) => x.id === a.id)!,
+                      e.currentTarget,
+                    )
+                  }
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={(e) =>
+                    onReconcile(
+                      accounts.find((x) => x.id === a.id)!,
+                      e.currentTarget,
+                    )
+                  }
+                >
+                  Reconcile
+                </button>
+              </div>
+            ))}
+          {snapshot.liabilities.map((l) => (
+            <div className="account" key={l.id}>
+              <span className="transaction-icon">
+                <Building2 size={17} />
+              </span>
+              <div>
+                <strong>{l.name}</strong>
+                <small>Liability</small>
+              </div>
+              <b>{money(l.balanceCents)}</b>
+            </div>
+          ))}
+        </section>
+      )}
     </div>
   );
 }
-function errorMessage(error:unknown,fallback:string){
-  if(typeof error==="string")return error;
-  if(error&&typeof error==="object"&&typeof (error as {message?:unknown}).message==="string")return (error as {message:string}).message;
+function errorMessage(error: unknown, fallback: string) {
+  if (typeof error === "string") return error;
+  if (
+    error &&
+    typeof error === "object" &&
+    typeof (error as { message?: unknown }).message === "string"
+  )
+    return (error as { message: string }).message;
   return fallback;
 }
 function SettingsView({
@@ -1062,7 +2471,11 @@ function SettingsView({
   onRestore,
 }: {
   settings: Bootstrap["settings"];
-  setSettings: (x:Bootstrap["settings"]|((old:Bootstrap["settings"])=>Bootstrap["settings"])) => void;
+  setSettings: (
+    x:
+      | Bootstrap["settings"]
+      | ((old: Bootstrap["settings"]) => Bootstrap["settings"]),
+  ) => void;
   bootstrap: Bootstrap;
   repository: Repository;
   onSaved: () => void;
@@ -1075,84 +2488,149 @@ function SettingsView({
     })),
   );
   const [message, setMessage] = useState("");
-  const [backupBusy,setBackupBusy]=useState(false);
-  const [restoreBusy,setRestoreBusy]=useState(false);
-  const [confirmRestore,setConfirmRestore]=useState(false);
-  const [dataResult,setDataResult]=useState<{kind:"error"|"success";message:string}|null>(null);
-  const dataAlert=useRef<HTMLParagraphElement>(null);
-  const restoreCancel=useRef<HTMLButtonElement>(null);
-  const [appearanceSaving,setAppearanceSaving]=useState(false);
-  const [memberSaving,setMemberSaving]=useState(false);
-  const [memberResult,setMemberResult]=useState<{kind:"error"|"success";message:string}|null>(null);
-  const memberAlert=useRef<HTMLParagraphElement>(null);
-  useEffect(()=>setPeople(bootstrap.people.map(person=>({...person,birthDate:displayBirthDate(person.birthDate)}))),[bootstrap.people]);
-  async function createBackup(){
-    if(backupBusy||restoreBusy)return;
-    setBackupBusy(true);setDataResult(null);
-    try{
-      if(!repository.selectBackupDestination||!repository.backupDatabase)throw new Error("Backup is unavailable.");
-      const destination=await repository.selectBackupDestination();
-      if(destination===null)return;
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const [dataResult, setDataResult] = useState<{
+    kind: "error" | "success";
+    message: string;
+  } | null>(null);
+  const dataAlert = useRef<HTMLParagraphElement>(null);
+  const restoreCancel = useRef<HTMLButtonElement>(null);
+  const [appearanceSaving, setAppearanceSaving] = useState(false);
+  const [memberSaving, setMemberSaving] = useState(false);
+  const [memberResult, setMemberResult] = useState<{
+    kind: "error" | "success";
+    message: string;
+  } | null>(null);
+  const memberAlert = useRef<HTMLParagraphElement>(null);
+  useEffect(
+    () =>
+      setPeople(
+        bootstrap.people.map((person) => ({
+          ...person,
+          birthDate: displayBirthDate(person.birthDate),
+        })),
+      ),
+    [bootstrap.people],
+  );
+  async function createBackup() {
+    if (backupBusy || restoreBusy) return;
+    setBackupBusy(true);
+    setDataResult(null);
+    try {
+      if (!repository.selectBackupDestination || !repository.backupDatabase)
+        throw new Error("Backup is unavailable.");
+      const destination = await repository.selectBackupDestination();
+      if (destination === null) return;
       await repository.backupDatabase(destination);
-      setDataResult({kind:"success",message:"Backup created successfully."});
-    }catch(error){
-      setDataResult({kind:"error",message:errorMessage(error,"Could not create the backup.")});
-      queueMicrotask(()=>dataAlert.current?.focus());
-    }finally{setBackupBusy(false)}
+      setDataResult({
+        kind: "success",
+        message: "Backup created successfully.",
+      });
+    } catch (error) {
+      setDataResult({
+        kind: "error",
+        message: errorMessage(error, "Could not create the backup."),
+      });
+      queueMicrotask(() => dataAlert.current?.focus());
+    } finally {
+      setBackupBusy(false);
+    }
   }
-  async function restoreBackup(){
-    if(backupBusy||restoreBusy)return;
-    setConfirmRestore(false);setRestoreBusy(true);setDataResult(null);
-    try{
-      if(!repository.selectRestoreSource||!repository.restoreDatabase)throw new Error("Restore is unavailable.");
-      const source=await repository.selectRestoreSource();
-      if(source===null)return;
-      const restored=await repository.restoreDatabase(source);
+  async function restoreBackup() {
+    if (backupBusy || restoreBusy) return;
+    setConfirmRestore(false);
+    setRestoreBusy(true);
+    setDataResult(null);
+    try {
+      if (!repository.selectRestoreSource || !repository.restoreDatabase)
+        throw new Error("Restore is unavailable.");
+      const source = await repository.selectRestoreSource();
+      if (source === null) return;
+      const restored = await repository.restoreDatabase(source);
       onRestore(restored);
-      setDataResult({kind:"success",message:"Backup restored successfully."});
-    }catch(error){
-      const value=error as {code?:string};
-      const fallback=value?.code==="invalid_backup"||value?.code==="incompatible_backup"
-        ?"That file is not a compatible LifeLook backup."
-        :"Could not restore the backup. Your current data is still available.";
-      setDataResult({kind:"error",message:errorMessage(error,fallback)});
-      queueMicrotask(()=>dataAlert.current?.focus());
-    }finally{setRestoreBusy(false)}
+      setDataResult({
+        kind: "success",
+        message: "Backup restored successfully.",
+      });
+    } catch (error) {
+      const value = error as { code?: string };
+      const fallback =
+        value?.code === "invalid_backup" ||
+        value?.code === "incompatible_backup"
+          ? "That file is not a compatible LifeLook backup."
+          : "Could not restore the backup. Your current data is still available.";
+      setDataResult({ kind: "error", message: errorMessage(error, fallback) });
+      queueMicrotask(() => dataAlert.current?.focus());
+    } finally {
+      setRestoreBusy(false);
+    }
   }
-  async function saveAppearance(patch:Partial<Bootstrap["settings"]>){
-    const next={...settings,...patch};setAppearanceSaving(true);setMessage("");
-    try{if(!repository.updateSettings)throw new Error("Settings persistence is unavailable.");const saved=await repository.updateSettings({theme:next.theme,reducedMotion:next.reducedMotion,expectedRevision:settings.revision});setSettings(saved);setMessage("Appearance saved.")}catch(e){setMessage((e as {message?:string}).message??"Could not save appearance.")}finally{setAppearanceSaving(false)}
+  async function saveAppearance(patch: Partial<Bootstrap["settings"]>) {
+    const next = { ...settings, ...patch };
+    setAppearanceSaving(true);
+    setMessage("");
+    try {
+      if (!repository.updateSettings)
+        throw new Error("Settings persistence is unavailable.");
+      const saved = await repository.updateSettings({
+        theme: next.theme,
+        reducedMotion: next.reducedMotion,
+        expectedRevision: settings.revision,
+      });
+      setSettings(saved);
+      setMessage("Appearance saved.");
+    } catch (e) {
+      setMessage(
+        (e as { message?: string }).message ?? "Could not save appearance.",
+      );
+    } finally {
+      setAppearanceSaving(false);
+    }
   }
   async function savePeople() {
-    if(memberSaving)return;
+    if (memberSaving) return;
     setMemberResult(null);
     if (people.some((p) => !p.name.trim())) {
-      setMemberResult({kind:"error",message:"Every household member needs a name."});
-      queueMicrotask(()=>memberAlert.current?.focus());
+      setMemberResult({
+        kind: "error",
+        message: "Every household member needs a name.",
+      });
+      queueMicrotask(() => memberAlert.current?.focus());
       return;
     }
     const invalidDate = people.findIndex(
       (person) => parseBirthDate(person.birthDate) === undefined,
     );
     if (invalidDate >= 0) {
-      setMemberResult({kind:"error",message:`Member ${invalidDate + 1}: enter a valid birth date as MM/DD/YYYY.`});
-      queueMicrotask(()=>memberAlert.current?.focus());
+      setMemberResult({
+        kind: "error",
+        message: `Member ${invalidDate + 1}: enter a valid birth date as MM/DD/YYYY.`,
+      });
+      queueMicrotask(() => memberAlert.current?.focus());
       return;
     }
     setMemberSaving(true);
-    try { await repository.saveOnboardingStep(8, {
-      people: people.map((p) => ({
-        ...p,
-        name: p.name.trim(),
-        birthDate: parseBirthDate(p.birthDate),
-      })),
-    });
-    setMemberResult({kind:"success",message:"Household members saved."});
-    onSaved();
-    } catch(error) {
-      setMemberResult({kind:"error",message:errorMessage(error,"Could not save household members.")});
-      queueMicrotask(()=>memberAlert.current?.focus());
-    } finally { setMemberSaving(false); }
+    try {
+      await repository.saveOnboardingStep(8, {
+        people: people.map((p) => ({
+          ...p,
+          name: p.name.trim(),
+          birthDate: parseBirthDate(p.birthDate),
+        })),
+      });
+      setMemberResult({ kind: "success", message: "Household members saved." });
+      onSaved();
+    } catch (error) {
+      setMemberResult({
+        kind: "error",
+        message: errorMessage(error, "Could not save household members."),
+      });
+      queueMicrotask(() => memberAlert.current?.focus());
+    } finally {
+      setMemberSaving(false);
+    }
   }
   return (
     <div className="content">
@@ -1198,33 +2676,58 @@ function SettingsView({
           >
             <Plus size={14} /> Add person
           </button>
-          <button className="primary" disabled={memberSaving} onClick={savePeople}>
-            {memberSaving?"Saving…":"Save members"}
+          <button
+            className="primary"
+            disabled={memberSaving}
+            onClick={savePeople}
+          >
+            {memberSaving ? "Saving…" : "Save members"}
           </button>
         </div>
-        {memberResult?.kind==="error"&&<p ref={memberAlert} tabIndex={-1} role="alert" className="negative">{memberResult.message}</p>}
-        {memberResult?.kind==="success"&&<p role="status">{memberResult.message}</p>}
+        {memberResult?.kind === "error" && (
+          <p ref={memberAlert} tabIndex={-1} role="alert" className="negative">
+            {memberResult.message}
+          </p>
+        )}
+        {memberResult?.kind === "success" && (
+          <p role="status">{memberResult.message}</p>
+        )}
         {message && <p role="status">{message}</p>}
       </section>
       <section className="card settings-card">
         <h3>Appearance</h3>
         <div className="setting">
-          <fieldset><legend>Theme</legend>{(["system","light","dark"] as Theme[]).map(theme=><label key={theme}><input type="radio" name="theme" checked={settings.theme===theme} disabled={appearanceSaving} onChange={()=>saveAppearance({theme})}/>{theme[0].toUpperCase()+theme.slice(1)}</label>)}</fieldset>
+          <fieldset>
+            <legend>Theme</legend>
+            {(["system", "light", "dark"] as Theme[]).map((theme) => (
+              <label key={theme}>
+                <input
+                  type="radio"
+                  name="theme"
+                  checked={settings.theme === theme}
+                  disabled={appearanceSaving}
+                  onChange={() => saveAppearance({ theme })}
+                />
+                {theme[0].toUpperCase() + theme.slice(1)}
+              </label>
+            ))}
+          </fieldset>
         </div>
         <div className="setting">
           <div>
             <strong id="reduced-motion-label">Reduced motion</strong>
-            <p id="reduced-motion-description">
-              Minimize interface animation.
-            </p>
+            <p id="reduced-motion-description">Minimize interface animation.</p>
           </div>
           <button
             role="switch"
             aria-checked={settings.reducedMotion}
             aria-labelledby="reduced-motion-label"
             aria-describedby="reduced-motion-description"
-            className={settings.reducedMotion?"switch on":"switch"}
-            disabled={appearanceSaving} onClick={()=>saveAppearance({reducedMotion:!settings.reducedMotion})}
+            className={settings.reducedMotion ? "switch on" : "switch"}
+            disabled={appearanceSaving}
+            onClick={() =>
+              saveAppearance({ reducedMotion: !settings.reducedMotion })
+            }
           >
             <span />
           </button>
@@ -1237,19 +2740,62 @@ function SettingsView({
             <strong>Local database</strong>
             <p>Your financial data stays on this device.</p>
           </div>
-          <button disabled={backupBusy||restoreBusy} onClick={createBackup}>{backupBusy?"Backing up…":"Back up data"}</button>
+          <button disabled={backupBusy || restoreBusy} onClick={createBackup}>
+            {backupBusy ? "Backing up…" : "Back up data"}
+          </button>
         </div>
         <div className="setting">
           <div>
             <strong>Restore</strong>
             <p>Replace local data from a LifeLook backup.</p>
           </div>
-          <button disabled={backupBusy||restoreBusy} onClick={()=>{setConfirmRestore(true);queueMicrotask(()=>restoreCancel.current?.focus())}}>Choose backup</button>
+          <button
+            disabled={backupBusy || restoreBusy}
+            onClick={() => {
+              setConfirmRestore(true);
+              queueMicrotask(() => restoreCancel.current?.focus());
+            }}
+          >
+            Choose backup
+          </button>
         </div>
-        {dataResult?.kind==="error"&&<p ref={dataAlert} tabIndex={-1} role="alert" className="negative">{dataResult.message}</p>}
-        {dataResult?.kind==="success"&&<p role="status">{dataResult.message}</p>}
+        {dataResult?.kind === "error" && (
+          <p ref={dataAlert} tabIndex={-1} role="alert" className="negative">
+            {dataResult.message}
+          </p>
+        )}
+        {dataResult?.kind === "success" && (
+          <p role="status">{dataResult.message}</p>
+        )}
       </section>
-      {confirmRestore&&<div className="modal-backdrop"><section className="card modal" role="alertdialog" aria-modal="true" aria-labelledby="restore-title" aria-describedby="restore-warning"><h2 id="restore-title">Replace all current data?</h2><p id="restore-warning">Restoring a backup replaces all data in this workspace and cannot be undone.</p><div className="actions"><button ref={restoreCancel} onClick={()=>setConfirmRestore(false)}>Cancel</button><button className="primary" onClick={restoreBackup}>Choose backup and restore</button></div></section></div>}
+      {confirmRestore && (
+        <div className="modal-backdrop">
+          <section
+            className="card modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="restore-title"
+            aria-describedby="restore-warning"
+          >
+            <h2 id="restore-title">Replace all current data?</h2>
+            <p id="restore-warning">
+              Restoring a backup replaces all data in this workspace and cannot
+              be undone.
+            </p>
+            <div className="actions">
+              <button
+                ref={restoreCancel}
+                onClick={() => setConfirmRestore(false)}
+              >
+                Cancel
+              </button>
+              <button className="primary" onClick={restoreBackup}>
+                Choose backup and restore
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

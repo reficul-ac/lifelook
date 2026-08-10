@@ -6,7 +6,7 @@ This is a current-branch backlog, not a snapshot of the original audit. `PLAN.md
 
 - Reconciled branch: current worktree based on `d81bbf1855dfcc694f8970898f40db4d780b8314`.
 - Reconciliation date: 2026-08-09 America/Los_Angeles.
-- Current automated baseline: 27 frontend tests, 15 Rust tests, and 3 native WebDriver scenarios.
+- Current automated baseline: 30 frontend tests, 21 Rust tests, and 3 native WebDriver scenarios.
 - Native evidence: `artifacts/native-e2e/`, generated from the release binary with isolated profiles.
 - Terms used below:
   - **Implemented/component-tested** means code or an injected-repository test passed; it is not persistence evidence.
@@ -22,9 +22,9 @@ No P0 defect is known. Native acceptance covers onboarding through relaunch, mem
 | Onboarding | Household, members, filing status, typed accounts, exact money parsing, and credit signs are implemented/component-tested | Account and household data survive process relaunch | Native add/remove/back/error interruption variants |
 | Shell/navigation | All five destinations and honest disabled controls are implemented | Navigation, current state, focus, and 920×650 minimum accepted | Profile/search/add implementations |
 | Overview | Current balances/activity totals are derived; projections require a saved tax profile | Transaction-driven income, spending, saved amount, and net worth survive relaunch | Broader planning inputs |
-| Activity | Manual income/expense/transfer creation and editing, grouped transfers, filters, and transfer-neutral totals are implemented/component-tested | Native mutation, editing, grouped transfers, search/account/year filters, exact totals, and relaunch persistence accepted | Transaction deletion and CSV import |
+| Activity | Manual/import/transfer deletion and reviewed CSV import are implemented with component and persistence-backed Rust coverage | Native mutation, editing, grouped transfers, search/account/year filters, exact totals, and relaunch persistence accepted; deletion/import native acceptance remains open | CSV export and broader planning inputs |
 | Plan | Saved tax/current domain snapshot feeds deterministic projection; disclosure semantics implemented | Expanded rows accepted at 920×650, 1024×768, and 1280×820 with long names | Scenario selection/editing and full domain-entry UI |
-| Net Worth | Account creation, metadata editing, signed credit balances, and adjustment-based reconciliation are implemented/component-tested | Second-account creation/rename, exact reconciled balances, net worth, and relaunch persistence accepted | Account deletion and asset/liability editing |
+| Net Worth | Account creation, metadata editing, signed credit balances, reconciliation, and guarded empty-account deletion are implemented/component/Rust-tested | Second-account creation/rename, exact reconciled balances, net worth, and relaunch persistence accepted; deletion native acceptance remains open | Asset/liability editing |
 | Settings members | Save busy/error/retry behavior is component-tested | Edited long member name survives relaunch | Native write-failure injection and calendar coverage |
 | Appearance | System/light/dark and reduced motion persist | Dark and reduced motion survive process relaunch | Native OS preference-change simulation |
 | Backup/restore | Staged atomic backup/restore, confirmation, error recovery, and refresh are implemented | Native accepted, including relaunch persistence | AppImage-specific dialog round trip |
@@ -137,8 +137,9 @@ No P0 defect is known. Native acceptance covers onboarding through relaunch, mem
 
 ### F-021 — Transaction and account deletion
 
-- **Status:** Not implemented (explicit backlog).
-- Manual transaction and account creation/editing do not include deletion. No deletion commands are exposed.
+- **Status:** Implemented/component/Rust-tested; native acceptance open.
+- Manual, transfer, and imported transactions can be deleted individually; transfer postings are removed atomically, reconciliation adjustments and stale revisions are rejected, and import-batch audit metadata remains.
+- Account deletion is limited to non-final empty accounts without posting, reconciliation, import, recurring-entry, or allocation references. Confirmation and blocker/error dialogs retain focus and state.
 
 ### F-016 — Startup corruption/permissions terminated before recovery
 
@@ -162,8 +163,8 @@ No P0 defect is known. Native acceptance covers onboarding through relaunch, mem
 
 ## Prioritized repair sequence
 
-1. Add transaction and account deletion (F-021) and CSV import workflows.
-2. Implement scenario selection/editing and expose the remaining planning inputs, including asset/liability editing (F-005/F-008).
+1. Implement scenario selection/editing and expose the remaining planning inputs, including asset/liability editing (F-005/F-008).
+2. Extend native acceptance to transaction/account deletion and mixed-file CSV import/relaunch persistence.
 3. Add the chart nonvisual alternative, strict offline test, and remaining native failure/calendar variants (F-013/F-014).
 4. Extend AppImage acceptance to mutation/relaunch and export/file-dialog behavior (F-019).
 

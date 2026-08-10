@@ -11,13 +11,16 @@ export interface TaxProfile { filingStatus:"single"|"married-joint"|"married-sep
 export interface Settings { theme:Theme; reducedMotion:boolean; revision:number }
 export interface Category { id:string; householdId:string; name:string; kind:"income"|"expense"|"transfer"; revision:number }
 export interface ActivityPosting { postingId:number; entryId:string; occurredOn:string; kind:"income"|"expense"|"transfer"|"adjustment"; origin?:"manual"|"import"|"reconciliation"; canDelete?:boolean; description:string; note?:string|null; transferGroupId?:string|null; accountId:string; accountName:string; categoryId?:string|null; categoryName?:string|null; amountCents:number; revision:number }
-export interface RecurringEntry { id:string; householdId:string; categoryId:string; accountId?:string|null; name:string; amountCents:number; startDate:string; endDate?:string|null; annualGrowthBps:number; revision:number }
+export type RecurringFrequency="weekly"|"biweekly"|"monthly"|"quarterly"|"annual";
+export interface RecurringEntry { id:string; householdId:string; categoryId:string; accountId?:string|null; name:string; amountCents:number; frequency:RecurringFrequency; startDate:string; endDate?:string|null; annualGrowthBps:number; revision:number }
+export interface RecurringInput { id:string;categoryId:string;accountId?:string|null;name:string;amountCents:number;frequency:RecurringFrequency;startDate:string;endDate?:string|null;annualGrowthBps:number }
 export interface Asset { id:string; householdId:string; name:string; valueCents:number; annualGrowthBps:number; revision:number }
 export interface MortgageTerms { originalPrincipalCents:number; termMonths:number; startDate:string; paymentOverrideCents?:number|null }
 export interface Liability { id:string; householdId:string; name:string; balanceCents:number; annualRateBps:number; minimumPaymentCents:number; mortgage?:MortgageTerms|null; revision:number }
 export interface AssetInput { id:string;name:string;valueCents:number;annualGrowthBps:number }
 export interface LiabilityInput { id:string;name:string;balanceCents:number;annualRateBps:number;minimumPaymentCents:number;mortgage?:MortgageTerms|null }
-export interface ScenarioRecord { id:string; householdId:string; name:string; isBaseline:boolean; assumptions:{inflationBps:number;thresholdInflationBps:number}; horizonMonths:number; revision:number; events:unknown[]; allocations:unknown[] }
+export interface ScenarioAllocation { id?:string;accountId:string;priority:number;percentBps:number;targetBalanceCents?:number|null }
+export interface ScenarioRecord { id:string; householdId:string; name:string; isBaseline:boolean; assumptions:{inflationBps:number;thresholdInflationBps:number}; horizonMonths:number; revision:number; events:import("./domain/types").ScenarioEvent[]; allocations:ScenarioAllocation[] }
 export interface WorkspaceSnapshot {
   onboardingStep:number; onboardingComplete:boolean;
   household?:{id:string;name:string;state:string}; people:BootstrapPerson[];
@@ -62,6 +65,12 @@ export interface Repository {
   createLiability?(input:LiabilityInput):Promise<void>;
   updateLiability?(input:LiabilityInput&{expectedRevision:number}):Promise<void>;
   deleteLiability?(input:{id:string;expectedRevision:number}):Promise<void>;
+  createRecurring?(input:RecurringInput):Promise<void>;
+  updateRecurring?(input:RecurringInput&{expectedRevision:number}):Promise<void>;
+  deleteRecurring?(input:{id:string;expectedRevision:number}):Promise<void>;
+  createScenario?(input:{id:string;name:string;cloneFromId?:string|null}):Promise<void>;
+  updateScenario?(input:{id:string;name:string;assumptions:ScenarioRecord["assumptions"];horizonMonths:number;events:ScenarioRecord["events"];allocations:ScenarioAllocation[];expectedRevision:number}):Promise<void>;
+  deleteScenario?(input:{id:string;expectedRevision:number}):Promise<void>;
   selectCsvSource?():Promise<string|null>;
   inspectCsv?(path:string):Promise<CsvInspection>;
   previewCsv?(path:string,fileHash:string,mapping:CsvMapping):Promise<CsvPreview>;
@@ -97,6 +106,12 @@ export const tauriRepository:Repository = {
   createLiability:(input)=>invoke("create_liability",{input}),
   updateLiability:(input)=>invoke("update_liability",{input}),
   deleteLiability:(input)=>invoke("delete_liability",{input}),
+  createRecurring:(input)=>invoke("create_recurring",{input}),
+  updateRecurring:(input)=>invoke("update_recurring",{input}),
+  deleteRecurring:(input)=>invoke("delete_recurring",{input}),
+  createScenario:(input)=>invoke("create_scenario",{input}),
+  updateScenario:(input)=>invoke("update_scenario",{input}),
+  deleteScenario:(input)=>invoke("delete_scenario",{input}),
   selectCsvSource:async()=>{const selected=await open({multiple:false,directory:false,filters:[{name:"CSV files",extensions:["csv"]}]});return typeof selected==="string"?selected:null},
   inspectCsv:(path)=>invoke("inspect_csv",{path}),
   previewCsv:(path,fileHash,mapping)=>invoke("preview_csv",{path,fileHash,mapping}),

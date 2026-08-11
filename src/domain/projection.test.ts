@@ -90,4 +90,4 @@ describe("ProjectionEngine",()=>{
     expect(year.warnings.map(warning=>warning.code)).toEqual(["account-depleted","unfunded-deficit"]);
   });
 });
-describe("tax estimates",()=>{ it("is zero with no income",()=>expect(estimateTax(0,"single",TAX_RULES_2025).totalCents).toBe(0)); it("calculates bracket boundaries deterministically",()=>{ const estimate=estimateTax(15000_00+11925_00,"single",TAX_RULES_2025); expect(estimate.federalCents).toBe(1192_50); expect(estimate.socialSecurityCents).toBeGreaterThan(0); }); });
+describe("tax estimates",()=>{ const wages=(grossWageIncomeCents:number)=>({grossWageIncomeCents,federalDeductionCents:0,californiaDeductionCents:0,ficaExemptWagesCents:0}); it("is zero with no income",()=>expect(estimateTax(wages(0),"single",TAX_RULES_2025).totalCents).toBe(0)); it("calculates bracket boundaries deterministically",()=>{ const estimate=estimateTax(wages(15750_00+11925_00),"single",TAX_RULES_2025); expect(estimate.federalCents).toBe(1192_50); expect(estimate.socialSecurityCents).toBeGreaterThan(0); }); });

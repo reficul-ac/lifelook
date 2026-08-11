@@ -50,4 +50,5 @@ export interface AnnualProjection { year: number; incomeCents: Cents; expenseCen
 export interface TaxBracket { upToCents: Cents | null; rateBps: BasisPoints }
 export interface TaxSource { jurisdiction: "federal" | "california" | "payroll"; sourceYear: number; status: "official" | "projected"; url: string }
 export interface TaxRulePack { year: 2025 | 2026; federal: Record<FilingStatus, { standardDeductionCents: Cents; brackets: readonly TaxBracket[] }>; california: Record<FilingStatus, { standardDeductionCents: Cents; brackets: readonly TaxBracket[] }>; socialSecurityWageBaseCents: Cents; additionalMedicareThresholdCents: Record<FilingStatus, Cents>; sources: readonly TaxSource[] }
+export interface TaxabilityBreakdown { grossWageIncomeCents: Cents; federalDeductionCents: Cents; californiaDeductionCents: Cents; ficaExemptWagesCents: Cents }
 export interface TaxEstimate { federalCents: Cents; californiaCents: Cents; socialSecurityCents: Cents; medicareCents: Cents; totalCents: Cents; effectiveRateBps: BasisPoints; marginalRateBps: BasisPoints; sourceYear: number; projected: boolean; sources: readonly TaxSource[] }

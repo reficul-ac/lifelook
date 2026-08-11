@@ -12,6 +12,24 @@ describe("LifeLook shell", () => {
     fireEvent.change(screen.getByLabelText("End date (optional)"),{target:{value:"2027-08-09"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));await waitFor(()=>expect(createRecurring).toHaveBeenCalledWith(expect.objectContaining({name:"Paycheck",amountCents:123456,frequency:"biweekly",annualGrowthBps:0})));
   });
 
+  it("saves the explicit traditional-retirement tax treatment", async () => {
+    const data = await testRepository.bootstrap();
+    const category = {id:"retirement",householdId:"test",name:"Retirement contribution",kind:"expense" as const,revision:1};
+    const account = {...data.accounts[0],id:"401k",name:"Workplace 401(k)",kind:"retirement" as const};
+    const scenario = {id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:120,revision:1,events:[],allocations:[]};
+    const createRecurring = vi.fn();
+    render(<App repository={{...testRepository,createRecurring,bootstrap:async()=>({...data,accounts:[account],categories:[category],scenarios:[scenario],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2025 as const,thresholdInflationBps:250,revision:1}})}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Plan/}));
+    fireEvent.click(screen.getByRole("button",{name:"Add expense"}));
+    fireEvent.change(screen.getByLabelText("Type"),{target:{value:"expense"}});
+    fireEvent.change(screen.getByLabelText("Name"),{target:{value:"401(k) contribution"}});
+    fireEvent.change(screen.getByLabelText("Account (optional)"),{target:{value:"401k"}});
+    fireEvent.change(screen.getByLabelText("Amount (USD)"),{target:{value:"500"}});
+    fireEvent.change(screen.getByLabelText(/Tax treatment/),{target:{value:"pretax"}});
+    fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(createRecurring).toHaveBeenCalledWith(expect.objectContaining({accountId:"401k",taxTreatment:"pretax"})));
+  });
+
   it("clones, edits, compares, and protects planning scenarios", async () => {
     const data=await testRepository.bootstrap(), base={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:18,revision:1,events:[],allocations:[]}, alt={...base,id:"alt",name:"Lean",isBaseline:false}; const createScenario=vi.fn(),updateScenario=vi.fn();
     render(<App repository={{...testRepository,createScenario,updateScenario,bootstrap:async()=>({...data,scenarios:[base,alt],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})}}/>);fireEvent.click(await screen.findByRole("button",{name:/Plan/}));expect(screen.getByRole("heading",{name:"18-month outlook"})).toBeInTheDocument();

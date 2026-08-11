@@ -20,6 +20,7 @@ describe("LifeLook onboarding variants", () => {
     await $("aria/Save & Continue").click();
 
     await $("aria/Filing status").selectByAttribute("value", "single");
+    await $("aria/Save & Continue").click();
     await $("aria/Credit card").click();
     await $('[aria-label="Account 1 name"]').setValue("Card");
     await $('[aria-label="Account 1 opening balance"]').setValue("125.40");
@@ -38,17 +39,24 @@ describe("LifeLook onboarding variants", () => {
     await $('//button[normalize-space()="Remove account 4"]').click();
 
     await $("aria/Back").click();
+    assert.equal(await $("aria/Filing status").getValue(), "single");
+    await $("aria/Back").click();
     assert.equal(await $("aria/Household name").getValue(), "Resumable household");
     assert.equal(await $("aria/Person 1 birth date").getValue(), "04/23/1988");
+    await $("aria/Save & Continue").click();
     await $("aria/Save & Continue").click();
 
     // Relaunch midway through onboarding; committed step-one data must be restored.
     await browser.reloadSession();
-    await $("aria/Household name").waitForDisplayed();
+    await $("aria/Credit card").waitForDisplayed();
+    assert.equal(await $('[aria-label="Account 1 name"]').getValue(), "");
+    await $("aria/Back").click();
+    await $("aria/Back").click();
     assert.equal(await $("aria/Household name").getValue(), "Resumable household");
     assert.equal(await $("aria/Person 1 birth date").getValue(), "04/23/1988");
     await $("aria/Save & Continue").click();
     await $("aria/Filing status").selectByAttribute("value", "single");
+    await $("aria/Save & Continue").click();
     await $("aria/Credit card").click();
     await $('[aria-label="Account 1 name"]').setValue("Card");
     await $('[aria-label="Account 1 opening balance"]').setValue("125.40");
@@ -60,6 +68,8 @@ describe("LifeLook onboarding variants", () => {
     await (await $$("aria/Retirement")).at(-1).click();
     await $('[aria-label="Account 3 name"]').setValue("IRA");
     await $('[aria-label="Account 3 opening balance"]').setValue("9000.00");
+    await $("aria/Save & Continue").click();
+    for (let step = 0; step < 4; step += 1) await $("aria/Skip & Continue").click();
     await $("aria/Finish setup").click();
 
     await $("aria/Overview").click();

@@ -1,170 +1,111 @@
-# LifeLook Fixes and Usability Backlog
+# LifeLook AppImage control audit
 
-This is a current-branch backlog, not a snapshot of the original audit. `PLAN.md` describes product intent; this file records shipped, accepted, and still-blocked behavior.
+This audit is anchored to application commit `18be03ecfb760e91e41c8daa5f2dd6336a41b883` and AppImage SHA-256 `80d932bc237aff1a33bcdbe5ab0886f9a4edca677763f53aa88b9d6094d539dd`. Evidence is under [`audit-artifacts/18be03ec…`](audit-artifacts/18be03ecfb760e91e41c8daa5f2dd6336a41b883/).
 
-## Verification record
+## Package and automated baseline
 
-- Reconciled branch: current worktree based on `d81bbf1855dfcc694f8970898f40db4d780b8314`.
-- Reconciliation date: 2026-08-10 America/Los_Angeles.
-- Current automated baseline: 58 frontend tests and 27 Rust tests. The release binary passed the general acceptance, financial-record, and live System-theme scenarios in this worktree; the built AppImage passed validation plus both isolated recovery variants. A complete native-suite rerun is still required before updating the final tested commit and aggregate native count.
-- Native evidence: `artifacts/native-e2e/`, generated from the release binary with isolated profiles.
-- Terms used below:
-  - **Implemented/component-tested** means code or an injected-repository test passed; it is not persistence evidence.
-  - **Native accepted** means the release process and real SQLite profile were exercised.
-  - **Still blocked** means the UI or required end-to-end evidence does not exist yet.
+- Audit date: 2026-08-10 America/Los_Angeles.
+- Package identity: [`package/identity.md`](audit-artifacts/18be03ecfb760e91e41c8daa5f2dd6336a41b883/package/identity.md).
+- Automated baseline: 78 frontend tests, production TypeScript/Vite build, 27 Rust tests, Rust formatting, clippy with warnings denied, zero npm advisories, and RustSec audit with 17 policy-allowed unmaintained/unsound transitive warnings.
+- AppImage baseline: content validation, Xvfb visible-window smoke, nine isolated scenario families, strict offline, corrupt recovery, and unwritable repair passed.
+- Inventory: 246 unique source control declarations; 193 conditional/repeated; 57 disabled expressions. See [`interaction-manifest.md`](audit-artifacts/18be03ecfb760e91e41c8daa5f2dd6336a41b883/interaction-manifest.md) and the one-row-per-control [`source-control-inventory.json`](audit-artifacts/18be03ecfb760e91e41c8daa5f2dd6336a41b883/source-control-inventory.json).
+- Matrix: 32/32 persistent-shell appearance/layout executions passed with structured records and screenshots.
 
-No P0 defect is known. Native acceptance covers onboarding variants and interruption, strict-offline setup, member-save failure/retry, member edits, appearance preferences, ledger/account/asset/liability mutation, global search navigation and focus, mixed CSV import, filtering, reconciliation, backup/restore, supported viewport sizes, and startup recovery.
+`Verified` means the repaired behavior was observed in this exact AppImage. Automated-only results are not promoted to `Verified`.
 
-## Coverage matrix
+## Findings
 
-| Screen or flow | Current implementation | Native acceptance | Still blocked |
-|---|---|---|---|
-| Onboarding | Household, members, filing status, typed accounts, recurring income/expenses, assets, debts, exact money parsing, and credit signs are implemented/component-tested | Add/remove/Back, guided financial inputs, calendar birth date, interruption/relaunch, and credit/investment/retirement accounts accepted | None for current scope |
-| Shell/navigation | All five destinations, local global search, the six-mode Add menu, and an accessible keyboard-complete Workspace menu with path, Settings, and backup feedback are implemented/component-tested | Navigation, search navigation/focus, current state, focus, and 920×650 minimum accepted | Native Workspace-menu coverage |
-| Overview | Current balances/activity totals are derived; projections require a saved tax profile | Transaction-driven income, spending, saved amount, and net worth survive relaunch | None for current scope |
-| Activity | Manual/import/export/transfer deletion and reviewed CSV import are implemented with component and persistence-backed Rust coverage | Native filtering/export, global-search focus, mutation, editing, deletion, grouped transfers, mixed-file CSV import, exact totals, and relaunch persistence accepted | None for current scope |
-| Plan | Recurring CRUD, all dated event variants, ordered surplus allocations, scenario CRUD/clone, dynamic horizons, selection, comparison, and all five priority-ordered funding-goal variants feed deterministic projections | Planning mutation, clone isolation, changed totals, allocations, and relaunch persistence accepted | Native five-goal persistence and clone-isolation coverage |
-| Net Worth | Account, asset, liability, and scenario-linked asset/debt lifecycle editing; mortgage terms; signed credit balances; reconciliation; and guarded deletion are implemented/component/Rust-tested | Current-record CRUD and general scenario mutation/relaunch accepted | Native coverage of every scenario lifecycle variant |
-| Settings members | Save busy/error/retry behavior is component-tested | Real SQLite failure, announced/focused error, retained draft, retry, calendar date, and relaunch persistence accepted | None for current scope |
-| Appearance | System/light/dark and reduced motion persist; System follows GNOME `color-scheme` changes through the native bridge while retaining media-query support | Dark and reduced motion survive process relaunch; both live System changes passed under D-Bus | None for current scope |
-| Backup/restore | Staged atomic backup/restore, confirmation, error recovery, and refresh are implemented | Native and packaged AppImage dialog round trips accepted, including relaunch persistence | None for current scope |
-| Startup recovery | Structured corrupt/unwritable recovery and Retry are component/Rust-tested | Release and AppImage recovery runs preserve corrupt bytes and reopen the repaired same path | Full CI rerun/upload confirmation |
-| Supply chain/CI | Zero-advisory production/full npm gates and pinned Rust audits gate CI; native tests use standalone WebdriverIO with Node's test runner | Not applicable | None for current scope |
-| AppImage | Build, content validation, visible-window smoke, packaged mutation/export/restore/relaunch, reusable packaged recovery, and artifact upload gate CI | Packaged isolated-profile acceptance; both recovery variants passed locally with `APPIMAGE_EXTRACT_AND_RUN=1` | Full CI rerun/upload confirmation |
+### FIN-TAX-001 — Retirement contributions incorrectly reduced FICA wages
 
-## Interaction inventory
+- Status: Ready for re-test
+- Severity: Critical
+- Reproduction: project $100,000 wage income with a $10,000 traditional workplace retirement contribution.
+- Expected: federal and California taxable wages decrease; Social Security and Medicare wages do not.
+- Actual before repair: all four tax bases decreased.
+- Root cause: one ambiguous `pretaxCents` parameter was applied to every tax base.
+- Repair: separate gross wages, federal deduction, California deduction, and FICA-exempt wage inputs; the supported UI preset maps to zero FICA exemption and requires a retirement destination account.
+- Automated evidence: `src/domain/tax.test.ts`, `src/domain/projection.test.ts`, and `src/App.test.tsx` pass.
+- Exact-AppImage evidence: the repaired input control and persistence path are present in the audited package, but an independently displayed golden tax result was not captured.
+- Challenger disposition: original arithmetic counterexample passes; third-party golden-output reconciliation remains open.
 
-| ID | Interaction or claim | Status | Evidence or remaining work |
-|---|---|---|---|
-| I-001 | Fresh launch and household setup | Native accepted | `acceptance.e2e.js` |
-| I-002 | Household/member validation and birth-date parsing | Implemented/component-tested | `App.test.tsx` |
-| I-003 | Add/remove members during onboarding | Native accepted | Isolated `onboarding-variants.e2e.js` profile |
-| I-004 | Filing status and California profile | Implemented/component-tested | Saved in onboarding payload and bootstrap |
-| I-005 | Account-kind radios and typed balances | Native accepted | Checking/savings plus isolated credit/investment/retirement coverage |
-| I-006 | Exact USD parsing and supported maximum | Implemented/component/Rust-tested | Decimal strings use integer/BigInt cents; backend limit enforced |
-| I-007 | Credit-card amount owed reduces net worth | Implemented/component/Rust-tested | Positive input normalizes to signed debt; migration repairs old positive credit balances |
-| I-008 | Interrupted onboarding/relaunch | Native accepted | Committed household/calendar data restore after a mid-setup process relaunch |
-| I-009 | Overview current net worth/cash flow/tax labels | Implemented/component-tested | Derived from bootstrap; tax output withheld without profile |
-| I-010 | Activity creation/editing/deletion, grouped transfers, CSV import/export, search, account/year filters | Native and packaged accepted | Export is exactly filter-scoped and includes both transfer postings with signed RFC 4180 rows |
-| I-011 | Plan expanders and monthly regions | Native accepted | Three supported viewports, including expanded rows |
-| I-012 | Scenario comparison and planning mutation | Native accepted | Clone isolation, dated-event/allocation persistence, changed projected totals, and relaunch covered |
-| I-013 | Net Worth current balances and credit/liability sections | Native accepted for current-record CRUD/persistence; scenario lifecycle editing implemented/component/Rust-tested | Native coverage of each asset/debt lifecycle event variant remains open |
-| I-014 | Net Worth zero-account action | Implemented/component-tested | Add account opens the shared account dialog |
-| I-015 | Settings member save, rejection, retained draft, retry | Native accepted | SQLite trigger injects a real write failure; focus, draft, retry, and relaunch persistence verified |
-| I-016 | Theme and reduced motion | Native accepted | Both persisted through process relaunch |
-| I-017 | Search/add/profile controls | Search and Add implemented; only Profile unavailable | Component coverage plus release-binary global-search acceptance |
-| I-018 | Backup and restore | Native accepted | Staged atomic backup/restore, confirmation, recovery, immediate refresh, dialogs, and relaunch persistence are covered |
-| I-019 | Keyboard focus, switch/radio/nav/disclosure semantics | Native accepted | Current no-history visualization exposes its state as semantic text; no chart is rendered |
-| I-020 | Long names and responsive layouts | Native accepted | 920×650, 1024×768, and 1280×820 screenshots |
-| I-021 | Corrupt-profile startup | Native accepted | Recovery UI displayed; SHA-256 unchanged |
-| I-022 | Unwritable-profile startup and Retry | Native accepted | No database before repair; same path opens after chmod and Retry |
-| I-023 | Offline launch | Native accepted | Isolated onboarding and relaunch pass inside a Bubblewrap network namespace |
-| I-024 | npm/Rust advisory gates | Implemented | CI plus `SECURITY.md`; full npm report remains visible |
-| I-025 | AppImage render/build/upload | Packaged accepted in CI | Visible smoke retained; isolated mutation, CSV dialog/content, backup/restore, and relaunch gate packaging |
-| I-026 | README current-vs-future accuracy | Reconciled | Current quick start and unavailable features are explicitly separated |
+### FIN-TAX-002 — 2025 federal standard deductions were stale
 
-## Deduplicated findings
+- Status: Ready for re-test
+- Severity: Critical
+- Reproduction: inspect the prior 2025 single/separate $15,000, joint $30,000, and head-of-household $22,500 values.
+- Expected: $15,750, $31,500, and $23,625 respectively.
+- Actual before repair: pre-revision values.
+- Root cause: the 2025 rule pack predated the statutory revision.
+- Repair: updated all filing statuses and added one-cent-below/at/above deduction and bracket tests.
+- Automated evidence: all 78 frontend tests pass.
+- Exact-AppImage evidence: package built from the repair commit; no displayed golden case captured.
+- Challenger disposition: parameter reconciliation complete; independent service comparison remains open.
 
-### F-002 — Workspace control
+### FIN-TAX-003 — Independent tax truth dataset is absent
 
-- **Status:** Implemented/component-tested. The local Workspace menu is the Profile finding's resolution; it exposes the household, local profile path, Settings navigation, and backup action with keyboard navigation, focus restoration, loading, success, and error feedback. Native menu coverage remains to be added.
-- Add now opens income, expense, transfer, account, asset, and debt creation. Net Worth creation controls and backup/restore selection are functional.
-- Global Search indexes the current bootstrap snapshot locally, deduplicates transfers, and navigates to and focuses Activity, Plan, and Net Worth records. Release-binary acceptance covers `Ctrl+K` activation against a persisted transaction.
+- Status: Open
+- Severity: High
+- Reproduction: search the repository for provenance-stamped PolicyEngine/TAXSIM fixtures.
+- Expected: reviewed offline fixtures with citations, retrieval dates, years, statuses, and boundary outputs.
+- Actual: comprehensive local boundary arithmetic exists; third-party reconciliation artifacts do not.
+- Root cause: prior work tested local production rules without importing an independent golden dataset.
+- Repair: none in this control-focused pass.
+- Automated evidence: local rule boundaries pass.
+- Exact-AppImage evidence: not applicable.
+- Challenger disposition: unresolved.
 
-### F-003 — Activity used static mock data
+### PROD-001 — Literal all-controls × 32 completion gate remains unmet
 
-- **Status:** Native accepted.
-- Activity reads persisted postings, groups transfer postings, supports manual creation/editing, derives transfer-neutral totals, and filters by text/account/year.
-- Release-binary acceptance creates and edits income, expense, and transfer entries, isolates current/prior/all-year and account/search results, and repeats critical assertions after relaunch against the same SQLite profile.
+- Status: Open
+- Severity: High
+- Reproduction: compare the 246-row source inventory, state-specific package scenarios, and the 32-row matrix.
+- Expected: every runtime instance of every applicable declaration has pointer/keyboard evidence in every required appearance/layout combination.
+- Actual: persistent shell controls passed all 32 combinations; state-specific onboarding, mutation, failure, import/export, planning, and recovery controls passed in the exact package at their scenario viewport, not each at all 32 combinations.
+- Root cause: the existing native suite was state-oriented, while the new cross-product runner covers persistent shell controls and responsive observation.
+- Repair: replaced the grouped manifest with 246 unique declaration rows; added a 32-combination exact-AppImage matrix and structured evidence.
+- Automated evidence: `e2e/specs/control-matrix.e2e.js` passed 32/32.
+- Exact-AppImage evidence: `package/control-matrix/results.json`, 32 screenshots, and `package/final-full-suite/`.
+- Challenger disposition: source/runtime reconciliation found stale onboarding route assumptions and corrected them; a literal full cross-product challenger pass is still required.
 
-### F-004 — Overview presented fabricated guidance
+### AUDIT-HARNESS-001 — Packaged scenario teardown did not exit
 
-- **Status:** Implemented/component-tested.
-- Overview derives current net worth and current-year activity, distinguishes projected tax, and suppresses projection claims when the tax profile is missing.
-- Future guidance remains bounded by the planning inputs currently exposed.
+- Status: Verified
+- Severity: Medium
+- Reproduction: run the first AppImage acceptance scenario without forcing Node's test-runner exit; assertions pass but the process retains a handle and the wrapper does not advance.
+- Expected: teardown terminates so every isolated scenario runs.
+- Actual before repair: the wrapper stalled after the first passed scenario.
+- Root cause: a packaged WebDriver/AppImage handle survived test teardown.
+- Repair: run scenarios with Node's `--test-force-exit` after registered teardown hooks complete.
+- Automated evidence: the final uninterrupted wrapper ran all nine scenario families and exited 0.
+- Exact-AppImage evidence: final full-suite screenshots and successful aggregate exit.
+- Challenger disposition: independently reproduced before repair; not reproduced after repair.
 
-### F-005 — Plan and balances ignored persisted domain state
+### AUDIT-HARNESS-002 — Onboarding variant skipped conditional Tax step
 
-- **Status:** Narrowed; ledger/account-derived views native accepted.
-- Bootstrap includes current account balances, tax profile, activity, recurring items, assets, liabilities, and scenarios. Overview/Plan/Net Worth consume that snapshot.
-- Release-binary acceptance proves exact Overview and Net Worth values after transaction/transfer edits, second-account rename, reconciliation, and process relaunch.
-- Scenario selection/comparison and create/clone/edit/delete are implemented. Recurring cash-flow CRUD drives projections. Asset and liability CRUD, mortgage terms, independent asset growth, and monthly debt amortization are implemented.
+- Status: Verified
+- Severity: Medium
+- Reproduction: the scenario selected Filing Status and immediately searched for Credit card, then assumed one Back returned from Accounts to Household.
+- Expected: activate Tax `Save & Continue`; Accounts Back returns to Tax; relaunch resumes the committed Accounts step while rolling back unsaved account drafts.
+- Actual before repair: the test failed on a missing control and later on the stale Back/relaunch assumptions.
+- Root cause: the scenario predated the eight-step onboarding route.
+- Repair: explicitly traverse Tax in both paths, assert the two-step Back route, committed household persistence, unsaved draft rollback, and remaining conditional steps.
+- Automated evidence: independent rerun and final full packaged suite pass.
+- Exact-AppImage evidence: exact package `80d932…` in isolated profiles.
+- Challenger disposition: independently reproduced three stale assumptions; all are corrected and verified.
 
-### F-006 — Credit-card sign handling increased net worth
+### PROD-002 — Startup and recovery behavior
 
-- **Status:** Implemented/component/Rust-tested.
-- Credit input is explicitly an amount owed, normalized to negative cents in frontend and backend, displayed as debt, and repaired by schema migration for older positive values.
+- Status: Verified
+- Severity: High
+- Reproduction: fresh launch, corrupt database bytes, and an unwritable profile directory repaired before Retry.
+- Expected: visible onboarding; unchanged corrupt bytes; no premature write to unwritable storage; Retry reopens the same repaired path.
+- Actual: matches expected behavior.
+- Root cause: not a defect.
+- Repair: not applicable.
+- Automated evidence: validation, smoke, corrupt, and unwritable scenarios pass.
+- Exact-AppImage evidence: `package/visible-window.png` and `package/final-full-suite/07`–`08`.
+- Challenger disposition: no reproducible defect in these states.
 
-### F-007 — Large USD values silently changed cents
+## Completion gate
 
-- **Status:** Implemented/component/Rust-tested.
-- Decimal strings are parsed exactly with a 12-digit-dollar limit and converted only after the cents value is safe; the backend enforces the matching maximum.
-
-### F-008 — Filing status and onboarding scope mismatch
-
-- **Status:** Narrowed.
-- Filing status, the supported California tax profile, and guided income, expense, asset, and debt onboarding are implemented and persisted.
-
-### F-009 — Backup/restore is incomplete
-
-- **Status:** Native accepted.
-- Settings provides filtered save/open dialogs, silent cancellation, busy protection, explicit destructive confirmation, announced/focused errors, and immediate workspace refresh. Native restore validates and migrates a staging copy, preserves the selected source, atomically replaces the live profile with rollback recovery, and returns the restored snapshot. Release-binary acceptance proves backup A, mutation B, immediate restore A, and persistence after relaunch.
-
-### F-010 — Appearance reset on relaunch
-
-- **Status:** Native accepted.
-- System/light/dark settings are stored in SQLite; explicit dark survives process relaunch and system mode observes the OS media query.
-
-### F-011 — Reduced motion was a no-op
-
-- **Status:** Native accepted.
-- The named switch updates persisted settings, sets the application motion state, and survives process relaunch.
-
-### F-013 — Member-save failures were unhandled
-
-- **Status:** Native accepted.
-- Busy protection, announced/focused errors, draft retention, retry, success refresh, and relaunch persistence are exercised after a real SQLite trigger rejects the member update.
-
-### F-014 — Accessibility semantics were incomplete
-
-- **Status:** Native accepted for the current interface.
-- Native tests cover labelled controls, current navigation, disclosure relationships, keyboard focus, and semantic text contrast. No chart is presently rendered: the empty visualization region exposes the complete “no dated balance history” state as ordinary semantic text.
-
-### F-015 — Net Worth empty state has no usable action
-
-- **Status:** Native accepted for account, asset, and liability creation plus account metadata editing and reconciliation.
-- Net Worth uses shared account, asset, and debt dialogs; release-binary acceptance covers exact balances, mortgage persistence, deletion, and relaunch.
-
-### F-021 — Transaction and account deletion
-
-- **Status:** Native accepted.
-- Manual, transfer, and imported transactions can be deleted individually; transfer postings are removed atomically, reconciliation adjustments and stale revisions are rejected, and import-batch audit metadata remains.
-- Account deletion is limited to non-final empty accounts without posting, reconciliation, import, recurring-entry, or allocation references. Confirmation and blocker/error dialogs retain focus and state.
-- Release-binary acceptance deletes manual and grouped-transfer activity atomically, deletes an empty account, rejects deletion of a blocked account, deletes an imported row, and proves the remaining state after relaunch.
-
-### F-016 — Startup corruption/permissions terminated before recovery
-
-- **Status:** Native accepted.
-- Separate release-binary scenarios show recovery UI, preserve corrupt bytes exactly, avoid replacement of an unwritable profile, and reopen through Retry after permissions are repaired.
-
-### F-018 — Advisory policy was missing
-
-- **Status:** Implemented.
-- CI blocks `npm audit --omit=dev`, installs `cargo-audit` 0.22.2 with `--locked`, blocks Rust advisories, displays the full npm audit, and rejects anything outside the exact temporary exception in `SECURITY.md`.
-
-### F-019 — Packaged smoke proved only liveness
-
-- **Status:** Implemented and packaged-accepted for persistence and file dialogs.
-- CI retains the lightweight visible-window smoke and separately runs the built AppImage through onboarding, mutation, filtered CSV export/content verification, backup/restore, immediate refresh, and same-profile relaunch.
-
-### F-020 — README mixed shipped and future flows
-
-- **Status:** Reconciled.
-- The quick start describes reachable onboarding, recurring and dated scenario planning, creation/editing, filtered CSV import/export, current-balance, appearance, and backup/restore behavior.
-
-## Prioritized repair sequence
-
-1. Native-accept all five shipped funding-goal variants, including edit/reorder/disable/delete, relaunch persistence, and clone isolation.
-2. Add native Workspace-menu coverage and complete the full native/AppImage CI evidence rerun.
-
-A finding is complete only when its observable acceptance criteria pass at the appropriate layer. Source inspection and component tests are never labeled as native persistence or packaged-runtime evidence.
+The evidence/documentation pass is internally consistent with application commit `18be03e…` and package `80d932…`, but the exhaustive audit is not complete. `FIN-TAX-003` and `PROD-001` remain Open. In particular, this file does not claim that state-specific controls were repeated through all 32 combinations, and no control is marked Verified solely from source or component evidence.

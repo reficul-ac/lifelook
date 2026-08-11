@@ -1,0 +1,3494 @@
+{
+  "generatedAt": "2026-08-11T01:08:03.035Z",
+  "sources": [
+    "src/App.tsx",
+    "src/GlobalSearch.tsx",
+    "src/ScenarioPlanningDialog.tsx"
+  ],
+  "count": 246,
+  "rows": [
+    {
+      "id": "SRC-FCF32C83D8",
+      "source": "src/App.tsx:163",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "retrying ? \"Retrying…\" : \"Retry\"",
+      "prerequisites": [
+        "loadError.retryable"
+      ],
+      "disabledExpression": "retrying",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-1808195B06",
+      "source": "src/App.tsx:430",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "name === \"Activity\" && bootstrap.activity.length > 0 && ( <i>{new Set(bootstrap.activity.map((x) => x.entryId)).size}</i> )",
+      "prerequisites": [
+        "each nav"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-A4A7C29694",
+      "source": "src/App.tsx:445",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "DYNAMIC_RENDERED_NAME@App.tsx:445",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-F81F772DFB",
+      "source": "src/App.tsx:461",
+      "element": "button",
+      "role": "menuitem",
+      "accessibleNameExpression": "Open Settings",
+      "prerequisites": [
+        "profileOpen"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-9A80EED69E",
+      "source": "src/App.tsx:461",
+      "element": "button",
+      "role": "menuitem",
+      "accessibleNameExpression": "profileBusy?\"Creating backup…\":\"Create Backup\"",
+      "prerequisites": [
+        "profileOpen"
+      ],
+      "disabledExpression": "profileBusy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-B0EA33201B",
+      "source": "src/App.tsx:471",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Search workspace",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-5ADDF43D4A",
+      "source": "src/App.tsx:479",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Toggle theme",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-A782678BFE",
+      "source": "src/App.tsx:488",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-CF2695F2E3",
+      "source": "src/App.tsx:582",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Open Settings",
+      "prerequisites": [
+        "view === \"Plan\" && !projections"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-F8CECA0F93",
+      "source": "src/App.tsx:975",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Income",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-DC320C2AA6",
+      "source": "src/App.tsx:980",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Expense",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-A6B25522E9",
+      "source": "src/App.tsx:985",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Transfer",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-1429611DCF",
+      "source": "src/App.tsx:986",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Account",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-FE0564B578",
+      "source": "src/App.tsx:987",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Asset",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-AD13E91FAE",
+      "source": "src/App.tsx:988",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Debt",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-4E04FC3CCB",
+      "source": "src/App.tsx:991",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-324D343EB4",
+      "source": "src/App.tsx:1060",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-28FA9377D8",
+      "source": "src/App.tsx:1063",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Deleting…\" : \"Delete permanently\"",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-3C5E2F083F",
+      "source": "src/App.tsx:1075",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Type",
+      "prerequisites": [
+        "state.type === \"transaction\"",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-AB645F098E",
+      "source": "src/App.tsx:1087",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Date",
+      "prerequisites": [
+        "state.type === \"transaction\"",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-8A2470B566",
+      "source": "src/App.tsx:1096",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Amount (USD)",
+      "prerequisites": [
+        "state.type === \"transaction\"",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-BFFD3E4AAB",
+      "source": "src/App.tsx:1105",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Account",
+      "prerequisites": [
+        "state.type === \"transaction\"",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-C0ACA605CE",
+      "source": "src/App.tsx:1118",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Category",
+      "prerequisites": [
+        "state.type === \"transaction\"",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-B9EC40CB76",
+      "source": "src/App.tsx:1132",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Description",
+      "prerequisites": [
+        "state.type === \"transaction\"",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-3B2BA51482",
+      "source": "src/App.tsx:1140",
+      "element": "textarea",
+      "role": "textarea",
+      "accessibleNameExpression": "Note",
+      "prerequisites": [
+        "state.type === \"transaction\"",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-B3C48B2332",
+      "source": "src/App.tsx:1151",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Date",
+      "prerequisites": [
+        "isTransfer",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-165AD347D8",
+      "source": "src/App.tsx:1160",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Amount (USD)",
+      "prerequisites": [
+        "isTransfer",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-351E5A9C7D",
+      "source": "src/App.tsx:1169",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "From account",
+      "prerequisites": [
+        "isTransfer",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-C3CEF19D13",
+      "source": "src/App.tsx:1182",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "To account",
+      "prerequisites": [
+        "isTransfer",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-5F8F578E2F",
+      "source": "src/App.tsx:1196",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Account name",
+      "prerequisites": [
+        "isAccount",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-C16411BC64",
+      "source": "src/App.tsx:1204",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Account type",
+      "prerequisites": [
+        "isAccount",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-C95FFA31C8",
+      "source": "src/App.tsx:1222",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "accountKind === \"credit\" ? \"Amount owed (USD)\" : \"Opening balance (USD)\"",
+      "prerequisites": [
+        "!state.account",
+        "isAccount",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-ED366A8714",
+      "source": "src/App.tsx:1244",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Date",
+      "prerequisites": [
+        "isReconcile",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-B90F1046F8",
+      "source": "src/App.tsx:1255",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "state.account!.kind === \"credit\" ? \"Target amount owed (USD)\" : \"Target current balance (USD)\"",
+      "prerequisites": [
+        "isReconcile",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-6DD0A46335",
+      "source": "src/App.tsx:1267",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Delete",
+      "prerequisites": [
+        "(entry?.canDelete || (isAccount && state.account))",
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-74C8C0AD87",
+      "source": "src/App.tsx:1276",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-5E89543545",
+      "source": "src/App.tsx:1280",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Saving…\" : \"Save\"",
+      "prerequisites": [
+        "entry?.origin !== \"import\"",
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-B4C33F79C4",
+      "source": "src/App.tsx:1500",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-E9AB1960B3",
+      "source": "src/App.tsx:1503",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Deleting…\" : \"Delete permanently\"",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-DA8B12E968",
+      "source": "src/App.tsx:1513",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "isAsset ? \"Asset name\" : \"Debt name\"",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-DA165CC44E",
+      "source": "src/App.tsx:1521",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "isAsset ? \"Current value (USD)\" : \"Current balance (USD)\"",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-7007868514",
+      "source": "src/App.tsx:1530",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "isAsset ? \"Annual growth (%)\" : \"Annual interest rate (%)\"",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-C4A90C4014",
+      "source": "src/App.tsx:1540",
+      "element": "input",
+      "role": "checkbox",
+      "accessibleNameExpression": "\" \" Include mortgage details",
+      "prerequisites": [
+        "!isAsset",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-A38E22AA12",
+      "source": "src/App.tsx:1555",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Original principal (USD)",
+      "prerequisites": [
+        "mortgage",
+        "!isAsset",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-C3C30DE6B8",
+      "source": "src/App.tsx:1564",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Mortgage start date",
+      "prerequisites": [
+        "mortgage",
+        "!isAsset",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-DE69123A31",
+      "source": "src/App.tsx:1573",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Original term (months)",
+      "prerequisites": [
+        "mortgage",
+        "!isAsset",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-470FE3CAC6",
+      "source": "src/App.tsx:1587",
+      "element": "input",
+      "role": "checkbox",
+      "accessibleNameExpression": "\" \" Use custom monthly payment",
+      "prerequisites": [
+        "mortgage",
+        "!isAsset",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-27D25E3118",
+      "source": "src/App.tsx:1597",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Custom monthly payment (USD)",
+      "prerequisites": [
+        "overridePayment",
+        "mortgage",
+        "!isAsset",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-3B0D2E2CF9",
+      "source": "src/App.tsx:1609",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Minimum monthly payment (USD)",
+      "prerequisites": [
+        "mortgage",
+        "!isAsset",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-153F9F67A3",
+      "source": "src/App.tsx:1622",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Delete",
+      "prerequisites": [
+        "record",
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-FDE8C7884E",
+      "source": "src/App.tsx:1631",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-0689273B10",
+      "source": "src/App.tsx:1634",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Saving…\" : \"Save\"",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-4E1EE3284F",
+      "source": "src/App.tsx:1851",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Household name",
+      "prerequisites": [
+        "step === 1"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-5D006E82AE",
+      "source": "src/App.tsx:1862",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "`Person ${i + 1} name`",
+      "prerequisites": [
+        "each people",
+        "step === 1"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-2919031F17",
+      "source": "src/App.tsx:1878",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Remove person i + 1",
+      "prerequisites": [
+        "people.length > 1",
+        "each people",
+        "step === 1"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-C0CD19F062",
+      "source": "src/App.tsx:1890",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add another person",
+      "prerequisites": [
+        "step === 1"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-ADB414A0FA",
+      "source": "src/App.tsx:1901",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Filing location",
+      "prerequisites": [
+        "step === 1"
+      ],
+      "disabledExpression": "true",
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-6F16F6A31E",
+      "source": "src/App.tsx:1908",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Filing status",
+      "prerequisites": [
+        "step === 2",
+        "step === 1"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-CD09824EAF",
+      "source": "src/App.tsx:1939",
+      "element": "input",
+      "role": "radio",
+      "accessibleNameExpression": "DYNAMIC_RENDERED_NAME@App.tsx:1939",
+      "prerequisites": [
+        "each accountKinds",
+        "each accounts",
+        "step === 3",
+        "step === 2",
+        "step === 1"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-B1E36DCE02",
+      "source": "src/App.tsx:1960",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "`Account ${i + 1} name`",
+      "prerequisites": [
+        "each accounts",
+        "step === 3",
+        "step === 2",
+        "step === 1"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-10AE2C2B46",
+      "source": "src/App.tsx:1972",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "`Account ${i + 1} opening balance`",
+      "prerequisites": [
+        "each accounts",
+        "step === 3",
+        "step === 2",
+        "step === 1"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-5FAB8E2DE7",
+      "source": "src/App.tsx:1990",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Remove account i + 1",
+      "prerequisites": [
+        "accounts.length > 1",
+        "each accounts",
+        "step === 3",
+        "step === 2",
+        "step === 1"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-59240C12B6",
+      "source": "src/App.tsx:2017",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add another account",
+      "prerequisites": [
+        "step === 3",
+        "step === 2",
+        "step === 1"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-3E2AA98C07",
+      "source": "src/App.tsx:2059",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Back",
+      "prerequisites": [
+        "step > 1"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-517BC775B4",
+      "source": "src/App.tsx:2067",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "saving ? \"Saving…\" : step === 1 ? \"Save & Continue\" : step === 8 ? \"Finish setup\" : step >= 4 && (step === 4 ? income.length : step === 5 ? expenses.length : step === 6 ? assets.length : debts.length) === 0 ? \"Skip & Continue\" : \"Save & Continue\"",
+      "prerequisites": [],
+      "disabledExpression": "saving",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-7EB7555549",
+      "source": "src/App.tsx:2274",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "`${kind} ${i + 1} name`",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-5326AE5A3F",
+      "source": "src/App.tsx:2284",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Category",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-8F36140969",
+      "source": "src/App.tsx:2297",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Account (optional)",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-AE2EE12921",
+      "source": "src/App.tsx:2313",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Amount (USD)",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-86E9D28D53",
+      "source": "src/App.tsx:2323",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Frequency",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-5EA10C1110",
+      "source": "src/App.tsx:2348",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Start date",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-03112F0514",
+      "source": "src/App.tsx:2358",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "End date (optional)",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-C65C90EBE4",
+      "source": "src/App.tsx:2369",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Annual growth (%)",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-D4B071E224",
+      "source": "src/App.tsx:2377",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Remove kind i + 1",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-68A75E5BD9",
+      "source": "src/App.tsx:2386",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add kind",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-13B7124B3A",
+      "source": "src/App.tsx:2414",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Asset name",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-AE885933C0",
+      "source": "src/App.tsx:2423",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Current value (USD)",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-6FEC2FF586",
+      "source": "src/App.tsx:2433",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Annual growth (%)",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-DD76115BEF",
+      "source": "src/App.tsx:2441",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Remove asset i + 1",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-E4370756F0",
+      "source": "src/App.tsx:2450",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add asset",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-4B6DC20073",
+      "source": "src/App.tsx:2482",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Debt name",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-175A405FA8",
+      "source": "src/App.tsx:2491",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Current balance (USD)",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-823E9D4B14",
+      "source": "src/App.tsx:2501",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Annual interest rate (%)",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-7AD8335782",
+      "source": "src/App.tsx:2510",
+      "element": "input",
+      "role": "checkbox",
+      "accessibleNameExpression": "\" \" Include mortgage details",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-BABF8B6F20",
+      "source": "src/App.tsx:2523",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Original principal (USD)",
+      "prerequisites": [
+        "d.mortgage",
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-9CB5EFABC5",
+      "source": "src/App.tsx:2533",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Mortgage start date",
+      "prerequisites": [
+        "d.mortgage",
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-3E3E86307F",
+      "source": "src/App.tsx:2543",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Original term (months)",
+      "prerequisites": [
+        "d.mortgage",
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-02D4BCEAD2",
+      "source": "src/App.tsx:2552",
+      "element": "input",
+      "role": "checkbox",
+      "accessibleNameExpression": "\" \" Use custom monthly payment",
+      "prerequisites": [
+        "d.mortgage",
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-3BDB15128F",
+      "source": "src/App.tsx:2566",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Custom monthly payment (USD)",
+      "prerequisites": [
+        "d.overridePayment",
+        "d.mortgage",
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-1B81563A5B",
+      "source": "src/App.tsx:2581",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Minimum monthly payment (USD)",
+      "prerequisites": [
+        "d.mortgage",
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-697BB8F9B0",
+      "source": "src/App.tsx:2592",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Remove debt i + 1",
+      "prerequisites": [
+        "each items"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-8B2CA78762",
+      "source": "src/App.tsx:2601",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add debt",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-6C61074823",
+      "source": "src/App.tsx:2652",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Edit title.toLowerCase()",
+      "prerequisites": [
+        "each sections"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-B463A8C9E0",
+      "source": "src/App.tsx:2766",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "label",
+      "prerequisites": [],
+      "disabledExpression": "disabled",
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-8AD150296A",
+      "source": "src/App.tsx:2778",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "`Choose ${label} from calendar`",
+      "prerequisites": [],
+      "disabledExpression": "disabled",
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-9D3D62A68B",
+      "source": "src/App.tsx:2869",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "View all",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-E2E0A60E1E",
+      "source": "src/App.tsx:2881",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Open plan",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-10652488A2",
+      "source": "src/App.tsx:3124",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "!inspection"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-6B67D24E92",
+      "source": "src/App.tsx:3127",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Reading…\" : \"Choose CSV…\"",
+      "prerequisites": [
+        "!inspection"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-5AC0EA3C67",
+      "source": "src/App.tsx:3141",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Destination account",
+      "prerequisites": [
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-1C7AB7B5EA",
+      "source": "src/App.tsx:3156",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Date column",
+      "prerequisites": [
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-5A4DA96012",
+      "source": "src/App.tsx:3167",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Description column",
+      "prerequisites": [
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-F6CF4FC02E",
+      "source": "src/App.tsx:3181",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Note column",
+      "prerequisites": [
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-B8A6883F27",
+      "source": "src/App.tsx:3195",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Date format",
+      "prerequisites": [
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-68DC06FB14",
+      "source": "src/App.tsx:3210",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Amount layout",
+      "prerequisites": [
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-27C38AC0FC",
+      "source": "src/App.tsx:3228",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Amount column",
+      "prerequisites": [
+        "mapping.amountLayout === \"signed\"",
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-1567BC41D6",
+      "source": "src/App.tsx:3239",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Positive values are",
+      "prerequisites": [
+        "mapping.amountLayout === \"signed\"",
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-8FA114CAAD",
+      "source": "src/App.tsx:3257",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Debit column",
+      "prerequisites": [
+        "mapping.amountLayout === \"signed\"",
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-61CA96A039",
+      "source": "src/App.tsx:3268",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Credit column",
+      "prerequisites": [
+        "mapping.amountLayout === \"signed\"",
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-D60E96F1BA",
+      "source": "src/App.tsx:3281",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-F288257C27",
+      "source": "src/App.tsx:3284",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Previewing…\" : \"Preview\"",
+      "prerequisites": [
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-DC8BAB272E",
+      "source": "src/App.tsx:3313",
+      "element": "input",
+      "role": "checkbox",
+      "accessibleNameExpression": "`Include row ${r.rowNumber}`",
+      "prerequisites": [
+        "each preview.rows",
+        "preview",
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": "!r.valid",
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-5C9CFC50E1",
+      "source": "src/App.tsx:3331",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "`Category row ${r.rowNumber}`",
+      "prerequisites": [
+        "each preview.rows",
+        "preview",
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": "!r.valid",
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-636AC1EEE1",
+      "source": "src/App.tsx:3362",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Back",
+      "prerequisites": [
+        "preview",
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-16E7C95BD2",
+      "source": "src/App.tsx:3365",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Importing…\" : \"Import selected\"",
+      "prerequisites": [
+        "preview",
+        "!preview && mapping",
+        "!inspection"
+      ],
+      "disabledExpression": "busy || !preview.rows.some((r) => r.include)",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-7E9F077ED5",
+      "source": "src/App.tsx:3478",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Search activity",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-D4074E79EF",
+      "source": "src/App.tsx:3488",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "DYNAMIC_RENDERED_NAME@App.tsx:3488",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-5DAAC8606F",
+      "source": "src/App.tsx:3503",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "DYNAMIC_RENDERED_NAME@App.tsx:3503",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-A5FBB02DC8",
+      "source": "src/App.tsx:3513",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Import CSV",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-95FBC062FB",
+      "source": "src/App.tsx:3514",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "exporting ? \"Exporting…\" : \"Export CSV\"",
+      "prerequisites": [],
+      "disabledExpression": "!rows.length || exporting",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-1CAF61280D",
+      "source": "src/App.tsx:3539",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "`Edit ${row.description || row.kind}`",
+      "prerequisites": [
+        "each rows"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-C8BB2948D6",
+      "source": "src/App.tsx:3735",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-0B17F80215",
+      "source": "src/App.tsx:3738",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Deleting…\" : \"Delete permanently\"",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-84692E6DC9",
+      "source": "src/App.tsx:3747",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Type",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-4C429833F1",
+      "source": "src/App.tsx:3757",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Name",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-B188FD43CD",
+      "source": "src/App.tsx:3765",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Recurring category",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-CDD37B2CA3",
+      "source": "src/App.tsx:3779",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Account (optional)",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-3E9A90D07B",
+      "source": "src/App.tsx:3793",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Amount (USD)",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-5DB9118A89",
+      "source": "src/App.tsx:3802",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Frequency",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-B1CDB224B3",
+      "source": "src/App.tsx:3817",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Start date",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-2C26878796",
+      "source": "src/App.tsx:3826",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "End date (optional)",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-D3621C4773",
+      "source": "src/App.tsx:3835",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Annual growth (%)",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-54E3C9E2D9",
+      "source": "src/App.tsx:3844",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Tax treatment",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-8111BD59D4",
+      "source": "src/App.tsx:3868",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Delete",
+      "prerequisites": [
+        "record",
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-A848124DE8",
+      "source": "src/App.tsx:3877",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-A3C052A18E",
+      "source": "src/App.tsx:3880",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Saving…\" : \"Save\"",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-8DC6AD0DB5",
+      "source": "src/App.tsx:4035",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-E997FC2B6A",
+      "source": "src/App.tsx:4038",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Deleting…\" : \"Delete permanently\"",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-4A7940B758",
+      "source": "src/App.tsx:4047",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Name",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "record?.isBaseline",
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-3C3FF1B160",
+      "source": "src/App.tsx:4056",
+      "element": "input",
+      "role": "checkbox",
+      "accessibleNameExpression": "\" \" Clone active scenario settings",
+      "prerequisites": [
+        "!editing",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-3315FC9A43",
+      "source": "src/App.tsx:4068",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Inflation (%)",
+      "prerequisites": [
+        "editing",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-5CF8600718",
+      "source": "src/App.tsx:4077",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Tax-threshold inflation (%)",
+      "prerequisites": [
+        "editing",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-7844D1283D",
+      "source": "src/App.tsx:4086",
+      "element": "input",
+      "role": "number",
+      "accessibleNameExpression": "Projection horizon (months)",
+      "prerequisites": [
+        "editing",
+        "confirmDelete"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-5E090D23A2",
+      "source": "src/App.tsx:4099",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Delete",
+      "prerequisites": [
+        "editing && !record?.isBaseline",
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-3A6A09A645",
+      "source": "src/App.tsx:4108",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-371F9B37CA",
+      "source": "src/App.tsx:4111",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Saving…\" : editing ? \"Save\" : \"Create scenario\"",
+      "prerequisites": [
+        "confirmDelete"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-BBCFBAF37E",
+      "source": "src/App.tsx:4178",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Active scenario",
+      "prerequisites": [
+        "scenarios.length > 0"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-E8075FDCB4",
+      "source": "src/App.tsx:4193",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "New scenario",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-B620424647",
+      "source": "src/App.tsx:4196",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Edit scenario",
+      "prerequisites": [],
+      "disabledExpression": "!scenarios.length",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-40CB940AEB",
+      "source": "src/App.tsx:4202",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Events &amp; allocations",
+      "prerequisites": [],
+      "disabledExpression": "!scenarios.length",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-374CA00649",
+      "source": "src/App.tsx:4213",
+      "element": "input",
+      "role": "checkbox",
+      "accessibleNameExpression": "s.name",
+      "prerequisites": [
+        "each scenarios"
+      ],
+      "disabledExpression": "!comparisonIds.includes(s.id) && comparisonIds.length >= 3",
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-B501B0A0E3",
+      "source": "src/App.tsx:4268",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add income",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-D2812B1A19",
+      "source": "src/App.tsx:4271",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add expense",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-5A0456247E",
+      "source": "src/App.tsx:4281",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "`Edit recurring ${entry.name}`",
+      "prerequisites": [
+        "each recurring"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-2A27C255C5",
+      "source": "src/App.tsx:4342",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "DYNAMIC_RENDERED_NAME@App.tsx:4342",
+      "prerequisites": [
+        "each projections"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-EE419E28B3",
+      "source": "src/App.tsx:4458",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add asset",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-B24E566AB7",
+      "source": "src/App.tsx:4461",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add account",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-F718904CE3",
+      "source": "src/App.tsx:4478",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Edit",
+      "prerequisites": [
+        "each snapshot.accounts .filter((a) => a.balanceCents >= 0)"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-8CA3A8C7B8",
+      "source": "src/App.tsx:4490",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Reconcile",
+      "prerequisites": [
+        "each snapshot.accounts .filter((a) => a.balanceCents >= 0)"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-BDA95A9BEC",
+      "source": "src/App.tsx:4512",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Edit",
+      "prerequisites": [
+        "each assetRecords"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-308FB56361",
+      "source": "src/App.tsx:4531",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add debt",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-B75E4C1FF8",
+      "source": "src/App.tsx:4547",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Edit",
+      "prerequisites": [
+        "each snapshot.accounts .filter((a) => a.balanceCents < 0)"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-38D99EE42E",
+      "source": "src/App.tsx:4559",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Reconcile",
+      "prerequisites": [
+        "each snapshot.accounts .filter((a) => a.balanceCents < 0)"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-F62BD1DAEA",
+      "source": "src/App.tsx:4581",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Edit",
+      "prerequisites": [
+        "each liabilityRecords"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-58AD518FB5",
+      "source": "src/App.tsx:4786",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "`Member ${i + 1} name`",
+      "prerequisites": [
+        "each people"
+      ],
+      "disabledExpression": "memberSaving",
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-A8083C9EB6",
+      "source": "src/App.tsx:4803",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Remove",
+      "prerequisites": [
+        "people.length > 1",
+        "each people"
+      ],
+      "disabledExpression": "memberSaving",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-EEAD20E49D",
+      "source": "src/App.tsx:4813",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add person",
+      "prerequisites": [],
+      "disabledExpression": "memberSaving",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-9D667362B4",
+      "source": "src/App.tsx:4821",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "memberSaving ? \"Saving…\" : \"Save members\"",
+      "prerequisites": [],
+      "disabledExpression": "memberSaving",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-738CA0AE5B",
+      "source": "src/App.tsx:4846",
+      "element": "input",
+      "role": "radio",
+      "accessibleNameExpression": "theme[0].toUpperCase() + theme.slice(1)",
+      "prerequisites": [
+        "each ([\"system\", \"light\", \"dark\"] as Theme[])"
+      ],
+      "disabledExpression": "appearanceSaving",
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-DD3CC310A5",
+      "source": "src/App.tsx:4863",
+      "element": "button",
+      "role": "switch",
+      "accessibleNameExpression": "reduced-motion-label",
+      "prerequisites": [],
+      "disabledExpression": "appearanceSaving",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-6D984069CC",
+      "source": "src/App.tsx:4885",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "backupBusy ? \"Backing up…\" : \"Back up data\"",
+      "prerequisites": [],
+      "disabledExpression": "backupBusy || restoreBusy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-48B650C60E",
+      "source": "src/App.tsx:4894",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Choose backup",
+      "prerequisites": [],
+      "disabledExpression": "backupBusy || restoreBusy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-CBC3162451",
+      "source": "src/App.tsx:4928",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "confirmRestore"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-E73B3D27BC",
+      "source": "src/App.tsx:4934",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Choose backup and restore",
+      "prerequisites": [
+        "confirmRestore"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-F3727419BB",
+      "source": "src/GlobalSearch.tsx:193",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Search workspace",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-0156550560",
+      "source": "src/GlobalSearch.tsx:226",
+      "element": "button",
+      "role": "option",
+      "accessibleNameExpression": "DYNAMIC_RENDERED_NAME@GlobalSearch.tsx:226",
+      "prerequisites": [
+        "each results"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-02A8F8F2E9",
+      "source": "src/ScenarioPlanningDialog.tsx:184",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add goal",
+      "prerequisites": [
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-47901ADA52",
+      "source": "src/ScenarioPlanningDialog.tsx:186",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "`${goal.enabled?\"Disable\":\"Enable\"} ${goal.name}`",
+      "prerequisites": [
+        "each goals",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-798BD890B5",
+      "source": "src/ScenarioPlanningDialog.tsx:186",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Move up",
+      "prerequisites": [
+        "each goals",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": "index===0",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-E2086897BC",
+      "source": "src/ScenarioPlanningDialog.tsx:186",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Move down",
+      "prerequisites": [
+        "each goals",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": "index===goals.length-1",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-18A9AD9E78",
+      "source": "src/ScenarioPlanningDialog.tsx:186",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Edit",
+      "prerequisites": [
+        "each goals",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-E98DAE0126",
+      "source": "src/ScenarioPlanningDialog.tsx:186",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Delete",
+      "prerequisites": [
+        "each goals",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-BAB541BF23",
+      "source": "src/ScenarioPlanningDialog.tsx:192",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add event",
+      "prerequisites": [
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-E7651C04FC",
+      "source": "src/ScenarioPlanningDialog.tsx:201",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "`Edit ${labels[e.type]} on ${e.date}`",
+      "prerequisites": [
+        "each events",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-F4877077B1",
+      "source": "src/ScenarioPlanningDialog.tsx:207",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "`Delete ${labels[e.type]} on ${e.date}`",
+      "prerequisites": [
+        "each events",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-C121282164",
+      "source": "src/ScenarioPlanningDialog.tsx:224",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add rule",
+      "prerequisites": [
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-93BD99E9A1",
+      "source": "src/ScenarioPlanningDialog.tsx:251",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Account",
+      "prerequisites": [
+        "each allocations",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-6BA546E3E7",
+      "source": "src/ScenarioPlanningDialog.tsx:270",
+      "element": "input",
+      "role": "number",
+      "accessibleNameExpression": "`Allocation ${i + 1} percent`",
+      "prerequisites": [
+        "each allocations",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": "i === allocations.length - 1",
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-532F402FA8",
+      "source": "src/ScenarioPlanningDialog.tsx:296",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Target balance (optional)",
+      "prerequisites": [
+        "each allocations",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-EB6F38535B",
+      "source": "src/ScenarioPlanningDialog.tsx:314",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Move up",
+      "prerequisites": [
+        "each allocations",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": "i === 0",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-9CF8948718",
+      "source": "src/ScenarioPlanningDialog.tsx:317",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Move down",
+      "prerequisites": [
+        "each allocations",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": "i === allocations.length - 1",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-95F92D61E8",
+      "source": "src/ScenarioPlanningDialog.tsx:323",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Remove",
+      "prerequisites": [
+        "each allocations",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-D61DE48477",
+      "source": "src/ScenarioPlanningDialog.tsx:347",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add rule",
+      "prerequisites": [
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-500CD1B153",
+      "source": "src/ScenarioPlanningDialog.tsx:354",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Liquid account",
+      "prerequisites": [
+        "each withdrawals",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-E68FC69DAB",
+      "source": "src/ScenarioPlanningDialog.tsx:356",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Move up",
+      "prerequisites": [
+        "each withdrawals",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": "i === 0",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-34D71C58EC",
+      "source": "src/ScenarioPlanningDialog.tsx:357",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Move down",
+      "prerequisites": [
+        "each withdrawals",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": "i === withdrawals.length - 1",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-B9C5B738AB",
+      "source": "src/ScenarioPlanningDialog.tsx:358",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Remove",
+      "prerequisites": [
+        "each withdrawals",
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-640D69747B",
+      "source": "src/ScenarioPlanningDialog.tsx:364",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-0294283C0C",
+      "source": "src/ScenarioPlanningDialog.tsx:367",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "busy ? \"Saving…\" : \"Save plan\"",
+      "prerequisites": [
+        "goalEditing !== undefined",
+        "editing !== undefined"
+      ],
+      "disabledExpression": "busy",
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-0DD0944556",
+      "source": "src/ScenarioPlanningDialog.tsx:405",
+      "element": "input",
+      "role": "checkbox",
+      "accessibleNameExpression": "label",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-7B48BEC93C",
+      "source": "src/ScenarioPlanningDialog.tsx:406",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Goal type",
+      "prerequisites": [],
+      "disabledExpression": "!!value",
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-DDA9A83DA4",
+      "source": "src/ScenarioPlanningDialog.tsx:406",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Name",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-4A305ADA77",
+      "source": "src/ScenarioPlanningDialog.tsx:406",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Target date",
+      "prerequisites": [
+        "kind!==\"retirement\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-D3C73286CB",
+      "source": "src/ScenarioPlanningDialog.tsx:406",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Destination account",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-ECB19928DC",
+      "source": "src/ScenarioPlanningDialog.tsx:406",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Starting earmarked balance",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-F4A2E0797D",
+      "source": "src/ScenarioPlanningDialog.tsx:406",
+      "element": "input",
+      "role": "checkbox",
+      "accessibleNameExpression": "Amount is in today’s dollars",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-54036303CC",
+      "source": "src/ScenarioPlanningDialog.tsx:406",
+      "element": "input",
+      "role": "checkbox",
+      "accessibleNameExpression": "Allow ordered account withdrawals when surplus is short",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-B522CD85F9",
+      "source": "src/ScenarioPlanningDialog.tsx:407",
+      "element": "input",
+      "role": "number",
+      "accessibleNameExpression": "Coverage months",
+      "prerequisites": [
+        "kind===\"emergency-fund\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-7092901C18",
+      "source": "src/ScenarioPlanningDialog.tsx:407",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Minimum target (optional)",
+      "prerequisites": [
+        "kind===\"emergency-fund\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-670AB8CEB3",
+      "source": "src/ScenarioPlanningDialog.tsx:408",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Liability",
+      "prerequisites": [
+        "kind===\"debt-payoff\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-0F14098C5B",
+      "source": "src/ScenarioPlanningDialog.tsx:409",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Beneficiary",
+      "prerequisites": [
+        "kind===\"education\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-9812E5F7A3",
+      "source": "src/ScenarioPlanningDialog.tsx:409",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Attendance starts",
+      "prerequisites": [
+        "kind===\"education\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-ADA9ECA119",
+      "source": "src/ScenarioPlanningDialog.tsx:409",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Attendance ends",
+      "prerequisites": [
+        "kind===\"education\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-6EF685F6A7",
+      "source": "src/ScenarioPlanningDialog.tsx:409",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Annual cost",
+      "prerequisites": [
+        "kind===\"education\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-C15F81E142",
+      "source": "src/ScenarioPlanningDialog.tsx:409",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Education inflation (%)",
+      "prerequisites": [
+        "kind===\"education\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-07B32834A7",
+      "source": "src/ScenarioPlanningDialog.tsx:410",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Purchase cost",
+      "prerequisites": [
+        "kind===\"major-purchase\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-068432CF23",
+      "source": "src/ScenarioPlanningDialog.tsx:411",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Retirement date for person.name",
+      "prerequisites": [
+        "participants.includes(person.id)",
+        "each bootstrap.people",
+        "kind===\"retirement\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-7B8D5D5CD1",
+      "source": "src/ScenarioPlanningDialog.tsx:411",
+      "element": "input",
+      "role": "number",
+      "accessibleNameExpression": "Plan through age for person.name",
+      "prerequisites": [
+        "participants.includes(person.id)",
+        "each bootstrap.people",
+        "kind===\"retirement\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-D95E527B30",
+      "source": "src/ScenarioPlanningDialog.tsx:411",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Desired monthly spending",
+      "prerequisites": [
+        "kind===\"retirement\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-73E11C2FF5",
+      "source": "src/ScenarioPlanningDialog.tsx:411",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Monthly healthcare cost",
+      "prerequisites": [
+        "kind===\"retirement\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-D41300D0C7",
+      "source": "src/ScenarioPlanningDialog.tsx:411",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Healthcare annual growth (%)",
+      "prerequisites": [
+        "kind===\"retirement\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-0CE3D44781",
+      "source": "src/ScenarioPlanningDialog.tsx:411",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Add pension",
+      "prerequisites": [
+        "kind===\"retirement\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-E4F2157A74",
+      "source": "src/ScenarioPlanningDialog.tsx:411",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Name",
+      "prerequisites": [
+        "each pensions",
+        "kind===\"retirement\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-C87DDD43A7",
+      "source": "src/ScenarioPlanningDialog.tsx:411",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Monthly amount",
+      "prerequisites": [
+        "each pensions",
+        "kind===\"retirement\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-FBDDE85DF5",
+      "source": "src/ScenarioPlanningDialog.tsx:411",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Start date",
+      "prerequisites": [
+        "each pensions",
+        "kind===\"retirement\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-FD65553015",
+      "source": "src/ScenarioPlanningDialog.tsx:411",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Remove pension",
+      "prerequisites": [
+        "each pensions",
+        "kind===\"retirement\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-30FE084946",
+      "source": "src/ScenarioPlanningDialog.tsx:412",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-01A732D3B7",
+      "source": "src/ScenarioPlanningDialog.tsx:412",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Save goal",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-7163797CB5",
+      "source": "src/ScenarioPlanningDialog.tsx:466",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "label",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-3ADC2DBF61",
+      "source": "src/ScenarioPlanningDialog.tsx:483",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "label",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-55699A8648",
+      "source": "src/ScenarioPlanningDialog.tsx:615",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Event type",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-C6FE49E9D2",
+      "source": "src/ScenarioPlanningDialog.tsx:631",
+      "element": "input",
+      "role": "date",
+      "accessibleNameExpression": "Event date",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-485E137B9C",
+      "source": "src/ScenarioPlanningDialog.tsx:646",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Recurring entry",
+      "prerequisites": [
+        "(kind === \"recurring-change\" || kind === \"income-change\")"
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-3B88176B4E",
+      "source": "src/ScenarioPlanningDialog.tsx:679",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Name",
+      "prerequisites": [
+        "kind === \"debt-origination\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-196894C103",
+      "source": "src/ScenarioPlanningDialog.tsx:688",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Annual rate (%)",
+      "prerequisites": [
+        "kind === \"debt-origination\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-E58FBB6330",
+      "source": "src/ScenarioPlanningDialog.tsx:703",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Liability",
+      "prerequisites": [
+        "kind === \"debt-payoff\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-2FBEF13E1B",
+      "source": "src/ScenarioPlanningDialog.tsx:724",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Name",
+      "prerequisites": [
+        "kind === \"asset-purchase\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-0839D0F5CA",
+      "source": "src/ScenarioPlanningDialog.tsx:733",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Annual growth (%)",
+      "prerequisites": [
+        "kind === \"asset-purchase\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-1D5327A8E9",
+      "source": "src/ScenarioPlanningDialog.tsx:749",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Asset",
+      "prerequisites": [
+        "kind === \"asset-sale\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-9B03D0CEF5",
+      "source": "src/ScenarioPlanningDialog.tsx:771",
+      "element": "input",
+      "role": "checkbox",
+      "accessibleNameExpression": "\" \" Finance this purchase",
+      "prerequisites": [
+        "kind === \"asset-purchase\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-6AE0145E88",
+      "source": "src/ScenarioPlanningDialog.tsx:786",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Debt name",
+      "prerequisites": [
+        "(f(\"financing.enabled\") || f(\"financing.liabilityId\"))",
+        "kind === \"asset-purchase\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-920CCF538E",
+      "source": "src/ScenarioPlanningDialog.tsx:795",
+      "element": "input",
+      "role": "textbox",
+      "accessibleNameExpression": "Annual rate (%)",
+      "prerequisites": [
+        "(f(\"financing.enabled\") || f(\"financing.liabilityId\"))",
+        "kind === \"asset-purchase\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab and text/editing keys"
+    },
+    {
+      "id": "SRC-13F83279C3",
+      "source": "src/ScenarioPlanningDialog.tsx:814",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Payoff mode",
+      "prerequisites": [
+        "kind === \"asset-sale\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-B51B34D526",
+      "source": "src/ScenarioPlanningDialog.tsx:826",
+      "element": "select",
+      "role": "select",
+      "accessibleNameExpression": "Liability",
+      "prerequisites": [
+        "f(\"payoff.mode\") && f(\"payoff.mode\") !== \"none\"",
+        "kind === \"asset-sale\""
+      ],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Rendered value/selection changes visibly and is consumed by the enclosing save or filter action.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-0174E1BBA7",
+      "source": "src/ScenarioPlanningDialog.tsx:845",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Cancel",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    },
+    {
+      "id": "SRC-A617F2F9BE",
+      "source": "src/ScenarioPlanningDialog.tsx:848",
+      "element": "button",
+      "role": "button",
+      "accessibleNameExpression": "Save event",
+      "prerequisites": [],
+      "disabledExpression": null,
+      "expectedVisibleEffect": "Named action or disclosure produces its rendered state change or feedback.",
+      "pointer": "click/select/type as applicable",
+      "keyboard": "Tab plus Enter/Space/arrows as applicable"
+    }
+  ]
+}

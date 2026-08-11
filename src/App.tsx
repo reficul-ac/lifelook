@@ -3620,7 +3620,8 @@ function RecurringDialog({
     [endDate, setEndDate] = useState(record?.endDate ?? ""),
     [growth, setGrowth] = useState(
       String((record?.annualGrowthBps ?? 0) / 100),
-    );
+    ),
+    [taxTreatment, setTaxTreatment] = useState(record?.taxTreatment ?? "none");
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [confirmDelete, setConfirmDelete] = useState(false);
@@ -3628,6 +3629,7 @@ function RecurringDialog({
   useEffect(() => {
     if (!available.some((c) => c.id === categoryId))
       setCategoryId(available[0]?.id ?? "");
+    if (kind === "income") setTaxTreatment("none");
   }, [kind]);
   useEffect(() => {
     if (error) errorRef.current?.focus();
@@ -3650,6 +3652,15 @@ function RecurringDialog({
       return setError(
         "Enter an annual growth rate within the supported range.",
       );
+    if (
+      taxTreatment === "pretax" &&
+      (kind !== "expense" ||
+        bootstrap.accounts.find((account) => account.id === accountId)?.kind !==
+          "retirement")
+    )
+      return setError(
+        "Pre-tax retirement contributions require a retirement account.",
+      );
     setBusy(true);
     try {
       const input = {
@@ -3662,6 +3673,7 @@ function RecurringDialog({
         startDate,
         endDate: endDate || null,
         annualGrowthBps: bps,
+        taxTreatment,
       };
       if (record)
         await repository.updateRecurring?.({
@@ -3826,6 +3838,30 @@ function RecurringDialog({
                 value={growth}
                 onChange={(e) => setGrowth(e.target.value)}
               />
+            </label>
+            <label>
+                Tax treatment
+                <select
+                  value={taxTreatment}
+                  onChange={(e) =>
+                    setTaxTreatment(
+                      e.target.value as Exclude<
+                        RecurringInput["taxTreatment"],
+                        undefined
+                      >,
+                    )
+                  }
+                >
+                  <option value="none">Paid after tax</option>
+                  <option value="pretax" disabled={kind !== "expense"}>
+                    Traditional workplace retirement contribution
+                  </option>
+                </select>
+                <small>
+                  The supported pre-tax preset reduces federal and California
+                  income-tax wages, but not Social Security or Medicare wages.
+                  It requires a retirement account.
+                </small>
             </label>
             <div className="actions">
               {record && (

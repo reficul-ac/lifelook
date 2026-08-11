@@ -1,4 +1,4 @@
-import type { Cents, FilingStatus, TaxBracket, TaxEstimate, TaxRulePack, TaxSource } from "./types";
+import type { Cents, FilingStatus, TaxabilityBreakdown, TaxBracket, TaxEstimate, TaxRulePack, TaxSource } from "./types";
 
 const IRS_URL="https://www.irs.gov/newsroom/irs-releases-tax-inflation-adjustments-for-tax-year-2026-including-amendments-from-the-one-big-beautiful-bill";
 const FTB_URL="https://www.ftb.ca.gov/forms/2025/2025-540-booklet.html";
@@ -18,10 +18,10 @@ const ca2025={
 const inflateBrackets=(items:readonly TaxBracket[],bps:number)=>items.map(x=>({...x,upToCents:x.upToCents===null?null:Math.round(x.upToCents*(1+bps/10000))}));
 
 export const TAX_RULES_2025:TaxRulePack={year:2025,federal:{
-  single:{standardDeductionCents:15000_00,brackets:brackets([[11925,1000],[48475,1200],[103350,2200],[197300,2400],[250525,3200],[626350,3500],[null,3700]])},
-  "married-joint":{standardDeductionCents:30000_00,brackets:brackets([[23850,1000],[96950,1200],[206700,2200],[394600,2400],[501050,3200],[751600,3500],[null,3700]])},
-  "married-separate":{standardDeductionCents:15000_00,brackets:brackets([[11925,1000],[48475,1200],[103350,2200],[197300,2400],[250525,3200],[375800,3500],[null,3700]])},
-  "head-of-household":{standardDeductionCents:22500_00,brackets:brackets([[17000,1000],[64850,1200],[103350,2200],[197300,2400],[250500,3200],[626350,3500],[null,3700]])},
+  single:{standardDeductionCents:15750_00,brackets:brackets([[11925,1000],[48475,1200],[103350,2200],[197300,2400],[250525,3200],[626350,3500],[null,3700]])},
+  "married-joint":{standardDeductionCents:31500_00,brackets:brackets([[23850,1000],[96950,1200],[206700,2200],[394600,2400],[501050,3200],[751600,3500],[null,3700]])},
+  "married-separate":{standardDeductionCents:15750_00,brackets:brackets([[11925,1000],[48475,1200],[103350,2200],[197300,2400],[250525,3200],[375800,3500],[null,3700]])},
+  "head-of-household":{standardDeductionCents:23625_00,brackets:brackets([[17000,1000],[64850,1200],[103350,2200],[197300,2400],[250500,3200],[626350,3500],[null,3700]])},
 },california:{
   single:{standardDeductionCents:5706_00,brackets:ca2025.single},
   "married-joint":{standardDeductionCents:11412_00,brackets:ca2025.joint},
@@ -43,12 +43,14 @@ export const TAX_RULES_2026:TaxRulePack={year:2026,federal:{
 
 function progressive(amount:Cents,items:readonly TaxBracket[]):Cents{let tax=0,previous=0;for(const item of items){const ceiling=item.upToCents??amount;tax+=Math.round(Math.max(0,Math.min(amount,ceiling)-previous)*item.rateBps/10000);if(amount<=ceiling)break;previous=ceiling;}return tax;}
 function marginal(amount:Cents,items:readonly TaxBracket[]):number{if(amount<=0)return 0;return items.find(x=>x.upToCents===null||amount<=x.upToCents)?.rateBps??0;}
-export function estimateTax(grossCents:Cents,status:FilingStatus,pack:TaxRulePack,pretaxCents=0,projected=false):TaxEstimate{
-  const wages=Math.max(0,grossCents-pretaxCents),fed=pack.federal[status],ca=pack.california[status];
-  const federalTaxable=Math.max(0,wages-fed.standardDeductionCents),caTaxable=Math.max(0,wages-ca.standardDeductionCents);
+export function estimateTax(input:TaxabilityBreakdown,status:FilingStatus,pack:TaxRulePack,projected=false):TaxEstimate{
+  for(const [name,value] of Object.entries(input)) if(!Number.isSafeInteger(value)||value<0) throw new RangeError(`${name} must be a non-negative safe integer number of cents`);
+  if(input.federalDeductionCents>input.grossWageIncomeCents||input.californiaDeductionCents>input.grossWageIncomeCents||input.ficaExemptWagesCents>input.grossWageIncomeCents) throw new RangeError("Tax deductions and exempt wages cannot exceed gross wage income");
+  const gross=Math.max(0,input.grossWageIncomeCents),fedDeduction=Math.max(0,Math.min(gross,input.federalDeductionCents)),caDeduction=Math.max(0,Math.min(gross,input.californiaDeductionCents)),ficaWages=Math.max(0,gross-Math.max(0,Math.min(gross,input.ficaExemptWagesCents))),fed=pack.federal[status],ca=pack.california[status];
+  const federalTaxable=Math.max(0,gross-fedDeduction-fed.standardDeductionCents),caTaxable=Math.max(0,gross-caDeduction-ca.standardDeductionCents);
   const federalCents=progressive(federalTaxable,fed.brackets),californiaCents=progressive(caTaxable,ca.brackets);
-  const socialSecurityCents=Math.round(Math.min(wages,pack.socialSecurityWageBaseCents)*620/10000);
-  const medicareCents=Math.round(wages*145/10000)+Math.round(Math.max(0,wages-pack.additionalMedicareThresholdCents[status])*90/10000);
+  const socialSecurityCents=Math.round(Math.min(ficaWages,pack.socialSecurityWageBaseCents)*620/10000);
+  const medicareCents=Math.round(ficaWages*145/10000)+Math.round(Math.max(0,ficaWages-pack.additionalMedicareThresholdCents[status])*90/10000);
   const totalCents=federalCents+californiaCents+socialSecurityCents+medicareCents;
-  return {federalCents,californiaCents,socialSecurityCents,medicareCents,totalCents,effectiveRateBps:wages?Math.round(totalCents*10000/wages):0,marginalRateBps:marginal(federalTaxable,fed.brackets)+marginal(caTaxable,ca.brackets)+145+(wages<pack.socialSecurityWageBaseCents?620:0)+(wages>pack.additionalMedicareThresholdCents[status]?90:0),sourceYear:pack.year,projected:projected||pack.sources.some(x=>x.status==="projected"),sources:pack.sources};
+  return {federalCents,californiaCents,socialSecurityCents,medicareCents,totalCents,effectiveRateBps:gross?Math.round(totalCents*10000/gross):0,marginalRateBps:marginal(federalTaxable,fed.brackets)+marginal(caTaxable,ca.brackets)+145+(ficaWages<pack.socialSecurityWageBaseCents?620:0)+(ficaWages>pack.additionalMedicareThresholdCents[status]?90:0),sourceYear:pack.year,projected:projected||pack.sources.some(x=>x.status==="projected"),sources:pack.sources};
 }

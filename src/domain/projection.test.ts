@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appreciationRateForYear, ProjectionEngine, requiredMonthlyFunding } from "./projection";
+import { appreciationRateForYear, ProjectionEngine, requiredMonthlyFunding, vestedAssetValue, vestedBpsAtDate } from "./projection";
 import { estimateTax, TAX_RULES_2025 } from "./tax";
 import type { FinancialSnapshot, Scenario } from "./types";
 
@@ -14,6 +14,15 @@ describe("asset appreciation curves",()=>{
     expect(appreciationRateForYear(asset,2030)).toBe(3133);
     expect(appreciationRateForYear(asset,2035)).toBe(800);
     expect(appreciationRateForYear(asset,2045)).toBe(800);
+  });
+});
+describe("private stock vesting",()=>{
+  const asset={valueCents:800_00,privateStock:{vestedBps:2500,vestingStartDate:"2026-01-01",remainingVestingQuarters:16}};
+  it("counts only vested value and vests the remainder evenly each quarter",()=>{
+    expect(vestedAssetValue(asset,"2026-01-01")).toBe(200_00);
+    expect(vestedBpsAtDate(asset,"2026-04-01")).toBe(2969);
+    expect(vestedBpsAtDate(asset,"2030-01-01")).toBe(10000);
+    expect(vestedAssetValue({...asset,valueCents:1_600_00},"2026-01-01")).toBe(400_00);
   });
 });
 

@@ -4,9 +4,9 @@ import { App } from "./App";
 import { testRepository } from "./repository";
 describe("LifeLook shell", () => {
   it("creates exact recurring planning inputs and retains invalid date drafts", async () => {
-    const data=await testRepository.bootstrap(), category={id:"salary",householdId:"test",name:"Salary",kind:"income" as const,revision:1}, scenario={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:120,revision:1,events:[],allocations:[]};
+    const data=await testRepository.bootstrap(), category={id:"income-other",householdId:"test",name:"Other income",kind:"income" as const,revision:1}, scenario={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:120,revision:1,events:[],allocations:[]};
     const createRecurring=vi.fn(); render(<App repository={{...testRepository,createRecurring,bootstrap:async()=>({...data,categories:[category],scenarios:[scenario],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})}}/>);
-    fireEvent.click(await screen.findByRole("button",{name:/Plan/}));fireEvent.click(screen.getByRole("button",{name:"Add income"}));
+    fireEvent.click(await screen.findByRole("button",{name:/Plan/}));fireEvent.click(screen.getByRole("tab",{name:"cash flow"}));fireEvent.click(screen.getByRole("button",{name:"Add income"}));
     fireEvent.change(screen.getByLabelText("Name"),{target:{value:"Paycheck"}});fireEvent.change(screen.getByLabelText("Amount (USD)"),{target:{value:"1234.56"}});fireEvent.change(screen.getByLabelText("Frequency"),{target:{value:"biweekly"}});fireEvent.change(screen.getByLabelText("Start date"),{target:{value:"2026-08-10"}});fireEvent.change(screen.getByLabelText("End date (optional)"),{target:{value:"2026-08-09"}});fireEvent.submit(screen.getByRole("button",{name:"Save"}).closest("form")!);
     expect(await screen.findByRole("alert")).toHaveTextContent(/on or after/);expect(screen.getByLabelText("Name")).toHaveValue("Paycheck");expect(createRecurring).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("End date (optional)"),{target:{value:"2027-08-09"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));await waitFor(()=>expect(createRecurring).toHaveBeenCalledWith(expect.objectContaining({name:"Paycheck",amountCents:123456,frequency:"biweekly",annualGrowthBps:0})));
@@ -20,6 +20,7 @@ describe("LifeLook shell", () => {
     const createRecurring = vi.fn();
     render(<App repository={{...testRepository,createRecurring,bootstrap:async()=>({...data,accounts:[account],categories:[category],scenarios:[scenario],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2025 as const,thresholdInflationBps:250,revision:1}})}}/>);
     fireEvent.click(await screen.findByRole("button",{name:/Plan/}));
+    fireEvent.click(screen.getByRole("tab",{name:"cash flow"}));
     fireEvent.click(screen.getByRole("button",{name:"Add expense"}));
     fireEvent.change(screen.getByLabelText("Type"),{target:{value:"expense"}});
     fireEvent.change(screen.getByLabelText("Name"),{target:{value:"401(k) contribution"}});
@@ -30,10 +31,17 @@ describe("LifeLook shell", () => {
     await waitFor(()=>expect(createRecurring).toHaveBeenCalledWith(expect.objectContaining({accountId:"401k",taxTreatment:"pretax"})));
   });
 
-  it("clones, edits, compares, and protects planning scenarios", async () => {
+  it("stores salary as an annual amount distributed monthly",async()=>{
+    const data=await testRepository.bootstrap(),category={id:"salary",householdId:"test",name:"Salary",kind:"income" as const,revision:1},scenario={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:12,revision:1,events:[],allocations:[]},createRecurring=vi.fn();
+    render(<App repository={{...testRepository,createRecurring,bootstrap:async()=>({...data,categories:[category],scenarios:[scenario],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Plan/}));fireEvent.click(screen.getByRole("tab",{name:"cash flow"}));fireEvent.click(screen.getByRole("button",{name:"Add income"}));expect(screen.getByLabelText("Type")).toHaveValue("income");expect(screen.getByLabelText("Recurring category")).toHaveDisplayValue("Salary");fireEvent.change(screen.getByLabelText("Name"),{target:{value:"Household salary"}});fireEvent.change(screen.getByLabelText("Annual salary (USD)"),{target:{value:"155000"}});expect(screen.queryByLabelText("Frequency")).not.toBeInTheDocument();expect(screen.queryByLabelText("Account (optional)")).not.toBeInTheDocument();expect(screen.queryByLabelText("Tax treatment")).not.toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(createRecurring).toHaveBeenCalledWith(expect.objectContaining({incomeType:"salary",amountCents:15500000,frequency:"monthly"})));
+  });
+
+  it("selects and configures one active planning scenario", async () => {
     const data=await testRepository.bootstrap(), base={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:18,revision:1,events:[],allocations:[]}, alt={...base,id:"alt",name:"Lean",isBaseline:false}; const createScenario=vi.fn(),updateScenario=vi.fn();
-    render(<App repository={{...testRepository,createScenario,updateScenario,bootstrap:async()=>({...data,scenarios:[base,alt],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})}}/>);fireEvent.click(await screen.findByRole("button",{name:/Plan/}));expect(screen.getByRole("heading",{name:"18-month outlook"})).toBeInTheDocument();
-    const checks=screen.getAllByRole("checkbox");fireEvent.click(checks[0]);fireEvent.click(checks[1]);expect(screen.getByRole("region",{name:"Scenario comparison"})).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"New scenario"}));expect(screen.getByLabelText(/Clone active/)).toBeChecked();fireEvent.change(screen.getByLabelText("Name"),{target:{value:"Growth"}});fireEvent.click(screen.getByRole("button",{name:"Create scenario"}));await waitFor(()=>expect(createScenario).toHaveBeenCalledWith(expect.objectContaining({name:"Growth",cloneFromId:"base"})));
+    render(<App repository={{...testRepository,createScenario,updateScenario,bootstrap:async()=>({...data,scenarios:[base,alt],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})}}/>);fireEvent.click(await screen.findByRole("button",{name:/Plan/}));expect(screen.getByRole("region",{name:"Annual wealth projection"})).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Active scenario"),{target:{value:"alt"}});expect(screen.getByLabelText("Active scenario")).toHaveValue("alt");fireEvent.click(screen.getByRole("tab",{name:"setup"}));fireEvent.click(screen.getByRole("button",{name:"New scenario"}));expect(screen.getByLabelText(/Clone active/)).toBeChecked();fireEvent.change(screen.getByLabelText("Name"),{target:{value:"Growth"}});fireEvent.click(screen.getByRole("button",{name:"Create scenario"}));await waitFor(()=>expect(createScenario).toHaveBeenCalledWith(expect.objectContaining({name:"Growth",cloneFromId:"alt"})));
   });
   it("navigates with accessible buttons", async () => {
     render(<App repository={testRepository} />);
@@ -89,18 +97,21 @@ describe("LifeLook shell", () => {
     expect(screen.getAllByRole("radio")).toHaveLength(5);
   });
 
-  it("connects Plan disclosures to labelled month regions", async () => {
+  it("synchronizes Plan spreadsheet selection with the chart", async () => {
     const data=await testRepository.bootstrap();
     const repository={...testRepository,bootstrap:async()=>({...data,taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})};
     render(<App repository={repository}/>);
     fireEvent.click(await screen.findByRole("button",{name:/Plan/}));
-    const year=String(new Date().getFullYear());
-    const disclosure=screen.getByRole("button",{name:new RegExp(year)});
-    expect(disclosure).toHaveAttribute("aria-expanded","false");
-    fireEvent.click(disclosure);
-    expect(disclosure).toHaveAttribute("aria-expanded","true");
-    const region=screen.getByRole("region",{name:`${year} monthly detail`});
-    expect(disclosure).toHaveAttribute("aria-controls",region.id);
+    const accountHeader=screen.getByRole("button",{name:"Test checking"});
+    expect(screen.getByRole("heading",{name:"Net Worth"})).toBeInTheDocument();
+    fireEvent.click(accountHeader);
+    expect(accountHeader).toHaveAttribute("aria-pressed","true");
+    expect(screen.getByRole("heading",{name:"Test checking"})).toBeInTheDocument();
+  });
+  it("recalculates and expands Plan for each projection range",async()=>{
+    const data=await testRepository.bootstrap(),scenario={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:30*12,revision:1,events:[],allocations:[]};
+    render(<App repository={{...testRepository,bootstrap:async()=>({...data,scenarios:[scenario],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})}}/>);fireEvent.click(await screen.findByRole("button",{name:/Plan/}));
+    const table=screen.getByRole("region",{name:"Annual wealth projection"});fireEvent.click(screen.getByRole("button",{name:"5Y"}));await waitFor(()=>expect(within(table).getAllByRole("rowheader")).toHaveLength(6));fireEvent.click(screen.getByRole("button",{name:"15Y"}));await waitFor(()=>expect(within(table).getAllByRole("rowheader")).toHaveLength(16));fireEvent.click(screen.getByRole("button",{name:"20Y"}));await waitFor(()=>expect(within(table).getAllByRole("rowheader")).toHaveLength(21));fireEvent.click(screen.getByRole("button",{name:"Max"}));await waitFor(()=>expect(within(table).getAllByRole("rowheader").length).toBeGreaterThan(21));
   });
 
   it("retains member drafts, blocks duplicate saves, and retries after rejection", async () => {
@@ -132,6 +143,14 @@ describe("LifeLook shell", () => {
       await screen.findByRole("button", { name: "Toggle theme" }),
     );
     expect(document.querySelector(".app")).toHaveClass("dark");
+  });
+  it("persists the header theme toggle across data refreshes",async()=>{
+    const data=await testRepository.bootstrap();let settings={theme:"light" as const,reducedMotion:data.settings?.reducedMotion??false,revision:data.settings?.revision??1};
+    const updateSettings=vi.fn(async input=>(settings={...settings,theme:input.theme,reducedMotion:input.reducedMotion,revision:settings.revision+1}));
+    const category={id:"income-other",householdId:"test",name:"Other income",kind:"income" as const,revision:1},scenario={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:12,revision:1,events:[],allocations:[]};
+    const repository={...testRepository,updateSettings,bootstrap:vi.fn(async()=>({...data,settings,categories:[category],scenarios:[scenario],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}}))};
+    render(<App repository={repository}/>);await screen.findByRole("heading",{name:"Overview"});fireEvent.click(screen.getByRole("button",{name:"Toggle theme"}));await waitFor(()=>expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({theme:"dark"})));expect(document.querySelector(".app")).toHaveClass("dark");
+    fireEvent.click(screen.getByRole("button",{name:/Plan/}));fireEvent.click(screen.getByRole("tab",{name:"cash flow"}));fireEvent.click(screen.getByRole("button",{name:"Add income"}));fireEvent.change(screen.getByLabelText("Name"),{target:{value:"Refresh"}});fireEvent.change(screen.getByLabelText("Amount (USD)"),{target:{value:"1"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));await waitFor(()=>expect(repository.bootstrap).toHaveBeenCalledTimes(2));expect(document.querySelector(".app")).toHaveClass("dark");
   });
   it("keeps only genuinely unavailable controls disabled", async () => {
     render(<App repository={testRepository}/>);

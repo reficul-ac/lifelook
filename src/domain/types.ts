@@ -11,12 +11,12 @@ export interface Account { id: string; name: string; kind: AccountKind; balanceC
 export interface Category { id: string; name: string; kind: "income" | "expense" | "transfer"; archived: boolean }
 export interface Transaction { id: string; date: string; amountCents: Cents; accountId: string; categoryId: string; transferAccountId?: string; note?: string }
 export type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
-export interface RecurringEntry { id: string; name: string; amountCents: Cents; kind: "income" | "expense"; categoryId?: string; accountId?: string; frequency?: RecurringFrequency; startDate: string; endDate?: string; annualGrowthBps?: BasisPoints; taxTreatment: "none" | "pretax" }
+export interface RecurringEntry { id: string; name: string; amountCents: Cents; kind: "income" | "expense"; incomeType?:"ordinary"|"salary"; categoryId?: string; accountId?: string; frequency?: RecurringFrequency; startDate: string; endDate?: string; annualGrowthBps?: BasisPoints; taxTreatment: "none" | "pretax" }
 export interface ImportProfile { id: string; name: string; columns: Readonly<Record<string, string>> }
 export interface ImportBatch { id: string; importedAt: string; profileId?: string; rowCount: number }
 export interface HousingCosts { propertyTaxRateBps: BasisPoints; insuranceMonthlyCents: Cents; insuranceAnnualGrowthBps: BasisPoints; hoaMonthlyCents: Cents; hoaAnnualGrowthBps: BasisPoints }
 export interface AppreciationCurve { startYear:number; startRateBps:BasisPoints; endYear:number; endRateBps:BasisPoints }
-export interface PrivateStockVesting { vestedBps:BasisPoints; vestingStartDate:string; remainingVestingQuarters:number }
+export interface PrivateStockVesting { vestedBps:BasisPoints; vestingStartDate:string; remainingVestingQuarters:number; taxOnVest?:boolean }
 export interface Asset { id: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; appreciationCurve?:AppreciationCurve|null; privateStock?:PrivateStockVesting|null; housingCosts?: HousingCosts; housingStartDate?: string; purchasePriceCents?: Cents | null; purchaseDate?: string | null }
 export interface MortgageTerms { originalPrincipalCents: Cents; termMonths: number; startDate: string; paymentOverrideCents?: Cents; assetId?: string | null }
 export interface Liability { id: string; name: string; balanceCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; mortgage?: MortgageTerms }
@@ -47,7 +47,13 @@ export interface LedgerActual { date: string; kind: "income" | "expense" | "tran
 export interface FinancialSnapshot { household: Household; taxProfile: TaxProfile; accounts: readonly Account[]; recurring: readonly RecurringEntry[]; assets: readonly Asset[]; liabilities: readonly Liability[]; actuals?: readonly LedgerActual[] }
 export type ProjectionStatus = "actual" | "blended" | "projected";
 export interface ProjectionWarning { code: "account-depleted" | "unfunded-deficit" | "invalid-allocation" | "aggressive-assumption" | "negative-balance" | "payment-below-interest" | "goal-shortfall" | "goal-missed" | "goal-outside-horizon" | "goal-validation" | "goal-conflict" | "insufficient-earmark" | "retirement-depletion"; message: string; month: string; entityId?: string; inputField?: string }
-export interface MonthlyProjection { month: string; status: ProjectionStatus; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; incomeVarianceCents: Cents; expenseVarianceCents: Cents; taxCents: Cents; surplusCents: Cents; liquidWorthCents: Cents | null; netWorthCents: Cents | null; debtCents: Cents | null; unfundedDeficitCents: Cents; allocationCents: Cents; goalFundingCents:Cents; goalResults:readonly GoalFundingResult[]; principalAndInterestCents: Cents; housingCostCents: Cents; warnings: readonly ProjectionWarning[] }
+export interface ProjectionBalances {
+  accounts: Readonly<Record<string, Cents>>;
+  assets: Readonly<Record<string, Cents>>;
+  privateStock: Readonly<Record<string, { vestedCents: Cents; unvestedCents: Cents }>>;
+  liabilities: Readonly<Record<string, Cents>>;
+}
+export interface MonthlyProjection { month: string; status: ProjectionStatus; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; incomeVarianceCents: Cents; expenseVarianceCents: Cents; taxCents: Cents; surplusCents: Cents; liquidWorthCents: Cents | null; netWorthCents: Cents | null; debtCents: Cents | null; balances: ProjectionBalances | null; unfundedDeficitCents: Cents; allocationCents: Cents; goalFundingCents:Cents; goalResults:readonly GoalFundingResult[]; principalAndInterestCents: Cents; housingCostCents: Cents; warnings: readonly ProjectionWarning[] }
 export interface AnnualProjection { year: number; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; taxCents: Cents; savingsRateBps: BasisPoints; surplusCents: Cents; allocationCents: Cents; goalFundingCents:Cents; goalResults:readonly GoalFundingResult[]; liquidWorthCents: Cents | null; endingNetWorthCents: Cents | null; debtCents: Cents | null; debtPayoffMonth?: string; unfundedDeficitCents: Cents; warnings: readonly ProjectionWarning[]; months: readonly MonthlyProjection[] }
 export interface TaxBracket { upToCents: Cents | null; rateBps: BasisPoints }
 export interface TaxSource { jurisdiction: "federal" | "california" | "payroll"; sourceYear: number; status: "official" | "projected"; url: string }

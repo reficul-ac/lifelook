@@ -76,13 +76,16 @@ const nav: [View, typeof LayoutDashboard][] = [
   ["Net Worth", Landmark],
   ["Settings", Settings],
 ];
-const money = (cents: number, compact = false) =>
-  new Intl.NumberFormat("en-US", {
+const money = (cents: number, compact = false) => {
+  const showMillionDecimals = compact && Math.abs(cents) >= 100_000_000;
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: compact ? 0 : 2,
+    minimumFractionDigits: showMillionDecimals ? 2 : compact ? 0 : 2,
+    maximumFractionDigits: compact ? (showMillionDecimals ? 2 : 0) : 2,
     notation: compact ? "compact" : "standard",
   }).format(cents / 100);
+};
 
 const baseline: Scenario = {
   id: "base",
@@ -103,6 +106,7 @@ const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
   recurring: (value.recurring ?? []).map((entry) => ({
     ...entry,
     frequency: entry.frequency ?? "monthly",
+    incomeType: entry.incomeType ?? "ordinary",
     taxTreatment: entry.taxTreatment ?? "none",
   })),
   assets: value.assets ?? [],
@@ -258,7 +262,16 @@ function Workspace({
   useEffect(()=>{if(settings.theme!=="system"||!repository.systemThemeDark)return;let active=true;const refresh=()=>repository.systemThemeDark?.().then(value=>{if(active&&value!==null&&value!==undefined)setOsDark(value)}).catch(()=>{});refresh();const timer=window.setInterval(refresh,500);return()=>{active=false;window.clearInterval(timer)}},[settings.theme,repository]);
   const dark =
     settings.theme === "dark" || (settings.theme === "system" && osDark);
+  async function toggleTheme(){
+    const previous=settings,next={...settings,theme:dark?"light" as const:"dark" as const};
+    setSettings(next);
+    if(!repository.updateSettings)return;
+    try{setSettings(await repository.updateSettings({theme:next.theme,reducedMotion:next.reducedMotion,expectedRevision:previous.revision}));}
+    catch{setSettings(previous);}
+  }
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [planSeries,setPlanSeries]=useState("net-worth");
+  const [planRange,setPlanRange]=useState<5|10|15|20|"max">(10);
   const [selectedScenarioId, setSelectedScenarioId] = useState(
     bootstrap.scenarios[0]?.id ?? "",
   );
@@ -348,6 +361,7 @@ function Workspace({
         accountId: r.accountId ?? undefined,
         endDate: r.endDate ?? undefined,
         taxTreatment: r.taxTreatment ?? "none",
+        incomeType:r.incomeType??"ordinary",
         kind:
           bootstrap.categories.find((c) => c.id === r.categoryId)?.kind ===
           "income"
@@ -410,9 +424,12 @@ function Workspace({
   const projections = useMemo(
     () =>
       bootstrap.taxProfile
-        ? ProjectionEngine.calculate(snapshot, selectedScenario, localIsoDate())
+        ? ProjectionEngine.calculate(snapshot,{
+            ...selectedScenario,
+            horizon:{...selectedScenario.horizon,months:planRange==="max"?selectedScenario.horizon.months:planRange*12},
+          },localIsoDate())
         : null,
-    [snapshot, bootstrap.taxProfile, selectedScenario],
+    [snapshot, bootstrap.taxProfile, selectedScenario,planRange],
   );
   return (
     <div
@@ -479,9 +496,7 @@ function Workspace({
             </button>
             <button
               className="icon"
-              onClick={() =>
-                setSettings((s) => ({ ...s, theme: dark ? "light" : "dark" }))
-              }
+              onClick={toggleTheme}
               aria-label="Toggle theme"
             >
               {dark ? <Sun size={18} /> : <Moon size={18} />}
@@ -570,6 +585,10 @@ function Workspace({
                 el,
               )
             }
+            selectedSeries={planSeries}
+            onSelectSeries={setPlanSeries}
+            range={planRange}
+            onRange={setPlanRange}
           />
         )}
         {view === "Plan" && !projections && (
@@ -1364,6 +1383,7 @@ function FinancialRecordDialog({
   const [vestedPercent, setVestedPercent] = useState(String((state.asset?.privateStock?.vestedBps ?? 2500)/100));
   const [vestingStartDate, setVestingStartDate] = useState(state.asset?.privateStock?.vestingStartDate ?? today());
   const [remainingVestingYears, setRemainingVestingYears] = useState(String((state.asset?.privateStock?.remainingVestingQuarters ?? 16)/4));
+  const [taxOnVest,setTaxOnVest]=useState(state.asset?.privateStock?.taxOnVest??false);
   const [purchasePrice, setPurchasePrice] = useState("0");
   const [financed, setFinanced] = useState(true);
   const [purchaseDate, setPurchaseDate] = useState(today());
@@ -1428,7 +1448,7 @@ function FinancialRecordDialog({
       const vestedBps=parsePercent(vestedPercent),years=Number(remainingVestingYears),remainingVestingQuarters=Math.round(years*4);
       if(vestedBps==null||vestedBps<0||vestedBps>10000||!/^\d{4}-\d{2}-\d{2}$/.test(vestingStartDate)||!Number.isFinite(years)||years<=0||remainingVestingQuarters<1||Math.abs(years*4-remainingVestingQuarters)>1e-9)
         return setError("Enter a vested percentage from 0–100 and a remaining vesting term in quarter-year increments.");
-      privateStockTerms={vestedBps,vestingStartDate,remainingVestingQuarters};
+      privateStockTerms={vestedBps,vestingStartDate,remainingVestingQuarters,taxOnVest};
     }
     if (!name.trim())
       return setError(`${isAsset ? "Asset" : "Debt"} name is required.`);
@@ -1641,6 +1661,7 @@ function FinancialRecordDialog({
                   <label>Currently vested (%)<input required inputMode="decimal" value={vestedPercent} onChange={(e)=>setVestedPercent(e.target.value)} /></label>
                   <label>Remaining vesting starts<input required type="date" value={vestingStartDate} onChange={(e)=>setVestingStartDate(e.target.value)} /></label>
                   <label>Remaining vesting period (years)<input required type="number" min="0.25" max="100" step="0.25" value={remainingVestingYears} onChange={(e)=>setRemainingVestingYears(e.target.value)} /></label>
+                  <label className="check-row"><input type="checkbox" checked={taxOnVest} onChange={e=>setTaxOnVest(e.target.checked)}/> Sell vested shares to cover ordinary-income tax</label>
                   <p className="muted">The unvested portion vests evenly every quarter over this period.</p>
                 </>
               )}
@@ -3770,6 +3791,7 @@ function RecurringDialog({
       String((record?.annualGrowthBps ?? 0) / 100),
     ),
     [taxTreatment, setTaxTreatment] = useState(record?.taxTreatment ?? "none");
+  const salary=kind==="income"&&available.find(category=>category.id===categoryId)?.name.trim().toLowerCase()==="salary";
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [confirmDelete, setConfirmDelete] = useState(false);
@@ -3814,7 +3836,7 @@ function RecurringDialog({
       const input = {
         id: record?.id ?? crypto.randomUUID(),
         categoryId,
-        accountId: accountId || null,
+        accountId: salary ? null : accountId || null,
         name: name.trim(),
         amountCents: cents,
         frequency,
@@ -3822,6 +3844,7 @@ function RecurringDialog({
         endDate: endDate || null,
         annualGrowthBps: bps,
         taxTreatment,
+        incomeType:salary?"salary" as const:"ordinary" as const,
       };
       if (record)
         await repository.updateRecurring?.({
@@ -3913,7 +3936,7 @@ function RecurringDialog({
               <select
                 aria-label="Recurring category"
                 value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
+                onChange={(e) => {setCategoryId(e.target.value);if(bootstrap.categories.find(category=>category.id===e.target.value)?.name.trim().toLowerCase()==="salary")setFrequency("monthly")}}
               >
                 {available.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -3922,7 +3945,7 @@ function RecurringDialog({
                 ))}
               </select>
             </label>
-            <label>
+            {!salary&&<label>
               Account (optional)
               <select
                 value={accountId}
@@ -3935,9 +3958,9 @@ function RecurringDialog({
                   </option>
                 ))}
               </select>
-            </label>
+            </label>}
             <label>
-              Amount (USD)
+              {salary?"Annual salary (USD)":"Amount (USD)"}
               <input
                 required
                 inputMode="decimal"
@@ -3945,7 +3968,7 @@ function RecurringDialog({
                 onChange={(e) => setAmount(e.target.value)}
               />
             </label>
-            <label>
+            {!salary&&<label>
               Frequency
               <select
                 value={frequency}
@@ -3959,7 +3982,7 @@ function RecurringDialog({
                 <option value="quarterly">Quarterly</option>
                 <option value="annual">Annual</option>
               </select>
-            </label>
+            </label>}
             <label>
               Start date
               <input
@@ -3987,7 +4010,7 @@ function RecurringDialog({
                 onChange={(e) => setGrowth(e.target.value)}
               />
             </label>
-            <label>
+            {!salary&&<label>
                 Tax treatment
                 <select
                   value={taxTreatment}
@@ -4010,7 +4033,7 @@ function RecurringDialog({
                   income-tax wages, but not Social Security or Medicare wages.
                   It requires a retirement account.
                 </small>
-            </label>
+            </label>}
             <div className="actions">
               {record && (
                 <button
@@ -4267,7 +4290,105 @@ function ScenarioDialog({
   );
 }
 
-function PlanView({
+type PlanViewProps = {
+  projections: ReturnType<typeof ProjectionEngine.calculate>;
+  scenarios: Scenario[];
+  selectedScenarioId: string;
+  onSelectScenario: (id: string) => void;
+  snapshot: FinancialSnapshot;
+  expanded: number | null;
+  setExpanded: (x: number | null) => void;
+  recurring: RecurringEntry[];
+  categories: Bootstrap["categories"];
+  accounts: BootstrapAccount[];
+  onAddRecurring: (kind: "income" | "expense", el: HTMLElement) => void;
+  onEditRecurring: (entry: RecurringEntry, el: HTMLElement) => void;
+  onAddScenario: (el: HTMLElement) => void;
+  onEditScenario: (el: HTMLElement) => void;
+  onPlanScenario: (el: HTMLElement) => void;
+  selectedSeries: string;
+  onSelectSeries: (id:string) => void;
+  range: 5|10|15|20|"max";
+  onRange: (range:5|10|15|20|"max") => void;
+};
+
+type WealthSeries = { id:string; name:string; group:"net-worth"|"account"|"asset"|"private-stock"|"debt"; component?:"vested"|"unvested" };
+
+function PlanView(props:PlanViewProps) {
+  const {projections,scenarios,selectedScenarioId,onSelectScenario,snapshot,recurring,categories,accounts,onAddRecurring,onEditRecurring,onAddScenario,onEditScenario,onPlanScenario,selectedSeries:selected,onSelectSeries:setSelected,range,onRange:setRange}=props;
+  const [tab,setTab]=useState<"wealth"|"cash-flow"|"goals"|"setup">("wealth");
+  const [activePoint,setActivePoint]=useState<number|null>(null);
+  const scenario=scenarios.find(item=>item.id===selectedScenarioId);
+  const privateAssets=snapshot.assets.filter(asset=>asset.privateStock);
+  const ordinaryAssets=snapshot.assets.filter(asset=>!asset.privateStock);
+  const series:WealthSeries[]=[
+    {id:"net-worth",name:"Net Worth",group:"net-worth"},
+    ...snapshot.accounts.map(item=>({id:`account:${item.id}`,name:item.name,group:"account" as const})),
+    ...ordinaryAssets.map(item=>({id:`asset:${item.id}`,name:item.name,group:"asset" as const})),
+    ...privateAssets.flatMap(item=>([
+      {id:`private:${item.id}:vested`,name:`${item.name} — Vested`,group:"private-stock" as const,component:"vested" as const},
+      {id:`private:${item.id}:unvested`,name:`${item.name} — Unvested`,group:"private-stock" as const,component:"unvested" as const},
+    ])),
+    ...snapshot.liabilities.map(item=>({id:`debt:${item.id}`,name:item.name,group:"debt" as const})),
+  ];
+  useEffect(()=>{if(!series.some(item=>item.id===selected))setSelected("net-worth");},[selected,series.map(item=>item.id).join("|")]);
+  const currentDate=localIsoDate();
+  const currentValue=(item:WealthSeries)=>{
+    if(item.group==="net-worth")return snapshot.accounts.reduce((sum,x)=>sum+x.balanceCents,0)+snapshot.assets.reduce((sum,x)=>sum+vestedAssetValue(x,currentDate),0)-snapshot.liabilities.reduce((sum,x)=>sum+x.balanceCents,0);
+    const [,id,component]=item.id.split(":");
+    if(item.group==="account")return snapshot.accounts.find(x=>x.id===id)?.balanceCents??0;
+    if(item.group==="asset")return snapshot.assets.find(x=>x.id===id)?.valueCents??0;
+    if(item.group==="debt")return snapshot.liabilities.find(x=>x.id===id)?.balanceCents??0;
+    const asset=snapshot.assets.find(x=>x.id===id);if(!asset)return 0;const vested=vestedAssetValue(asset,currentDate);return component==="vested"?vested:asset.valueCents-vested;
+  };
+  const projectedValue=(item:WealthSeries,month:(typeof projections)[number]["months"][number])=>{
+    if(item.group==="net-worth")return month.netWorthCents??0;
+    const [,id,component]=item.id.split(":");
+    if(item.group==="account")return month.balances?.accounts[id]??0;
+    if(item.group==="asset")return month.balances?.assets[id]??0;
+    if(item.group==="debt")return month.balances?.liabilities[id]??0;
+    const value=month.balances?.privateStock[id];return component==="vested"?(value?.vestedCents??0):(value?.unvestedCents??0);
+  };
+  const annualRows=projections.map(year=>({year:year.year,month:[...year.months].reverse().find(item=>item.balances)})).filter(row=>row.month) as {year:number;month:(typeof projections)[number]["months"][number]}[];
+  const visibleRows=range==="max"?annualRows:annualRows.slice(0,range);
+  const activeSeries=series.find(item=>item.id===selected)??series[0];
+  const points=[{label:"Current",value:currentValue(activeSeries)},...visibleRows.map(row=>({label:String(row.year),value:projectedValue(activeSeries,row.month)}))];
+  const first=points[0]?.value??0,last=points.at(-1)?.value??first,change=last-first,percent=first===0?null:Math.round(change/Math.abs(first)*1000)/10;
+  const values=points.map(point=>point.value),min=Math.min(...values,0),max=Math.max(...values,0),span=Math.max(1,max-min);
+  const coords=points.map((point,index)=>({x:points.length===1?50:4+index*92/(points.length-1),y:8+(max-point.value)*76/span,...point}));
+  const path=coords.map((point,index)=>`${index?"L":"M"} ${point.x} ${point.y}`).join(" ");
+  const latestGoals=projections.flatMap(year=>year.months).at(-1)?.goalResults??[];
+  const homeCosts=snapshot.assets.filter(asset=>{
+    const housing=asset.housingCosts,mortgage=snapshot.liabilities.some(item=>item.mortgage?.assetId===asset.id);
+    return Boolean(housing&&(mortgage||asset.purchaseDate||asset.purchasePriceCents||housing.propertyTaxRateBps||housing.insuranceMonthlyCents||housing.hoaMonthlyCents));
+  }).map(asset=>{
+    const mortgage=snapshot.liabilities.find(item=>item.mortgage?.assetId===asset.id),housing=asset.housingCosts!;
+    const principalAndInterest=mortgage?.minimumPaymentCents??0,propertyTax=Math.round(asset.valueCents*housing.propertyTaxRateBps/120000),insurance=housing.insuranceMonthlyCents,hoa=housing.hoaMonthlyCents;
+    return {id:asset.id,name:asset.name,principalAndInterest,propertyTax,insurance,hoa,total:principalAndInterest+propertyTax+insurance+hoa};
+  });
+  const selectSeries=(id:string)=>{setSelected(id);setActivePoint(null)};
+  const cell=(item:WealthSeries,value:number,key:string)=><td key={key} className={selected===item.id?"selected":undefined}><button onClick={()=>selectSeries(item.id)} aria-label={`Select ${item.name}, ${money(value)}`} title={money(value)}>{money(value,true)}{item.group==="debt"&&<small> owed</small>}</button></td>;
+  return <div className="content plan-workspace">
+    <div className="plan-toolbar">
+      <div><span className="label assumption">Plan</span><h2>{scenario?.name??"Baseline"}</h2></div>
+      <label>Scenario<select data-search-kind="Scenario" data-search-id={selectedScenarioId} aria-label="Active scenario" value={selectedScenarioId} onChange={event=>onSelectScenario(event.target.value)}>{scenarios.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+    </div>
+    <div className="plan-tabs" role="tablist" aria-label="Plan sections">{(["wealth","cash-flow","goals","setup"] as const).map(item=><button key={item} role="tab" aria-selected={tab===item} onClick={()=>setTab(item)}>{item.replace("-"," ")}</button>)}</div>
+    {tab==="wealth"&&<>
+      <section className={`wealth-chart card wide ${activeSeries.group}`} aria-labelledby="wealth-chart-title">
+        <div className="chart-heading"><div><span className="label projected">Projected balance</span><h3 id="wealth-chart-title">{activeSeries.name}</h3></div><div className="chart-ranges" aria-label="Projection range">{([5,10,15,20,"max"] as const).map(item=><button key={item} aria-pressed={range===item} onClick={()=>setRange(item)}>{item==="max"?"Max":`${item}Y`}</button>)}</div></div>
+        <div className="wealth-summary" aria-live="polite"><strong>{money(first)}</strong><span>Current</span><strong>{money(last)}</strong><span>Ending</span><strong className={change>=0?"positive":"negative"}>{change>=0?"+":""}{money(change)} {percent===null?"—":`(${percent>=0?"+":""}${percent}%)`}</strong><span>Total balance change</span></div>
+        <div className="chart-canvas"><svg viewBox="0 0 100 100" role="img" aria-label={`${activeSeries.name} projection from ${money(first)} to ${money(last)}`} preserveAspectRatio="none"><line className="chart-zero" x1="4" x2="96" y1={8+max*76/span} y2={8+max*76/span}/><path className="chart-area" d={`${path} L ${coords.at(-1)?.x??96} 92 L 4 92 Z`}/><path className="chart-line" d={path}/>{coords.map((point,index)=><circle key={point.label} cx={point.x} cy={point.y} r="1.6" tabIndex={0} role="button" aria-label={`${point.label}: ${money(point.value)}${activeSeries.group==="debt"?" owed":""}`} onFocus={()=>setActivePoint(index)} onBlur={()=>setActivePoint(null)} onPointerEnter={()=>setActivePoint(index)} onPointerLeave={()=>setActivePoint(null)}/>)}</svg>{activePoint!==null&&coords[activePoint]&&<output className="chart-tooltip" style={{left:`${coords[activePoint].x}%`,top:`${coords[activePoint].y}%`}}>{coords[activePoint].label}<strong>{money(coords[activePoint].value)}{activeSeries.group==="debt"?" owed":""}</strong></output>}</div>
+      </section>
+      <section className="projection-sheet card wide" aria-label="Annual wealth projection"><div className="sheet-scroll"><table><thead><tr><th rowSpan={3} className="year-column">Year</th><th colSpan={1}>Net Worth</th>{snapshot.accounts.length>0&&<th colSpan={snapshot.accounts.length}>Accounts</th>}{snapshot.assets.length>0&&<th colSpan={ordinaryAssets.length+privateAssets.length*2}>Assets</th>}{snapshot.liabilities.length>0&&<th colSpan={snapshot.liabilities.length}>Debts</th>}</tr><tr><th rowSpan={2} className={selected==="net-worth"?"selected":undefined}><button aria-pressed={selected==="net-worth"} onClick={()=>selectSeries("net-worth")}>Net Worth</button></th>{snapshot.accounts.map(item=><th rowSpan={2} key={item.id} className={selected===`account:${item.id}`?"selected":undefined}><button aria-pressed={selected===`account:${item.id}`} onClick={()=>selectSeries(`account:${item.id}`)}>{item.name}</button></th>)}{ordinaryAssets.map(item=><th rowSpan={2} key={item.id} className={selected===`asset:${item.id}`?"selected":undefined}><button aria-pressed={selected===`asset:${item.id}`} onClick={()=>selectSeries(`asset:${item.id}`)}>{item.name}</button></th>)}{privateAssets.map(item=><th colSpan={2} key={item.id}><button aria-pressed={selected===`private:${item.id}:vested`} onClick={()=>selectSeries(`private:${item.id}:vested`)}>{item.name}</button></th>)}{snapshot.liabilities.map(item=><th rowSpan={2} key={item.id} className={selected===`debt:${item.id}`?"selected":undefined}><button aria-pressed={selected===`debt:${item.id}`} onClick={()=>selectSeries(`debt:${item.id}`)}>{item.name}</button></th>)}</tr><tr>{privateAssets.flatMap(item=>([<th key={`${item.id}-v`} className={selected===`private:${item.id}:vested`?"selected":undefined}><button aria-pressed={selected===`private:${item.id}:vested`} onClick={()=>selectSeries(`private:${item.id}:vested`)}>Vested</button></th>,<th key={`${item.id}-u`} className={selected===`private:${item.id}:unvested`?"selected":undefined}><button aria-pressed={selected===`private:${item.id}:unvested`} onClick={()=>selectSeries(`private:${item.id}:unvested`)}>Unvested</button></th>]))}</tr></thead><tbody><tr><th className="year-column" scope="row">Current</th>{series.map(item=>cell(item,currentValue(item),`current-${item.id}`))}</tr>{visibleRows.map(row=><tr key={row.year}><th className="year-column" scope="row">{row.year}</th>{series.map(item=>cell(item,projectedValue(item,row.month),`${row.year}-${item.id}`))}</tr>)}</tbody></table></div></section>
+    </>}
+    {tab==="cash-flow"&&<><section className="card wide"><div className="card-title"><div><span className="label assumption">Inputs</span><h3>Income and spending</h3></div><div className="inline-actions"><button onClick={e=>onAddRecurring("income",e.currentTarget)}>Add income</button><button onClick={e=>onAddRecurring("expense",e.currentTarget)}>Add expense</button></div></div>{recurring.map(entry=>{const kind=categories.find(c=>c.id===entry.categoryId)?.kind;return <button key={entry.id} className="transaction transaction-action" onClick={e=>onEditRecurring(entry,e.currentTarget)}><div><strong>{entry.name}</strong><small>{categories.find(c=>c.id===entry.categoryId)?.name??"Uncategorized"} · {entry.frequency}</small></div><b>{money(kind==="income"?entry.amountCents:-entry.amountCents)}</b></button>})}{homeCosts.map(home=><div className="transaction" key={`home-${home.id}`}><div><strong>{home.name} housing</strong><small>Automatic monthly expense · P&amp;I {money(home.principalAndInterest)} + property tax {money(home.propertyTax)} + insurance {money(home.insurance)}{home.hoa?` + HOA ${money(home.hoa)}`:""}</small></div><b>{money(-home.total)}</b></div>)}</section><section className="card wide"><h3>Annual cash flow</h3><div className="year-table"><div className="year-row table-head"><span>Year</span><span>Income</span><span>Spending</span><span>Taxes</span><span>Surplus</span></div>{projections.map(year=><div className="year-row" key={year.year}><span>{year.year}</span><span>{money(year.incomeCents,true)}</span><span>{money(year.expenseCents,true)}</span><span>{money(year.taxCents,true)}</span><strong>{money(year.surplusCents,true)}</strong></div>)}</div></section></>}
+    {tab==="goals"&&<><section className="card wide"><div className="card-title"><div><span className="label assumption">Funding trackers</span><h3>Goals</h3></div></div>{scenario?.goals.map(goal=>{const result=latestGoals.find(item=>item.goalId===goal.id);return <div className="transaction" key={goal.id}><div><strong>{goal.name}</strong><small>{goal.enabled?(result?.targetResult.replaceAll("-"," ")??"Waiting for projection"):"Disabled"}</small></div>{result&&<div><progress aria-label={`${goal.name} funding progress`} max={10000} value={result.completionBps}/><small>{money(result.earmarkedCents)} of {money(result.targetCents)}</small></div>}</div>})}{!scenario?.goals.length&&<p className="empty">No funding goals in this scenario.</p>}</section>{homeCosts.length>0&&<section className="card wide"><h3>Home payments</h3>{homeCosts.map(home=><div className="transaction" key={home.id}><div><strong>{home.name}</strong><small>Mortgage, property tax, insurance{home.hoa?", and HOA":""}</small></div><b>{money(home.total)}/month</b></div>)}</section>}</>}
+    {tab==="setup"&&<section className="card wide"><div className="card-title"><div><span className="label assumption">Scenario configuration</span><h3>{scenario?.name}</h3></div><div className="inline-actions"><button onClick={e=>onAddScenario(e.currentTarget)}>New scenario</button><button onClick={e=>onEditScenario(e.currentTarget)}>Edit scenario</button><button onClick={e=>onPlanScenario(e.currentTarget)}>Events, allocations &amp; withdrawals</button></div></div><div className="setup-summary"><div><span>Projection horizon</span><strong>{scenario?`${scenario.horizon.months} months`:"—"}</strong></div><div><span>Inflation assumption</span><strong>{scenario?`${scenario.assumptions.inflationBps/100}%`:"—"}</strong></div><div><span>Events</span><strong>{scenario?.events.length??0}</strong></div><div><span>Surplus allocations</span><strong>{scenario?.allocations.length??0}</strong></div></div></section>}
+  </div>;
+}
+
+function LegacyPlanView({
   projections,
   scenarios,
   selectedScenarioId,

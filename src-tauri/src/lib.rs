@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 10;
+const SCHEMA_VERSION: i64 = 12;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -208,6 +208,7 @@ struct RecurringEntry {
     name: String,
     amount_cents: i64,
     frequency: String,
+    income_type: String,
     start_date: String,
     end_date: Option<String>,
     annual_growth_bps: i64,
@@ -244,6 +245,8 @@ struct PrivateStockVesting {
     vested_bps: i64,
     vesting_start_date: String,
     remaining_vesting_quarters: i64,
+    #[serde(default)]
+    tax_on_vest: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -291,6 +294,8 @@ struct RecurringInput {
     name: String,
     amount_cents: i64,
     frequency: String,
+    #[serde(default = "default_income_type")]
+    income_type: String,
     start_date: String,
     end_date: Option<String>,
     annual_growth_bps: i64,
@@ -301,6 +306,7 @@ struct RecurringInput {
 fn default_tax_treatment() -> String {
     "none".to_owned()
 }
+fn default_income_type() -> String { "ordinary".to_owned() }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ScenarioCreateInput {
@@ -690,6 +696,14 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         "INSERT OR IGNORE INTO schema_migrations(version) VALUES(10)",
         [],
     )?;
+    let recurring_columns: Vec<String> = transaction.prepare("PRAGMA table_info(recurring_entries)")?.query_map([], |r| r.get(1))?.collect::<Result<_, _>>()?;
+    if !recurring_columns.iter().any(|name| name == "income_type") {
+        transaction.execute("ALTER TABLE recurring_entries ADD COLUMN income_type TEXT NOT NULL DEFAULT 'ordinary' CHECK(income_type IN ('ordinary','salary'))", [])?;
+    }
+    transaction.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES(11)", [])?;
+    transaction.execute("INSERT OR IGNORE INTO categories(id,household_id,name,kind) SELECT 'income-salary-'||id,id,'Salary','income' FROM households", [])?;
+    transaction.execute("UPDATE recurring_entries SET category_id='income-salary-'||household_id WHERE income_type='salary'", [])?;
+    transaction.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES(12)", [])?;
     transaction.commit()?;
     Ok(())
 }
@@ -805,7 +819,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,category_id,account_id,name,amount_cents,frequency,start_date,end_date,annual_growth_bps,revision,tax_treatment FROM recurring_entries WHERE household_id=? ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,household_id,category_id,account_id,name,amount_cents,frequency,income_type,start_date,end_date,annual_growth_bps,revision,tax_treatment FROM recurring_entries WHERE household_id=? ORDER BY name")?;
         recurring = q
             .query_map([&h.id], |r| {
                 Ok(RecurringEntry {
@@ -816,11 +830,12 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     name: r.get(4)?,
                     amount_cents: r.get(5)?,
                     frequency: r.get(6)?,
-                    start_date: r.get(7)?,
-                    end_date: r.get(8)?,
-                    annual_growth_bps: r.get(9)?,
-                    revision: r.get(10)?,
-                    tax_treatment: r.get(11)?,
+                    income_type: r.get(7)?,
+                    start_date: r.get(8)?,
+                    end_date: r.get(9)?,
+                    annual_growth_bps: r.get(10)?,
+                    revision: r.get(11)?,
+                    tax_treatment: r.get(12)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -1189,6 +1204,7 @@ fn complete_onboarding(database: tauri::State<Database>) -> Result<(), AppError>
         )?;
         for (id, name, kind) in [
             ("income-other", "Other income", "income"),
+            ("income-salary", "Salary", "income"),
             ("expense-other", "Other expense", "expense"),
         ] {
             tx.execute(
@@ -1226,6 +1242,9 @@ fn validate_recurring(input: &RecurringInput) -> Result<(), AppError> {
         "weekly" | "biweekly" | "monthly" | "quarterly" | "annual"
     ) {
         return Err(AppError::Validation("invalid recurring frequency".into()));
+    }
+    if !matches!(input.income_type.as_str(), "ordinary" | "salary") {
+        return Err(AppError::Validation("invalid income type".into()));
     }
     if !valid_iso_date(&input.start_date)
         || input
@@ -1269,7 +1288,7 @@ fn create_recurring(
         validate_recurring(&input)?;
         validate_recurring_tax_treatment(db, &input)?;
         let hid: String = db.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
-        db.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,frequency,start_date,end_date,annual_growth_bps,tax_treatment) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11 WHERE EXISTS(SELECT 1 FROM categories WHERE id=?3 AND household_id=?2) AND (?4 IS NULL OR EXISTS(SELECT 1 FROM accounts WHERE id=?4 AND household_id=?2))",params![input.id,hid,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment]).and_then(|n|if n==1{Ok(n)}else{Err(rusqlite::Error::QueryReturnedNoRows)}).map_err(|_|AppError::Validation("category or account does not belong to this household".into()))?;
+        db.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,frequency,income_type,start_date,end_date,annual_growth_bps,tax_treatment) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12 WHERE EXISTS(SELECT 1 FROM categories WHERE id=?3 AND household_id=?2 AND (?8='ordinary' OR kind='income')) AND (?4 IS NULL OR EXISTS(SELECT 1 FROM accounts WHERE id=?4 AND household_id=?2))",params![input.id,hid,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.income_type,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment]).and_then(|n|if n==1{Ok(n)}else{Err(rusqlite::Error::QueryReturnedNoRows)}).map_err(|_|AppError::Validation("category or account does not belong to this household".into()))?;
         Ok(())
     })
 }
@@ -1284,7 +1303,7 @@ fn update_recurring(
         let revision = input
             .expected_revision
             .ok_or_else(|| AppError::Validation("expected revision is required".into()))?;
-        let n=db.execute("UPDATE recurring_entries SET category_id=?2,account_id=?3,name=?4,amount_cents=?5,frequency=?6,start_date=?7,end_date=?8,annual_growth_bps=?9,tax_treatment=?10,revision=revision+1 WHERE id=?1 AND revision=?11 AND EXISTS(SELECT 1 FROM categories c WHERE c.id=?2 AND c.household_id=recurring_entries.household_id) AND (?3 IS NULL OR EXISTS(SELECT 1 FROM accounts a WHERE a.id=?3 AND a.household_id=recurring_entries.household_id))",params![input.id,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment,revision])?;
+        let n=db.execute("UPDATE recurring_entries SET category_id=?2,account_id=?3,name=?4,amount_cents=?5,frequency=?6,income_type=?7,start_date=?8,end_date=?9,annual_growth_bps=?10,tax_treatment=?11,revision=revision+1 WHERE id=?1 AND revision=?12 AND EXISTS(SELECT 1 FROM categories c WHERE c.id=?2 AND c.household_id=recurring_entries.household_id AND (?7='ordinary' OR c.kind='income')) AND (?3 IS NULL OR EXISTS(SELECT 1 FROM accounts a WHERE a.id=?3 AND a.household_id=recurring_entries.household_id))",params![input.id,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.income_type,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment,revision])?;
         if n == 0 {
             return Err(AppError::Conflict);
         }
@@ -4524,6 +4543,7 @@ mod tests {
                 vested_bps: 2500,
                 vesting_start_date: "2026-01-01".into(),
                 remaining_vesting_quarters: 16,
+                tax_on_vest: true,
             }),
             housing_costs: None,
             expected_revision: None,

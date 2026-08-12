@@ -473,6 +473,52 @@ h1 {
   padding: 16px 20px;
   margin-bottom: 14px;
 }
+.plan-workspace { --series:#6d9b72; }
+.plan-toolbar { display:flex; align-items:end; justify-content:space-between; gap:16px; margin-bottom:10px; }
+.plan-toolbar h2 { margin:3px 0 0; font-size:20px; }
+.plan-toolbar label { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:11px; }
+.plan-toolbar select { min-width:150px; }
+.plan-tabs { display:flex; gap:4px; border-bottom:1px solid var(--line); margin-bottom:14px; }
+.plan-tabs button { border:0; border-bottom:2px solid transparent; background:transparent; color:var(--muted); padding:10px 14px; text-transform:capitalize; font-weight:650; cursor:pointer; }
+.plan-tabs button[aria-selected="true"] { color:var(--text); border-bottom-color:var(--accent); }
+.chart-heading { display:flex; align-items:start; justify-content:space-between; gap:12px; }
+.chart-heading h3 { margin:4px 0; font-size:20px; }
+.chart-ranges { display:flex; gap:4px; }
+.chart-ranges button { border:1px solid transparent; border-radius:16px; background:transparent; color:var(--muted); padding:5px 9px; cursor:pointer; }
+.chart-ranges button[aria-pressed="true"] { border-color:var(--line); background:var(--surface2); color:var(--text); }
+.wealth-summary { display:grid; grid-template-columns:repeat(3,max-content); gap:2px 24px; margin:12px 0; }
+.wealth-summary strong { font-size:15px; }
+.wealth-summary span { color:var(--muted); font-size:10px; grid-row:2; }
+.chart-canvas { height:260px; position:relative; }
+.chart-canvas svg { width:100%; height:100%; overflow:visible; }
+.chart-line { fill:none; stroke:var(--series); stroke-width:1.5; vector-effect:non-scaling-stroke; }
+.chart-area { fill:color-mix(in srgb,var(--series) 12%,transparent); }
+.chart-zero { stroke:var(--line); stroke-width:1; vector-effect:non-scaling-stroke; stroke-dasharray:3 3; }
+.chart-canvas circle { fill:var(--surface); stroke:var(--series); stroke-width:1.5; vector-effect:non-scaling-stroke; cursor:pointer; }
+.chart-canvas circle:focus { outline:none; stroke:var(--focus); stroke-width:3; }
+.chart-tooltip { position:absolute; translate:-50% calc(-100% - 8px); display:grid; z-index:3; min-width:max-content; padding:6px 8px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--muted); font-size:10px; box-shadow:0 4px 16px #0002; pointer-events:none; }
+.chart-tooltip strong { color:var(--text); }
+.wealth-chart.account { --series:#547ea8; }.wealth-chart.asset { --series:#9a7848; }.wealth-chart.private-stock { --series:#8669a5; }.wealth-chart.debt { --series:#a65e58; }
+.projection-sheet { padding:0; overflow:hidden; }
+.sheet-scroll { overflow:auto; max-height:520px; }
+.projection-sheet table { border-collapse:separate; border-spacing:0; min-width:100%; width:max-content; font-size:11px; }
+.projection-sheet th,.projection-sheet td { min-width:128px; padding:0; border-right:1px solid var(--line); border-bottom:1px solid var(--line); text-align:right; background:var(--surface); white-space:nowrap; }
+.projection-sheet thead th { position:sticky; z-index:2; color:var(--muted); font-size:10px; text-align:center; }
+.projection-sheet thead tr:nth-child(1) th { top:0; height:29px; background:var(--surface2); }
+.projection-sheet thead tr:nth-child(2) th { top:29px; height:38px; }
+.projection-sheet thead tr:nth-child(3) th { top:67px; height:34px; }
+.projection-sheet button { width:100%; height:100%; border:0; background:transparent; color:inherit; padding:9px 12px; text-align:right; cursor:pointer; font:inherit; }
+.projection-sheet thead button { text-align:center; font-weight:700; }
+.projection-sheet .year-column { position:sticky; left:0; z-index:4; min-width:82px; width:82px; padding:10px 12px; text-align:left; font-weight:700; box-shadow:1px 0 var(--line); }
+.projection-sheet thead .year-column { z-index:6; background:var(--surface2); }
+.projection-sheet .selected { background:color-mix(in srgb,var(--accent) 10%,var(--surface)); box-shadow:inset 2px 0 var(--accent),inset -2px 0 var(--accent); }
+.projection-sheet th.selected button[aria-pressed="true"]::after { content:" • Selected"; display:block; font-size:8px; color:var(--accent); }
+.projection-sheet button:focus-visible,.plan-tabs button:focus-visible,.chart-ranges button:focus-visible { outline:2px solid var(--focus); outline-offset:-3px; }
+.projection-sheet td small { color:var(--muted); font-size:8px; }
+.setup-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.setup-summary div { display:grid; gap:4px; padding:14px; border:1px solid var(--line); border-radius:9px; }
+.setup-summary span { color:var(--muted); font-size:10px; }
+@media (max-width:650px) { .plan-toolbar { align-items:stretch; flex-direction:column; }.plan-toolbar label { justify-content:space-between; }.wealth-summary { grid-template-columns:repeat(3,1fr); gap:8px; }.chart-canvas { height:210px; }.setup-summary { grid-template-columns:repeat(2,1fr); }.plan-tabs { overflow-x:auto; } }
 .year-table {
   font-size: 12px;
 }

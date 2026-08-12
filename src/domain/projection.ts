@@ -3,6 +3,7 @@ import type { AnnualProjection, FinancialSnapshot, GoalFundingResult, MonthlyPro
 
 const monthKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 const grow = (cents: number, bps: number, months: number) => Math.round(cents * Math.pow(1 + bps / 10_000, months / 12));
+export const appreciationRateForYear=(asset:Pick<import("./types").Asset,"annualGrowthBps"|"appreciationCurve">,year:number)=>{const curve=asset.appreciationCurve;if(!curve)return asset.annualGrowthBps;if(year<=curve.startYear)return curve.startRateBps;if(year>=curve.endYear)return curve.endRateBps;return Math.round(curve.startRateBps+(curve.endRateBps-curve.startRateBps)*(year-curve.startYear)/(curve.endYear-curve.startYear));};
 const isoDate = (value: string) => {
   const date = new Date(`${value}T00:00:00Z`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(date.valueOf()) || date.toISOString().slice(0, 10) !== value) throw new RangeError(`Invalid date: ${value}`);
@@ -82,7 +83,7 @@ export const ProjectionEngine = {
         const destination=account(goal.destinationAccountId);
         earmarks.set(goal.id,grow(earmarks.get(goal.id)??0,destination.annualReturnBps,1));
       }
-      for (const asset of assets.values()) asset.value = grow(asset.value, asset.annualGrowthBps, 1);
+      for (const asset of assets.values()) asset.value = grow(asset.value, appreciationRateForYear(asset,date.getUTCFullYear()), 1);
       let income = 0, expense = 0;
       for (const entry of snapshot.recurring) {
         const count = occurrences(entry, key);

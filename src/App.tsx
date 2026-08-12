@@ -593,16 +593,25 @@ function Workspace({
             onEdit={(account, el) =>
               openDialog({ type: "account", account }, el)
             }
+            onDelete={(account, el) =>
+              openDialog({ type: "account", account, requestDelete: true }, el)
+            }
             onReconcile={(account, el) =>
               openDialog({ type: "reconcile", account }, el)
             }
             onAddAsset={(el) => openDialog({ type: "asset" }, el)}
             onAddLiability={(el) => openDialog({ type: "liability" }, el)}
             onEditAsset={(asset, el) =>
-              openDialog({ type: "asset", asset }, el)
+              openDialog({ type: "asset", asset, linkedLiability: bootstrap.liabilities.find((liability)=>liability.mortgage?.assetId===asset.id) }, el)
+            }
+            onDeleteAsset={(asset, el) =>
+              openDialog({ type: "asset", asset, linkedLiability: bootstrap.liabilities.find((liability)=>liability.mortgage?.assetId===asset.id), requestDelete: true }, el)
             }
             onEditLiability={(liability, el) =>
               openDialog({ type: "liability", liability }, el)
+            }
+            onDeleteLiability={(liability, el) =>
+              openDialog({ type: "liability", liability, requestDelete: true }, el)
             }
           />
         )}
@@ -702,6 +711,8 @@ type DialogState = {
   account?: BootstrapAccount;
   asset?: Asset;
   liability?: Liability;
+  linkedLiability?: Liability;
+  requestDelete?: boolean;
   recurring?: RecurringEntry;
   scenario?: ScenarioRecord;
   invoker?: HTMLElement | null;
@@ -766,6 +777,9 @@ function EntryDialog({
     ),
     [balance, setBalance] = useState(
       state.account ? String(Math.abs(state.account.balanceCents) / 100) : "",
+    ),
+    [annualReturn, setAnnualReturn] = useState(
+      String((state.account?.annualReturnBps ?? 0) / 100),
     );
   const categories = bootstrap.categories.filter((c) => c.kind === kind);
   useEffect(() => {
@@ -872,11 +886,21 @@ function EntryDialog({
         else await repository.createTransfer?.(input);
       } else if (state.type === "account") {
         if (!name.trim()) throw { message: "Account name is required." };
+        const annualReturnBps = parsePercent(annualReturn);
+        if (
+          annualReturnBps === undefined ||
+          annualReturnBps < -10_000 ||
+          annualReturnBps > 100_000
+        )
+          throw {
+            message: "Enter an annual return between -100% and 1,000%.",
+          };
         if (state.account)
           await repository.updateAccount?.({
             id: state.account.id,
             name: name.trim(),
             kind: accountKind,
+            annualReturnBps,
             expectedRevision: state.account.revision,
           });
         else {
@@ -889,6 +913,7 @@ function EntryDialog({
             kind: accountKind,
             openingBalanceCents:
               accountKind === "credit" ? Math.abs(opening) : opening,
+            annualReturnBps,
           });
         }
       } else if (state.type === "reconcile") {
@@ -920,10 +945,7 @@ function EntryDialog({
         const impact = await repository.accountDeletionImpact?.(
           state.account!.id,
         );
-        if (impact && !impact.canDelete) {
-          setBlockers(impact.blockers);
-          return;
-        }
+        if (impact) setBlockers(impact.blockers);
         setConfirmDelete(true);
       } catch (x) {
         setError(errorMessage(x, "Could not check this account."));
@@ -932,6 +954,9 @@ function EntryDialog({
       }
     } else setConfirmDelete(true);
   }
+  useEffect(() => {
+    if (state.requestDelete) void beginDelete();
+  }, []);
   async function remove() {
     setBusy(true);
     setError("");
@@ -1038,8 +1063,8 @@ function EntryDialog({
           </p>
         )}
         {blockers.length > 0 && (
-          <div role="alert" tabIndex={-1} ref={noticeRef}>
-            <p>This account cannot be deleted:</p>
+          <div tabIndex={-1} ref={noticeRef}>
+            <p>Deleting this account will also:</p>
             <ul>
               {blockers.map((x) => (
                 <li key={x}>{x}</li>
@@ -1054,7 +1079,7 @@ function EntryDialog({
               {isAccount
                 ? state.account?.name
                 : entry?.description || "this entry"}
-              . Financial history is never cascaded.
+              . {isAccount ? "The related records listed above will be removed or disconnected." : "Financial history is never cascaded."}
             </p>
             <div className="actions">
               <button disabled={busy} onClick={() => setConfirmDelete(false)}>
@@ -1227,6 +1252,15 @@ function EntryDialog({
                       />
                     </label>
                   )}
+                  <label>
+                    Annual return (%)
+                    <input
+                      inputMode="decimal"
+                      required
+                      value={annualReturn}
+                      onChange={(e) => setAnnualReturn(e.target.value)}
+                    />
+                  </label>
                 </>
               )}
               {isReconcile && (
@@ -1306,6 +1340,7 @@ function FinancialRecordDialog({
   const isAsset = state.type === "asset";
   const record = isAsset ? state.asset : state.liability;
   const liability = state.liability;
+  const linkedMortgage = state.linkedLiability ?? (!isAsset && liability?.mortgage?.assetId ? liability : undefined);
   const [name, setName] = useState(record?.name ?? "");
   const [value, setValue] = useState("0");
   useEffect(() => {
@@ -1318,6 +1353,19 @@ function FinancialRecordDialog({
         0) / 100,
     ),
   );
+  const [advancedGrowth, setAdvancedGrowth] = useState(Boolean(isAsset && state.asset?.appreciationCurve));
+  const [growthStartYear, setGrowthStartYear] = useState(String(state.asset?.appreciationCurve?.startYear ?? new Date().getFullYear()));
+  const [growthStartRate, setGrowthStartRate] = useState(String((state.asset?.appreciationCurve?.startRateBps ?? state.asset?.annualGrowthBps ?? 0) / 100));
+  const [growthEndYear, setGrowthEndYear] = useState(String(state.asset?.appreciationCurve?.endYear ?? new Date().getFullYear() + 10));
+  const [growthEndRate, setGrowthEndRate] = useState(String((state.asset?.appreciationCurve?.endRateBps ?? state.asset?.annualGrowthBps ?? 0) / 100));
+  const [home, setHome] = useState(false);
+  const [purchasePrice, setPurchasePrice] = useState("0");
+  const [financed, setFinanced] = useState(true);
+  const [purchaseDate, setPurchaseDate] = useState(today());
+  const [downPayment, setDownPayment] = useState("20");
+  const [loanRate, setLoanRate] = useState("6.5");
+  const [propertyTax, setPropertyTax] = useState("1.25");
+  const [insuranceAnnual, setInsuranceAnnual] = useState("0");
   const [minimumPayment, setMinimumPayment] = useState(
     String((liability?.minimumPaymentCents ?? 0) / 100),
   );
@@ -1339,7 +1387,7 @@ function FinancialRecordDialog({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(Boolean(state.requestDelete));
   useEffect(() => {
     modal.current?.querySelector<HTMLElement>("button,input,select")?.focus();
     return () => state.invoker?.focus();
@@ -1362,6 +1410,14 @@ function FinancialRecordDialog({
     setError("");
     const cents = parseMoney(value);
     const bps = parsePercent(rate);
+    let appreciationCurve = null;
+    if (isAsset && advancedGrowth) {
+      const startYear = Number(growthStartYear), endYear = Number(growthEndYear);
+      const startRateBps = parsePercent(growthStartRate), endRateBps = parsePercent(growthEndRate);
+      if (!Number.isInteger(startYear) || !Number.isInteger(endYear) || endYear <= startYear || startYear < 1900 || endYear > 2500 || startRateBps == null || endRateBps == null || startRateBps < -10000 || endRateBps < -10000 || startRateBps > 100000 || endRateBps > 100000)
+        return setError("Enter valid appreciation years and rates; the ending year must be after the starting year.");
+      appreciationCurve = {startYear,startRateBps,endYear,endRateBps};
+    }
     if (!name.trim())
       return setError(`${isAsset ? "Asset" : "Debt"} name is required.`);
     if (cents == null || cents < 0)
@@ -1373,11 +1429,41 @@ function FinancialRecordDialog({
     setBusy(true);
     try {
       if (isAsset) {
+        if (!state.asset && home) {
+          const purchasePriceCents = parseMoney(purchasePrice);
+          const downPaymentBps = parsePercent(downPayment);
+          const propertyTaxRateBps = parsePercent(propertyTax);
+          const insuranceAnnualCents = parseMoney(insuranceAnnual);
+          const loanRateBps = parsePercent(loanRate);
+          const months = /^\d+$/.test(term) ? Number(term) : 0;
+          if (!purchasePriceCents || purchasePriceCents < 0)
+            throw { message: "Enter the original home purchase price." };
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate) || purchaseDate > today())
+            throw { message: "Enter a purchase date that is not in the future." };
+          if (propertyTaxRateBps == null || propertyTaxRateBps < 0 || insuranceAnnualCents == null || insuranceAnnualCents < 0)
+            throw { message: "Enter valid property tax and annual insurance amounts." };
+          if (financed && (downPaymentBps == null || downPaymentBps < 0 || downPaymentBps > 10000 || loanRateBps == null || loanRateBps < 0 || months < 1 || months > 480))
+            throw { message: "Enter valid down payment, interest rate, and a term from 1 to 480 months." };
+          await repository.createHome?.({
+            assetId: crypto.randomUUID(),
+            liabilityId: financed ? crypto.randomUUID() : null,
+            name: name.trim(), purchasePriceCents, currentValueCents: cents, annualGrowthBps: bps, appreciationCurve,
+            purchaseDate, propertyTaxRateBps, insuranceAnnualCents, financed,
+            downPaymentBps: financed ? downPaymentBps : undefined,
+            termMonths: financed ? months : undefined,
+            annualRateBps: financed ? loanRateBps : undefined,
+            asOfDate: today(),
+          });
+          await Promise.resolve(refresh());
+          close();
+          return;
+        }
         const input = {
           id: state.asset?.id ?? crypto.randomUUID(),
           name: name.trim(),
           valueCents: cents,
           annualGrowthBps: bps,
+          appreciationCurve,
         };
         if (state.asset)
           await repository.updateAsset?.({
@@ -1493,8 +1579,12 @@ function FinancialRecordDialog({
         {confirmDelete ? (
           <>
             <p>
-              This permanently removes {record?.name}. Existing account and
-              activity history is unaffected.
+              This permanently removes {record?.name}.
+              {isAsset && linkedMortgage
+                ? ` Its linked mortgage, ${linkedMortgage.name}, will also be permanently removed.`
+                : linkedMortgage
+                  ? " The linked home will remain in Net Worth."
+                  : " Existing account and activity history is unaffected."}
             </p>
             <div className="actions">
               <button disabled={busy} onClick={() => setConfirmDelete(false)}>
@@ -1517,7 +1607,7 @@ function FinancialRecordDialog({
                 />
               </label>
               <label>
-                {isAsset ? "Current value (USD)" : "Current balance (USD)"}
+                {isAsset && home ? "Current home value (USD)" : isAsset ? "Current value (USD)" : "Current balance (USD)"}
                 <input
                   required
                   inputMode="decimal"
@@ -1525,6 +1615,26 @@ function FinancialRecordDialog({
                   onChange={(e) => setValue(e.target.value)}
                 />
               </label>
+              {isAsset && !state.asset && (
+                <label className="check-row">
+                  <input type="checkbox" checked={home} onChange={(e)=>setHome(e.target.checked)} /> This asset is a home
+                </label>
+              )}
+              {isAsset && home && !state.asset && (
+                <>
+                  <label>Original purchase price (USD)<input required inputMode="decimal" value={purchasePrice} onChange={(e)=>setPurchasePrice(e.target.value)} /></label>
+                  <label>Purchase date<input required type="date" max={today()} value={purchaseDate} onChange={(e)=>setPurchaseDate(e.target.value)} /></label>
+                  <label>Property tax (%)<input required inputMode="decimal" value={propertyTax} onChange={(e)=>setPropertyTax(e.target.value)} /></label>
+                  <label>Homeowners insurance per year (USD)<input required inputMode="decimal" value={insuranceAnnual} onChange={(e)=>setInsuranceAnnual(e.target.value)} /></label>
+                  <label className="check-row"><input type="checkbox" checked={financed} onChange={(e)=>setFinanced(e.target.checked)} /> Financed with a mortgage</label>
+                  {financed && <>
+                    <label>Down payment (%)<input required inputMode="decimal" value={downPayment} onChange={(e)=>setDownPayment(e.target.value)} /></label>
+                    <label>Mortgage interest rate (%)<input required inputMode="decimal" value={loanRate} onChange={(e)=>setLoanRate(e.target.value)} /></label>
+                    <label>Loan term (months)<input required inputMode="numeric" value={term} onChange={(e)=>setTerm(e.target.value)} /></label>
+                    <p className="muted">LifeLook calculates the original principal, standard monthly payment, and current mortgage balance from these terms.</p>
+                  </>}
+                </>
+              )}
               <label>
                 {isAsset ? "Annual growth (%)" : "Annual interest rate (%)"}
                 <input
@@ -1534,6 +1644,18 @@ function FinancialRecordDialog({
                   onChange={(e) => setRate(e.target.value)}
                 />
               </label>
+              {isAsset && (
+                <>
+                  <label className="check-row"><input type="checkbox" checked={advancedGrowth} onChange={(e)=>setAdvancedGrowth(e.target.checked)} /> Use an appreciation curve</label>
+                  {advancedGrowth && <>
+                    <p className="muted">The rate changes linearly each year, then remains at the ending rate.</p>
+                    <label>Starting year<input required inputMode="numeric" value={growthStartYear} onChange={(e)=>setGrowthStartYear(e.target.value)} /></label>
+                    <label>Starting appreciation (%)<input required inputMode="decimal" value={growthStartRate} onChange={(e)=>setGrowthStartRate(e.target.value)} /></label>
+                    <label>Ending year<input required inputMode="numeric" value={growthEndYear} onChange={(e)=>setGrowthEndYear(e.target.value)} /></label>
+                    <label>Ending appreciation (%)<input required inputMode="decimal" value={growthEndRate} onChange={(e)=>setGrowthEndRate(e.target.value)} /></label>
+                  </>}
+                </>
+              )}
               {!isAsset && (
                 <>
                   <label className="check-row">
@@ -4229,6 +4351,15 @@ function PlanView({
           ))}
         </div>
       </div>
+      {snapshot.liabilities.some((liability) => liability.mortgage?.assetId) && (
+        <section className="card wide" aria-labelledby="housing-payments-title">
+          <div className="card-title"><div><span className="label assumption">Committed monthly expenses</span><h3 id="housing-payments-title">Home payments</h3></div></div>
+          {snapshot.liabilities.filter((liability) => liability.mortgage?.assetId).map((liability) => (
+            <div className="transaction" key={liability.id}><div><strong>{liability.name}</strong><small>Automatically funded before monthly surplus is allocated</small></div><b>{money(liability.minimumPaymentCents)}/month</b></div>
+          ))}
+          <p className="muted">Mortgage principal and interest are deducted automatically each month. Increase the mortgage payment in Net Worth to model extra principal.</p>
+        </section>
+      )}
       {activeScenario&&<section className="card wide" aria-labelledby="goal-summary-title"><div className="card-title"><div><span className="label assumption">Funding trackers</span><h3 id="goal-summary-title">Goals</h3></div><span>{money(projections.reduce((sum,year)=>sum+year.goalFundingCents,0),true)} projected funding</span></div>{activeScenario.goals.map(goal=>{const result=latestGoalResults.find(item=>item.goalId===goal.id);return <div className="transaction" key={goal.id}><div><strong>{goal.name}</strong><small>{goal.enabled?(result?.targetResult.replaceAll("-"," ")??"Waiting for projection"):"Disabled"}</small></div>{result&&<div><progress aria-label={`${goal.name} funding progress`} max={10000} value={result.completionBps}>{result.completionBps/100}%</progress><small>{money(result.earmarkedCents)} of {money(result.targetCents)} · {money(result.requiredCents)}/month required · {money(result.shortfallCents)} shortfall{result.projectedCompletionDate?` · completion ${result.projectedCompletionDate}`:""}</small></div>}</div>})}{!activeScenario.goals.length&&<p className="empty">No funding goals in this scenario.</p>}<p className="muted">Funding does not execute purchases, debt payoff, or retirement changes; add those separately as dated events.</p></section>}
       {comparisons.length > 1 && (
         <section className="card wide" aria-label="Scenario comparison">
@@ -4396,11 +4527,14 @@ function NetWorth({
   liabilities: liabilityRecords,
   onAdd,
   onEdit,
+  onDelete,
   onReconcile,
   onAddAsset,
   onAddLiability,
   onEditAsset,
+  onDeleteAsset,
   onEditLiability,
+  onDeleteLiability,
 }: {
   snapshot: FinancialSnapshot;
   accounts: BootstrapAccount[];
@@ -4408,11 +4542,14 @@ function NetWorth({
   liabilities: Liability[];
   onAdd: (el: HTMLElement) => void;
   onEdit: (a: BootstrapAccount, el: HTMLElement) => void;
+  onDelete: (a: BootstrapAccount, el: HTMLElement) => void;
   onReconcile: (a: BootstrapAccount, el: HTMLElement) => void;
   onAddAsset: (el: HTMLElement) => void;
   onAddLiability: (el: HTMLElement) => void;
   onEditAsset: (a: Asset, el: HTMLElement) => void;
+  onDeleteAsset: (a: Asset, el: HTMLElement) => void;
   onEditLiability: (l: Liability, el: HTMLElement) => void;
+  onDeleteLiability: (l: Liability, el: HTMLElement) => void;
 }) {
   const assets =
       snapshot.accounts.reduce((s, a) => s + Math.max(0, a.balanceCents), 0) +
@@ -4497,6 +4634,7 @@ function NetWorth({
               >
                 Reconcile
               </button>
+              <button className="danger-link" aria-label={`Delete account ${a.name}`} onClick={(e)=>onDelete(accounts.find((x)=>x.id===a.id)!,e.currentTarget)}>Delete</button>
             </div>
           ))}
         {assetRecords.map((a) => (
@@ -4506,7 +4644,16 @@ function NetWorth({
             </span>
             <div>
               <strong>{a.name}</strong>
-              <small>Asset</small>
+              <small>
+                {liabilityRecords.find((l) => l.mortgage?.assetId === a.id)
+                  ? `Home · linked to ${liabilityRecords.find((l) => l.mortgage?.assetId === a.id)!.name}`
+                  : "Asset"}
+              </small>
+              {a.purchasePriceCents != null && a.purchasePriceCents > 0 && (
+                <small>
+                  {money(a.valueCents - a.purchasePriceCents)} ({(((a.valueCents / a.purchasePriceCents) - 1) * 100).toFixed(1)}%) since purchase
+                </small>
+              )}
             </div>
             <b>{money(a.valueCents)}</b>
             <button
@@ -4516,6 +4663,7 @@ function NetWorth({
             >
               Edit
             </button>
+            <button className="danger-link" aria-label={`Delete asset ${a.name}`} onClick={(e)=>onDeleteAsset(a,e.currentTarget)}>Delete</button>
           </div>
         ))}
         {!snapshot.accounts.length && !snapshot.assets.length && (
@@ -4566,6 +4714,7 @@ function NetWorth({
               >
                 Reconcile
               </button>
+              <button className="danger-link" aria-label={`Delete account ${a.name}`} onClick={(e)=>onDelete(accounts.find((x)=>x.id===a.id)!,e.currentTarget)}>Delete</button>
             </div>
           ))}
         {liabilityRecords.map((l) => (
@@ -4585,6 +4734,7 @@ function NetWorth({
             >
               Edit
             </button>
+            <button className="danger-link" aria-label={`Delete debt ${l.name}`} onClick={(e)=>onDeleteLiability(l,e.currentTarget)}>Delete</button>
           </div>
         ))}
         {debt === 0 && (
@@ -4633,12 +4783,14 @@ function SettingsView({
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [dataResult, setDataResult] = useState<{
     kind: "error" | "success";
     message: string;
   } | null>(null);
   const dataAlert = useRef<HTMLParagraphElement>(null);
   const restoreCancel = useRef<HTMLButtonElement>(null);
+  const resetCancel = useRef<HTMLButtonElement>(null);
   const [appearanceSaving, setAppearanceSaving] = useState(false);
   const [memberSaving, setMemberSaving] = useState(false);
   const [memberResult, setMemberResult] = useState<{
@@ -4707,6 +4859,26 @@ function SettingsView({
           ? "That file is not a compatible LifeLook backup."
           : "Could not restore the backup. Your current data is still available.";
       setDataResult({ kind: "error", message: errorMessage(error, fallback) });
+      queueMicrotask(() => dataAlert.current?.focus());
+    } finally {
+      setRestoreBusy(false);
+    }
+  }
+  async function resetProfile() {
+    if (backupBusy || restoreBusy) return;
+    setConfirmReset(false);
+    setRestoreBusy(true);
+    setDataResult(null);
+    try {
+      if (!repository.resetProfile)
+        throw new Error("Profile reset is unavailable.");
+      const reset = await repository.resetProfile();
+      onRestore(reset);
+    } catch (error) {
+      setDataResult({
+        kind: "error",
+        message: errorMessage(error, "Could not reset the profile. Your current data is still available."),
+      });
       queueMicrotask(() => dataAlert.current?.focus());
     } finally {
       setRestoreBusy(false);
@@ -4901,6 +5073,22 @@ function SettingsView({
             Choose backup
           </button>
         </div>
+        <div className="setting">
+          <div>
+            <strong>Reset profile</strong>
+            <p>Permanently erase this workspace and start onboarding again.</p>
+          </div>
+          <button
+            className="danger"
+            disabled={backupBusy || restoreBusy}
+            onClick={() => {
+              setConfirmReset(true);
+              queueMicrotask(() => resetCancel.current?.focus());
+            }}
+          >
+            Reset profile
+          </button>
+        </div>
         {dataResult?.kind === "error" && (
           <p ref={dataAlert} tabIndex={-1} role="alert" className="negative">
             {dataResult.message}
@@ -4933,6 +5121,30 @@ function SettingsView({
               </button>
               <button className="primary" onClick={restoreBackup}>
                 Choose backup and restore
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {confirmReset && (
+        <div className="modal-backdrop">
+          <section
+            className="card modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="reset-title"
+            aria-describedby="reset-warning"
+          >
+            <h2 id="reset-title">Reset your profile?</h2>
+            <p id="reset-warning">
+              This permanently erases all household, account, activity, and planning data in this workspace. This cannot be undone.
+            </p>
+            <div className="actions">
+              <button ref={resetCancel} onClick={() => setConfirmReset(false)}>
+                Cancel
+              </button>
+              <button className="danger" onClick={resetProfile}>
+                Yes, reset profile
               </button>
             </div>
           </section>

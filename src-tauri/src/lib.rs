@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 8;
+const SCHEMA_VERSION: i64 = 9;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -222,8 +222,20 @@ struct Asset {
     name: String,
     value_cents: i64,
     annual_growth_bps: i64,
+    #[serde(default)]
+    appreciation_curve: Option<AppreciationCurve>,
     revision: i64,
     housing_costs: serde_json::Value,
+    purchase_price_cents: Option<i64>,
+    purchase_date: Option<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppreciationCurve {
+    start_year: i64,
+    start_rate_bps: i64,
+    end_year: i64,
+    end_rate_bps: i64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -232,6 +244,8 @@ struct MortgageTerms {
     term_months: i64,
     start_date: String,
     payment_override_cents: Option<i64>,
+    #[serde(default)]
+    asset_id: Option<String>,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -358,6 +372,7 @@ struct AccountInput {
     name: String,
     kind: String,
     opening_balance_cents: i64,
+    annual_return_bps: i64,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -365,6 +380,7 @@ struct UpdateAccountInput {
     id: String,
     name: String,
     kind: String,
+    annual_return_bps: i64,
     expected_revision: i64,
 }
 #[derive(Debug, Deserialize)]
@@ -389,6 +405,8 @@ struct AssetInput {
     value_cents: i64,
     annual_growth_bps: i64,
     #[serde(default)]
+    appreciation_curve: Option<AppreciationCurve>,
+    #[serde(default)]
     housing_costs: Option<serde_json::Value>,
     expected_revision: Option<i64>,
 }
@@ -402,6 +420,26 @@ struct LiabilityInput {
     minimum_payment_cents: i64,
     mortgage: Option<MortgageTerms>,
     expected_revision: Option<i64>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HomeInput {
+    asset_id: String,
+    liability_id: Option<String>,
+    name: String,
+    purchase_price_cents: i64,
+    current_value_cents: i64,
+    annual_growth_bps: i64,
+    #[serde(default)]
+    appreciation_curve: Option<AppreciationCurve>,
+    purchase_date: String,
+    property_tax_rate_bps: i64,
+    insurance_annual_cents: i64,
+    financed: bool,
+    down_payment_bps: Option<i64>,
+    term_months: Option<i64>,
+    annual_rate_bps: Option<i64>,
+    as_of_date: String,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -495,7 +533,7 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
       CREATE TABLE IF NOT EXISTS transaction_entries(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, occurred_on TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('income','expense','transfer','adjustment')), description TEXT NOT NULL DEFAULT '', note TEXT, import_batch_id TEXT REFERENCES import_batches(id) ON DELETE RESTRICT, transfer_group_id TEXT, revision INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS postings(id INTEGER PRIMARY KEY AUTOINCREMENT, entry_id TEXT NOT NULL REFERENCES transaction_entries(id) ON DELETE RESTRICT, account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT, category_id TEXT REFERENCES categories(id) ON DELETE RESTRICT, amount_cents INTEGER NOT NULL CHECK(amount_cents<>0), fingerprint TEXT, UNIQUE(account_id,fingerprint));
       CREATE TABLE IF NOT EXISTS recurring_entries(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE RESTRICT, account_id TEXT REFERENCES accounts(id) ON DELETE RESTRICT, name TEXT NOT NULL, amount_cents INTEGER NOT NULL CHECK(amount_cents>0), start_date TEXT NOT NULL, end_date TEXT, annual_growth_bps INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL DEFAULT 1);
-      CREATE TABLE IF NOT EXISTS assets(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, name TEXT NOT NULL, value_cents INTEGER NOT NULL CHECK(value_cents>=0), annual_growth_bps INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL DEFAULT 1);
+      CREATE TABLE IF NOT EXISTS assets(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, name TEXT NOT NULL, value_cents INTEGER NOT NULL CHECK(value_cents>=0), annual_growth_bps INTEGER NOT NULL DEFAULT 0, appreciation_curve_json TEXT, revision INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE IF NOT EXISTS liabilities(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, name TEXT NOT NULL, balance_cents INTEGER NOT NULL CHECK(balance_cents>=0), annual_rate_bps INTEGER NOT NULL DEFAULT 0, minimum_payment_cents INTEGER NOT NULL DEFAULT 0 CHECK(minimum_payment_cents>=0), mortgage_json TEXT, revision INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE IF NOT EXISTS scenarios(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, name TEXT NOT NULL, is_baseline INTEGER NOT NULL DEFAULT 0 CHECK(is_baseline IN (0,1)), assumptions_json TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1);
       CREATE UNIQUE INDEX IF NOT EXISTS one_baseline ON scenarios(household_id) WHERE is_baseline=1;
@@ -609,6 +647,23 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
     transaction.execute_batch("CREATE TABLE IF NOT EXISTS scenario_goals(id TEXT PRIMARY KEY,scenario_id TEXT NOT NULL REFERENCES scenarios(id) ON DELETE RESTRICT,goal_type TEXT NOT NULL CHECK(goal_type IN ('retirement','emergency-fund','debt-payoff','education','major-purchase')),priority INTEGER NOT NULL CHECK(priority>0),payload_json TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,UNIQUE(scenario_id,priority));")?;
     transaction.execute(
         "INSERT OR IGNORE INTO schema_migrations(version) VALUES(8)",
+        [],
+    )?;
+    let asset_columns: Vec<String> = transaction
+        .prepare("PRAGMA table_info(assets)")?
+        .query_map([], |row| row.get(1))?
+        .collect::<Result<_, _>>()?;
+    if !asset_columns
+        .iter()
+        .any(|name| name == "appreciation_curve_json")
+    {
+        transaction.execute(
+            "ALTER TABLE assets ADD COLUMN appreciation_curve_json TEXT",
+            [],
+        )?;
+    }
+    transaction.execute(
+        "INSERT OR IGNORE INTO schema_migrations(version) VALUES(9)",
         [],
     )?;
     transaction.commit()?;
@@ -745,18 +800,29 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision,housing_costs_json FROM assets WHERE household_id=? ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision,housing_costs_json,appreciation_curve_json FROM assets WHERE household_id=? ORDER BY name")?;
         assets = q
             .query_map([&h.id], |r| {
+                let housing: serde_json::Value =
+                    serde_json::from_str(&r.get::<_, String>(6)?).unwrap_or_default();
                 Ok(Asset {
                     id: r.get(0)?,
                     household_id: r.get(1)?,
                     name: r.get(2)?,
                     value_cents: r.get(3)?,
                     annual_growth_bps: r.get(4)?,
+                    appreciation_curve: r
+                        .get::<_, Option<String>>(7)?
+                        .and_then(|raw| serde_json::from_str(&raw).ok()),
                     revision: r.get(5)?,
-                    housing_costs: serde_json::from_str(&r.get::<_, String>(6)?)
-                        .unwrap_or_default(),
+                    purchase_price_cents: housing
+                        .get("purchasePriceCents")
+                        .and_then(|value| value.as_i64()),
+                    purchase_date: housing
+                        .get("purchaseDate")
+                        .and_then(|value| value.as_str())
+                        .map(str::to_owned),
+                    housing_costs: housing,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -2290,8 +2356,9 @@ fn create_account(input: AccountInput, database: tauri::State<Database>) -> Resu
         }
         let hid = active_household(db)?;
         let liquid = account_properties(&input.kind)?;
+        validate_rate(input.annual_return_bps, -10_000, "annual return")?;
         let balance = stored_balance(&input.kind, input.opening_balance_cents)?;
-        db.execute("INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,liquid) VALUES(?1,?2,?3,?4,?5,?6)",params![input.id,hid,input.name.trim(),input.kind,balance,liquid])?;
+        db.execute("INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,annual_return_bps,liquid) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![input.id,hid,input.name.trim(),input.kind,balance,input.annual_return_bps,liquid])?;
         Ok(())
     })
 }
@@ -2306,7 +2373,8 @@ fn update_account(
         }
         let hid = active_household(db)?;
         let liquid = account_properties(&input.kind)?;
-        let changed=db.execute("UPDATE accounts SET name=?1,kind=?2,liquid=?3,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=?4 AND household_id=?5 AND revision=?6",params![input.name.trim(),input.kind,liquid,input.id,hid,input.expected_revision])?;
+        validate_rate(input.annual_return_bps, -10_000, "annual return")?;
+        let changed=db.execute("UPDATE accounts SET name=?1,kind=?2,annual_return_bps=?3,liquid=?4,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=?5 AND household_id=?6 AND revision=?7",params![input.name.trim(),input.kind,input.annual_return_bps,liquid,input.id,hid,input.expected_revision])?;
         if changed == 0 {
             return Err(AppError::Conflict);
         }
@@ -2331,16 +2399,14 @@ fn account_impact(db: &Connection, account_id: &str) -> Result<AccountDeletionIm
         [&hid],
         |r| r.get(0),
     )?;
-    if accounts <= 1 {
-        blockers.push("This is the household's last account.".into())
-    }
+    let _ = accounts;
     let opening_balance: i64 = db.query_row(
         "SELECT opening_balance_cents FROM accounts WHERE id=?",
         [account_id],
         |r| r.get(0),
     )?;
     if opening_balance != 0 {
-        blockers.push("The account has a non-zero opening balance.".into())
+        blockers.push("Remove its opening balance.".into())
     }
     let postings: i64 = db.query_row(
         "SELECT count(*) FROM postings WHERE account_id=?",
@@ -2348,7 +2414,7 @@ fn account_impact(db: &Connection, account_id: &str) -> Result<AccountDeletionIm
         |r| r.get(0),
     )?;
     if postings > 0 {
-        blockers.push("The account has transactions or reconciliation history.".into())
+        blockers.push(format!("Permanently remove {postings} transaction posting(s), including both sides of affected transfers."))
     }
     let imports: i64 = db.query_row(
         "SELECT count(*) FROM import_batches WHERE account_id=?",
@@ -2356,7 +2422,9 @@ fn account_impact(db: &Connection, account_id: &str) -> Result<AccountDeletionIm
         |r| r.get(0),
     )?;
     if imports > 0 {
-        blockers.push("The account has import batch history.".into())
+        blockers.push(format!(
+            "Permanently remove {imports} associated import batch record(s)."
+        ))
     }
     let recurring: i64 = db.query_row(
         "SELECT count(*) FROM recurring_entries WHERE account_id=?",
@@ -2364,7 +2432,9 @@ fn account_impact(db: &Connection, account_id: &str) -> Result<AccountDeletionIm
         |r| r.get(0),
     )?;
     if recurring > 0 {
-        blockers.push("The account is used by recurring entries.".into())
+        blockers.push(format!(
+            "Disconnect it from {recurring} recurring entry or entries."
+        ))
     }
     let allocations: i64 = db.query_row(
         "SELECT count(*) FROM allocations WHERE account_id=?",
@@ -2372,11 +2442,11 @@ fn account_impact(db: &Connection, account_id: &str) -> Result<AccountDeletionIm
         |r| r.get(0),
     )?;
     if allocations > 0 {
-        blockers.push("The account is used by scenario allocations.".into())
+        blockers.push(format!("Remove {allocations} plan allocation rule(s)."))
     }
     Ok(AccountDeletionImpact {
         account_id: account_id.into(),
-        can_delete: blockers.is_empty(),
+        can_delete: true,
         blockers,
     })
 }
@@ -2392,18 +2462,43 @@ fn delete_account(input: DeleteInput, database: tauri::State<Database>) -> Resul
     with_db(&database, |db| delete_account_from(db, &input))
 }
 fn delete_account_from(db: &mut Connection, input: &DeleteInput) -> Result<(), AppError> {
-    let impact = account_impact(db, &input.id)?;
-    if !impact.can_delete {
-        return Err(AppError::Validation(impact.blockers.join(" ")));
+    let tx = db.transaction()?;
+    let hid = active_household(&tx)?;
+    let revision: Option<i64> = tx
+        .query_row(
+            "SELECT revision FROM accounts WHERE id=?1 AND household_id=?2",
+            params![input.id, hid],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if revision != Some(input.expected_revision) {
+        return Err(AppError::Conflict);
     }
-    let hid = active_household(db)?;
-    let changed = db.execute(
+    tx.execute("UPDATE recurring_entries SET account_id=NULL,revision=revision+1 WHERE account_id=?1 AND household_id=?2",params![input.id,hid])?;
+    tx.execute("DELETE FROM allocations WHERE account_id=?1 AND scenario_id IN (SELECT id FROM scenarios WHERE household_id=?2)",params![input.id,hid])?;
+    tx.execute("DELETE FROM withdrawal_rules WHERE account_id=?1 AND scenario_id IN (SELECT id FROM scenarios WHERE household_id=?2)",params![input.id,hid])?;
+    tx.execute("DELETE FROM scenario_goals WHERE scenario_id IN (SELECT id FROM scenarios WHERE household_id=?2) AND EXISTS (SELECT 1 FROM json_tree(scenario_goals.payload_json) WHERE json_tree.value=?1)",params![input.id,hid])?;
+    tx.execute("DELETE FROM scenario_events WHERE scenario_id IN (SELECT id FROM scenarios WHERE household_id=?2) AND EXISTS (SELECT 1 FROM json_tree(scenario_events.payload_json) WHERE json_tree.value=?1)",params![input.id,hid])?;
+    let entry_ids: Vec<String> = tx
+        .prepare("SELECT DISTINCT entry_id FROM postings WHERE account_id=?1")?
+        .query_map([&input.id], |row| row.get(0))?
+        .collect::<Result<_, _>>()?;
+    for entry_id in entry_ids {
+        tx.execute("DELETE FROM postings WHERE entry_id=?1", [&entry_id])?;
+        tx.execute("DELETE FROM transaction_entries WHERE id=?1", [&entry_id])?;
+    }
+    tx.execute(
+        "DELETE FROM import_batches WHERE account_id=?1",
+        [&input.id],
+    )?;
+    let changed = tx.execute(
         "DELETE FROM accounts WHERE id=?1 AND household_id=?2 AND revision=?3",
         params![input.id, hid, input.expected_revision],
     )?;
     if changed == 0 {
         return Err(AppError::Conflict);
     }
+    tx.commit()?;
     Ok(())
 }
 fn validate_rate(value: i64, minimum: i64, label: &str) -> Result<(), AppError> {
@@ -2493,6 +2588,7 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
     }
     validate_nonnegative_money(input.value_cents, "asset value")?;
     validate_rate(input.annual_growth_bps, -10_000, "annual growth")?;
+    let curve_json = validate_appreciation_curve(input.appreciation_curve.as_ref())?;
     let housing = input.housing_costs.clone().unwrap_or_else(|| serde_json::json!({"propertyTaxRateBps":0,"insuranceMonthlyCents":0,"insuranceAnnualGrowthBps":0,"hoaMonthlyCents":0,"hoaAnnualGrowthBps":0}));
     for field in [
         "propertyTaxRateBps",
@@ -2515,18 +2611,135 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
     let housing_json = serde_json::to_string(&housing)?;
     let hid = active_household(db)?;
     if update {
-        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,revision=revision+1 WHERE id=?5 AND household_id=?6 AND revision=?7",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
+        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,appreciation_curve_json=?5,revision=revision+1 WHERE id=?6 AND household_id=?7 AND revision=?8",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
         if changed == 0 {
             return Err(AppError::Conflict);
         }
     } else {
-        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json) VALUES(?1,?2,?3,?4,?5,?6)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json])?;
+        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json])?;
     }
     Ok(())
+}
+fn validate_appreciation_curve(
+    curve: Option<&AppreciationCurve>,
+) -> Result<Option<String>, AppError> {
+    let Some(curve) = curve else { return Ok(None) };
+    if !(1900..=2500).contains(&curve.start_year)
+        || !(1900..=2500).contains(&curve.end_year)
+        || curve.end_year <= curve.start_year
+    {
+        return Err(AppError::Validation(
+            "appreciation curve end year must be after its start year".into(),
+        ));
+    }
+    validate_rate(curve.start_rate_bps, -10_000, "starting appreciation")?;
+    validate_rate(curve.end_rate_bps, -10_000, "ending appreciation")?;
+    Ok(Some(serde_json::to_string(curve)?))
 }
 #[tauri::command]
 fn create_asset(input: AssetInput, database: tauri::State<Database>) -> Result<(), AppError> {
     with_db(&database, |db| save_asset(db, &input, false))
+}
+
+fn months_between(start: &str, end: &str) -> Result<i64, AppError> {
+    use chrono::Datelike;
+    let start = chrono::NaiveDate::parse_from_str(start, "%Y-%m-%d")
+        .map_err(|_| AppError::Validation("purchase date must be valid".into()))?;
+    let end = chrono::NaiveDate::parse_from_str(end, "%Y-%m-%d")
+        .map_err(|_| AppError::Validation("as-of date must be valid".into()))?;
+    if start > end {
+        return Err(AppError::Validation(
+            "purchase date cannot be in the future".into(),
+        ));
+    }
+    let months =
+        (end.year() - start.year()) as i64 * 12 + end.month() as i64 - start.month() as i64;
+    Ok(months.max(0))
+}
+
+fn amortized_balance(principal: i64, annual_rate_bps: i64, term: i64, paid: i64) -> i64 {
+    if paid >= term {
+        return 0;
+    }
+    if annual_rate_bps == 0 {
+        return ((principal as i128 * (term - paid) as i128) / term as i128) as i64;
+    }
+    let rate = annual_rate_bps as f64 / 120_000.0;
+    let payment = principal as f64 * rate / (1.0 - (1.0 + rate).powi(-(term as i32)));
+    let balance = principal as f64 * (1.0 + rate).powi(paid as i32)
+        - payment * ((1.0 + rate).powi(paid as i32) - 1.0) / rate;
+    balance.max(0.0).round() as i64
+}
+
+fn create_home_impl(db: &mut Connection, input: &HomeInput) -> Result<(), AppError> {
+    if input.name.trim().is_empty() {
+        return Err(AppError::Validation("home name is required".into()));
+    }
+    validate_nonnegative_money(input.purchase_price_cents, "purchase price")?;
+    validate_nonnegative_money(input.current_value_cents, "current home value")?;
+    if input.purchase_price_cents == 0 {
+        return Err(AppError::Validation(
+            "purchase price must be positive".into(),
+        ));
+    }
+    validate_rate(input.annual_growth_bps, -10_000, "annual growth")?;
+    let curve_json = validate_appreciation_curve(input.appreciation_curve.as_ref())?;
+    validate_rate(input.property_tax_rate_bps, 0, "property tax rate")?;
+    validate_nonnegative_money(input.insurance_annual_cents, "annual insurance")?;
+    let elapsed = months_between(&input.purchase_date, &input.as_of_date)?;
+    let tx = db.transaction()?;
+    let hid = active_household(&tx)?;
+    let housing = serde_json::json!({
+        "propertyTaxRateBps": input.property_tax_rate_bps,
+        "insuranceMonthlyCents": (input.insurance_annual_cents as f64 / 12.0).round() as i64,
+        "insuranceAnnualGrowthBps": 0,
+        "hoaMonthlyCents": 0,
+        "hoaAnnualGrowthBps": 0
+        ,"purchasePriceCents": input.purchase_price_cents
+        ,"purchaseDate": input.purchase_date
+    });
+    tx.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![input.asset_id,hid,input.name.trim(),input.current_value_cents,input.annual_growth_bps,serde_json::to_string(&housing)?,curve_json])?;
+    if input.financed {
+        let down = input
+            .down_payment_bps
+            .ok_or_else(|| AppError::Validation("down payment percent is required".into()))?;
+        if !(0..=10_000).contains(&down) {
+            return Err(AppError::Validation(
+                "down payment percent must be between 0 and 100".into(),
+            ));
+        }
+        let term = input
+            .term_months
+            .ok_or_else(|| AppError::Validation("loan term is required".into()))?;
+        if !(1..=480).contains(&term) {
+            return Err(AppError::Validation(
+                "loan term must be between 1 and 480 months".into(),
+            ));
+        }
+        let rate = input
+            .annual_rate_bps
+            .ok_or_else(|| AppError::Validation("interest rate is required".into()))?;
+        validate_rate(rate, 0, "interest rate")?;
+        let original =
+            ((input.purchase_price_cents as i128 * (10_000 - down) as i128) / 10_000) as i64;
+        let balance = amortized_balance(original, rate, term, elapsed);
+        let payment = calculated_mortgage_payment(original, rate, term);
+        let mortgage = MortgageTerms {
+            original_principal_cents: original,
+            term_months: term,
+            start_date: input.purchase_date.clone(),
+            payment_override_cents: None,
+            asset_id: Some(input.asset_id.clone()),
+        };
+        tx.execute("INSERT INTO liabilities(id,household_id,name,balance_cents,annual_rate_bps,minimum_payment_cents,mortgage_json) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![input.liability_id.as_ref().ok_or_else(||AppError::Validation("mortgage id is required".into()))?,hid,format!("{} Mortgage",input.name.trim()),balance,rate,payment,serde_json::to_string(&mortgage)?])?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+#[tauri::command]
+fn create_home(input: HomeInput, database: tauri::State<Database>) -> Result<(), AppError> {
+    with_db(&database, |db| create_home_impl(db, &input))
 }
 #[tauri::command]
 fn update_asset(input: AssetInput, database: tauri::State<Database>) -> Result<(), AppError> {
@@ -2536,15 +2749,51 @@ fn update_asset(input: AssetInput, database: tauri::State<Database>) -> Result<(
 fn delete_asset(input: DeleteInput, database: tauri::State<Database>) -> Result<(), AppError> {
     with_db(&database, |db| delete_asset_from(db, &input))
 }
-fn delete_asset_from(db: &Connection, input: &DeleteInput) -> Result<(), AppError> {
-    let hid = active_household(db)?;
-    let changed = db.execute(
+fn delete_asset_from(db: &mut Connection, input: &DeleteInput) -> Result<(), AppError> {
+    let tx = db.transaction()?;
+    let hid = active_household(&tx)?;
+    let revision: Option<i64> = tx
+        .query_row(
+            "SELECT revision FROM assets WHERE id=?1 AND household_id=?2",
+            params![input.id, hid],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if revision != Some(input.expected_revision) {
+        return Err(AppError::Conflict);
+    }
+    let linked: Vec<String> = {
+        let mut statement = tx.prepare(
+            "SELECT id,mortgage_json FROM liabilities WHERE household_id=?1 AND mortgage_json IS NOT NULL",
+        )?;
+        let rows = statement
+            .query_map([&hid], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .filter_map(|item| item.ok())
+            .filter_map(|(id, raw)| {
+                serde_json::from_str::<MortgageTerms>(&raw)
+                    .ok()
+                    .filter(|terms| terms.asset_id.as_deref() == Some(input.id.as_str()))
+                    .map(|_| id)
+            })
+            .collect();
+        rows
+    };
+    for liability_id in linked {
+        tx.execute(
+            "DELETE FROM liabilities WHERE id=?1 AND household_id=?2",
+            params![liability_id, hid],
+        )?;
+    }
+    let changed = tx.execute(
         "DELETE FROM assets WHERE id=?1 AND household_id=?2 AND revision=?3",
         params![input.id, hid, input.expected_revision],
     )?;
     if changed == 0 {
         return Err(AppError::Conflict);
     }
+    tx.commit()?;
     Ok(())
 }
 fn save_liability(db: &Connection, input: &LiabilityInput, update: bool) -> Result<(), AppError> {
@@ -3381,6 +3630,40 @@ fn restore_database(
     restore_database_impl(&database, &source)
 }
 
+fn reset_profile_impl(database: &Database) -> Result<WorkspaceSnapshot, AppError> {
+    with_db(database, |db| {
+        let transaction = db.transaction()?;
+        transaction.execute_batch(
+            "DELETE FROM allocations;
+             DELETE FROM withdrawal_rules;
+             DELETE FROM scenario_goals;
+             DELETE FROM scenario_events;
+             DELETE FROM scenarios;
+             DELETE FROM postings;
+             DELETE FROM transaction_entries;
+             DELETE FROM import_batches;
+             DELETE FROM import_profiles;
+             DELETE FROM recurring_entries;
+             DELETE FROM assets;
+             DELETE FROM liabilities;
+             DELETE FROM accounts;
+             DELETE FROM tax_profiles;
+             DELETE FROM settings;
+             DELETE FROM people;
+             DELETE FROM categories;
+             DELETE FROM households;
+             DELETE FROM app_state;",
+        )?;
+        transaction.commit()?;
+        bootstrap(db)
+    })
+}
+
+#[tauri::command]
+fn reset_profile(database: tauri::State<Database>) -> Result<WorkspaceSnapshot, AppError> {
+    reset_profile_impl(&database)
+}
+
 fn startup_failure(
     code: &'static str,
     message: &str,
@@ -3599,6 +3882,7 @@ pub fn run() {
             account_deletion_impact,
             delete_account,
             create_asset,
+            create_home,
             update_asset,
             delete_asset,
             create_liability,
@@ -3618,6 +3902,7 @@ pub fn run() {
             backup_database,
             inspect_backup,
             restore_database,
+            reset_profile,
             retry_startup,
             system_theme_dark
         ])
@@ -3686,6 +3971,57 @@ mod tests {
             .query_row("SELECT count(*) FROM schema_migrations", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, SCHEMA_VERSION)
+    }
+    #[test]
+    fn reset_profile_clears_user_data_and_returns_fresh_onboarding() {
+        let database = Database {
+            path: PathBuf::from("unused-test-profile.db"),
+            state: Mutex::new(DatabaseState::Ready(seeded())),
+        };
+        let snapshot = reset_profile_impl(&database).unwrap();
+        assert!(!snapshot.onboarding_complete);
+        assert_eq!(snapshot.onboarding_step, 0);
+        assert!(snapshot.household.is_none());
+        assert!(snapshot.people.is_empty());
+        assert!(snapshot.accounts.is_empty());
+        assert!(snapshot.categories.is_empty());
+    }
+    #[test]
+    fn financed_home_is_created_atomically_with_amortized_linked_mortgage() {
+        let mut c = seeded();
+        create_home_impl(
+            &mut c,
+            &HomeInput {
+                asset_id: "home".into(),
+                liability_id: Some("loan".into()),
+                name: "Home".into(),
+                purchase_price_cents: 50_000_000,
+                current_value_cents: 65_000_000,
+                annual_growth_bps: 300,
+                appreciation_curve: None,
+                purchase_date: "2020-01-15".into(),
+                property_tax_rate_bps: 120,
+                insurance_annual_cents: 240_000,
+                financed: true,
+                down_payment_bps: Some(2000),
+                term_months: Some(360),
+                annual_rate_bps: Some(600),
+                as_of_date: "2025-01-15".into(),
+            },
+        )
+        .unwrap();
+        let (balance, payment, raw):(i64,i64,String)=c.query_row("SELECT balance_cents,minimum_payment_cents,mortgage_json FROM liabilities WHERE id='loan'",[],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+        assert!(balance > 37_000_000 && balance < 38_000_000);
+        assert_eq!(payment, 239_820);
+        let terms: MortgageTerms = serde_json::from_str(&raw).unwrap();
+        assert_eq!(terms.asset_id.as_deref(), Some("home"));
+        assert_eq!(
+            c.query_row("SELECT value_cents FROM assets WHERE id='home'", [], |r| {
+                r.get::<_, i64>(0)
+            })
+            .unwrap(),
+            65_000_000
+        );
     }
     #[test]
     fn transfers_are_balanced() {
@@ -3970,12 +4306,11 @@ mod tests {
     }
 
     #[test]
-    fn account_deletion_reports_history_and_last_account() {
+    fn account_deletion_reports_cascade_consequences_but_remains_allowed() {
         let mut c = seeded();
         c.execute("DELETE FROM accounts WHERE id='b'", []).unwrap();
         let impact = account_impact(&c, "a").unwrap();
-        assert!(!impact.can_delete);
-        assert!(impact.blockers.iter().any(|x| x.contains("last account")));
+        assert!(impact.can_delete);
         let input = TransactionInput {
             id: "history".into(),
             occurred_on: "2026-01-01".into(),
@@ -3987,7 +4322,10 @@ mod tests {
         };
         insert_transaction(&mut c, &input).unwrap();
         let impact = account_impact(&c, "a").unwrap();
-        assert!(impact.blockers.iter().any(|x| x.contains("transactions")));
+        assert!(impact
+            .blockers
+            .iter()
+            .any(|x| x.contains("transaction posting")));
     }
 
     #[test]
@@ -4114,7 +4452,7 @@ mod tests {
             .unwrap()
             .blockers
             .iter()
-            .any(|x| x.contains("allocations")));
+            .any(|x| x.contains("allocation")));
 
         let imported = seeded();
         imported.execute("INSERT INTO import_batches(id,account_id,row_count,status) VALUES('batch','b',0,'complete')",[]).unwrap();
@@ -4127,21 +4465,37 @@ mod tests {
 
     #[test]
     fn assets_and_mortgages_round_trip_update_and_delete() {
-        let c = seeded();
+        let mut c = seeded();
         let asset = AssetInput {
             id: "home".into(),
             name: " Home ".into(),
             value_cents: 50_000_000,
             annual_growth_bps: 350,
+            appreciation_curve: Some(AppreciationCurve {
+                start_year: 2026,
+                start_rate_bps: 5000,
+                end_year: 2035,
+                end_rate_bps: 800,
+            }),
             housing_costs: None,
             expected_revision: None,
         };
         save_asset(&c, &asset, false).unwrap();
+        let saved_curve: String = c
+            .query_row(
+                "SELECT appreciation_curve_json FROM assets WHERE id='home'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let saved_curve: AppreciationCurve = serde_json::from_str(&saved_curve).unwrap();
+        assert_eq!(saved_curve.end_rate_bps, 800);
         let mortgage = MortgageTerms {
             original_principal_cents: 40_000_000,
             term_months: 360,
             start_date: "2020-01-15".into(),
             payment_override_cents: None,
+            asset_id: Some("home".into()),
         };
         let liability = LiabilityInput {
             id: "mortgage".into(),
@@ -4178,7 +4532,7 @@ mod tests {
         );
 
         save_asset(
-            &c,
+            &mut c,
             &AssetInput {
                 expected_revision: Some(1),
                 value_cents: 51_000_000,
@@ -4188,23 +4542,21 @@ mod tests {
         )
         .unwrap();
         delete_asset_from(
-            &c,
+            &mut c,
             &DeleteInput {
                 id: "home".into(),
                 expected_revision: 2,
             },
         )
         .unwrap();
-        delete_liability_from(
-            &c,
-            &DeleteInput {
-                id: "mortgage".into(),
-                expected_revision: 1,
-            },
-        )
-        .unwrap();
         assert_eq!(
             c.query_row("SELECT count(*) FROM assets", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            c.query_row("SELECT count(*) FROM liabilities", [], |r| r
+                .get::<_, i64>(0))
                 .unwrap(),
             0
         );
@@ -4224,6 +4576,7 @@ mod tests {
             name: "Asset".into(),
             value_cents: 1,
             annual_growth_bps: -10_001,
+            appreciation_curve: None,
             housing_costs: None,
             expected_revision: None,
         };
@@ -4236,6 +4589,7 @@ mod tests {
             name: "Asset".into(),
             value_cents: 100,
             annual_growth_bps: 0,
+            appreciation_curve: None,
             housing_costs: None,
             expected_revision: None,
         };

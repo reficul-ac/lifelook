@@ -1,0 +1,21 @@
+# Exact-package interaction manifest
+
+Status values describe this package only. `Automated support` is not manual proof.
+
+| Stable ID | Surface and controls | Prerequisite | Expected observable result and persistence | Keyboard/viewport expectation | Exact-package evidence | Status |
+|---|---|---|---|---|---|---|
+| START-001 | Fresh startup window | Empty isolated profile | Onboarding renders; no fabricated records | Visible at 920×650 through 1600×1000 | `package/identity.md` visible-window hash | Passed (smoke) |
+| START-002 | Corrupt-profile recovery | Invalid database bytes | Recovery appears; original bytes unchanged | Retry reachable by keyboard | `package/recovery/07-corrupt-profile-recovery.png` | Passed |
+| START-003 | Unwritable-profile Retry | Unwritable profile directory | Failure feedback; after repair Retry opens same path | Focusable Retry; Enter activates | `package/recovery/08-unwritable-profile-repaired.png` | Passed |
+| ONB-001 | Household, people, birth dates, filing status, account kinds/balances, recurring inputs, Back/Next/remove | Empty or interrupted profile | Validation is visible; committed steps survive relaunch; cancellation does not mutate | Tab order, Enter submit, radio arrows/Space; all viewports | Component/native support only | Re-test required |
+| SHELL-001 | Five navigation buttons; Workspace menu; Settings/backup; Add menu; global search | Populated profile | Correct destination/action, focus restoration, busy/error feedback | Ctrl+K, Escape, arrows, Enter/Space; all viewports | Component/native support only | Re-test required |
+| OVER-001 | Current totals, tax card, projection disclosures | Populated and no-tax profiles | Every amount traces to persisted state; unavailable calculations say why | Semantic reading order; responsive cards | Unit/component support only | Re-test required |
+| ACT-001 | Search/account/year filters; add/edit/delete income, expense, transfer; CSV import/export/review | Accounts/categories and synthetic files | Exact filtered totals and CSV; mutations survive relaunch; failures rollback | Dialog trap, Escape/cancel, Enter, checkboxes; all viewports | Native support only | Re-test required |
+| PLAN-001 | Recurring CRUD; disclosures; scenario create/clone/edit/delete/select/compare | Tax profile and scenarios | Projection changes only from saved assumptions; clone isolation survives relaunch | Disclosure Enter/Space; forms and comparison responsive | Unit/component/native support only | Re-test required |
+| PLAN-002 | All dated event variants and allocation/withdrawal rows | Scenario and referenced records | Deterministic ordered effect; invalid references rejected without mutation | Row controls pointer/keyboard; focus restored | Rust/unit support only | Re-test required |
+| GOAL-001 | Emergency, debt, education, purchase, retirement add/edit/reorder/disable/delete | Scenario, people, accounts, debts, expenses | Truthful target/progress/warnings; persistence and clone isolation | All controls labelled and keyboard operable | Unit/component support only | Re-test required |
+| NW-001 | Account/asset/liability add/edit/delete; reconcile; mortgage controls | Populated and empty states | Exact signs/totals/payment; guarded deletion; relaunch persistence | Dialog keyboard behavior; all viewports | Rust/native support only | Re-test required |
+| SET-001 | Members; theme System/light/dark; reduced motion; backup/restore dialogs | Populated profile | Busy/error feedback and persistence; restore atomicity | Switch Space; dialog Escape/Enter; all viewports | Component/native support only | Re-test required |
+| STATE-001 | Long names, validation errors, busy/cancellation, persistence failure, restored/offline profiles | Dedicated synthetic profiles | No clipping, duplicate submission, hidden error, partial write, or network dependency | Focus visible/restored; announcements; all viewports/themes | Mixed automated support | Re-test required |
+
+The source inventory includes buttons, inputs, selects, checkboxes, radios, switches, disclosures, dialogs, editable rows, and conditional/disabled states represented by the grouped rows above. A human audit must expand each grouped row into an evidence-bearing execution row during re-test; grouping is not a claim that every control passed.

@@ -15,8 +15,9 @@ export interface RecurringEntry { id: string; name: string; amountCents: Cents; 
 export interface ImportProfile { id: string; name: string; columns: Readonly<Record<string, string>> }
 export interface ImportBatch { id: string; importedAt: string; profileId?: string; rowCount: number }
 export interface HousingCosts { propertyTaxRateBps: BasisPoints; insuranceMonthlyCents: Cents; insuranceAnnualGrowthBps: BasisPoints; hoaMonthlyCents: Cents; hoaAnnualGrowthBps: BasisPoints }
-export interface Asset { id: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; housingCosts?: HousingCosts; housingStartDate?: string }
-export interface MortgageTerms { originalPrincipalCents: Cents; termMonths: number; startDate: string; paymentOverrideCents?: Cents }
+export interface AppreciationCurve { startYear:number; startRateBps:BasisPoints; endYear:number; endRateBps:BasisPoints }
+export interface Asset { id: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; appreciationCurve?:AppreciationCurve|null; housingCosts?: HousingCosts; housingStartDate?: string; purchasePriceCents?: Cents | null; purchaseDate?: string | null }
+export interface MortgageTerms { originalPrincipalCents: Cents; termMonths: number; startDate: string; paymentOverrideCents?: Cents; assetId?: string | null }
 export interface Liability { id: string; name: string; balanceCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; mortgage?: MortgageTerms }
 export interface GrowthAssumption { inflationBps: BasisPoints; thresholdInflationBps: BasisPoints }
 export interface AllocationRule { id?: string; accountId: string; percentBps: BasisPoints; priority: number; targetBalanceCents?: Cents }

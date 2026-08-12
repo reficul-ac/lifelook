@@ -161,8 +161,24 @@ describe("LifeLook shell", () => {
   });
   it("creates credit accounts as positive amounts owed from Net Worth",async()=>{
     const data=await testRepository.bootstrap();const createAccount=vi.fn();render(<App repository={{...testRepository,createAccount,bootstrap:async()=>data}}/>);fireEvent.click(await screen.findByRole("button",{name:/Net Worth/}));fireEvent.click(screen.getByRole("button",{name:"Add account"}));
-    fireEvent.change(screen.getByLabelText("Account name"),{target:{value:"Rewards"}});fireEvent.change(screen.getByLabelText("Account type"),{target:{value:"credit"}});fireEvent.change(screen.getByLabelText("Amount owed (USD)"),{target:{value:"42.50"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));
-    await waitFor(()=>expect(createAccount).toHaveBeenCalledWith(expect.objectContaining({name:"Rewards",kind:"credit",openingBalanceCents:4250})));
+    fireEvent.change(screen.getByLabelText("Account name"),{target:{value:"Rewards"}});fireEvent.change(screen.getByLabelText("Account type"),{target:{value:"credit"}});fireEvent.change(screen.getByLabelText("Amount owed (USD)"),{target:{value:"42.50"}});fireEvent.change(screen.getByLabelText("Annual return (%)"),{target:{value:"4.25"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(createAccount).toHaveBeenCalledWith(expect.objectContaining({name:"Rewards",kind:"credit",openingBalanceCents:4250,annualReturnBps:425})));
+  });
+  it("edits the annual return of an existing account",async()=>{
+    const data=await testRepository.bootstrap();const account={...data.accounts[0],annualReturnBps:350};const updateAccount=vi.fn();
+    render(<App repository={{...testRepository,updateAccount,bootstrap:async()=>({...data,accounts:[account]})}}/>);fireEvent.click(await screen.findByRole("button",{name:/Net Worth/}));fireEvent.click(screen.getByRole("button",{name:"Edit"}));
+    expect(screen.getByLabelText("Annual return (%)")).toHaveValue("3.5");fireEvent.change(screen.getByLabelText("Annual return (%)"),{target:{value:"7.25"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(updateAccount).toHaveBeenCalledWith(expect.objectContaining({id:account.id,annualReturnBps:725})));
+  });
+  it("creates a financed home and mortgage together",async()=>{
+    const createHome=vi.fn();render(<App repository={{...testRepository,createHome}}/>);fireEvent.click(await screen.findByRole("button",{name:/Net Worth/}));fireEvent.click(screen.getByRole("button",{name:"Add asset"}));
+    fireEvent.click(screen.getByLabelText("This asset is a home"));fireEvent.change(screen.getByLabelText("Asset name"),{target:{value:"Lake House"}});fireEvent.change(screen.getByLabelText("Original purchase price (USD)"),{target:{value:"500000"}});fireEvent.change(screen.getByLabelText("Current home value (USD)"),{target:{value:"650000"}});fireEvent.change(screen.getByLabelText("Annual growth (%)"),{target:{value:"3"}});fireEvent.change(screen.getByLabelText("Purchase date"),{target:{value:"2020-01-15"}});fireEvent.change(screen.getByLabelText("Down payment (%)"),{target:{value:"20"}});fireEvent.change(screen.getByLabelText("Mortgage interest rate (%)"),{target:{value:"6"}});fireEvent.change(screen.getByLabelText("Loan term (months)"),{target:{value:"360"}});fireEvent.change(screen.getByLabelText("Property tax (%)"),{target:{value:"1.2"}});fireEvent.change(screen.getByLabelText("Homeowners insurance per year (USD)"),{target:{value:"2400"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(createHome).toHaveBeenCalledWith(expect.objectContaining({name:"Lake House",purchasePriceCents:50000000,currentValueCents:65000000,downPaymentBps:2000,annualRateBps:600,termMonths:360,propertyTaxRateBps:120,insuranceAnnualCents:240000,financed:true})));
+  });
+  it("saves an interpolated appreciation curve for an asset",async()=>{
+    const data=await testRepository.bootstrap(),asset={id:"startup",householdId:"test",name:"Startup stock",valueCents:100000,annualGrowthBps:5000,revision:1};const updateAsset=vi.fn();
+    render(<App repository={{...testRepository,updateAsset,bootstrap:async()=>({...data,assets:[asset]})}}/>);fireEvent.click(await screen.findByRole("button",{name:/Net Worth/}));const row=screen.getByText("Startup stock").closest<HTMLElement>(".account")!;fireEvent.click(within(row).getByRole("button",{name:"Edit"}));fireEvent.click(screen.getByLabelText("Use an appreciation curve"));fireEvent.change(screen.getByLabelText("Starting year"),{target:{value:"2026"}});fireEvent.change(screen.getByLabelText("Starting appreciation (%)"),{target:{value:"50"}});fireEvent.change(screen.getByLabelText("Ending year"),{target:{value:"2035"}});fireEvent.change(screen.getByLabelText("Ending appreciation (%)"),{target:{value:"8"}});fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(updateAsset).toHaveBeenCalledWith(expect.objectContaining({appreciationCurve:{startYear:2026,startRateBps:5000,endYear:2035,endRateBps:800}})));
   });
   it("groups transfer postings into one editable Activity row",async()=>{
     const data=await testRepository.bootstrap();const a=data.accounts[0],b={...a,id:"b",name:"Savings"};const base={postingId:1,entryId:"t",occurredOn:`${new Date().getFullYear()}-01-02`,kind:"transfer" as const,description:"Transfer",transferGroupId:"t",categoryId:null,categoryName:null,note:null,revision:1};
@@ -230,6 +246,19 @@ describe("LifeLook shell", () => {
     fireEvent.click(screen.getByRole("button",{name:"Choose backup"}));fireEvent.click(screen.getByRole("button",{name:"Choose backup and restore"}));
     const alert=await screen.findByRole("alert");expect(alert).toHaveTextContent(/not a compatible LifeLook backup/i);await waitFor(()=>expect(alert).toHaveFocus());
     expect(screen.getByText("Test household")).toBeInTheDocument();
+  });
+  it("requires confirmation before resetting the profile and returns to onboarding", async () => {
+    const resetProfile=vi.fn().mockResolvedValue({onboardingStep:0,onboardingComplete:false,people:[],accounts:[],categories:[]});
+    render(<App repository={{...testRepository,resetProfile}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Settings/}));
+    fireEvent.click(screen.getByRole("button",{name:"Reset profile"}));
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(/permanently erases/i);
+    fireEvent.click(screen.getByRole("button",{name:"Cancel"}));
+    expect(resetProfile).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:"Reset profile"}));
+    fireEvent.click(screen.getByRole("button",{name:"Yes, reset profile"}));
+    await waitFor(()=>expect(resetProfile).toHaveBeenCalledOnce());
+    expect(await screen.findByRole("heading",{name:"Tell us about your household"})).toBeInTheDocument();
   });
   it("shows onboarding for a new workspace", async () => {
     const repository = {
@@ -411,17 +440,16 @@ describe("LifeLook shell", () => {
     await waitFor(()=>expect(confirmation).not.toBeInTheDocument());
   });
 
-  it("keeps a blocked account dialog open and focuses its blockers", async () => {
+  it("shows account deletion consequences and still allows confirmation", async () => {
     const data=await testRepository.bootstrap();
     const accountDeletionImpact=vi.fn().mockResolvedValue({accountId:"cash",canDelete:false,blockers:["The account has transactions."]});
     render(<App repository={{...testRepository,accountDeletionImpact,bootstrap:async()=>data}}/>);
     fireEvent.click(await screen.findByRole("button",{name:/Net Worth/}));
     fireEvent.click(screen.getByRole("button",{name:"Edit"}));
     fireEvent.click(screen.getByRole("button",{name:"Delete"}));
-    const alert=await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("The account has transactions.");
-    await waitFor(()=>expect(alert).toHaveFocus());
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    const confirmation=await screen.findByRole("alertdialog");
+    expect(confirmation).toHaveTextContent("The account has transactions.");
+    expect(screen.getByRole("button",{name:"Delete permanently"})).toBeEnabled();
   });
 
   it("retains CSV preview choices after commit failure and restores focus on close", async () => {

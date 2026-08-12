@@ -15,11 +15,13 @@ export interface ActivityPosting { postingId:number; entryId:string; occurredOn:
 export type RecurringFrequency="weekly"|"biweekly"|"monthly"|"quarterly"|"annual";
 export interface RecurringEntry { id:string; householdId:string; categoryId:string; accountId?:string|null; name:string; amountCents:number; frequency:RecurringFrequency; startDate:string; endDate?:string|null; annualGrowthBps:number; taxTreatment?:"none"|"pretax"; revision:number }
 export interface RecurringInput { id:string;categoryId:string;accountId?:string|null;name:string;amountCents:number;frequency:RecurringFrequency;startDate:string;endDate?:string|null;annualGrowthBps:number;taxTreatment?:"none"|"pretax" }
-export interface Asset { id:string; householdId:string; name:string; valueCents:number; annualGrowthBps:number; housingCosts?:import("./domain/types").HousingCosts; revision:number }
-export interface MortgageTerms { originalPrincipalCents:number; termMonths:number; startDate:string; paymentOverrideCents?:number|null }
+export interface AppreciationCurve { startYear:number;startRateBps:number;endYear:number;endRateBps:number }
+export interface Asset { id:string; householdId:string; name:string; valueCents:number; annualGrowthBps:number; appreciationCurve?:AppreciationCurve|null; housingCosts?:import("./domain/types").HousingCosts; purchasePriceCents?:number|null; purchaseDate?:string|null; revision:number }
+export interface MortgageTerms { originalPrincipalCents:number; termMonths:number; startDate:string; paymentOverrideCents?:number|null; assetId?:string|null }
 export interface Liability { id:string; householdId:string; name:string; balanceCents:number; annualRateBps:number; minimumPaymentCents:number; mortgage?:MortgageTerms|null; revision:number }
-export interface AssetInput { id:string;name:string;valueCents:number;annualGrowthBps:number;housingCosts?:import("./domain/types").HousingCosts }
+export interface AssetInput { id:string;name:string;valueCents:number;annualGrowthBps:number;appreciationCurve?:AppreciationCurve|null;housingCosts?:import("./domain/types").HousingCosts }
 export interface LiabilityInput { id:string;name:string;balanceCents:number;annualRateBps:number;minimumPaymentCents:number;mortgage?:MortgageTerms|null }
+export interface HomeInput { assetId:string;liabilityId?:string|null;name:string;purchasePriceCents:number;currentValueCents:number;annualGrowthBps:number;appreciationCurve?:AppreciationCurve|null;purchaseDate:string;propertyTaxRateBps:number;insuranceAnnualCents:number;financed:boolean;downPaymentBps?:number;termMonths?:number;annualRateBps?:number;asOfDate:string }
 export interface OnboardingStepPayload {
   household?:{id:string;name:string;state:"CA"};
   people?:BootstrapPerson[];
@@ -43,7 +45,7 @@ export type BootstrapInput = Pick<WorkspaceSnapshot,"onboardingStep"|"onboarding
 export interface TransactionInput { id:string; occurredOn:string; accountId:string; categoryId:string; amountCents:number; description:string; note?:string|null }
 export interface UpdateTransactionInput extends Omit<TransactionInput,"id"> { id:string; expectedRevision:number }
 export interface TransferInput { id:string;occurredOn:string;fromAccountId:string;toAccountId:string;amountCents:number;expectedRevision?:number }
-export interface AccountInput { id:string;name:string;kind:AccountKind;openingBalanceCents:number }
+export interface AccountInput { id:string;name:string;kind:AccountKind;openingBalanceCents:number;annualReturnBps:number }
 export type CsvDateFormat="iso"|"us";
 export type CsvAmountLayout="signed"|"debitCredit";
 export interface CsvMapping { accountId:string; dateColumn:string; descriptionColumn:string; noteColumn?:string|null; amountLayout:CsvAmountLayout; amountColumn?:string|null; debitColumn?:string|null; creditColumn?:string|null; inflowPositive:boolean; dateFormat:CsvDateFormat }
@@ -67,11 +69,12 @@ export interface Repository {
   updateTransfer?(input:TransferInput&{expectedRevision:number}):Promise<void>;
   deleteTransaction?(input:{id:string;expectedRevision:number}):Promise<void>;
   createAccount?(input:AccountInput):Promise<void>;
-  updateAccount?(input:{id:string;name:string;kind:AccountKind;expectedRevision:number}):Promise<void>;
+  updateAccount?(input:{id:string;name:string;kind:AccountKind;annualReturnBps:number;expectedRevision:number}):Promise<void>;
   reconcileAccount?(input:{id:string;occurredOn:string;targetBalanceCents:number;expectedBalanceCents:number}):Promise<void>;
   accountDeletionImpact?(accountId:string):Promise<AccountDeletionImpact>;
   deleteAccount?(input:{id:string;expectedRevision:number}):Promise<void>;
   createAsset?(input:AssetInput):Promise<void>;
+  createHome?(input:HomeInput):Promise<void>;
   updateAsset?(input:AssetInput&{expectedRevision:number}):Promise<void>;
   deleteAsset?(input:{id:string;expectedRevision:number}):Promise<void>;
   createLiability?(input:LiabilityInput):Promise<void>;
@@ -94,6 +97,7 @@ export interface Repository {
   selectRestoreSource?():Promise<string|null>;
   backupDatabase?(destination:string):Promise<void>;
   restoreDatabase?(source:string):Promise<BootstrapInput>;
+  resetProfile?():Promise<BootstrapInput>;
 }
 
 const backupFilters=[{name:"LifeLook backup",extensions:["lifelook"]}];
@@ -117,6 +121,7 @@ export const tauriRepository:Repository = {
   accountDeletionImpact:(accountId)=>invoke("account_deletion_impact",{accountId}),
   deleteAccount:(input)=>invoke("delete_account",{input}),
   createAsset:(input)=>invoke("create_asset",{input}),
+  createHome:(input)=>invoke("create_home",{input}),
   updateAsset:(input)=>invoke("update_asset",{input}),
   deleteAsset:(input)=>invoke("delete_asset",{input}),
   createLiability:(input)=>invoke("create_liability",{input}),
@@ -142,6 +147,7 @@ export const tauriRepository:Repository = {
   },
   backupDatabase:(destination)=>invoke("backup_database",{destination}),
   restoreDatabase:(source)=>invoke("restore_database",{source}),
+  resetProfile:()=>invoke("reset_profile"),
 };
 
 export const emptySettings:Settings={theme:"system",reducedMotion:false,revision:1};
@@ -151,5 +157,5 @@ export const testRepository:Repository = {
   async updateSettings(input){return {...input,revision:input.expectedRevision+1}},
   async selectActivityExportDestination(){return null}, async selectBackupDestination(){return null}, async selectRestoreSource(){return null},
   async exportActivityCsv(){},
-  async backupDatabase(){}, async restoreDatabase(){return this.bootstrap()}
+  async backupDatabase(){}, async restoreDatabase(){return this.bootstrap()}, async resetProfile(){return {onboardingStep:0,onboardingComplete:false,people:[],accounts:[],categories:[]}}
 };

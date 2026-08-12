@@ -1,11 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { ProjectionEngine, requiredMonthlyFunding } from "./projection";
+import { appreciationRateForYear, ProjectionEngine, requiredMonthlyFunding } from "./projection";
 import { estimateTax, TAX_RULES_2025 } from "./tax";
 import type { FinancialSnapshot, Scenario } from "./types";
 
 const snapshot: FinancialSnapshot = { household:{id:"h",name:"H",state:"CA",people:[]}, taxProfile:{filingStatus:"single",state:"CA",taxYear:2025,thresholdInflationBps:250}, accounts:[{id:"a",name:"Cash",kind:"checking",balanceCents:100_00,annualReturnBps:0,liquid:true}], recurring:[{id:"i",name:"Pay",kind:"income",amountCents:1000_00,startDate:"2025-01-01",taxTreatment:"none"},{id:"e",name:"Rent",kind:"expense",amountCents:400_00,startDate:"2025-01-01",taxTreatment:"none"}],assets:[],liabilities:[] };
 const scenario: Scenario = {id:"s",name:"Base",assumptions:{inflationBps:0,thresholdInflationBps:250},assumptionsInherited:false,events:[],allocations:[],withdrawals:[],goals:[],horizon:{start:"2025-01",months:12}};
 const calculate=(financial:FinancialSnapshot=snapshot,planned:Scenario=scenario)=>ProjectionEngine.calculate(financial,planned,"2025-01-15");
+describe("asset appreciation curves",()=>{
+  const asset={annualGrowthBps:1000,appreciationCurve:{startYear:2026,startRateBps:5000,endYear:2035,endRateBps:800}};
+  it("interpolates yearly and holds the endpoint rates",()=>{
+    expect(appreciationRateForYear(asset,2025)).toBe(5000);
+    expect(appreciationRateForYear(asset,2026)).toBe(5000);
+    expect(appreciationRateForYear(asset,2030)).toBe(3133);
+    expect(appreciationRateForYear(asset,2035)).toBe(800);
+    expect(appreciationRateForYear(asset,2045)).toBe(800);
+  });
+});
 
 describe("ProjectionEngine",()=>{
   it("uses straight-line and future-value goal funding formulas",()=>{

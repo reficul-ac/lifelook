@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import {
   ProjectionEngine,
+  vestedAssetValue,
   type FinancialSnapshot,
   type Scenario,
 } from "./domain";
@@ -1359,6 +1360,10 @@ function FinancialRecordDialog({
   const [growthEndYear, setGrowthEndYear] = useState(String(state.asset?.appreciationCurve?.endYear ?? new Date().getFullYear() + 10));
   const [growthEndRate, setGrowthEndRate] = useState(String((state.asset?.appreciationCurve?.endRateBps ?? state.asset?.annualGrowthBps ?? 0) / 100));
   const [home, setHome] = useState(false);
+  const [privateStock, setPrivateStock] = useState(Boolean(state.asset?.privateStock));
+  const [vestedPercent, setVestedPercent] = useState(String((state.asset?.privateStock?.vestedBps ?? 2500)/100));
+  const [vestingStartDate, setVestingStartDate] = useState(state.asset?.privateStock?.vestingStartDate ?? today());
+  const [remainingVestingYears, setRemainingVestingYears] = useState(String((state.asset?.privateStock?.remainingVestingQuarters ?? 16)/4));
   const [purchasePrice, setPurchasePrice] = useState("0");
   const [financed, setFinanced] = useState(true);
   const [purchaseDate, setPurchaseDate] = useState(today());
@@ -1418,6 +1423,13 @@ function FinancialRecordDialog({
         return setError("Enter valid appreciation years and rates; the ending year must be after the starting year.");
       appreciationCurve = {startYear,startRateBps,endYear,endRateBps};
     }
+    let privateStockTerms = null;
+    if (isAsset && privateStock) {
+      const vestedBps=parsePercent(vestedPercent),years=Number(remainingVestingYears),remainingVestingQuarters=Math.round(years*4);
+      if(vestedBps==null||vestedBps<0||vestedBps>10000||!/^\d{4}-\d{2}-\d{2}$/.test(vestingStartDate)||!Number.isFinite(years)||years<=0||remainingVestingQuarters<1||Math.abs(years*4-remainingVestingQuarters)>1e-9)
+        return setError("Enter a vested percentage from 0–100 and a remaining vesting term in quarter-year increments.");
+      privateStockTerms={vestedBps,vestingStartDate,remainingVestingQuarters};
+    }
     if (!name.trim())
       return setError(`${isAsset ? "Asset" : "Debt"} name is required.`);
     if (cents == null || cents < 0)
@@ -1464,6 +1476,7 @@ function FinancialRecordDialog({
           valueCents: cents,
           annualGrowthBps: bps,
           appreciationCurve,
+          privateStock: privateStockTerms,
         };
         if (state.asset)
           await repository.updateAsset?.({
@@ -1616,9 +1629,20 @@ function FinancialRecordDialog({
                 />
               </label>
               {isAsset && !state.asset && (
-                <label className="check-row">
-                  <input type="checkbox" checked={home} onChange={(e)=>setHome(e.target.checked)} /> This asset is a home
-                </label>
+                <>
+                  <label className="check-row"><input type="checkbox" checked={home} onChange={(e)=>{setHome(e.target.checked);if(e.target.checked)setPrivateStock(false)}} /> This asset is a home</label>
+                  <label className="check-row"><input type="checkbox" checked={privateStock} onChange={(e)=>{setPrivateStock(e.target.checked);if(e.target.checked)setHome(false)}} /> This asset is private stock</label>
+                </>
+              )}
+              {isAsset && state.asset && !home && <label className="check-row"><input type="checkbox" checked={privateStock} onChange={(e)=>setPrivateStock(e.target.checked)} /> This asset is private stock</label>}
+              {isAsset && privateStock && (
+                <>
+                  <p className="muted">The full company value appreciates, but only vested value counts toward Net Worth.</p>
+                  <label>Currently vested (%)<input required inputMode="decimal" value={vestedPercent} onChange={(e)=>setVestedPercent(e.target.value)} /></label>
+                  <label>Remaining vesting starts<input required type="date" value={vestingStartDate} onChange={(e)=>setVestingStartDate(e.target.value)} /></label>
+                  <label>Remaining vesting period (years)<input required type="number" min="0.25" max="100" step="0.25" value={remainingVestingYears} onChange={(e)=>setRemainingVestingYears(e.target.value)} /></label>
+                  <p className="muted">The unvested portion vests evenly every quarter over this period.</p>
+                </>
               )}
               {isAsset && home && !state.asset && (
                 <>
@@ -1635,15 +1659,17 @@ function FinancialRecordDialog({
                   </>}
                 </>
               )}
-              <label>
-                {isAsset ? "Annual growth (%)" : "Annual interest rate (%)"}
-                <input
-                  required
-                  inputMode="decimal"
-                  value={rate}
-                  onChange={(e) => setRate(e.target.value)}
-                />
-              </label>
+              {(!isAsset || !advancedGrowth) && (
+                <label>
+                  {isAsset ? "Annual growth (%)" : "Annual interest rate (%)"}
+                  <input
+                    required
+                    inputMode="decimal"
+                    value={rate}
+                    onChange={(e) => setRate(e.target.value)}
+                  />
+                </label>
+              )}
               {isAsset && (
                 <>
                   <label className="check-row"><input type="checkbox" checked={advancedGrowth} onChange={(e)=>setAdvancedGrowth(e.target.checked)} /> Use an appreciation curve</label>
@@ -4553,13 +4579,13 @@ function NetWorth({
 }) {
   const assets =
       snapshot.accounts.reduce((s, a) => s + Math.max(0, a.balanceCents), 0) +
-      snapshot.assets.reduce((s, a) => s + a.valueCents, 0),
+      snapshot.assets.reduce((s, a) => s + vestedAssetValue(a,localIsoDate()), 0),
     debt =
       snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0) +
       snapshot.accounts.reduce((s, a) => s + Math.max(0, -a.balanceCents), 0),
     netWorth =
       snapshot.accounts.reduce((s, a) => s + a.balanceCents, 0) +
-      snapshot.assets.reduce((s, a) => s + a.valueCents, 0) -
+      snapshot.assets.reduce((s, a) => s + vestedAssetValue(a,localIsoDate()), 0) -
       snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0);
   return (
     <div className="content">
@@ -4645,17 +4671,20 @@ function NetWorth({
             <div>
               <strong>{a.name}</strong>
               <small>
-                {liabilityRecords.find((l) => l.mortgage?.assetId === a.id)
+                {a.privateStock
+                  ? "Private stock"
+                  : liabilityRecords.find((l) => l.mortgage?.assetId === a.id)
                   ? `Home · linked to ${liabilityRecords.find((l) => l.mortgage?.assetId === a.id)!.name}`
                   : "Asset"}
               </small>
+              {a.privateStock && <small>{money(a.valueCents)} total company value · {money(a.valueCents-vestedAssetValue(a,localIsoDate()))} unvested</small>}
               {a.purchasePriceCents != null && a.purchasePriceCents > 0 && (
                 <small>
                   {money(a.valueCents - a.purchasePriceCents)} ({(((a.valueCents / a.purchasePriceCents) - 1) * 100).toFixed(1)}%) since purchase
                 </small>
               )}
             </div>
-            <b>{money(a.valueCents)}</b>
+            <b>{money(vestedAssetValue(a,localIsoDate()))}</b>
             <button
               data-search-kind="Asset"
               data-search-id={a.id}

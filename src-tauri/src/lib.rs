@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 9;
+const SCHEMA_VERSION: i64 = 10;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -224,6 +224,7 @@ struct Asset {
     annual_growth_bps: i64,
     #[serde(default)]
     appreciation_curve: Option<AppreciationCurve>,
+    private_stock: Option<PrivateStockVesting>,
     revision: i64,
     housing_costs: serde_json::Value,
     purchase_price_cents: Option<i64>,
@@ -236,6 +237,13 @@ struct AppreciationCurve {
     start_rate_bps: i64,
     end_year: i64,
     end_rate_bps: i64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PrivateStockVesting {
+    vested_bps: i64,
+    vesting_start_date: String,
+    remaining_vesting_quarters: i64,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -407,6 +415,8 @@ struct AssetInput {
     #[serde(default)]
     appreciation_curve: Option<AppreciationCurve>,
     #[serde(default)]
+    private_stock: Option<PrivateStockVesting>,
+    #[serde(default)]
     housing_costs: Option<serde_json::Value>,
     expected_revision: Option<i64>,
 }
@@ -533,7 +543,7 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
       CREATE TABLE IF NOT EXISTS transaction_entries(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, occurred_on TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('income','expense','transfer','adjustment')), description TEXT NOT NULL DEFAULT '', note TEXT, import_batch_id TEXT REFERENCES import_batches(id) ON DELETE RESTRICT, transfer_group_id TEXT, revision INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
       CREATE TABLE IF NOT EXISTS postings(id INTEGER PRIMARY KEY AUTOINCREMENT, entry_id TEXT NOT NULL REFERENCES transaction_entries(id) ON DELETE RESTRICT, account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT, category_id TEXT REFERENCES categories(id) ON DELETE RESTRICT, amount_cents INTEGER NOT NULL CHECK(amount_cents<>0), fingerprint TEXT, UNIQUE(account_id,fingerprint));
       CREATE TABLE IF NOT EXISTS recurring_entries(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, category_id TEXT NOT NULL REFERENCES categories(id) ON DELETE RESTRICT, account_id TEXT REFERENCES accounts(id) ON DELETE RESTRICT, name TEXT NOT NULL, amount_cents INTEGER NOT NULL CHECK(amount_cents>0), start_date TEXT NOT NULL, end_date TEXT, annual_growth_bps INTEGER NOT NULL DEFAULT 0, revision INTEGER NOT NULL DEFAULT 1);
-      CREATE TABLE IF NOT EXISTS assets(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, name TEXT NOT NULL, value_cents INTEGER NOT NULL CHECK(value_cents>=0), annual_growth_bps INTEGER NOT NULL DEFAULT 0, appreciation_curve_json TEXT, revision INTEGER NOT NULL DEFAULT 1);
+      CREATE TABLE IF NOT EXISTS assets(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, name TEXT NOT NULL, value_cents INTEGER NOT NULL CHECK(value_cents>=0), annual_growth_bps INTEGER NOT NULL DEFAULT 0, appreciation_curve_json TEXT, private_stock_json TEXT, revision INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE IF NOT EXISTS liabilities(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, name TEXT NOT NULL, balance_cents INTEGER NOT NULL CHECK(balance_cents>=0), annual_rate_bps INTEGER NOT NULL DEFAULT 0, minimum_payment_cents INTEGER NOT NULL DEFAULT 0 CHECK(minimum_payment_cents>=0), mortgage_json TEXT, revision INTEGER NOT NULL DEFAULT 1);
       CREATE TABLE IF NOT EXISTS scenarios(id TEXT PRIMARY KEY, household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT, name TEXT NOT NULL, is_baseline INTEGER NOT NULL DEFAULT 0 CHECK(is_baseline IN (0,1)), assumptions_json TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1);
       CREATE UNIQUE INDEX IF NOT EXISTS one_baseline ON scenarios(household_id) WHERE is_baseline=1;
@@ -664,6 +674,20 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
     }
     transaction.execute(
         "INSERT OR IGNORE INTO schema_migrations(version) VALUES(9)",
+        [],
+    )?;
+    let asset_columns: Vec<String> = transaction
+        .prepare("PRAGMA table_info(assets)")?
+        .query_map([], |row| row.get(1))?
+        .collect::<Result<_, _>>()?;
+    if !asset_columns
+        .iter()
+        .any(|name| name == "private_stock_json")
+    {
+        transaction.execute("ALTER TABLE assets ADD COLUMN private_stock_json TEXT", [])?;
+    }
+    transaction.execute(
+        "INSERT OR IGNORE INTO schema_migrations(version) VALUES(10)",
         [],
     )?;
     transaction.commit()?;
@@ -800,7 +824,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision,housing_costs_json,appreciation_curve_json FROM assets WHERE household_id=? ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision,housing_costs_json,appreciation_curve_json,private_stock_json FROM assets WHERE household_id=? ORDER BY name")?;
         assets = q
             .query_map([&h.id], |r| {
                 let housing: serde_json::Value =
@@ -813,6 +837,9 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     annual_growth_bps: r.get(4)?,
                     appreciation_curve: r
                         .get::<_, Option<String>>(7)?
+                        .and_then(|raw| serde_json::from_str(&raw).ok()),
+                    private_stock: r
+                        .get::<_, Option<String>>(8)?
                         .and_then(|raw| serde_json::from_str(&raw).ok()),
                     revision: r.get(5)?,
                     purchase_price_cents: housing
@@ -2589,6 +2616,7 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
     validate_nonnegative_money(input.value_cents, "asset value")?;
     validate_rate(input.annual_growth_bps, -10_000, "annual growth")?;
     let curve_json = validate_appreciation_curve(input.appreciation_curve.as_ref())?;
+    let private_stock_json = validate_private_stock(input.private_stock.as_ref())?;
     let housing = input.housing_costs.clone().unwrap_or_else(|| serde_json::json!({"propertyTaxRateBps":0,"insuranceMonthlyCents":0,"insuranceAnnualGrowthBps":0,"hoaMonthlyCents":0,"hoaAnnualGrowthBps":0}));
     for field in [
         "propertyTaxRateBps",
@@ -2611,12 +2639,12 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
     let housing_json = serde_json::to_string(&housing)?;
     let hid = active_household(db)?;
     if update {
-        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,appreciation_curve_json=?5,revision=revision+1 WHERE id=?6 AND household_id=?7 AND revision=?8",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
+        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,appreciation_curve_json=?5,private_stock_json=?6,revision=revision+1 WHERE id=?7 AND household_id=?8 AND revision=?9",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
         if changed == 0 {
             return Err(AppError::Conflict);
         }
     } else {
-        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json])?;
+        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json,private_stock_json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json])?;
     }
     Ok(())
 }
@@ -2635,6 +2663,21 @@ fn validate_appreciation_curve(
     validate_rate(curve.start_rate_bps, -10_000, "starting appreciation")?;
     validate_rate(curve.end_rate_bps, -10_000, "ending appreciation")?;
     Ok(Some(serde_json::to_string(curve)?))
+}
+fn validate_private_stock(stock: Option<&PrivateStockVesting>) -> Result<Option<String>, AppError> {
+    let Some(stock) = stock else { return Ok(None) };
+    if !(0..=10_000).contains(&stock.vested_bps) {
+        return Err(AppError::Validation(
+            "vested percentage must be between 0 and 100".into(),
+        ));
+    }
+    validate_date(&stock.vesting_start_date)?;
+    if !(1..=400).contains(&stock.remaining_vesting_quarters) {
+        return Err(AppError::Validation(
+            "remaining vesting must be between 1 and 400 quarters".into(),
+        ));
+    }
+    Ok(Some(serde_json::to_string(stock)?))
 }
 #[tauri::command]
 fn create_asset(input: AssetInput, database: tauri::State<Database>) -> Result<(), AppError> {
@@ -4477,6 +4520,11 @@ mod tests {
                 end_year: 2035,
                 end_rate_bps: 800,
             }),
+            private_stock: Some(PrivateStockVesting {
+                vested_bps: 2500,
+                vesting_start_date: "2026-01-01".into(),
+                remaining_vesting_quarters: 16,
+            }),
             housing_costs: None,
             expected_revision: None,
         };
@@ -4490,6 +4538,15 @@ mod tests {
             .unwrap();
         let saved_curve: AppreciationCurve = serde_json::from_str(&saved_curve).unwrap();
         assert_eq!(saved_curve.end_rate_bps, 800);
+        let saved_stock: String = c
+            .query_row(
+                "SELECT private_stock_json FROM assets WHERE id='home'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let saved_stock: PrivateStockVesting = serde_json::from_str(&saved_stock).unwrap();
+        assert_eq!(saved_stock.remaining_vesting_quarters, 16);
         let mortgage = MortgageTerms {
             original_principal_cents: 40_000_000,
             term_months: 360,
@@ -4577,6 +4634,7 @@ mod tests {
             value_cents: 1,
             annual_growth_bps: -10_001,
             appreciation_curve: None,
+            private_stock: None,
             housing_costs: None,
             expected_revision: None,
         };
@@ -4590,6 +4648,7 @@ mod tests {
             value_cents: 100,
             annual_growth_bps: 0,
             appreciation_curve: None,
+            private_stock: None,
             housing_costs: None,
             expected_revision: None,
         };

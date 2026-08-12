@@ -26,6 +26,22 @@ describe("private stock vesting",()=>{
   });
 });
 
+describe("private stock tax on vest",()=>{
+  it("taxes each quarterly vest only in the calendar year when it occurs",()=>{
+    const financial:FinancialSnapshot={...snapshot,accounts:[{...snapshot.accounts[0],balanceCents:0}],recurring:[{id:"salary",name:"Household salary",kind:"income",amountCents:10_000_00,startDate:"2025-01-01",taxTreatment:"none"}],assets:[{id:"stock",name:"Stock",valueCents:400_000_00,annualGrowthBps:0,privateStock:{vestedBps:0,vestingStartDate:"2025-10-01",remainingVestingQuarters:4,taxOnVest:true}}]};
+    const plan:Scenario={...scenario,horizon:{start:"2025-10",months:6}};
+    const taxed=ProjectionEngine.calculate(financial,plan,"2025-10-15");
+    const untaxed=ProjectionEngine.calculate({...financial,assets:[{...financial.assets[0],privateStock:{...financial.assets[0].privateStock!,taxOnVest:false}}]},plan,"2025-10-15");
+    expect(taxed.find(year=>year.year===2025)?.taxCents).toBe(untaxed.find(year=>year.year===2025)?.taxCents);
+    expect(taxed.find(year=>year.year===2026)!.taxCents).toBeGreaterThan(untaxed.find(year=>year.year===2026)!.taxCents);
+    const january=taxed.find(year=>year.year===2026)!.months.find(month=>month.month==="2026-01")!;
+    const untaxedJanuary=untaxed.find(year=>year.year===2026)!.months.find(month=>month.month==="2026-01")!;
+    expect(january.taxCents).toBeGreaterThan(untaxedJanuary.taxCents);
+    expect(january.balances!.privateStock.stock.vestedCents).toBeLessThan(untaxedJanuary.balances!.privateStock.stock.vestedCents);
+    expect(taxed.find(year=>year.year===2026)!.months.filter(month=>month.taxCents>(untaxed.find(year=>year.year===2026)!.months.find(other=>other.month===month.month)?.taxCents??0)).map(month=>month.month)).toEqual(["2026-01"]);
+  });
+});
+
 describe("ProjectionEngine",()=>{
   it("uses straight-line and future-value goal funding formulas",()=>{
     expect(requiredMonthlyFunding(1200,12,0)).toBe(100);
@@ -68,6 +84,13 @@ describe("ProjectionEngine",()=>{
     expect(year.months[0].expenseCents).toBe(550_00);
     expect(year.expenseCents).toBe(550_00);
   });
+  it("automatically includes the full linked-home carrying cost once",()=>{
+    const financial={...snapshot,recurring:[],assets:[{id:"home",name:"Home",valueCents:600_000_00,annualGrowthBps:0,housingCosts:{propertyTaxRateBps:120,insuranceMonthlyCents:200_00,insuranceAnnualGrowthBps:0,hoaMonthlyCents:50_00,hoaAnnualGrowthBps:0}}],liabilities:[{id:"mortgage",name:"Mortgage",balanceCents:400_000_00,annualRateBps:0,minimumPaymentCents:2_000_00,mortgage:{originalPrincipalCents:400_000_00,termMonths:360,startDate:"2025-01-01",assetId:"home"}}]};
+    const month=calculate(financial,{...scenario,horizon:{start:"2025-01",months:1}})[0].months[0];
+    expect(month.principalAndInterestCents).toBe(2_000_00);
+    expect(month.housingCostCents).toBe(600_00+200_00+50_00);
+    expect(month.expenseCents).toBe(2_000_00+600_00+200_00+50_00);
+  });
   it("grows assets at their individual rates",()=>{
     const financial={...snapshot,assets:[
       {id:"still",name:"Still",valueCents:100_00,annualGrowthBps:0},
@@ -79,10 +102,23 @@ describe("ProjectionEngine",()=>{
     const expected=100_00+Math.round(100_00*Math.pow(1.12,1/12));
     expect(year.months[0].netWorthCents!-withoutAssets.months[0].netWorthCents!).toBe(expected);
   });
+  it("exposes entity balances after all monthly projection activity",()=>{
+    const financial={...snapshot,accounts:[{...snapshot.accounts[0],balanceCents:1000}],assets:[{id:"home",name:"Home",valueCents:2000,annualGrowthBps:0},{id:"equity",name:"Equity",valueCents:4000,annualGrowthBps:0,privateStock:{vestedBps:2500,vestingStartDate:"2025-01-01",remainingVestingQuarters:4}}],liabilities:[{id:"loan",name:"Loan",balanceCents:1000,annualRateBps:0,minimumPaymentCents:100}],recurring:[]};
+    const month=calculate(financial,{...scenario,events:[{id:"add",date:"2025-01-01",type:"account-contribution" as const,accountId:"a",amountCents:500}],horizon:{start:"2025-01",months:1}})[0].months[0];
+    expect(month.balances).toEqual({accounts:{a:1500},assets:{home:2000},privateStock:{equity:{vestedCents:1000,unvestedCents:3000}},liabilities:{loan:900}});
+    expect(month.netWorthCents).toBe(1500+2000+1000-900-100);
+  });
   it.each([["weekly",5],["biweekly",3],["monthly",1],["quarterly",1],["annual",1]] as const)("generates %s occurrences from calendar dates",(frequency,count)=>{
     const financial={...snapshot,recurring:[{id:"r",name:"Cadence",kind:"income" as const,amountCents:100,frequency,startDate:"2025-01-01",endDate:"2025-01-31",taxTreatment:"none" as const}]};
     const [year]=calculate(financial,{...scenario,horizon:{start:"2025-01",months:1}});
     expect(year.incomeCents).toBe(count*100);
+  });
+  it("distributes an annual salary across twelve monthly cash-flow periods",()=>{
+    const financial={...snapshot,recurring:[{id:"salary",name:"Salary",kind:"income" as const,incomeType:"salary" as const,amountCents:120_000_01,frequency:"monthly" as const,startDate:"2025-01-01",taxTreatment:"none" as const}]};
+    const year=calculate(financial)[0];
+    expect(year.incomeCents).toBe(120_000_01);
+    expect(year.months[0].incomeCents).toBe(10_000_01);
+    expect(year.months.slice(1).every(month=>month.incomeCents===10_000_00)).toBe(true);
   });
   it("applies target waterfalls to remaining surplus",()=>{
     const financial={...snapshot,taxProfile:{...snapshot.taxProfile,filingStatus:"single" as const},recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0},{...snapshot.accounts[0],id:"b",balanceCents:0}]};

@@ -45,6 +45,12 @@ function occurrences(entry: RecurringEntry, month: string) {
   }
   return count;
 }
+function recurringAmount(entry:RecurringEntry,annualOrOccurrenceCents:number,month:string,growthBps:number,growthMonths:number,count:number){
+  const grown=grow(annualOrOccurrenceCents,growthBps,growthMonths);
+  if(entry.incomeType!=="salary")return grown*count;
+  const base=Math.floor(grown/12),remainder=grown-base*12,calendarMonth=Number(month.slice(5,7))-1;
+  return base+(calendarMonth<remainder?1:0);
+}
 
 export const ProjectionEngine = {
   calculate(snapshot: FinancialSnapshot, scenario: Scenario, asOfDate: string): readonly AnnualProjection[] {
@@ -52,7 +58,7 @@ export const ProjectionEngine = {
     const asOf = isoDate(asOfDate), asOfMonth = monthKey(asOf);
     const start = new Date(`${asOfMonth}-01T00:00:00Z`);
     const accounts = new Map(snapshot.accounts.map(a => [a.id, { ...a, balance: a.balanceCents }]));
-    const assets = new Map(snapshot.assets.map(a => [a.id, { ...a, value: a.valueCents }]));
+    const assets = new Map(snapshot.assets.map(a => [a.id, { ...a, value: a.valueCents, withheld: 0 }]));
     const debts = new Map(snapshot.liabilities.map(l => [l.id, { ...l, balance: l.balanceCents, payment: l.minimumPaymentCents }]));
     const allGoals=[...scenario.goals];
     if(new Set(allGoals.map(x=>x.id)).size!==allGoals.length) throw new RangeError("Goal ids must be unique");
@@ -63,16 +69,43 @@ export const ProjectionEngine = {
     for(const goal of allGoals){const destination=goal.destinationAccountId;const total=(earmarkedByAccount.get(destination)??0)+goal.startingEarmarkedCents;const current=accounts.get(destination);if(!current)throw new RangeError(`Unknown goal destination account: ${destination}`);if(total>current.balance)throw new RangeError("Combined starting goal earmarks exceed the destination account balance");earmarkedByAccount.set(destination,total);}
     // Stored JSON array order is not part of the calculation contract.
     const events = [...scenario.events].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-    const planned=[...Array(scenario.horizon.months)].map((_,index)=>{const date=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+index,1)),key=monthKey(date);let gross=0,pretax=0;for(const entry of snapshot.recurring){const count=occurrences(entry,key);if(!count)continue;const changes=events.filter(e=>(e.type==="recurring-change"||e.type==="income-change")&&e.entryId===entry.id&&e.date.slice(0,7)<=key);const base=changes.length?(changes.at(-1)! as {amountCents:number}).amountCents:entry.amountCents,value=grow(base,entry.annualGrowthBps??(entry.kind==="expense"?scenario.assumptions.inflationBps:0),index)*count;if(entry.kind==="income")gross+=value;else if(entry.taxTreatment==="pretax")pretax+=value;}for(const event of events.filter(e=>e.date.slice(0,7)===key))if(event.type==="one-time-income")gross+=event.amountCents;return {key,year:date.getUTCFullYear(),gross,pretax};});
-    const taxByMonth=new Map<string,number>();
-    for(const year of new Set(planned.map(x=>x.year))){const rows=planned.filter(x=>x.year===year),gross=rows.reduce((s,x)=>s+x.gross,0),pretax=rows.reduce((s,x)=>s+x.pretax,0),base=snapshot.taxProfile.taxYear===2025?TAX_RULES_2025:TAX_RULES_2026,total=estimateTax({grossWageIncomeCents:gross,federalDeductionCents:pretax,californiaDeductionCents:pretax,ficaExemptWagesCents:0},snapshot.taxProfile.filingStatus,base,year>base.year).totalCents,weights=rows.map(x=>Math.max(0,x.gross-x.pretax)),weight=weights.reduce((s,x)=>s+x,0),allocated=weights.map(value=>weight?Math.floor(total*value/weight):0);let remainder=total-allocated.reduce((sum,value)=>sum+value,0);for(let i=0;remainder>0&&i<allocated.length;i++,remainder--)allocated[i]++;rows.forEach((row,i)=>taxByMonth.set(row.key,allocated[i]));}
+    const planned=[...Array(scenario.horizon.months)].map((_,index)=>{const date=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+index,1)),key=monthKey(date);let gross=0,pretax=0;for(const entry of snapshot.recurring){const count=occurrences(entry,key);if(!count)continue;const changes=events.filter(e=>(e.type==="recurring-change"||e.type==="income-change")&&e.entryId===entry.id&&e.date.slice(0,7)<=key);const base=changes.length?(changes.at(-1)! as {amountCents:number}).amountCents:entry.amountCents,value=recurringAmount(entry,base,key,entry.annualGrowthBps??(entry.kind==="expense"?scenario.assumptions.inflationBps:0),index,count);if(entry.kind==="income")gross+=value;else if(entry.taxTreatment==="pretax")pretax+=value;}for(const event of events.filter(e=>e.date.slice(0,7)===key))if(event.type==="one-time-income")gross+=event.amountCents;return {key,year:date.getUTCFullYear(),gross,pretax};});
+    const vestIncomeByMonth=new Map<string,number>();
+    for(const original of snapshot.assets.filter(asset=>asset.privateStock?.taxOnVest)){
+      let value=original.valueCents;
+      let previousBps=vestedBpsAtDate(original,monthKey(addMonths(start,-1))+"-01");
+      for(let index=0;index<scenario.horizon.months;index++){
+        const date=addMonths(start,index),key=monthKey(date);
+        value=grow(value,appreciationRateForYear(original,date.getUTCFullYear()),1);
+        const currentBps=vestedBpsAtDate(original,`${key}-01`);
+        const vestedIncome=Math.max(0,Math.round(value*(currentBps-previousBps)/10000));
+        if(vestedIncome)vestIncomeByMonth.set(key,(vestIncomeByMonth.get(key)??0)+vestedIncome);
+        previousBps=currentBps;
+      }
+    }
+    const taxByMonth=new Map<string,number>(),stockTaxByMonth=new Map<string,number>();
+    for(const year of new Set(planned.map(x=>x.year))){
+      const rows=planned.filter(x=>x.year===year),gross=rows.reduce((s,x)=>s+x.gross,0),pretax=rows.reduce((s,x)=>s+x.pretax,0),stockGross=rows.reduce((sum,row)=>sum+(vestIncomeByMonth.get(row.key)??0),0),base=snapshot.taxProfile.taxYear===2025?TAX_RULES_2025:TAX_RULES_2026;
+      const estimate=(wages:number,deductions=pretax)=>estimateTax({grossWageIncomeCents:wages,federalDeductionCents:deductions,californiaDeductionCents:deductions,ficaExemptWagesCents:0},snapshot.taxProfile.filingStatus,base,year>base.year).totalCents;
+      const wageTax=estimate(gross);
+      let annualHouseholdGross=0,annualHouseholdPretax=0;
+      for(let calendarMonth=0;calendarMonth<12;calendarMonth++){
+        const date=new Date(Date.UTC(year,calendarMonth,1)),key=monthKey(date),growthMonth=(year-start.getUTCFullYear())*12+calendarMonth-start.getUTCMonth();
+        for(const entry of snapshot.recurring){const count=occurrences(entry,key);if(!count)continue;const changes=events.filter(e=>(e.type==="recurring-change"||e.type==="income-change")&&e.entryId===entry.id&&e.date.slice(0,7)<=key),amount=changes.length?(changes.at(-1)! as {amountCents:number}).amountCents:entry.amountCents,value=recurringAmount(entry,amount,key,entry.annualGrowthBps??(entry.kind==="expense"?scenario.assumptions.inflationBps:0),growthMonth,count);if(entry.kind==="income")annualHouseholdGross+=value;else if(entry.taxTreatment==="pretax")annualHouseholdPretax+=value;}
+        for(const event of events.filter(e=>e.date.slice(0,7)===key))if(event.type==="one-time-income")annualHouseholdGross+=event.amountCents;
+      }
+      const stockTax=Math.max(0,estimate(annualHouseholdGross+stockGross,annualHouseholdPretax)-estimate(annualHouseholdGross,annualHouseholdPretax));
+      const allocate=(total:number,weights:number[])=>{const weight=weights.reduce((s,x)=>s+x,0),values=weights.map(value=>weight?Math.floor(total*value/weight):0);let remainder=total-values.reduce((s,x)=>s+x,0);for(let i=0;remainder>0&&i<values.length;i++,remainder--)values[i]++;return values;};
+      const wageAllocated=allocate(wageTax,rows.map(x=>Math.max(0,x.gross-x.pretax))),stockAllocated=allocate(stockTax,rows.map(x=>vestIncomeByMonth.get(x.key)??0));
+      rows.forEach((row,i)=>{taxByMonth.set(row.key,wageAllocated[i]+stockAllocated[i]);stockTaxByMonth.set(row.key,stockAllocated[i]);});
+    }
     const months: MonthlyProjection[] = [];
     for (let month = 0; month < asOf.getUTCMonth(); month++) {
       const key = `${asOf.getUTCFullYear()}-${String(month + 1).padStart(2, "0")}`;
       const actual = snapshot.actuals?.filter(x => x.date.slice(0, 7) === key) ?? [];
       const income = actual.filter(x => x.kind === "income").reduce((s, x) => s + Math.abs(x.amountCents), 0);
       const expense = actual.filter(x => x.kind === "expense").reduce((s, x) => s + Math.abs(x.amountCents), 0);
-      months.push({month:key,status:"actual",incomeCents:income,expenseCents:expense,actualIncomeCents:income,actualExpenseCents:expense,incomeVarianceCents:0,expenseVarianceCents:0,taxCents:0,surplusCents:income-expense,liquidWorthCents:null,netWorthCents:null,debtCents:null,unfundedDeficitCents:0,allocationCents:0,goalFundingCents:0,goalResults:[],principalAndInterestCents:0,housingCostCents:0,warnings:[]});
+      months.push({month:key,status:"actual",incomeCents:income,expenseCents:expense,actualIncomeCents:income,actualExpenseCents:expense,incomeVarianceCents:0,expenseVarianceCents:0,taxCents:0,surplusCents:income-expense,liquidWorthCents:null,netWorthCents:null,debtCents:null,balances:null,unfundedDeficitCents:0,allocationCents:0,goalFundingCents:0,goalResults:[],principalAndInterestCents:0,housingCostCents:0,warnings:[]});
     }
     let cumulativeDeficit = 0;
     for (let index = 0; index < scenario.horizon.months; index++) {
@@ -85,14 +118,14 @@ export const ProjectionEngine = {
         const destination=account(goal.destinationAccountId);
         earmarks.set(goal.id,grow(earmarks.get(goal.id)??0,destination.annualReturnBps,1));
       }
-      for (const asset of assets.values()) asset.value = grow(asset.value, appreciationRateForYear(asset,date.getUTCFullYear()), 1);
+      for (const asset of assets.values()) { const rate=appreciationRateForYear(asset,date.getUTCFullYear());asset.value = grow(asset.value,rate,1);asset.withheld=grow(asset.withheld,rate,1); }
       let income = 0, expense = 0;
       for (const entry of snapshot.recurring) {
         const count = occurrences(entry, key);
         if (!count) continue;
         const changes = events.filter(e => (e.type === "recurring-change" || e.type === "income-change") && e.entryId === entry.id && e.date.slice(0, 7) <= key);
         const base = changes.length ? (changes.at(-1)! as { amountCents: number }).amountCents : entry.amountCents;
-        const value = grow(base, entry.annualGrowthBps ?? (entry.kind === "expense" ? scenario.assumptions.inflationBps : 0), index) * count;
+        const value = recurringAmount(entry,base,key,entry.annualGrowthBps ?? (entry.kind === "expense" ? scenario.assumptions.inflationBps : 0),index,count);
         if (entry.kind === "income") income += value; else {expense += value;if(entry.taxTreatment==="pretax"){if(!entry.accountId||accountKind(snapshot,entry.accountId)!=="retirement")throw new RangeError("Pre-tax contributions require a retirement destination account");account(entry.accountId).balance+=value;}}
       }
       const currentEvents = events.filter(e => e.date.slice(0, 7) === key);
@@ -103,7 +136,7 @@ export const ProjectionEngine = {
         else if (event.type === "account-transfer") { account(event.fromAccountId).balance -= event.amountCents; account(event.toAccountId).balance += event.amountCents; }
         else if (event.type === "asset-purchase") {
           account(event.fundingAccountId).balance -= event.downPaymentCents + event.costsCents;
-          assets.set(event.assetId, { id: event.assetId, name: event.name, valueCents: event.valueCents, value: event.valueCents, annualGrowthBps: event.annualGrowthBps, housingCosts:event.housingCosts });
+          assets.set(event.assetId, { id: event.assetId, name: event.name, valueCents: event.valueCents, value: event.valueCents, withheld:0, annualGrowthBps: event.annualGrowthBps, housingCosts:event.housingCosts });
           if (event.financing) debts.set(event.financing.liabilityId, { id: event.financing.liabilityId, name: event.financing.name, balanceCents: event.financing.principalCents, balance: event.financing.principalCents, annualRateBps: event.financing.annualRateBps, minimumPaymentCents: event.financing.minimumPaymentCents, payment: event.financing.minimumPaymentCents });
         } else if (event.type === "debt-origination") {
           account(event.accountId).balance += event.principalCents;
@@ -125,8 +158,9 @@ export const ProjectionEngine = {
       }
       expense+=housingCostCents;
       for (const item of debts.values()) { if (item.balance <= 0) continue; const interest=Math.round(item.balance * item.annualRateBps / 120_000),due = item.balance + interest; const paid = Math.min(item.payment, due); if(item.payment<interest)warnings.push({code:"payment-below-interest",message:`${item.name}'s payment is below monthly interest.`,month:key,entityId:item.id,inputField:"minimumPaymentCents"}); expense += paid; principalAndInterestCents+=paid; item.balance = due - paid; }
-      const tax = taxByMonth.get(key)??0;
-      const surplus = income - expense - tax;
+      const tax = taxByMonth.get(key)??0,stockTax=stockTaxByMonth.get(key)??0;
+      if(stockTax){const taxable=[...assets.values()].filter(item=>item.privateStock?.taxOnVest);const weights=taxable.map(item=>{const previous=vestedBpsAtDate(item,monthKey(addMonths(date,-1))+"-01"),current=vestedBpsAtDate(item,`${key}-01`);return Math.max(0,Math.round(item.value*(current-previous)/10000));}),total=weights.reduce((sum,value)=>sum+value,0);let assigned=0;taxable.forEach((item,i)=>{const amount=i===taxable.length-1?stockTax-assigned:(total?Math.floor(stockTax*weights[i]/total):0);item.withheld+=amount;assigned+=amount;});}
+      const surplus = income - expense - (tax-stockTax);
       let availableSurplus=Math.max(0,surplus),goalFundingCents=0;
       const goalResults:GoalFundingResult[]=[];
       for(const goal of goals){
@@ -152,9 +186,16 @@ export const ProjectionEngine = {
         if (remaining > 0) { const fallback = snapshot.accounts.find(a => a.liquid); if (fallback) account(fallback.id).balance += remaining; }
       } else if (surplus < 0) { let remaining=-surplus; const ordered=[...scenario.withdrawals].sort((a,b)=>a.priority-b.priority).map(r=>account(r.accountId)); for(const source of ordered){const drawn=Math.min(Math.max(0,source.balance),remaining);source.balance-=drawn;remaining-=drawn;if(source.balance===0&&drawn>0)warnings.push({code:"account-depleted",message:`${source.name} was depleted.`,month:key,entityId:source.id,inputField:"withdrawals"});if(!remaining)break;} unfunded=remaining; cumulativeDeficit+=unfunded; if(unfunded)warnings.push({code:"unfunded-deficit",message:`${unfunded} cents of the deficit could not be funded.`,month:key,inputField:"withdrawals"}); }
       const liquid = [...accounts.values()].filter(a => a.liquid).reduce((s, a) => s + a.balance, 0) - cumulativeDeficit;
-      const accountTotal = [...accounts.values()].reduce((s, a) => s + a.balance, 0), assetTotal = [...assets.values()].reduce((s, a) => s + vestedAssetValue(a,`${key}-01`), 0), debtTotal = [...debts.values()].reduce((s, d) => s + d.balance, 0);
+      const accountTotal = [...accounts.values()].reduce((s, a) => s + a.balance, 0), assetTotal = [...assets.values()].reduce((s, a) => s + Math.max(0,vestedAssetValue(a,`${key}-01`)-a.withheld), 0), debtTotal = [...debts.values()].reduce((s, d) => s + d.balance, 0);
       const actual=snapshot.actuals?.filter(x=>x.date.slice(0,7)===key)??[], actualIncome=actual.filter(x=>x.kind==="income").reduce((s,x)=>s+Math.abs(x.amountCents),0),actualExpense=actual.filter(x=>x.kind==="expense").reduce((s,x)=>s+Math.abs(x.amountCents),0),status=key<asOfMonth?"actual":key===asOfMonth?"blended":"projected";
-      months.push({ month: key, status, incomeCents: income, expenseCents: expense, actualIncomeCents:actualIncome,actualExpenseCents:actualExpense,incomeVarianceCents:actualIncome-income,expenseVarianceCents:actualExpense-expense,taxCents: tax, surplusCents: surplus, allocationCents,goalFundingCents,goalResults, liquidWorthCents: liquid, netWorthCents: accountTotal + assetTotal - debtTotal - cumulativeDeficit, debtCents: debtTotal, unfundedDeficitCents: unfunded,principalAndInterestCents,housingCostCents,warnings });
+      const balanceDate=`${key}-01`;
+      const balances={
+        accounts:Object.fromEntries([...accounts].map(([id,item])=>[id,item.balance])),
+        assets:Object.fromEntries([...assets].filter(([,item])=>!item.privateStock).map(([id,item])=>[id,item.value])),
+        privateStock:Object.fromEntries([...assets].filter(([,item])=>item.privateStock).map(([id,item])=>{const grossVested=vestedAssetValue(item,balanceDate),vestedCents=Math.max(0,grossVested-item.withheld);return [id,{vestedCents,unvestedCents:item.value-grossVested}];})),
+        liabilities:Object.fromEntries([...debts].map(([id,item])=>[id,Math.max(0,item.balance)])),
+      };
+      months.push({ month: key, status, incomeCents: income, expenseCents: expense, actualIncomeCents:actualIncome,actualExpenseCents:actualExpense,incomeVarianceCents:actualIncome-income,expenseVarianceCents:actualExpense-expense,taxCents: tax, surplusCents: surplus, allocationCents,goalFundingCents,goalResults, liquidWorthCents: liquid, netWorthCents: accountTotal + assetTotal - debtTotal - cumulativeDeficit, debtCents: debtTotal, balances, unfundedDeficitCents: unfunded,principalAndInterestCents,housingCostCents,warnings });
     }
     const grouped = new Map<number, MonthlyProjection[]>();
     for (const month of months) { const year = Number(month.month.slice(0, 4)); grouped.set(year, [...(grouped.get(year) ?? []), month]); }

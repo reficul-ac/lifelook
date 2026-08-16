@@ -1,0 +1,12 @@
+{
+  "people": [{"id":"spouse-a","name":"Spouse A"},{"id":"spouse-b","name":"Spouse B"}],
+  "taxUnit": {"id":"joint","filingStatus":"married-joint","memberPersonIds":["spouse-a","spouse-b"]},
+  "salaries": [
+    {"ownerPersonId":"spouse-a","annualCents":15500000,"annualGrowthBps":1000,"annualGrowthMonth":2},
+    {"ownerPersonId":"spouse-b","annualCents":5000000,"annualGrowthBps":0}
+  ],
+  "holding": {"name":"PrivateCo","priceCents":6895,"priceDate":"2026-09-01","sellToCover":true,"appreciationCurve":{"startYear":2026,"startRateBps":5000,"endYear":2035,"endRateBps":800},"grants":[
+    {"id":"original","ownerPersonId":"spouse-a","grantDate":"2025-09-01","grantPriceCents":4000,"unitsMicros":6500000000,"preset":{"cliffDate":"2026-09-01","quarterCount":12}},
+    {"id":"promotion","ownerPersonId":"spouse-a","grantDate":"2026-09-01","grantPriceCents":6895,"unitsMicros":1813000000,"preset":{"cliffDate":"2027-09-01","quarterCount":12}}
+  ]}
+}

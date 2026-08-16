@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 14;
+const SCHEMA_VERSION: i64 = 15;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -149,6 +149,15 @@ struct TaxProfile {
     tax_year: i64,
     threshold_inflation_bps: i64,
     revision: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tax_unit: Option<TaxUnit>,
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TaxUnit {
+    id: String,
+    filing_status: String,
+    member_person_ids: Vec<String>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -214,6 +223,9 @@ struct RecurringEntry {
     annual_growth_bps: i64,
     revision: i64,
     tax_treatment: String,
+    income_tax_category: String,
+    owner_person_id: Option<String>,
+    annual_growth_month: Option<i64>,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -226,6 +238,7 @@ struct Asset {
     #[serde(default)]
     appreciation_curve: Option<AppreciationCurve>,
     private_stock: Option<PrivateStockVesting>,
+    equity_holding: Option<serde_json::Value>,
     revision: i64,
     housing_costs: serde_json::Value,
     purchase_price_cents: Option<i64>,
@@ -301,6 +314,12 @@ struct RecurringInput {
     annual_growth_bps: i64,
     #[serde(default = "default_tax_treatment")]
     tax_treatment: String,
+    #[serde(default = "default_income_tax_category")]
+    income_tax_category: String,
+    #[serde(default)]
+    owner_person_id: Option<String>,
+    #[serde(default)]
+    annual_growth_month: Option<i64>,
     expected_revision: Option<i64>,
 }
 fn default_tax_treatment() -> String {
@@ -308,6 +327,9 @@ fn default_tax_treatment() -> String {
 }
 fn default_income_type() -> String {
     "ordinary".to_owned()
+}
+fn default_income_tax_category() -> String {
+    "nontaxable".to_owned()
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -423,6 +445,8 @@ struct AssetInput {
     appreciation_curve: Option<AppreciationCurve>,
     #[serde(default)]
     private_stock: Option<PrivateStockVesting>,
+    #[serde(default)]
+    equity_holding: Option<serde_json::Value>,
     #[serde(default)]
     housing_costs: Option<serde_json::Value>,
     expected_revision: Option<i64>,
@@ -762,12 +786,50 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         [],
         |r| r.get(0),
     )?;
-    if version < 14 {
+    let contribution_has_household = transaction
+        .prepare("PRAGMA table_info(scenario_contributions)")?
+        .query_map([], |r| r.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .any(|x| x == "household_id");
+    if version < 14 || !contribution_has_household {
         transaction.execute_batch("ALTER TABLE scenario_contributions RENAME TO scenario_contributions_v13;
           CREATE TABLE scenario_contributions(id TEXT PRIMARY KEY,household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT,scenario_id TEXT NOT NULL REFERENCES scenarios(id) ON DELETE RESTRICT,destination_type TEXT NOT NULL CHECK(destination_type IN ('account','asset','mortgage')),destination_id TEXT NOT NULL,percent_bps INTEGER CHECK(percent_bps BETWEEN 1 AND 10000),monthly_amount_cents INTEGER CHECK(monthly_amount_cents>0),frequency TEXT NOT NULL CHECK(frequency IN ('weekly','biweekly','monthly','quarterly','annual')),target_balance_cents INTEGER CHECK(target_balance_cents>=0),overflow_destination_type TEXT CHECK(overflow_destination_type IN ('account','asset')),overflow_destination_id TEXT,CHECK((percent_bps IS NULL)<>(monthly_amount_cents IS NULL)),UNIQUE(scenario_id,destination_type,destination_id));
           INSERT INTO scenario_contributions(id,household_id,scenario_id,destination_type,destination_id,percent_bps,frequency,target_balance_cents,overflow_destination_type,overflow_destination_id) SELECT c.id,s.household_id,c.scenario_id,c.destination_type,c.destination_id,c.percent_bps,c.frequency,c.target_balance_cents,c.overflow_destination_type,c.overflow_destination_id FROM scenario_contributions_v13 c JOIN scenarios s ON s.id=c.scenario_id;
           DROP TABLE scenario_contributions_v13;
-          INSERT INTO schema_migrations(version) VALUES(14);")?;
+          INSERT OR IGNORE INTO schema_migrations(version) VALUES(14);")?;
+    }
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 15 {
+        let recurring_columns = transaction
+            .prepare("PRAGMA table_info(recurring_entries)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        if !recurring_columns.iter().any(|x| x == "owner_person_id") {
+            transaction.execute("ALTER TABLE recurring_entries ADD COLUMN owner_person_id TEXT REFERENCES people(id) ON DELETE RESTRICT",[])?;
+        }
+        if !recurring_columns.iter().any(|x| x == "income_tax_category") {
+            transaction.execute("ALTER TABLE recurring_entries ADD COLUMN income_tax_category TEXT NOT NULL DEFAULT 'nontaxable' CHECK(income_tax_category IN ('wages','taxable-nonwage','nontaxable'))",[])?;
+        }
+        if !recurring_columns.iter().any(|x| x == "annual_growth_month") {
+            transaction.execute("ALTER TABLE recurring_entries ADD COLUMN annual_growth_month INTEGER CHECK(annual_growth_month BETWEEN 1 AND 12)",[])?;
+        }
+        let asset_columns = transaction
+            .prepare("PRAGMA table_info(assets)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        if !asset_columns.iter().any(|x| x == "equity_holding_json") {
+            transaction.execute("ALTER TABLE assets ADD COLUMN equity_holding_json TEXT", [])?;
+        }
+        transaction.execute_batch("CREATE TABLE IF NOT EXISTS tax_units(id TEXT PRIMARY KEY,household_id TEXT NOT NULL UNIQUE REFERENCES households(id) ON DELETE RESTRICT,filing_status TEXT NOT NULL CHECK(filing_status IN ('single','married-joint','married-separate','head-of-household')));
+          CREATE TABLE IF NOT EXISTS tax_unit_members(tax_unit_id TEXT NOT NULL REFERENCES tax_units(id) ON DELETE CASCADE,person_id TEXT NOT NULL UNIQUE REFERENCES people(id) ON DELETE RESTRICT,PRIMARY KEY(tax_unit_id,person_id));
+          CREATE TABLE IF NOT EXISTS equity_grants(id TEXT PRIMARY KEY,asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE RESTRICT,owner_person_id TEXT REFERENCES people(id) ON DELETE RESTRICT,grant_date TEXT NOT NULL,grant_price_cents INTEGER NOT NULL CHECK(grant_price_cents>=0),units_micros INTEGER NOT NULL CHECK(units_micros>0),review_required INTEGER NOT NULL DEFAULT 0 CHECK(review_required IN (0,1)));
+          CREATE TABLE IF NOT EXISTS equity_vest_events(id TEXT PRIMARY KEY,grant_id TEXT NOT NULL REFERENCES equity_grants(id) ON DELETE CASCADE,vest_date TEXT NOT NULL,units_micros INTEGER NOT NULL CHECK(units_micros>0),actual_fmv_cents INTEGER CHECK(actual_fmv_cents>=0));
+          INSERT INTO schema_migrations(version) VALUES(15);")?;
     }
     transaction
         .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
@@ -820,7 +882,13 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        tax_profile = connection.query_row("SELECT filing_status,state,tax_year,250,revision FROM tax_profiles WHERE household_id=?",[&h.id],|r| Ok(TaxProfile{filing_status:r.get(0)?,state:r.get(1)?,tax_year:r.get(2)?,threshold_inflation_bps:r.get(3)?,revision:r.get(4)?})).optional()?;
+        tax_profile = connection.query_row("SELECT filing_status,state,tax_year,250,revision FROM tax_profiles WHERE household_id=?",[&h.id],|r| Ok(TaxProfile{filing_status:r.get(0)?,state:r.get(1)?,tax_year:r.get(2)?,threshold_inflation_bps:r.get(3)?,revision:r.get(4)?,tax_unit:None})).optional()?;
+        if let Some(profile) = tax_profile.as_mut() {
+            profile.tax_unit=connection.query_row("SELECT id,filing_status FROM tax_units WHERE household_id=?",[&h.id],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?))).optional()?.map(|(id,filing_status)|{
+                let member_person_ids=connection.prepare("SELECT person_id FROM tax_unit_members WHERE tax_unit_id=? ORDER BY person_id").and_then(|mut q|q.query_map([&id],|r|r.get(0))?.collect()).unwrap_or_default();
+                TaxUnit{id,filing_status,member_person_ids}
+            });
+        }
         settings = connection
             .query_row(
                 "SELECT theme,reduced_motion,revision FROM settings WHERE household_id=?",
@@ -886,7 +954,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,category_id,account_id,name,amount_cents,frequency,income_type,start_date,end_date,annual_growth_bps,revision,tax_treatment FROM recurring_entries WHERE household_id=? ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,household_id,category_id,account_id,name,amount_cents,frequency,income_type,start_date,end_date,annual_growth_bps,revision,tax_treatment,income_tax_category,owner_person_id,annual_growth_month FROM recurring_entries WHERE household_id=? ORDER BY name")?;
         recurring = q
             .query_map([&h.id], |r| {
                 Ok(RecurringEntry {
@@ -903,10 +971,13 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     annual_growth_bps: r.get(10)?,
                     revision: r.get(11)?,
                     tax_treatment: r.get(12)?,
+                    income_tax_category: r.get(13)?,
+                    owner_person_id: r.get(14)?,
+                    annual_growth_month: r.get(15)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision,housing_costs_json,appreciation_curve_json,private_stock_json FROM assets WHERE household_id=? ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision,housing_costs_json,appreciation_curve_json,private_stock_json,equity_holding_json FROM assets WHERE household_id=? ORDER BY name")?;
         assets = q
             .query_map([&h.id], |r| {
                 let housing: serde_json::Value =
@@ -922,6 +993,9 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                         .and_then(|raw| serde_json::from_str(&raw).ok()),
                     private_stock: r
                         .get::<_, Option<String>>(8)?
+                        .and_then(|raw| serde_json::from_str(&raw).ok()),
+                    equity_holding: r
+                        .get::<_, Option<String>>(9)?
                         .and_then(|raw| serde_json::from_str(&raw).ok()),
                     revision: r.get(5)?,
                     purchase_price_cents: housing
@@ -1103,7 +1177,45 @@ fn save_onboarding_step(
             }
             let hid: String =
                 tx.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
-            tx.execute("INSERT INTO tax_profiles(household_id,filing_status,state,tax_year) VALUES(?1,?2,'CA',?3) ON CONFLICT(household_id) DO UPDATE SET filing_status=excluded.filing_status,tax_year=excluded.tax_year,revision=revision+1",params![hid,profile.filing_status,profile.tax_year])?;
+            tx.execute("INSERT INTO tax_profiles(household_id,filing_status,state,tax_year) VALUES(?1,?2,'CA',?3) ON CONFLICT(household_id) DO UPDATE SET filing_status=excluded.filing_status,tax_year=excluded.tax_year,revision=revision+1",params![hid,&profile.filing_status,profile.tax_year])?;
+            if let Some(unit) = profile.tax_unit {
+                let distinct = unit
+                    .member_person_ids
+                    .iter()
+                    .collect::<std::collections::HashSet<_>>();
+                if unit.filing_status != profile.filing_status
+                    || (unit.filing_status == "married-joint"
+                        && (distinct.len() != 2 || unit.member_person_ids.len() != 2))
+                {
+                    return Err(AppError::Validation(
+                        "married filing jointly requires two distinct household people".into(),
+                    ));
+                }
+                if unit.member_person_ids.iter().any(|person_id| {
+                    !tx.query_row(
+                        "SELECT EXISTS(SELECT 1 FROM people WHERE id=?1 AND household_id=?2)",
+                        params![person_id, &hid],
+                        |r| r.get::<_, bool>(0),
+                    )
+                    .unwrap_or(false)
+                }) {
+                    return Err(AppError::Validation(
+                        "tax-unit members must belong to this household".into(),
+                    ));
+                }
+                tx.execute("DELETE FROM tax_unit_members WHERE tax_unit_id IN (SELECT id FROM tax_units WHERE household_id=?)",[&hid])?;
+                tx.execute("DELETE FROM tax_units WHERE household_id=?", [&hid])?;
+                tx.execute(
+                    "INSERT INTO tax_units(id,household_id,filing_status) VALUES(?1,?2,?3)",
+                    params![unit.id, &hid, unit.filing_status],
+                )?;
+                for person_id in unit.member_person_ids {
+                    tx.execute(
+                        "INSERT INTO tax_unit_members(tax_unit_id,person_id) VALUES(?1,?2)",
+                        params![unit.id, person_id],
+                    )?;
+                }
+            }
         }
         if let Some(items) = payload.accounts {
             if items.is_empty() {
@@ -1346,7 +1458,7 @@ fn create_recurring(
         validate_recurring(&input)?;
         validate_recurring_tax_treatment(db, &input)?;
         let hid: String = db.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
-        db.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,frequency,income_type,start_date,end_date,annual_growth_bps,tax_treatment) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12 WHERE EXISTS(SELECT 1 FROM categories WHERE id=?3 AND household_id=?2 AND (?8='ordinary' OR kind='income')) AND (?4 IS NULL OR EXISTS(SELECT 1 FROM accounts WHERE id=?4 AND household_id=?2))",params![input.id,hid,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.income_type,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment]).and_then(|n|if n==1{Ok(n)}else{Err(rusqlite::Error::QueryReturnedNoRows)}).map_err(|_|AppError::Validation("category or account does not belong to this household".into()))?;
+        db.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,frequency,income_type,start_date,end_date,annual_growth_bps,tax_treatment,income_tax_category,owner_person_id,annual_growth_month) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15 WHERE EXISTS(SELECT 1 FROM categories WHERE id=?3 AND household_id=?2 AND (?8='ordinary' OR kind='income')) AND (?4 IS NULL OR EXISTS(SELECT 1 FROM accounts WHERE id=?4 AND household_id=?2)) AND (?14 IS NULL OR EXISTS(SELECT 1 FROM people WHERE id=?14 AND household_id=?2))",params![input.id,hid,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.income_type,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment,input.income_tax_category,input.owner_person_id,input.annual_growth_month]).and_then(|n|if n==1{Ok(n)}else{Err(rusqlite::Error::QueryReturnedNoRows)}).map_err(|_|AppError::Validation("category, account, or wage owner does not belong to this household".into()))?;
         Ok(())
     })
 }
@@ -1361,7 +1473,7 @@ fn update_recurring(
         let revision = input
             .expected_revision
             .ok_or_else(|| AppError::Validation("expected revision is required".into()))?;
-        let n=db.execute("UPDATE recurring_entries SET category_id=?2,account_id=?3,name=?4,amount_cents=?5,frequency=?6,income_type=?7,start_date=?8,end_date=?9,annual_growth_bps=?10,tax_treatment=?11,revision=revision+1 WHERE id=?1 AND revision=?12 AND EXISTS(SELECT 1 FROM categories c WHERE c.id=?2 AND c.household_id=recurring_entries.household_id AND (?7='ordinary' OR c.kind='income')) AND (?3 IS NULL OR EXISTS(SELECT 1 FROM accounts a WHERE a.id=?3 AND a.household_id=recurring_entries.household_id))",params![input.id,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.income_type,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment,revision])?;
+        let n=db.execute("UPDATE recurring_entries SET category_id=?2,account_id=?3,name=?4,amount_cents=?5,frequency=?6,income_type=?7,start_date=?8,end_date=?9,annual_growth_bps=?10,tax_treatment=?11,income_tax_category=?13,owner_person_id=?14,annual_growth_month=?15,revision=revision+1 WHERE id=?1 AND revision=?12 AND EXISTS(SELECT 1 FROM categories c WHERE c.id=?2 AND c.household_id=recurring_entries.household_id AND (?7='ordinary' OR c.kind='income')) AND (?3 IS NULL OR EXISTS(SELECT 1 FROM accounts a WHERE a.id=?3 AND a.household_id=recurring_entries.household_id))",params![input.id,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.income_type,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment,revision,input.income_tax_category,input.owner_person_id,input.annual_growth_month])?;
         if n == 0 {
             return Err(AppError::Conflict);
         }
@@ -2475,6 +2587,11 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
     validate_rate(input.annual_growth_bps, -10_000, "annual growth")?;
     let curve_json = validate_appreciation_curve(input.appreciation_curve.as_ref())?;
     let private_stock_json = validate_private_stock(input.private_stock.as_ref())?;
+    let equity_holding_json = input
+        .equity_holding
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()?;
     let housing = input.housing_costs.clone().unwrap_or_else(|| serde_json::json!({"propertyTaxRateBps":0,"insuranceMonthlyCents":0,"insuranceAnnualGrowthBps":0,"hoaMonthlyCents":0,"hoaAnnualGrowthBps":0}));
     for field in [
         "propertyTaxRateBps",
@@ -2497,12 +2614,12 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
     let housing_json = serde_json::to_string(&housing)?;
     let hid = active_household(db)?;
     if update {
-        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,appreciation_curve_json=?5,private_stock_json=?6,revision=revision+1 WHERE id=?7 AND household_id=?8 AND revision=?9",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
+        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,appreciation_curve_json=?5,private_stock_json=?6,equity_holding_json=?7,revision=revision+1 WHERE id=?8 AND household_id=?9 AND revision=?10",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,equity_holding_json,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
         if changed == 0 {
             return Err(AppError::Conflict);
         }
     } else {
-        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json,private_stock_json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json])?;
+        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json,private_stock_json,equity_holding_json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,equity_holding_json])?;
     }
     Ok(())
 }
@@ -4403,6 +4520,7 @@ mod tests {
                 remaining_vesting_quarters: 16,
                 tax_on_vest: true,
             }),
+            equity_holding: None,
             housing_costs: None,
             expected_revision: None,
         };
@@ -4513,6 +4631,7 @@ mod tests {
             annual_growth_bps: -10_001,
             appreciation_curve: None,
             private_stock: None,
+            equity_holding: None,
             housing_costs: None,
             expected_revision: None,
         };
@@ -4527,6 +4646,7 @@ mod tests {
             annual_growth_bps: 0,
             appreciation_curve: None,
             private_stock: None,
+            equity_holding: None,
             housing_costs: None,
             expected_revision: None,
         };

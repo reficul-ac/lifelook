@@ -21,18 +21,11 @@ export interface Asset { id: string; name: string; valueCents: Cents; annualGrow
 export interface MortgageTerms { originalPrincipalCents: Cents; termMonths: number; startDate: string; paymentOverrideCents?: Cents; assetId?: string | null }
 export interface Liability { id: string; name: string; balanceCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; mortgage?: MortgageTerms }
 export interface GrowthAssumption { inflationBps: BasisPoints; thresholdInflationBps: BasisPoints }
-export interface AllocationRule { id?: string; accountId: string; percentBps: BasisPoints; priority: number; targetBalanceCents?: Cents }
+export type ContributionDestinationType = "account" | "asset" | "mortgage";
+export type ContributionOverflowType = "account" | "asset";
+export interface ContributionRule { id: string; destinationType: ContributionDestinationType; destinationId: string; percentBps?: BasisPoints; monthlyAmountCents?: Cents; frequency: RecurringFrequency; targetBalanceCents?: Cents; overflowDestinationType?: ContributionOverflowType; overflowDestinationId?: string }
 export interface WithdrawalRule { id?: string; accountId: string; priority: number }
 export interface ProjectionHorizon { start: string; months: number }
-export type GoalType = "retirement" | "emergency-fund" | "debt-payoff" | "education" | "major-purchase";
-export interface GoalCommon { id:string; scenarioId:string; type:GoalType; name:string; priority:number; enabled:boolean; targetDate:string; todayDollarBasis:boolean; startingEarmarkedCents:Cents; allowCashShortfall:boolean; revision:number }
-export interface EmergencyFundGoal extends GoalCommon { type:"emergency-fund"; destinationAccountId:string; expenseEntryIds:readonly string[]; coverageMonths:number; minimumTargetCents?:Cents }
-export interface DebtPayoffGoal extends GoalCommon { type:"debt-payoff"; liabilityId:string; destinationAccountId:string }
-export interface EducationGoal extends GoalCommon { type:"education"; beneficiary:string; attendanceStartDate:string; attendanceEndDate:string; annualCostCents:Cents; educationInflationBps:BasisPoints; destinationAccountId:string }
-export interface MajorPurchaseGoal extends GoalCommon { type:"major-purchase"; purchaseDate:string; costCents:Cents; destinationAccountId:string }
-export interface RetirementGoal extends GoalCommon { type:"retirement"; participantIds:readonly string[]; retirementDates:Readonly<Record<string,string>>; planningThroughAges:Readonly<Record<string,number>>; desiredSpendingCents:Cents; healthcareCents:Cents; healthcareGrowthBps:BasisPoints; destinationAccountId:string; pensions:readonly {id:string;name:string;monthlyCents:Cents;startDate:string}[] }
-export type ScenarioGoal = EmergencyFundGoal | DebtPayoffGoal | EducationGoal | MajorPurchaseGoal | RetirementGoal;
-export interface GoalFundingResult { goalId:string; requiredCents:Cents; fundedCents:Cents; shortfallCents:Cents; earmarkedCents:Cents; targetCents:Cents; completionBps:BasisPoints; projectedCompletionDate?:string; targetResult:"on-track"|"completed"|"missed"|"infeasible"|"outside-horizon" }
 export type ScenarioEvent =
   | { id: string; date: string; type: "recurring-change" | "income-change"; entryId: string; amountCents: Cents }
   | { id: string; date: string; type: "one-time-income" | "one-time-expense"; amountCents: Cents }
@@ -42,19 +35,20 @@ export type ScenarioEvent =
   | { id: string; date: string; type: "asset-sale"; assetId: string; proceedsCents: Cents; costsCents: Cents; destinationAccountId: string; payoff?: { liabilityId: string; mode: "none" | "partial" | "full"; amountCents?: Cents } }
   | { id: string; date: string; type: "debt-origination"; liabilityId: string; name: string; principalCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; accountId: string }
   | { id: string; date: string; type: "debt-payoff"; liabilityId: string; accountId: string; amountCents?: Cents };
-export interface Scenario { id: string; name: string; assumptions: GrowthAssumption; assumptionsInherited: boolean; events: readonly ScenarioEvent[]; allocations: readonly AllocationRule[]; withdrawals: readonly WithdrawalRule[]; horizon: ProjectionHorizon; goals:readonly ScenarioGoal[] }
+export interface Scenario { id: string; name: string; assumptions: GrowthAssumption; assumptionsInherited: boolean; events: readonly ScenarioEvent[]; defaultContributionAccountId?: string; contributions: readonly ContributionRule[]; withdrawals: readonly WithdrawalRule[]; horizon: ProjectionHorizon }
 export interface LedgerActual { date: string; kind: "income" | "expense" | "transfer" | "adjustment"; amountCents: Cents }
 export interface FinancialSnapshot { household: Household; taxProfile: TaxProfile; accounts: readonly Account[]; recurring: readonly RecurringEntry[]; assets: readonly Asset[]; liabilities: readonly Liability[]; actuals?: readonly LedgerActual[] }
 export type ProjectionStatus = "actual" | "blended" | "projected";
-export interface ProjectionWarning { code: "account-depleted" | "unfunded-deficit" | "invalid-allocation" | "aggressive-assumption" | "negative-balance" | "payment-below-interest" | "goal-shortfall" | "goal-missed" | "goal-outside-horizon" | "goal-validation" | "goal-conflict" | "insufficient-earmark" | "retirement-depletion"; message: string; month: string; entityId?: string; inputField?: string }
+export interface ProjectionWarning { code: "account-depleted" | "unfunded-deficit" | "invalid-contribution" | "aggressive-assumption" | "negative-balance" | "payment-below-interest"; message: string; month: string; entityId?: string; inputField?: string }
 export interface ProjectionBalances {
   accounts: Readonly<Record<string, Cents>>;
   assets: Readonly<Record<string, Cents>>;
   privateStock: Readonly<Record<string, { vestedCents: Cents; unvestedCents: Cents }>>;
   liabilities: Readonly<Record<string, Cents>>;
 }
-export interface MonthlyProjection { month: string; status: ProjectionStatus; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; incomeVarianceCents: Cents; expenseVarianceCents: Cents; taxCents: Cents; surplusCents: Cents; liquidWorthCents: Cents | null; netWorthCents: Cents | null; debtCents: Cents | null; balances: ProjectionBalances | null; unfundedDeficitCents: Cents; allocationCents: Cents; goalFundingCents:Cents; goalResults:readonly GoalFundingResult[]; principalAndInterestCents: Cents; housingCostCents: Cents; warnings: readonly ProjectionWarning[] }
-export interface AnnualProjection { year: number; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; taxCents: Cents; savingsRateBps: BasisPoints; surplusCents: Cents; allocationCents: Cents; goalFundingCents:Cents; goalResults:readonly GoalFundingResult[]; liquidWorthCents: Cents | null; endingNetWorthCents: Cents | null; debtCents: Cents | null; debtPayoffMonth?: string; unfundedDeficitCents: Cents; warnings: readonly ProjectionWarning[]; months: readonly MonthlyProjection[] }
+export interface ContributionResult { ruleId: string; destinationType: ContributionDestinationType; destinationId: string; amountCents: Cents }
+export interface MonthlyProjection { month: string; status: ProjectionStatus; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; incomeVarianceCents: Cents; expenseVarianceCents: Cents; taxCents: Cents; surplusCents: Cents; liquidWorthCents: Cents | null; netWorthCents: Cents | null; debtCents: Cents | null; balances: ProjectionBalances | null; unfundedDeficitCents: Cents; contributionCents: Cents; contributionResults:readonly ContributionResult[]; principalAndInterestCents: Cents; housingCostCents: Cents; warnings: readonly ProjectionWarning[] }
+export interface AnnualProjection { year: number; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; taxCents: Cents; savingsRateBps: BasisPoints; surplusCents: Cents; contributionCents: Cents; contributionResults:readonly ContributionResult[]; liquidWorthCents: Cents | null; endingNetWorthCents: Cents | null; debtCents: Cents | null; debtPayoffMonth?: string; unfundedDeficitCents: Cents; warnings: readonly ProjectionWarning[]; months: readonly MonthlyProjection[] }
 export interface TaxBracket { upToCents: Cents | null; rateBps: BasisPoints }
 export interface TaxSource { jurisdiction: "federal" | "california" | "payroll"; sourceYear: number; status: "official" | "projected"; url: string }
 export interface TaxRulePack { year: 2025 | 2026; federal: Record<FilingStatus, { standardDeductionCents: Cents; brackets: readonly TaxBracket[] }>; california: Record<FilingStatus, { standardDeductionCents: Cents; brackets: readonly TaxBracket[] }>; socialSecurityWageBaseCents: Cents; additionalMedicareThresholdCents: Record<FilingStatus, Cents>; sources: readonly TaxSource[] }

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { appreciationRateForYear, ProjectionEngine, requiredMonthlyFunding, vestedAssetValue, vestedBpsAtDate } from "./projection";
+import { appreciationRateForYear, effectiveContributionBps, ProjectionEngine, vestedAssetValue, vestedBpsAtDate } from "./projection";
 import { estimateTax, TAX_RULES_2025 } from "./tax";
 import type { FinancialSnapshot, Scenario } from "./types";
 
 const snapshot: FinancialSnapshot = { household:{id:"h",name:"H",state:"CA",people:[]}, taxProfile:{filingStatus:"single",state:"CA",taxYear:2025,thresholdInflationBps:250}, accounts:[{id:"a",name:"Cash",kind:"checking",balanceCents:100_00,annualReturnBps:0,liquid:true}], recurring:[{id:"i",name:"Pay",kind:"income",amountCents:1000_00,startDate:"2025-01-01",taxTreatment:"none"},{id:"e",name:"Rent",kind:"expense",amountCents:400_00,startDate:"2025-01-01",taxTreatment:"none"}],assets:[],liabilities:[] };
-const scenario: Scenario = {id:"s",name:"Base",assumptions:{inflationBps:0,thresholdInflationBps:250},assumptionsInherited:false,events:[],allocations:[],withdrawals:[],goals:[],horizon:{start:"2025-01",months:12}};
+const scenario: Scenario = {id:"s",name:"Base",assumptions:{inflationBps:0,thresholdInflationBps:250},assumptionsInherited:false,events:[],defaultContributionAccountId:"a",contributions:[],withdrawals:[],horizon:{start:"2025-01",months:12}};
 const calculate=(financial:FinancialSnapshot=snapshot,planned:Scenario=scenario)=>ProjectionEngine.calculate(financial,planned,"2025-01-15");
 describe("asset appreciation curves",()=>{
   const asset={annualGrowthBps:1000,appreciationCurve:{startYear:2026,startRateBps:5000,endYear:2035,endRateBps:800}};
@@ -43,32 +43,45 @@ describe("private stock tax on vest",()=>{
 });
 
 describe("ProjectionEngine",()=>{
-  it("uses straight-line and future-value goal funding formulas",()=>{
-    expect(requiredMonthlyFunding(1200,12,0)).toBe(100);
-    expect(requiredMonthlyFunding(1200,12,1200)).toBeLessThan(100);
-    expect(requiredMonthlyFunding(1200,12,-1200)).toBeGreaterThan(100);
-    expect(requiredMonthlyFunding(1200,0,1200)).toBe(1200);
+  it("combines fixed amounts and remaining-surplus percentages for the displayed assignment",()=>{
+    expect(effectiveContributionBps([{id:"fixed",destinationType:"account",destinationId:"a",monthlyAmountCents:1250_00,frequency:"monthly"}],7090_00)).toBe(1763);
+    expect(effectiveContributionBps([{id:"fixed",destinationType:"account",destinationId:"a",monthlyAmountCents:2500,frequency:"monthly"},{id:"percent",destinationType:"account",destinationId:"b",percentBps:5000,frequency:"monthly"}],10000)).toBe(6250);
+    expect(effectiveContributionBps([{id:"fixed",destinationType:"account",destinationId:"a",monthlyAmountCents:20000,frequency:"monthly"}],10000)).toBe(10000);
   });
-  it("funds ordered goals before ordinary surplus allocations",()=>{
-    const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0},{...snapshot.accounts[0],id:"goal",name:"Goal",kind:"savings" as const,balanceCents:0}]};
-    const planned={...scenario,events:[{id:"cash",date:"2025-01-01",type:"one-time-income" as const,amountCents:1200}],allocations:[{accountId:"a",priority:1,percentBps:10000}],goals:[{id:"g",scenarioId:"s",type:"major-purchase" as const,name:"Purchase",priority:1,enabled:true,targetDate:"2025-12-15",purchaseDate:"2025-12-15",todayDollarBasis:true,startingEarmarkedCents:0,allowCashShortfall:false,revision:1,costCents:1200,destinationAccountId:"goal"}],horizon:{start:"2025-01",months:1}};
-    const month=calculate(financial,planned)[0].months[0];
-    expect(month.goalFundingCents).toBe(100);
-    expect(month.allocationCents).toBe(month.surplusCents-100);
-    expect(month.goalResults[0]).toMatchObject({fundedCents:100,shortfallCents:0,targetResult:"outside-horizon"});
+  it("splits total surplus by fixed contribution shares and keeps the remainder in cash",()=>{
+    const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0},{...snapshot.accounts[0],id:"invest",name:"Invest",kind:"investment" as const,liquid:false,balanceCents:0}]};
+    const plan:Scenario={...scenario,events:[{id:"cash",date:"2025-01-01",type:"one-time-income",amountCents:100_00}],contributions:[{id:"half",destinationType:"account",destinationId:"invest",percentBps:5000,frequency:"monthly"}],horizon:{start:"2025-01",months:1}};
+    const month=calculate(financial,plan)[0].months[0];
+    expect(month.contributionCents).toBe(Math.floor(month.surplusCents/2));
+    expect(month.balances!.accounts.a+month.balances!.accounts.invest).toBe(month.surplusCents);
   });
-  it("rejects combined earmarks above a shared account balance",()=>{
-    const common={scenarioId:"s",type:"major-purchase" as const,enabled:true,targetDate:"2025-12-01",purchaseDate:"2025-12-01",todayDollarBasis:true,allowCashShortfall:false,revision:1,costCents:100,destinationAccountId:"a"};
-    const goals=[{...common,id:"g1",name:"One",priority:1,startingEarmarkedCents:60_00},{...common,id:"g2",name:"Two",priority:2,startingEarmarkedCents:60_00}];
-    expect(()=>calculate(snapshot,{...scenario,goals})).toThrow(/earmarks/);
+  it("reserves fixed monthly amounts before percentages divide the remaining surplus",()=>{
+    const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0},{...snapshot.accounts[0],id:"roth",name:"Roth",kind:"retirement" as const,liquid:false,balanceCents:0},{...snapshot.accounts[0],id:"brokerage",name:"Brokerage",kind:"investment" as const,liquid:false,balanceCents:0}]};
+    const plan:Scenario={...scenario,events:[{id:"cash",date:"2025-01-01",type:"one-time-income",amountCents:100_00}],contributions:[{id:"roth-fixed",destinationType:"account",destinationId:"roth",monthlyAmountCents:30_00,frequency:"monthly"},{id:"half-rest",destinationType:"account",destinationId:"brokerage",percentBps:5000,frequency:"monthly"}],horizon:{start:"2025-01",months:1}};
+    const month=calculate(financial,plan)[0].months[0],remaining=month.surplusCents-30_00;
+    expect(month.balances!.accounts.roth).toBe(30_00);
+    expect(month.balances!.accounts.brokerage).toBe(Math.floor(remaining/2));
+    expect(month.balances!.accounts.a).toBe(remaining-Math.floor(remaining/2));
   });
-  it("keeps debt payoff funding earmarked instead of executing a payoff",()=>{
-    const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0},{...snapshot.accounts[0],id:"reserve",name:"Reserve",balanceCents:0}],liabilities:[{id:"loan",name:"Loan",balanceCents:1200,annualRateBps:0,minimumPaymentCents:0}]};
-    const goal={id:"debt-goal",scenarioId:"s",type:"debt-payoff" as const,name:"Loan reserve",priority:1,enabled:true,targetDate:"2025-12-01",todayDollarBasis:false,startingEarmarkedCents:0,allowCashShortfall:false,revision:1,liabilityId:"loan",destinationAccountId:"reserve"};
-    const month=calculate(financial,{...scenario,events:[{id:"cash",date:"2025-01-01",type:"one-time-income" as const,amountCents:1200}],goals:[goal],horizon:{start:"2025-01",months:1}})[0].months[0];
-    expect(month.goalFundingCents).toBe(100);expect(month.debtCents).toBe(1200);expect(month.goalResults[0].earmarkedCents).toBe(100);
+  it("limits a fixed monthly contribution to positive surplus",()=>{
+    const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0},{...snapshot.accounts[0],id:"roth",name:"Roth",kind:"retirement" as const,liquid:false,balanceCents:0}]};
+    const plan:Scenario={...scenario,events:[{id:"cash",date:"2025-01-01",type:"one-time-income",amountCents:10_00}],contributions:[{id:"roth-fixed",destinationType:"account",destinationId:"roth",monthlyAmountCents:50_00,frequency:"monthly"}],horizon:{start:"2025-01",months:1}};
+    const month=calculate(financial,plan)[0].months[0];
+    expect(month.balances!.accounts.roth).toBe(month.surplusCents);expect(month.balances!.accounts.a).toBe(0);
   });
-  it("does not fund disabled goals",()=>{const goal={id:"off",scenarioId:"s",type:"major-purchase" as const,name:"Off",priority:1,enabled:false,targetDate:"2025-12-01",purchaseDate:"2025-12-01",todayDollarBasis:false,startingEarmarkedCents:0,allowCashShortfall:false,revision:1,costCents:1200,destinationAccountId:"a"};expect(calculate(snapshot,{...scenario,goals:[goal]})[0].goalFundingCents).toBe(0)});
+  it("accepts nullable database fields after a fixed contribution save and refresh",()=>{
+    const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0},{...snapshot.accounts[0],id:"roth",name:"Roth",kind:"retirement" as const,liquid:false,balanceCents:0}]};
+    const persistedRule={id:"roth-fixed",destinationType:"account",destinationId:"roth",percentBps:null,monthlyAmountCents:25_00,frequency:"monthly",targetBalanceCents:null,overflowDestinationType:null,overflowDestinationId:null};
+    const plan={...scenario,events:[{id:"cash",date:"2025-01-01",type:"one-time-income" as const,amountCents:50_00}],contributions:[persistedRule],horizon:{start:"2025-01",months:1}} as unknown as Scenario;
+    expect(()=>calculate(financial,plan)).not.toThrow();
+    expect(calculate(financial,plan)[0].months[0].balances!.accounts.roth).toBe(25_00);
+  });
+  it("applies mortgage contributions as extra principal without increasing expenses",()=>{
+    const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0}],liabilities:[{id:"mortgage",name:"Mortgage",balanceCents:100_00,annualRateBps:0,minimumPaymentCents:10_00,mortgage:{originalPrincipalCents:100_00,termMonths:12,startDate:"2025-01-01",assetId:"home"}}]};
+    const plan:Scenario={...scenario,events:[{id:"cash",date:"2025-01-01",type:"one-time-income",amountCents:50_00}],contributions:[{id:"extra",destinationType:"mortgage",destinationId:"mortgage",percentBps:10000,frequency:"monthly"}],horizon:{start:"2025-01",months:1}};
+    const month=calculate(financial,plan)[0].months[0];
+    expect(month.expenseCents).toBe(10_00);expect(month.contributionCents).toBe(month.surplusCents);expect(month.debtCents).toBe(90_00-month.surplusCents);
+  });
   it("keeps annual and monthly totals consistent",()=>{ const [year]=calculate(); expect(year.incomeCents).toBe(year.months.reduce((s,m)=>s+m.incomeCents,0)); expect(year.surplusCents).toBe(year.months.reduce((s,m)=>s+m.surplusCents,0)); });
   it("applies mid-year events only from their date",()=>{ const changed={...scenario,events:[{id:"x",type:"income-change" as const,date:"2025-07-01",entryId:"i",amountCents:2000_00}]}; const [year]=calculate(snapshot,changed); expect(year.months[5].incomeCents).toBe(1000_00); expect(year.months[6].incomeCents).toBe(2000_00); });
   it("sorts recurring changes deterministically rather than trusting payload order",()=>{ const events=[{id:"later",type:"income-change" as const,date:"2025-07-02",entryId:"i",amountCents:3000_00},{id:"earlier",type:"income-change" as const,date:"2025-07-01",entryId:"i",amountCents:2000_00}]; const [year]=calculate(snapshot,{...scenario,events}); expect(year.months[6].incomeCents).toBe(3000_00); });
@@ -120,9 +133,9 @@ describe("ProjectionEngine",()=>{
     expect(year.months[0].incomeCents).toBe(10_000_01);
     expect(year.months.slice(1).every(month=>month.incomeCents===10_000_00)).toBe(true);
   });
-  it("applies target waterfalls to remaining surplus",()=>{
+  it("keeps capped contribution overflow in default cash",()=>{
     const financial={...snapshot,taxProfile:{...snapshot.taxProfile,filingStatus:"single" as const},recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0},{...snapshot.accounts[0],id:"b",balanceCents:0}]};
-    const planned={...scenario,events:[{id:"cash",date:"2025-01-01",type:"one-time-income" as const,amountCents:1000}],allocations:[{accountId:"a",priority:1,percentBps:5000,targetBalanceCents:200},{accountId:"b",priority:2,percentBps:10000}],horizon:{start:"2025-01",months:1}};
+    const planned:Scenario={...scenario,events:[{id:"cash",date:"2025-01-01",type:"one-time-income" as const,amountCents:1000}],contributions:[{id:"capped",destinationType:"account",destinationId:"b",percentBps:10000,frequency:"monthly",targetBalanceCents:200}],horizon:{start:"2025-01",months:1}};
     const [year]=calculate(financial,planned);
     expect(year.liquidWorthCents).toBe(year.surplusCents);
   });

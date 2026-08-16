@@ -30,6 +30,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import {
+  effectiveContributionBps,
   ProjectionEngine,
   vestedAssetValue,
   type FinancialSnapshot,
@@ -93,9 +94,9 @@ const baseline: Scenario = {
   assumptions: { inflationBps: 250, thresholdInflationBps: 250 },
   assumptionsInherited: true,
   events: [],
-  allocations: [{ accountId: "savings", percentBps: 10000, priority: 1 }],
+  defaultContributionAccountId: "savings",
+  contributions: [],
   withdrawals: [],
-  goals: [],
   horizon: { start: "2025-01", months: 120 },
 };
 const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
@@ -111,7 +112,7 @@ const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
   })),
   assets: value.assets ?? [],
   liabilities: value.liabilities ?? [],
-  scenarios: (value.scenarios ?? []).map((scenario)=>({...scenario,withdrawals:scenario.withdrawals??[],goals:scenario.goals??[]})),
+  scenarios: (value.scenarios ?? []).map((scenario)=>({...scenario,defaultContributionAccountId:scenario.defaultContributionAccountId??value.accounts.find(account=>account.liquid&&(account.kind==="checking"||account.kind==="savings"))?.id??null,withdrawals:scenario.withdrawals??[],contributions:(scenario.contributions??[]).map(rule=>({...rule,percentBps:rule.percentBps??undefined,monthlyAmountCents:rule.monthlyAmountCents??undefined,targetBalanceCents:rule.targetBalanceCents??undefined,overflowDestinationType:rule.overflowDestinationType??undefined,overflowDestinationId:rule.overflowDestinationId??undefined}))})),
   accounts: value.accounts.map((a) => ({
     ...a,
     balanceCents: "balanceCents" in a ? a.balanceCents : a.openingBalanceCents,
@@ -395,12 +396,9 @@ function Workspace({
         },
         assumptionsInherited: false,
         events: record.events,
-        allocations: record.allocations.map((rule) => ({
-          ...rule,
-          targetBalanceCents: rule.targetBalanceCents ?? undefined,
-        })),
+        defaultContributionAccountId: record.defaultContributionAccountId??undefined,
+        contributions: record.contributions,
         withdrawals: record.withdrawals ?? [],
-        goals: record.goals ?? [],
         horizon: {
           start: new Date().toISOString().slice(0, 7),
           months: record.horizonMonths,
@@ -411,15 +409,7 @@ function Workspace({
   const selectedScenario = scenarios.find((s) => s.id === selectedScenarioId) ??
     scenarios[0] ?? {
       ...baseline,
-      allocations: snapshot.accounts[0]
-        ? [
-            {
-              accountId: snapshot.accounts[0].id,
-              percentBps: 10000,
-              priority: 1,
-            },
-          ]
-        : [],
+      defaultContributionAccountId: snapshot.accounts.find(account=>account.liquid&&(account.kind==="checking"||account.kind==="savings"))?.id,
     };
   const projections = useMemo(
     () =>
@@ -431,6 +421,7 @@ function Workspace({
         : null,
     [snapshot, bootstrap.taxProfile, selectedScenario,planRange],
   );
+  const projectedPositiveMonths=projections?.[0]?.months.filter(month=>month.surplusCents>0)??[],projectedMonthlySurplusCents=projectedPositiveMonths.length?projectedPositiveMonths.reduce((sum,month)=>sum+month.surplusCents,0)/projectedPositiveMonths.length:0;
   return (
     <div
       className={dark ? "app dark" : "app"}
@@ -676,6 +667,7 @@ function Workspace({
         <ScenarioPlanningDialog
           record={dialog.scenario}
           bootstrap={bootstrap}
+          projectedMonthlySurplusCents={projectedMonthlySurplusCents}
           repository={repository}
           close={closeDialog}
           refresh={onRefresh}
@@ -4133,9 +4125,9 @@ function ScenarioDialog({
           assumptions: { inflationBps: i, thresholdInflationBps: t },
           horizonMonths: h,
           events: record!.events,
-          allocations: record!.allocations,
+          defaultContributionAccountId: record!.defaultContributionAccountId,
+          contributions: record!.contributions,
           withdrawals: record!.withdrawals,
-          goals: record!.goals,
           expectedRevision: record!.revision,
         });
         await refresh();
@@ -4316,9 +4308,9 @@ type WealthSeries = { id:string; name:string; group:"net-worth"|"account"|"asset
 
 function PlanView(props:PlanViewProps) {
   const {projections,scenarios,selectedScenarioId,onSelectScenario,snapshot,recurring,categories,accounts,onAddRecurring,onEditRecurring,onAddScenario,onEditScenario,onPlanScenario,selectedSeries:selected,onSelectSeries:setSelected,range,onRange:setRange}=props;
-  const [tab,setTab]=useState<"wealth"|"cash-flow"|"goals"|"setup">("wealth");
+  const [tab,setTab]=useState<"wealth"|"cash-flow"|"contributions"|"setup">("wealth");
   const [activePoint,setActivePoint]=useState<number|null>(null);
-  const scenario=scenarios.find(item=>item.id===selectedScenarioId);
+  const scenario=scenarios.find(item=>item.id===selectedScenarioId)??scenarios[0]!;
   const privateAssets=snapshot.assets.filter(asset=>asset.privateStock);
   const ordinaryAssets=snapshot.assets.filter(asset=>!asset.privateStock);
   const series:WealthSeries[]=[
@@ -4357,7 +4349,6 @@ function PlanView(props:PlanViewProps) {
   const values=points.map(point=>point.value),min=Math.min(...values,0),max=Math.max(...values,0),span=Math.max(1,max-min);
   const coords=points.map((point,index)=>({x:points.length===1?50:4+index*92/(points.length-1),y:8+(max-point.value)*76/span,...point}));
   const path=coords.map((point,index)=>`${index?"L":"M"} ${point.x} ${point.y}`).join(" ");
-  const latestGoals=projections.flatMap(year=>year.months).at(-1)?.goalResults??[];
   const homeCosts=snapshot.assets.filter(asset=>{
     const housing=asset.housingCosts,mortgage=snapshot.liabilities.some(item=>item.mortgage?.assetId===asset.id);
     return Boolean(housing&&(mortgage||asset.purchaseDate||asset.purchasePriceCents||housing.propertyTaxRateBps||housing.insuranceMonthlyCents||housing.hoaMonthlyCents));
@@ -4367,13 +4358,14 @@ function PlanView(props:PlanViewProps) {
     return {id:asset.id,name:asset.name,principalAndInterest,propertyTax,insurance,hoa,total:principalAndInterest+propertyTax+insurance+hoa};
   });
   const selectSeries=(id:string)=>{setSelected(id);setActivePoint(null)};
+  const positiveMonths=projections[0]?.months.filter(month=>month.surplusCents>0)??[],averageMonthlySurplus=positiveMonths.length?positiveMonths.reduce((sum,month)=>sum+month.surplusCents,0)/positiveMonths.length:0,effectiveAssignedBps=effectiveContributionBps(scenario?.contributions??[],averageMonthlySurplus);
   const cell=(item:WealthSeries,value:number,key:string)=><td key={key} className={selected===item.id?"selected":undefined}><button onClick={()=>selectSeries(item.id)} aria-label={`Select ${item.name}, ${money(value)}`} title={money(value)}>{money(value,true)}{item.group==="debt"&&<small> owed</small>}</button></td>;
   return <div className="content plan-workspace">
     <div className="plan-toolbar">
       <div><span className="label assumption">Plan</span><h2>{scenario?.name??"Baseline"}</h2></div>
       <label>Scenario<select data-search-kind="Scenario" data-search-id={selectedScenarioId} aria-label="Active scenario" value={selectedScenarioId} onChange={event=>onSelectScenario(event.target.value)}>{scenarios.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
     </div>
-    <div className="plan-tabs" role="tablist" aria-label="Plan sections">{(["wealth","cash-flow","goals","setup"] as const).map(item=><button key={item} role="tab" aria-selected={tab===item} onClick={()=>setTab(item)}>{item.replace("-"," ")}</button>)}</div>
+    <div className="plan-tabs" role="tablist" aria-label="Plan sections">{(["wealth","cash-flow","contributions","setup"] as const).map(item=><button key={item} role="tab" aria-selected={tab===item} onClick={()=>setTab(item)}>{item.replace("-"," ")}</button>)}</div>
     {tab==="wealth"&&<>
       <section className={`wealth-chart card wide ${activeSeries.group}`} aria-labelledby="wealth-chart-title">
         <div className="chart-heading"><div><span className="label projected">Projected balance</span><h3 id="wealth-chart-title">{activeSeries.name}</h3></div><div className="chart-ranges" aria-label="Projection range">{([5,10,15,20,"max"] as const).map(item=><button key={item} aria-pressed={range===item} onClick={()=>setRange(item)}>{item==="max"?"Max":`${item}Y`}</button>)}</div></div>
@@ -4383,290 +4375,11 @@ function PlanView(props:PlanViewProps) {
       <section className="projection-sheet card wide" aria-label="Annual wealth projection"><div className="sheet-scroll"><table><thead><tr><th rowSpan={3} className="year-column">Year</th><th colSpan={1}>Net Worth</th>{snapshot.accounts.length>0&&<th colSpan={snapshot.accounts.length}>Accounts</th>}{snapshot.assets.length>0&&<th colSpan={ordinaryAssets.length+privateAssets.length*2}>Assets</th>}{snapshot.liabilities.length>0&&<th colSpan={snapshot.liabilities.length}>Debts</th>}</tr><tr><th rowSpan={2} className={selected==="net-worth"?"selected":undefined}><button aria-pressed={selected==="net-worth"} onClick={()=>selectSeries("net-worth")}>Net Worth</button></th>{snapshot.accounts.map(item=><th rowSpan={2} key={item.id} className={selected===`account:${item.id}`?"selected":undefined}><button aria-pressed={selected===`account:${item.id}`} onClick={()=>selectSeries(`account:${item.id}`)}>{item.name}</button></th>)}{ordinaryAssets.map(item=><th rowSpan={2} key={item.id} className={selected===`asset:${item.id}`?"selected":undefined}><button aria-pressed={selected===`asset:${item.id}`} onClick={()=>selectSeries(`asset:${item.id}`)}>{item.name}</button></th>)}{privateAssets.map(item=><th colSpan={2} key={item.id}><button aria-pressed={selected===`private:${item.id}:vested`} onClick={()=>selectSeries(`private:${item.id}:vested`)}>{item.name}</button></th>)}{snapshot.liabilities.map(item=><th rowSpan={2} key={item.id} className={selected===`debt:${item.id}`?"selected":undefined}><button aria-pressed={selected===`debt:${item.id}`} onClick={()=>selectSeries(`debt:${item.id}`)}>{item.name}</button></th>)}</tr><tr>{privateAssets.flatMap(item=>([<th key={`${item.id}-v`} className={selected===`private:${item.id}:vested`?"selected":undefined}><button aria-pressed={selected===`private:${item.id}:vested`} onClick={()=>selectSeries(`private:${item.id}:vested`)}>Vested</button></th>,<th key={`${item.id}-u`} className={selected===`private:${item.id}:unvested`?"selected":undefined}><button aria-pressed={selected===`private:${item.id}:unvested`} onClick={()=>selectSeries(`private:${item.id}:unvested`)}>Unvested</button></th>]))}</tr></thead><tbody><tr><th className="year-column" scope="row">Current</th>{series.map(item=>cell(item,currentValue(item),`current-${item.id}`))}</tr>{visibleRows.map(row=><tr key={row.year}><th className="year-column" scope="row">{row.year}</th>{series.map(item=>cell(item,projectedValue(item,row.month),`${row.year}-${item.id}`))}</tr>)}</tbody></table></div></section>
     </>}
     {tab==="cash-flow"&&<><section className="card wide"><div className="card-title"><div><span className="label assumption">Inputs</span><h3>Income and spending</h3></div><div className="inline-actions"><button onClick={e=>onAddRecurring("income",e.currentTarget)}>Add income</button><button onClick={e=>onAddRecurring("expense",e.currentTarget)}>Add expense</button></div></div>{recurring.map(entry=>{const kind=categories.find(c=>c.id===entry.categoryId)?.kind;return <button key={entry.id} className="transaction transaction-action" onClick={e=>onEditRecurring(entry,e.currentTarget)}><div><strong>{entry.name}</strong><small>{categories.find(c=>c.id===entry.categoryId)?.name??"Uncategorized"} · {entry.frequency}</small></div><b>{money(kind==="income"?entry.amountCents:-entry.amountCents)}</b></button>})}{homeCosts.map(home=><div className="transaction" key={`home-${home.id}`}><div><strong>{home.name} housing</strong><small>Automatic monthly expense · P&amp;I {money(home.principalAndInterest)} + property tax {money(home.propertyTax)} + insurance {money(home.insurance)}{home.hoa?` + HOA ${money(home.hoa)}`:""}</small></div><b>{money(-home.total)}</b></div>)}</section><section className="card wide"><h3>Annual cash flow</h3><div className="year-table"><div className="year-row table-head"><span>Year</span><span>Income</span><span>Spending</span><span>Taxes</span><span>Surplus</span></div>{projections.map(year=><div className="year-row" key={year.year}><span>{year.year}</span><span>{money(year.incomeCents,true)}</span><span>{money(year.expenseCents,true)}</span><span>{money(year.taxCents,true)}</span><strong>{money(year.surplusCents,true)}</strong></div>)}</div></section></>}
-    {tab==="goals"&&<><section className="card wide"><div className="card-title"><div><span className="label assumption">Funding trackers</span><h3>Goals</h3></div></div>{scenario?.goals.map(goal=>{const result=latestGoals.find(item=>item.goalId===goal.id);return <div className="transaction" key={goal.id}><div><strong>{goal.name}</strong><small>{goal.enabled?(result?.targetResult.replaceAll("-"," ")??"Waiting for projection"):"Disabled"}</small></div>{result&&<div><progress aria-label={`${goal.name} funding progress`} max={10000} value={result.completionBps}/><small>{money(result.earmarkedCents)} of {money(result.targetCents)}</small></div>}</div>})}{!scenario?.goals.length&&<p className="empty">No funding goals in this scenario.</p>}</section>{homeCosts.length>0&&<section className="card wide"><h3>Home payments</h3>{homeCosts.map(home=><div className="transaction" key={home.id}><div><strong>{home.name}</strong><small>Mortgage, property tax, insurance{home.hoa?", and HOA":""}</small></div><b>{money(home.total)}/month</b></div>)}</section>}</>}
-    {tab==="setup"&&<section className="card wide"><div className="card-title"><div><span className="label assumption">Scenario configuration</span><h3>{scenario?.name}</h3></div><div className="inline-actions"><button onClick={e=>onAddScenario(e.currentTarget)}>New scenario</button><button onClick={e=>onEditScenario(e.currentTarget)}>Edit scenario</button><button onClick={e=>onPlanScenario(e.currentTarget)}>Events, allocations &amp; withdrawals</button></div></div><div className="setup-summary"><div><span>Projection horizon</span><strong>{scenario?`${scenario.horizon.months} months`:"—"}</strong></div><div><span>Inflation assumption</span><strong>{scenario?`${scenario.assumptions.inflationBps/100}%`:"—"}</strong></div><div><span>Events</span><strong>{scenario?.events.length??0}</strong></div><div><span>Surplus allocations</span><strong>{scenario?.allocations.length??0}</strong></div></div></section>}
+    {tab==="contributions"&&<section className="card wide"><div className="card-title"><div><span className="label assumption">Surplus routing</span><h3>Contributions</h3></div><button onClick={e=>onPlanScenario(e.currentTarget)}>Edit contributions</button></div><p><strong>{effectiveAssignedBps/100}% of projected surplus assigned</strong> · {(10000-effectiveAssignedBps)/100}% remaining</p><p className="muted">Fixed monthly amounts are reserved first. Percentage rules divide the remaining Cash Flow surplus.</p>{scenario.contributions.map(rule=><div className="transaction" key={rule.id}><div><strong>{rule.destinationType} contribution</strong><small>{rule.frequency} · {rule.monthlyAmountCents!==undefined?`${money(rule.monthlyAmountCents)}/month · about ${averageMonthlySurplus?Math.min(100,Math.round(rule.monthlyAmountCents*10000/averageMonthlySurplus)/100):0}% of projected surplus`:`${(rule.percentBps??0)/100}% of remaining surplus`}{rule.targetBalanceCents!==undefined?` · cap ${money(rule.targetBalanceCents)}`:""}</small></div></div>)}{!scenario.contributions.length&&<p className="empty">All positive surplus remains in the default cash account.</p>}</section>}
+    {tab==="setup"&&<section className="card wide"><div className="card-title"><div><span className="label assumption">Scenario configuration</span><h3>{scenario?.name}</h3></div><div className="inline-actions"><button onClick={e=>onAddScenario(e.currentTarget)}>New scenario</button><button onClick={e=>onEditScenario(e.currentTarget)}>Edit scenario</button><button onClick={e=>onPlanScenario(e.currentTarget)}>Events &amp; withdrawals</button></div></div><div className="setup-summary"><div><span>Projection horizon</span><strong>{scenario?`${scenario.horizon.months} months`:"—"}</strong></div><div><span>Inflation assumption</span><strong>{scenario?`${scenario.assumptions.inflationBps/100}%`:"—"}</strong></div><div><span>Events</span><strong>{scenario?.events.length??0}</strong></div><div><span>Contribution rules</span><strong>{scenario?.contributions.length??0}</strong></div></div></section>}
   </div>;
 }
 
-function LegacyPlanView({
-  projections,
-  scenarios,
-  selectedScenarioId,
-  onSelectScenario,
-  snapshot,
-  expanded,
-  setExpanded,
-  recurring,
-  categories,
-  accounts,
-  onAddRecurring,
-  onEditRecurring,
-  onAddScenario,
-  onEditScenario,
-  onPlanScenario,
-}: {
-  projections: ReturnType<typeof ProjectionEngine.calculate>;
-  scenarios: Scenario[];
-  selectedScenarioId: string;
-  onSelectScenario: (id: string) => void;
-  snapshot: FinancialSnapshot;
-  expanded: number | null;
-  setExpanded: (x: number | null) => void;
-  recurring: RecurringEntry[];
-  categories: Bootstrap["categories"];
-  accounts: BootstrapAccount[];
-  onAddRecurring: (kind: "income" | "expense", el: HTMLElement) => void;
-  onEditRecurring: (entry: RecurringEntry, el: HTMLElement) => void;
-  onAddScenario: (el: HTMLElement) => void;
-  onEditScenario: (el: HTMLElement) => void;
-  onPlanScenario: (el: HTMLElement) => void;
-}) {
-  const [comparisonIds, setComparisonIds] = useState<string[]>([]);
-  const activeScenario=scenarios.find(s=>s.id===selectedScenarioId);
-  const latestGoalResults=projections.flatMap(year=>year.months).at(-1)?.goalResults??[];
-  const comparisons = scenarios
-    .filter((s) => comparisonIds.includes(s.id))
-    .map((s) => ({
-      scenario: s,
-      years: ProjectionEngine.calculate(snapshot, s, localIsoDate()),
-    }));
-  const comparisonYears = [
-    ...new Set(comparisons.flatMap((x) => x.years.map((y) => y.year))),
-  ].sort();
-  return (
-    <div className="content">
-      <div className="scenario-bar">
-        <div>
-          <span className="label assumption">Assumptions</span>
-          <h3>
-            {scenarios.find((s) => s.id === selectedScenarioId)?.name ??
-              "Baseline"}{" "}
-            plan
-          </h3>
-          {scenarios.length > 0 && (
-            <select
-              data-search-kind="Scenario"
-              data-search-id={selectedScenarioId}
-              aria-label="Active scenario"
-              value={selectedScenarioId}
-              onChange={(event) => onSelectScenario(event.target.value)}
-            >
-              {scenarios.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <div className="inline-actions">
-            <button onClick={(e) => onAddScenario(e.currentTarget)}>
-              New scenario
-            </button>
-            <button
-              disabled={!scenarios.length}
-              onClick={(e) => onEditScenario(e.currentTarget)}
-            >
-              Edit scenario
-            </button>
-            <button
-              disabled={!scenarios.length}
-              onClick={(e) => onPlanScenario(e.currentTarget)}
-            >
-              Events &amp; allocations
-            </button>
-          </div>
-        </div>
-        <div aria-label="Compare scenarios">
-          {scenarios.map((s) => (
-            <label key={s.id}>
-              <input
-                type="checkbox"
-                checked={comparisonIds.includes(s.id)}
-                disabled={
-                  !comparisonIds.includes(s.id) && comparisonIds.length >= 3
-                }
-                onChange={() =>
-                  setComparisonIds((ids) =>
-                    ids.includes(s.id)
-                      ? ids.filter((id) => id !== s.id)
-                      : [...ids, s.id],
-                  )
-                }
-              />
-              {s.name}
-            </label>
-          ))}
-        </div>
-      </div>
-      {snapshot.liabilities.some((liability) => liability.mortgage?.assetId) && (
-        <section className="card wide" aria-labelledby="housing-payments-title">
-          <div className="card-title"><div><span className="label assumption">Committed monthly expenses</span><h3 id="housing-payments-title">Home payments</h3></div></div>
-          {snapshot.liabilities.filter((liability) => liability.mortgage?.assetId).map((liability) => (
-            <div className="transaction" key={liability.id}><div><strong>{liability.name}</strong><small>Automatically funded before monthly surplus is allocated</small></div><b>{money(liability.minimumPaymentCents)}/month</b></div>
-          ))}
-          <p className="muted">Mortgage principal and interest are deducted automatically each month. Increase the mortgage payment in Net Worth to model extra principal.</p>
-        </section>
-      )}
-      {activeScenario&&<section className="card wide" aria-labelledby="goal-summary-title"><div className="card-title"><div><span className="label assumption">Funding trackers</span><h3 id="goal-summary-title">Goals</h3></div><span>{money(projections.reduce((sum,year)=>sum+year.goalFundingCents,0),true)} projected funding</span></div>{activeScenario.goals.map(goal=>{const result=latestGoalResults.find(item=>item.goalId===goal.id);return <div className="transaction" key={goal.id}><div><strong>{goal.name}</strong><small>{goal.enabled?(result?.targetResult.replaceAll("-"," ")??"Waiting for projection"):"Disabled"}</small></div>{result&&<div><progress aria-label={`${goal.name} funding progress`} max={10000} value={result.completionBps}>{result.completionBps/100}%</progress><small>{money(result.earmarkedCents)} of {money(result.targetCents)} · {money(result.requiredCents)}/month required · {money(result.shortfallCents)} shortfall{result.projectedCompletionDate?` · completion ${result.projectedCompletionDate}`:""}</small></div>}</div>})}{!activeScenario.goals.length&&<p className="empty">No funding goals in this scenario.</p>}<p className="muted">Funding does not execute purchases, debt payoff, or retirement changes; add those separately as dated events.</p></section>}
-      {comparisons.length > 1 && (
-        <section className="card wide" aria-label="Scenario comparison">
-          <h3>Scenario comparison</h3>
-          <div className="year-table">
-            <div className="year-row table-head">
-              <span>Year</span>
-              {comparisons.map((x) => (
-                <span key={x.scenario.id}>{x.scenario.name}</span>
-              ))}
-            </div>
-            {comparisonYears.map((year) => (
-              <div className="year-row" key={year}>
-                <span>{year}</span>
-                {comparisons.map((x) => {
-                  const row = x.years.find((y) => y.year === year);
-                  return (
-                    <span key={x.scenario.id}>
-                      {row
-                        ? `${row.endingNetWorthCents === null ? "Unavailable" : money(row.endingNetWorthCents, true)} · goals ${money(row.goalFundingCents,true)} · deficit ${money(row.unfundedDeficitCents, true)}`
-                        : "—"}
-                    </span>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-      <section className="card wide" aria-label="Planning inputs">
-        <div className="card-title">
-          <div>
-            <span className="label assumption">Inputs</span>
-            <h3>Planning inputs</h3>
-          </div>
-          <div className="inline-actions">
-            <button onClick={(e) => onAddRecurring("income", e.currentTarget)}>
-              Add income
-            </button>
-            <button onClick={(e) => onAddRecurring("expense", e.currentTarget)}>
-              Add expense
-            </button>
-          </div>
-        </div>
-        <div className="planning-inputs">
-          {recurring.map((entry) => {
-            const category = categories.find((c) => c.id === entry.categoryId);
-            const account = accounts.find((a) => a.id === entry.accountId);
-            return (
-              <button
-                data-search-kind="Recurring"
-                data-search-id={entry.id}
-                className="transaction transaction-action"
-                key={entry.id}
-                onClick={(e) => onEditRecurring(entry, e.currentTarget)}
-                aria-label={`Edit recurring ${entry.name}`}
-              >
-                <span className="transaction-icon">
-                  {category?.kind === "income" ? (
-                    <ArrowDownRight size={17} />
-                  ) : (
-                    <ArrowUpRight size={17} />
-                  )}
-                </span>
-                <div>
-                  <strong>{entry.name}</strong>
-                  <small>
-                    {category?.name ?? "Uncategorized"}
-                    {account ? ` · ${account.name}` : ""} · {entry.frequency}
-                  </small>
-                </div>
-                <b className={category?.kind === "income" ? "positive" : ""}>
-                  {money(
-                    category?.kind === "income"
-                      ? entry.amountCents
-                      : -entry.amountCents,
-                  )}
-                </b>
-              </button>
-            );
-          })}
-          {!recurring.length && (
-            <p className="empty">No recurring planning inputs yet.</p>
-          )}
-        </div>
-      </section>
-      <section className="card wide">
-        <div className="card-title">
-          <div>
-            <span className="label projected">Projected</span>
-            <h3>
-              {horizonLabel(
-                scenarios.find((s) => s.id === selectedScenarioId)?.horizon
-                  .months ?? 120,
-              )}{" "}
-              outlook
-            </h3>
-          </div>
-          <small>Click a year for monthly detail</small>
-        </div>
-        <div className="year-table">
-          <div className="year-row table-head">
-            <span>Year</span>
-            <span>Income</span>
-            <span>Spending</span>
-            <span>Taxes</span>
-            <span>Net worth</span>
-          </div>
-          {projections.map((year) => (
-            <div key={year.year}>
-              <button
-                className="year-row"
-                aria-expanded={expanded === year.year}
-                aria-controls={`plan-months-${year.year}`}
-                onClick={() =>
-                  setExpanded(expanded === year.year ? null : year.year)
-                }
-              >
-                <span>
-                  {expanded === year.year ? (
-                    <ChevronDown size={15} />
-                  ) : (
-                    <ChevronRight size={15} />
-                  )}{" "}
-                  {year.year}
-                </span>
-                <span>{money(year.incomeCents, true)}</span>
-                <span>{money(year.expenseCents, true)}</span>
-                <span>{money(year.taxCents, true)}</span>
-                <strong>{year.endingNetWorthCents === null ? "Unavailable" : money(year.endingNetWorthCents, true)}</strong>
-              </button>
-              {expanded === year.year && (
-                <div
-                  className="months"
-                  id={`plan-months-${year.year}`}
-                  role="region"
-                  aria-label={`${year.year} monthly detail`}
-                >
-                  {year.months.map((m) => (
-                    <div key={m.month}>
-                      <span>
-                        {new Date(m.month + "-02").toLocaleDateString("en", {
-                          month: "short",
-                        })}
-                      </span>
-                      <span>{money(m.incomeCents, true)}</span>
-                      <span>{money(m.expenseCents, true)}</span>
-                      <span>{money(m.taxCents, true)}</span>
-                      <strong>{m.netWorthCents === null ? "Unavailable" : money(m.netWorthCents, true)}</strong>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
 function NetWorth({
   snapshot,
   accounts,
@@ -5101,7 +4814,7 @@ function SettingsView({
       <section className="card settings-card">
         <h3>Household members</h3>
         <p className="muted">
-          People whose income, spending, or goals are included in this plan.
+          People whose income and spending are included in this plan.
         </p>
         {people.map((p, i) => (
           <div className="member-setting" key={p.id}>

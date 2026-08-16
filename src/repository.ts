@@ -32,8 +32,7 @@ export interface OnboardingStepPayload {
   assets?:AssetInput[];
   liabilities?:LiabilityInput[];
 }
-export interface ScenarioAllocation { id?:string;accountId:string;priority:number;percentBps:number;targetBalanceCents?:number|null }
-export interface ScenarioRecord { id:string; householdId:string; name:string; isBaseline:boolean; assumptions:{inflationBps:number;thresholdInflationBps:number}; horizonMonths:number; revision:number; events:import("./domain/types").ScenarioEvent[]; allocations:ScenarioAllocation[]; withdrawals:import("./domain/types").WithdrawalRule[]; goals:import("./domain/types").ScenarioGoal[] }
+export interface ScenarioRecord { id:string; householdId:string; name:string; isBaseline:boolean; assumptions:{inflationBps:number;thresholdInflationBps:number}; horizonMonths:number; revision:number; events:import("./domain/types").ScenarioEvent[]; defaultContributionAccountId?:string|null; contributions:import("./domain/types").ContributionRule[]; withdrawals:import("./domain/types").WithdrawalRule[] }
 export interface WorkspaceSnapshot {
   onboardingStep:number; onboardingComplete:boolean;
   household?:{id:string;name:string;state:string}; people:BootstrapPerson[];
@@ -42,7 +41,7 @@ export interface WorkspaceSnapshot {
   assets:Asset[]; liabilities:Liability[]; scenarios:ScenarioRecord[];
 }
 export type Bootstrap = WorkspaceSnapshot;
-export type BootstrapInput = Pick<WorkspaceSnapshot,"onboardingStep"|"onboardingComplete"|"people"|"categories"> & {accounts:(BootstrapAccount|Omit<BootstrapAccount,"balanceCents">)[];scenarios?:Array<Omit<ScenarioRecord,"withdrawals"|"goals">&{withdrawals?:ScenarioRecord["withdrawals"];goals?:ScenarioRecord["goals"]}>} & Partial<Omit<WorkspaceSnapshot,"onboardingStep"|"onboardingComplete"|"people"|"accounts"|"categories"|"scenarios">>;
+export type BootstrapInput = Pick<WorkspaceSnapshot,"onboardingStep"|"onboardingComplete"|"people"|"categories"> & {accounts:(BootstrapAccount|Omit<BootstrapAccount,"balanceCents">)[];scenarios?:Array<Omit<ScenarioRecord,"withdrawals"|"contributions">&{withdrawals?:ScenarioRecord["withdrawals"];contributions?:ScenarioRecord["contributions"]}>} & Partial<Omit<WorkspaceSnapshot,"onboardingStep"|"onboardingComplete"|"people"|"accounts"|"categories"|"scenarios">>;
 export interface TransactionInput { id:string; occurredOn:string; accountId:string; categoryId:string; amountCents:number; description:string; note?:string|null }
 export interface UpdateTransactionInput extends Omit<TransactionInput,"id"> { id:string; expectedRevision:number }
 export interface TransferInput { id:string;occurredOn:string;fromAccountId:string;toAccountId:string;amountCents:number;expectedRevision?:number }
@@ -85,7 +84,7 @@ export interface Repository {
   updateRecurring?(input:RecurringInput&{expectedRevision:number}):Promise<void>;
   deleteRecurring?(input:{id:string;expectedRevision:number}):Promise<void>;
   createScenario?(input:{id:string;name:string;cloneFromId?:string|null}):Promise<void>;
-  updateScenario?(input:{id:string;name:string;assumptions:ScenarioRecord["assumptions"];horizonMonths:number;events:ScenarioRecord["events"];allocations:ScenarioAllocation[];withdrawals:import("./domain/types").WithdrawalRule[];goals:import("./domain/types").ScenarioGoal[];expectedRevision:number}):Promise<void>;
+  updateScenario?(input:{id:string;name:string;assumptions:ScenarioRecord["assumptions"];horizonMonths:number;events:ScenarioRecord["events"];defaultContributionAccountId?:string|null;contributions:import("./domain/types").ContributionRule[];withdrawals:import("./domain/types").WithdrawalRule[];expectedRevision:number}):Promise<void>;
   deleteScenario?(input:{id:string;expectedRevision:number}):Promise<void>;
   selectCsvSource?():Promise<string|null>;
   inspectCsv?(path:string):Promise<CsvInspection>;

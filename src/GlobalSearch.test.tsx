@@ -88,7 +88,7 @@ async function records() {
         horizonMonths: 24,
         revision: 1,
         events: [],
-        allocations: [],
+        contributions: [],
       },
     ],
   };

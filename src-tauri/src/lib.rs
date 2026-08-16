@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 12;
+const SCHEMA_VERSION: i64 = 14;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -281,9 +281,9 @@ struct ScenarioRecord {
     horizon_months: i64,
     revision: i64,
     events: Vec<serde_json::Value>,
-    allocations: Vec<serde_json::Value>,
+    default_contribution_account_id: Option<String>,
+    contributions: Vec<serde_json::Value>,
     withdrawals: Vec<serde_json::Value>,
-    goals: Vec<serde_json::Value>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -306,7 +306,9 @@ struct RecurringInput {
 fn default_tax_treatment() -> String {
     "none".to_owned()
 }
-fn default_income_type() -> String { "ordinary".to_owned() }
+fn default_income_type() -> String {
+    "ordinary".to_owned()
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ScenarioCreateInput {
@@ -322,11 +324,10 @@ struct ScenarioUpdateInput {
     assumptions: serde_json::Value,
     horizon_months: i64,
     events: Vec<serde_json::Value>,
-    allocations: Vec<serde_json::Value>,
+    default_contribution_account_id: Option<String>,
+    contributions: Vec<serde_json::Value>,
     #[serde(default)]
     withdrawals: Vec<serde_json::Value>,
-    #[serde(default)]
-    goals: Vec<serde_json::Value>,
     expected_revision: i64,
 }
 #[derive(Debug, Deserialize)]
@@ -696,14 +697,80 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         "INSERT OR IGNORE INTO schema_migrations(version) VALUES(10)",
         [],
     )?;
-    let recurring_columns: Vec<String> = transaction.prepare("PRAGMA table_info(recurring_entries)")?.query_map([], |r| r.get(1))?.collect::<Result<_, _>>()?;
+    let recurring_columns: Vec<String> = transaction
+        .prepare("PRAGMA table_info(recurring_entries)")?
+        .query_map([], |r| r.get(1))?
+        .collect::<Result<_, _>>()?;
     if !recurring_columns.iter().any(|name| name == "income_type") {
         transaction.execute("ALTER TABLE recurring_entries ADD COLUMN income_type TEXT NOT NULL DEFAULT 'ordinary' CHECK(income_type IN ('ordinary','salary'))", [])?;
     }
-    transaction.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES(11)", [])?;
+    transaction.execute(
+        "INSERT OR IGNORE INTO schema_migrations(version) VALUES(11)",
+        [],
+    )?;
     transaction.execute("INSERT OR IGNORE INTO categories(id,household_id,name,kind) SELECT 'income-salary-'||id,id,'Salary','income' FROM households", [])?;
     transaction.execute("UPDATE recurring_entries SET category_id='income-salary-'||household_id WHERE income_type='salary'", [])?;
-    transaction.execute("INSERT OR IGNORE INTO schema_migrations(version) VALUES(12)", [])?;
+    transaction.execute(
+        "INSERT OR IGNORE INTO schema_migrations(version) VALUES(12)",
+        [],
+    )?;
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 13 {
+        let scenario_columns: Vec<String> = transaction
+            .prepare("PRAGMA table_info(scenarios)")?
+            .query_map([], |r| r.get(1))?
+            .collect::<Result<_, _>>()?;
+        if !scenario_columns
+            .iter()
+            .any(|name| name == "default_contribution_account_id")
+        {
+            transaction.execute("ALTER TABLE scenarios ADD COLUMN default_contribution_account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL",[])?;
+        }
+        transaction.execute_batch("CREATE TABLE IF NOT EXISTS scenario_contributions(id TEXT PRIMARY KEY,household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT,scenario_id TEXT NOT NULL REFERENCES scenarios(id) ON DELETE RESTRICT,destination_type TEXT NOT NULL CHECK(destination_type IN ('account','asset','mortgage')),destination_id TEXT NOT NULL,percent_bps INTEGER NOT NULL CHECK(percent_bps BETWEEN 1 AND 10000),frequency TEXT NOT NULL CHECK(frequency IN ('weekly','biweekly','monthly','quarterly','annual')),target_balance_cents INTEGER CHECK(target_balance_cents>=0),overflow_destination_type TEXT CHECK(overflow_destination_type IN ('account','asset')),overflow_destination_id TEXT,UNIQUE(scenario_id,destination_type,destination_id));")?;
+        let scenario_ids: Vec<String> = transaction
+            .prepare("SELECT id FROM scenarios")?
+            .query_map([], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
+        for scenario_id in scenario_ids {
+            let fallback: Option<String> = transaction.query_row("SELECT id FROM accounts WHERE household_id=(SELECT household_id FROM scenarios WHERE id=?1) AND liquid=1 AND kind IN ('checking','savings') ORDER BY CASE kind WHEN 'checking' THEN 0 ELSE 1 END,rowid LIMIT 1",[&scenario_id],|r|r.get(0)).optional()?;
+            transaction.execute(
+                "UPDATE scenarios SET default_contribution_account_id=?1 WHERE id=?2",
+                params![fallback, scenario_id],
+            )?;
+            let rows: Vec<(String,String,i64,Option<i64>)> = transaction.prepare("SELECT id,account_id,percent_bps,target_balance_cents FROM allocations WHERE scenario_id=? ORDER BY priority")?.query_map([&scenario_id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?)))?.collect::<Result<_,_>>()?;
+            let mut remaining = 10000_i64;
+            for (index, (id, account_id, percent, target)) in rows.iter().enumerate() {
+                let share = if index + 1 == rows.len() {
+                    remaining
+                } else {
+                    remaining * percent / 10000
+                };
+                remaining -= share;
+                if share > 0 {
+                    transaction.execute("INSERT INTO scenario_contributions(id,household_id,scenario_id,destination_type,destination_id,percent_bps,frequency,target_balance_cents) VALUES(?1,(SELECT household_id FROM scenarios WHERE id=?2),?2,'account',?3,?4,'monthly',?5)",params![id,scenario_id,account_id,share,target])?;
+                }
+            }
+        }
+        transaction.execute_batch("DELETE FROM scenario_goals; DROP TABLE scenario_goals; DROP TABLE allocations; INSERT INTO schema_migrations(version) VALUES(13);")?;
+    }
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 14 {
+        transaction.execute_batch("ALTER TABLE scenario_contributions RENAME TO scenario_contributions_v13;
+          CREATE TABLE scenario_contributions(id TEXT PRIMARY KEY,household_id TEXT NOT NULL REFERENCES households(id) ON DELETE RESTRICT,scenario_id TEXT NOT NULL REFERENCES scenarios(id) ON DELETE RESTRICT,destination_type TEXT NOT NULL CHECK(destination_type IN ('account','asset','mortgage')),destination_id TEXT NOT NULL,percent_bps INTEGER CHECK(percent_bps BETWEEN 1 AND 10000),monthly_amount_cents INTEGER CHECK(monthly_amount_cents>0),frequency TEXT NOT NULL CHECK(frequency IN ('weekly','biweekly','monthly','quarterly','annual')),target_balance_cents INTEGER CHECK(target_balance_cents>=0),overflow_destination_type TEXT CHECK(overflow_destination_type IN ('account','asset')),overflow_destination_id TEXT,CHECK((percent_bps IS NULL)<>(monthly_amount_cents IS NULL)),UNIQUE(scenario_id,destination_type,destination_id));
+          INSERT INTO scenario_contributions(id,household_id,scenario_id,destination_type,destination_id,percent_bps,frequency,target_balance_cents,overflow_destination_type,overflow_destination_id) SELECT c.id,s.household_id,c.scenario_id,c.destination_type,c.destination_id,c.percent_bps,c.frequency,c.target_balance_cents,c.overflow_destination_type,c.overflow_destination_id FROM scenario_contributions_v13 c JOIN scenarios s ON s.id=c.scenario_id;
+          DROP TABLE scenario_contributions_v13;
+          INSERT INTO schema_migrations(version) VALUES(14);")?;
+    }
+    transaction
+        .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
     transaction.commit()?;
     Ok(())
 }
@@ -885,7 +952,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,name,is_baseline,assumptions_json,horizon_months,revision FROM scenarios WHERE household_id=? ORDER BY is_baseline DESC,name")?;
+        let mut q=connection.prepare("SELECT id,household_id,name,is_baseline,assumptions_json,horizon_months,revision,default_contribution_account_id FROM scenarios WHERE household_id=? ORDER BY is_baseline DESC,name")?;
         scenarios = q
             .query_map([&h.id], |r| {
                 let raw: String = r.get(4)?;
@@ -914,9 +981,9 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     horizon_months: r.get(5)?,
                     revision: r.get(6)?,
                     events: vec![],
-                    allocations: vec![],
+                    default_contribution_account_id: r.get(7)?,
+                    contributions: vec![],
                     withdrawals: vec![],
-                    goals: vec![],
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -929,8 +996,8 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null))
                 })?
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut allocations = connection.prepare("SELECT json_object('id',id,'accountId',account_id,'priority',priority,'percentBps',percent_bps,'targetBalanceCents',target_balance_cents) FROM allocations WHERE scenario_id=? ORDER BY priority")?;
-            scenario.allocations = allocations
+            let mut contributions = connection.prepare("SELECT json_object('id',id,'destinationType',destination_type,'destinationId',destination_id,'percentBps',percent_bps,'monthlyAmountCents',monthly_amount_cents,'frequency',frequency,'targetBalanceCents',target_balance_cents,'overflowDestinationType',overflow_destination_type,'overflowDestinationId',overflow_destination_id) FROM scenario_contributions WHERE scenario_id=? ORDER BY rowid")?;
+            scenario.contributions = contributions
                 .query_map([&scenario.id], |r| {
                     let raw: String = r.get(0)?;
                     Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null))
@@ -938,15 +1005,6 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 .collect::<Result<Vec<_>, _>>()?;
             let mut withdrawals = connection.prepare("SELECT json_object('id',id,'accountId',account_id,'priority',priority) FROM withdrawal_rules WHERE scenario_id=? ORDER BY priority")?;
             scenario.withdrawals = withdrawals
-                .query_map([&scenario.id], |r| {
-                    let raw: String = r.get(0)?;
-                    Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null))
-                })?
-                .collect::<Result<Vec<_>, _>>()?;
-            let mut goals = connection.prepare(
-                "SELECT payload_json FROM scenario_goals WHERE scenario_id=? ORDER BY priority,id",
-            )?;
-            scenario.goals = goals
                 .query_map([&scenario.id], |r| {
                     let raw: String = r.get(0)?;
                     Ok(serde_json::from_str(&raw).unwrap_or(serde_json::Value::Null))
@@ -1212,7 +1270,7 @@ fn complete_onboarding(database: tauri::State<Database>) -> Result<(), AppError>
                 params![format!("{id}-{hid}"), hid, name, kind],
             )?;
         }
-        tx.execute("INSERT OR IGNORE INTO scenarios(id,household_id,name,is_baseline,assumptions_json) VALUES(?1,?2,'Baseline',1,'{\"inflationBps\":250,\"thresholdInflationBps\":250}')",params![format!("baseline-{hid}"),hid])?;
+        tx.execute("INSERT OR IGNORE INTO scenarios(id,household_id,name,is_baseline,assumptions_json,default_contribution_account_id) VALUES(?1,?2,'Baseline',1,'{\"inflationBps\":250,\"thresholdInflationBps\":250}',(SELECT id FROM accounts WHERE household_id=?2 AND liquid=1 AND kind IN ('checking','savings') ORDER BY CASE kind WHEN 'checking' THEN 0 ELSE 1 END,rowid LIMIT 1))",params![format!("baseline-{hid}"),hid])?;
         tx.execute(
             "UPDATE households SET onboarding_complete=1,onboarding_step=8 WHERE id=?",
             [hid],
@@ -1354,14 +1412,13 @@ fn create_scenario(
             ));
         }
         if let Some(source) = input.clone_from_id {
-            let (assumptions,horizon):(String,i64)=tx.query_row("SELECT assumptions_json,horizon_months FROM scenarios WHERE id=? AND household_id=?",params![source,hid],|r|Ok((r.get(0)?,r.get(1)?))).map_err(|_|AppError::Validation("clone source does not belong to this household".into()))?;
-            tx.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months) VALUES(?1,?2,?3,0,?4,?5)",params![input.id,hid,name,assumptions,horizon])?;
+            let (assumptions,horizon,fallback):(String,i64,Option<String>)=tx.query_row("SELECT assumptions_json,horizon_months,default_contribution_account_id FROM scenarios WHERE id=? AND household_id=?",params![source,hid],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).map_err(|_|AppError::Validation("clone source does not belong to this household".into()))?;
+            tx.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months,default_contribution_account_id) VALUES(?1,?2,?3,0,?4,?5,?6)",params![input.id,hid,name,assumptions,horizon,fallback])?;
             tx.execute("INSERT INTO scenario_events(id,scenario_id,event_date,kind,payload_json) SELECT ?1||'-'||id,?1,event_date,kind,payload_json FROM scenario_events WHERE scenario_id=?2",params![input.id,source])?;
-            tx.execute("INSERT INTO allocations(id,scenario_id,account_id,priority,percent_bps,target_balance_cents) SELECT ?1||'-'||id,?1,account_id,priority,percent_bps,target_balance_cents FROM allocations WHERE scenario_id=?2",params![input.id,source])?;
+            tx.execute("INSERT INTO scenario_contributions(id,household_id,scenario_id,destination_type,destination_id,percent_bps,monthly_amount_cents,frequency,target_balance_cents,overflow_destination_type,overflow_destination_id) SELECT ?1||'-'||id,household_id,?1,destination_type,destination_id,percent_bps,monthly_amount_cents,frequency,target_balance_cents,overflow_destination_type,overflow_destination_id FROM scenario_contributions WHERE scenario_id=?2",params![input.id,source])?;
             tx.execute("INSERT INTO withdrawal_rules(id,scenario_id,account_id,priority) SELECT ?1||'-'||id,?1,account_id,priority FROM withdrawal_rules WHERE scenario_id=?2",params![input.id,source])?;
-            tx.execute("INSERT INTO scenario_goals(id,scenario_id,goal_type,priority,payload_json) SELECT ?1||'-'||id,?1,goal_type,priority,json_set(payload_json,'$.id',?1||'-'||id,'$.scenarioId',?1,'$.revision',1) FROM scenario_goals WHERE scenario_id=?2",params![input.id,source])?;
         } else {
-            tx.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months) VALUES(?1,?2,?3,0,'{\"inflationBps\":250,\"thresholdInflationBps\":250}',120)",params![input.id,hid,name])?;
+            tx.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months,default_contribution_account_id) VALUES(?1,?2,?3,0,'{\"inflationBps\":250,\"thresholdInflationBps\":250}',120,(SELECT id FROM accounts WHERE household_id=?2 AND liquid=1 AND kind IN ('checking','savings') ORDER BY CASE kind WHEN 'checking' THEN 0 ELSE 1 END,rowid LIMIT 1))",params![input.id,hid,name])?;
         }
         tx.commit()?;
         Ok(())
@@ -1518,52 +1575,57 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
             }
         }
     }
-    let mut allocation_ids = HashSet::new();
-    let mut allocation_accounts = HashSet::new();
-    for (index, rule) in input.allocations.iter().enumerate() {
-        let account = rule
-            .get("accountId")
+    let mut ids = HashSet::new();
+    let mut destinations = HashSet::new();
+    let mut total = 0;
+    for rule in &input.contributions {
+        let id = rule.get("id").and_then(|x| x.as_str()).unwrap_or("");
+        let kind = rule
+            .get("destinationType")
             .and_then(|x| x.as_str())
-            .filter(|x| !x.is_empty())
-            .ok_or_else(|| AppError::Validation("allocation account is required".into()))?;
-        if !allocation_accounts.insert(account) {
+            .unwrap_or("");
+        let destination = rule
+            .get("destinationId")
+            .and_then(|x| x.as_str())
+            .unwrap_or("");
+        let percent = json_i64(rule, "percentBps");
+        let monthly_amount = json_i64(rule, "monthlyAmountCents");
+        let frequency = rule.get("frequency").and_then(|x| x.as_str()).unwrap_or("");
+        if id.is_empty()
+            || destination.is_empty()
+            || !["account", "asset", "mortgage"].contains(&kind)
+            || !["weekly", "biweekly", "monthly", "quarterly", "annual"].contains(&frequency)
+            || percent.is_some() == monthly_amount.is_some()
+            || percent.is_some_and(|value| !(1..=10000).contains(&value))
+            || monthly_amount.is_some_and(|value| !(1..=MAX_MONEY_CENTS).contains(&value))
+            || !ids.insert(id)
+            || !destinations.insert((kind, destination))
+        {
             return Err(AppError::Validation(
-                "allocation accounts must be unique".into(),
-            ));
-        }
-        if let Some(id) = rule.get("id").and_then(|x| x.as_str()) {
-            if !allocation_ids.insert(id) {
-                return Err(AppError::Validation("allocation ids must be unique".into()));
-            }
-        }
-        if json_i64(rule, "priority") != Some(index as i64 + 1) {
-            return Err(AppError::Validation(
-                "allocation priorities must be contiguous and ordered".into(),
-            ));
-        }
-        let percent = json_i64(rule, "percentBps")
-            .ok_or_else(|| AppError::Validation("allocation percentage is required".into()))?;
-        if !(0..=10000).contains(&percent) {
-            return Err(AppError::Validation(
-                "allocation percentage is invalid".into(),
+                "invalid or duplicate contribution rule".into(),
             ));
         }
         if json_i64(rule, "targetBalanceCents").is_some_and(|x| !(0..=MAX_MONEY_CENTS).contains(&x))
         {
             return Err(AppError::Validation(
-                "allocation target balance is invalid".into(),
+                "contribution target balance is invalid".into(),
             ));
         }
+        let overflow_type = rule.get("overflowDestinationType").and_then(|x| x.as_str());
+        let overflow_id = rule.get("overflowDestinationId").and_then(|x| x.as_str());
+        if overflow_type.is_some() != overflow_id.is_some()
+            || overflow_type.is_some_and(|x| !["account", "asset"].contains(&x))
+            || overflow_type == Some(kind) && overflow_id == Some(destination)
+        {
+            return Err(AppError::Validation(
+                "invalid contribution overflow destination".into(),
+            ));
+        }
+        total += percent.unwrap_or(0);
     }
-    if !input.allocations.is_empty()
-        && input
-            .allocations
-            .last()
-            .and_then(|v| json_i64(v, "percentBps"))
-            != Some(10000)
-    {
+    if total > 10000 {
         return Err(AppError::Validation(
-            "final allocation must be a 100% catch-all".into(),
+            "contribution percentages cannot exceed 100%".into(),
         ));
     }
     Ok(())
@@ -1720,7 +1782,19 @@ fn update_scenario(
                 }
             }
         }
-        let n=tx.execute("UPDATE scenarios SET name=?2,assumptions_json=?3,horizon_months=?4,revision=revision+1 WHERE id=?1 AND revision=?5",params![input.id,name,serde_json::to_string(&input.assumptions)?,input.horizon_months,input.expected_revision])?;
+        let fallback = input
+            .default_contribution_account_id
+            .as_deref()
+            .ok_or_else(|| {
+                AppError::Validation("default contribution cash account is required".into())
+            })?;
+        let owns_fallback:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND household_id=?2 AND liquid=1 AND kind IN ('checking','savings'))",params![fallback,household_id],|r|r.get(0))?;
+        if !owns_fallback {
+            return Err(AppError::Validation(
+                "default contribution account must be household checking or savings".into(),
+            ));
+        }
+        let n=tx.execute("UPDATE scenarios SET name=?2,assumptions_json=?3,horizon_months=?4,default_contribution_account_id=?6,revision=revision+1 WHERE id=?1 AND revision=?5",params![input.id,name,serde_json::to_string(&input.assumptions)?,input.horizon_months,input.expected_revision,fallback])?;
         if n == 0 {
             return Err(AppError::Conflict);
         }
@@ -1746,27 +1820,40 @@ fn update_scenario(
             }
             tx.execute("INSERT INTO scenario_events(id,scenario_id,event_date,kind,payload_json) VALUES(?1,?2,?3,?4,?5)",params![id,input.id,date,kind,serde_json::to_string(&event)?])?;
         }
-        tx.execute("DELETE FROM allocations WHERE scenario_id=?", [&input.id])?;
-        for (index, rule) in input.allocations.iter().enumerate() {
-            let account = rule
-                .get("accountId")
+        tx.execute(
+            "DELETE FROM scenario_contributions WHERE scenario_id=?",
+            [&input.id],
+        )?;
+        for rule in &input.contributions {
+            let id = rule.get("id").and_then(|x| x.as_str()).unwrap();
+            let kind = rule
+                .get("destinationType")
                 .and_then(|x| x.as_str())
-                .ok_or_else(|| AppError::Validation("allocation account is required".into()))?;
-            let priority = json_i64(rule, "priority").unwrap_or(index as i64 + 1);
-            let percent = json_i64(rule, "percentBps")
-                .ok_or_else(|| AppError::Validation("allocation percentage is required".into()))?;
+                .unwrap();
+            let destination = rule.get("destinationId").and_then(|x| x.as_str()).unwrap();
+            let percent = json_i64(rule, "percentBps");
+            let monthly_amount = json_i64(rule, "monthlyAmountCents");
+            let frequency = rule.get("frequency").and_then(|x| x.as_str()).unwrap();
             let target = json_i64(rule, "targetBalanceCents");
-            if !(0..=10000).contains(&percent)
-                || target.is_some_and(|x| !(0..=MAX_MONEY_CENTS).contains(&x))
-            {
-                return Err(AppError::Validation("invalid allocation".into()));
+            let overflow_type = rule.get("overflowDestinationType").and_then(|x| x.as_str());
+            let overflow_id = rule.get("overflowDestinationId").and_then(|x| x.as_str());
+            let eligible:bool=match kind{"account"=>tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND household_id=?2)",params![destination,household_id],|r|r.get(0))?,"asset"=>tx.query_row("SELECT EXISTS(SELECT 1 FROM assets WHERE id=?1 AND household_id=?2 AND private_stock_json IS NULL AND json_extract(housing_costs_json,'$.purchasePriceCents') IS NULL AND COALESCE(json_extract(housing_costs_json,'$.propertyTaxRateBps'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.insuranceMonthlyCents'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.hoaMonthlyCents'),0)=0)",params![destination,household_id],|r|r.get(0))?,"mortgage"=>tx.query_row("SELECT EXISTS(SELECT 1 FROM liabilities WHERE id=?1 AND household_id=?2 AND mortgage_json IS NOT NULL)",params![destination,household_id],|r|r.get(0))?,_=>false};
+            if !eligible {
+                return Err(AppError::Validation("contribution destination is missing, ineligible, or belongs to another household".into()));
             }
-            let inserted=tx.execute("INSERT INTO allocations(id,scenario_id,account_id,priority,percent_bps,target_balance_cents) SELECT ?1,?2,?3,?4,?5,?6 WHERE EXISTS(SELECT 1 FROM accounts a JOIN scenarios s ON s.household_id=a.household_id WHERE a.id=?3 AND s.id=?2)",params![rule.get("id").and_then(|x|x.as_str()).map(str::to_owned).unwrap_or_else(||format!("{}-{index}",input.id)),input.id,account,priority,percent,target])?;
-            if inserted != 1 {
-                return Err(AppError::Validation(
-                    "allocation account does not belong to this household".into(),
-                ));
+            if let (Some(okind), Some(oid)) = (overflow_type, overflow_id) {
+                let valid: bool = if okind == "account" {
+                    tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND household_id=?2 AND kind IN ('investment','retirement'))",params![oid,household_id],|r|r.get(0))?
+                } else {
+                    tx.query_row("SELECT EXISTS(SELECT 1 FROM assets WHERE id=?1 AND household_id=?2 AND private_stock_json IS NULL AND json_extract(housing_costs_json,'$.purchasePriceCents') IS NULL AND COALESCE(json_extract(housing_costs_json,'$.propertyTaxRateBps'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.insuranceMonthlyCents'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.hoaMonthlyCents'),0)=0)",params![oid,household_id],|r|r.get(0))?
+                };
+                if !valid {
+                    return Err(AppError::Validation(
+                        "overflow destination is missing or ineligible".into(),
+                    ));
+                }
             }
+            tx.execute("INSERT INTO scenario_contributions(id,household_id,scenario_id,destination_type,destination_id,percent_bps,monthly_amount_cents,frequency,target_balance_cents,overflow_destination_type,overflow_destination_id) VALUES(?1,?11,?2,?3,?4,?5,?6,?7,?8,?9,?10)",params![id,input.id,kind,destination,percent,monthly_amount,frequency,target,overflow_type,overflow_id,household_id])?;
         }
         tx.execute(
             "DELETE FROM withdrawal_rules WHERE scenario_id=?",
@@ -1785,245 +1872,6 @@ fn update_scenario(
             if inserted != 1 {
                 return Err(AppError::Validation(
                     "withdrawal account must be a liquid household account".into(),
-                ));
-            }
-        }
-        tx.execute(
-            "DELETE FROM scenario_goals WHERE scenario_id=?",
-            [&input.id],
-        )?;
-        let supported_goals = [
-            "retirement",
-            "emergency-fund",
-            "debt-payoff",
-            "education",
-            "major-purchase",
-        ];
-        let mut priorities = HashSet::new();
-        let mut goal_ids = HashSet::new();
-        let mut earmarks: HashMap<String, i64> = HashMap::new();
-        for goal in &input.goals {
-            let id = goal
-                .get("id")
-                .and_then(|x| x.as_str())
-                .ok_or_else(|| AppError::Validation("goal id is required".into()))?;
-            let kind = goal
-                .get("type")
-                .and_then(|x| x.as_str())
-                .ok_or_else(|| AppError::Validation("goal type is required".into()))?;
-            let priority = json_i64(goal, "priority")
-                .ok_or_else(|| AppError::Validation("goal priority is required".into()))?;
-            let date = goal
-                .get("targetDate")
-                .and_then(|x| x.as_str())
-                .unwrap_or("");
-            let name = goal
-                .get("name")
-                .and_then(|x| x.as_str())
-                .unwrap_or("")
-                .trim();
-            let scenario_id = goal
-                .get("scenarioId")
-                .and_then(|x| x.as_str())
-                .unwrap_or("");
-            let earmark = json_i64(goal, "startingEarmarkedCents").unwrap_or(-1);
-            if !supported_goals.contains(&kind)
-                || id.trim().is_empty()
-                || !goal_ids.insert(id)
-                || name.is_empty()
-                || scenario_id != input.id
-                || priority < 1
-                || !priorities.insert(priority)
-                || !valid_iso_date(date)
-                || !(0..=MAX_MONEY_CENTS).contains(&earmark)
-                || !goal.get("enabled").is_some_and(|x| x.is_boolean())
-                || !goal.get("todayDollarBasis").is_some_and(|x| x.is_boolean())
-                || !goal
-                    .get("allowCashShortfall")
-                    .is_some_and(|x| x.is_boolean())
-            {
-                return Err(AppError::Validation(
-                    "goal identity, name, priority, date, or common funding fields are invalid"
-                        .into(),
-                ));
-            }
-            let destination = goal
-                .get("destinationAccountId")
-                .and_then(|x| x.as_str())
-                .unwrap_or("");
-            if !owns("accounts", destination)? {
-                return Err(AppError::Validation(
-                    "goal destination account does not belong to this household".into(),
-                ));
-            }
-            *earmarks.entry(destination.to_owned()).or_default() += earmark;
-            if kind == "debt-payoff" {
-                let liability = goal
-                    .get("liabilityId")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("");
-                if !owns("liabilities", liability)? {
-                    return Err(AppError::Validation(
-                        "goal liability does not belong to this household".into(),
-                    ));
-                }
-            }
-            if kind == "emergency-fund" {
-                let months = json_i64(goal, "coverageMonths").unwrap_or(0);
-                let expenses = goal
-                    .get("expenseEntryIds")
-                    .and_then(|x| x.as_array())
-                    .ok_or_else(|| {
-                        AppError::Validation("emergency expenses are required".into())
-                    })?;
-                if !(1..=120).contains(&months)
-                    || expenses.is_empty()
-                    || json_i64(goal, "minimumTargetCents")
-                        .is_some_and(|x| !(0..=MAX_MONEY_CENTS).contains(&x))
-                {
-                    return Err(AppError::Validation("invalid emergency goal".into()));
-                }
-                for expense in expenses {
-                    let id = expense.as_str().unwrap_or("");
-                    if !owns("recurring_entries", id)? {
-                        return Err(AppError::Validation(
-                            "goal expense does not belong to this household".into(),
-                        ));
-                    }
-                    let expense_kind: String = tx.query_row("SELECT c.kind FROM recurring_entries r JOIN categories c ON c.id=r.category_id WHERE r.id=?",[id],|row|row.get(0))?;
-                    if expense_kind != "expense" {
-                        return Err(AppError::Validation(
-                            "emergency goals can reference only recurring expenses".into(),
-                        ));
-                    }
-                }
-            } else if kind == "education" {
-                let beneficiary = goal
-                    .get("beneficiary")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("")
-                    .trim();
-                let start = goal
-                    .get("attendanceStartDate")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("");
-                let end = goal
-                    .get("attendanceEndDate")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("");
-                if beneficiary.is_empty()
-                    || !valid_iso_date(start)
-                    || !valid_iso_date(end)
-                    || end < start
-                    || !json_i64(goal, "annualCostCents")
-                        .is_some_and(|x| (1..=MAX_MONEY_CENTS).contains(&x))
-                    || !json_i64(goal, "educationInflationBps")
-                        .is_some_and(|x| (0..=100_000).contains(&x))
-                {
-                    return Err(AppError::Validation("invalid education goal".into()));
-                }
-            } else if kind == "major-purchase" {
-                let purchase = goal
-                    .get("purchaseDate")
-                    .and_then(|x| x.as_str())
-                    .unwrap_or("");
-                if purchase != date
-                    || !json_i64(goal, "costCents")
-                        .is_some_and(|x| (1..=MAX_MONEY_CENTS).contains(&x))
-                {
-                    return Err(AppError::Validation("invalid major purchase goal".into()));
-                }
-            } else if kind == "retirement" {
-                let participants = goal
-                    .get("participantIds")
-                    .and_then(|x| x.as_array())
-                    .ok_or_else(|| {
-                        AppError::Validation("retirement participants are required".into())
-                    })?;
-                let dates = goal
-                    .get("retirementDates")
-                    .and_then(|x| x.as_object())
-                    .ok_or_else(|| AppError::Validation("retirement dates are required".into()))?;
-                let ages = goal
-                    .get("planningThroughAges")
-                    .and_then(|x| x.as_object())
-                    .ok_or_else(|| AppError::Validation("planning ages are required".into()))?;
-                if participants.is_empty()
-                    || !json_i64(goal, "desiredSpendingCents")
-                        .is_some_and(|x| (0..=MAX_MONEY_CENTS).contains(&x))
-                    || !json_i64(goal, "healthcareCents")
-                        .is_some_and(|x| (0..=MAX_MONEY_CENTS).contains(&x))
-                    || !json_i64(goal, "healthcareGrowthBps")
-                        .is_some_and(|x| (0..=100_000).contains(&x))
-                {
-                    return Err(AppError::Validation("invalid retirement goal".into()));
-                }
-                if json_i64(goal, "desiredSpendingCents").unwrap_or(0)
-                    + json_i64(goal, "healthcareCents").unwrap_or(0)
-                    <= 0
-                {
-                    return Err(AppError::Validation(
-                        "retirement spending or healthcare must be positive".into(),
-                    ));
-                }
-                for participant in participants {
-                    let id = participant.as_str().unwrap_or("");
-                    let retirement = dates.get(id).and_then(|x| x.as_str()).unwrap_or("");
-                    let age = ages.get(id).and_then(|x| x.as_i64()).unwrap_or(0);
-                    if !owns("people", id)?
-                        || !valid_iso_date(retirement)
-                        || !(1..=120).contains(&age)
-                    {
-                        return Err(AppError::Validation(
-                            "invalid retirement participant".into(),
-                        ));
-                    }
-                    let birth: Option<String> =
-                        tx.query_row("SELECT birth_date FROM people WHERE id=?", [id], |row| {
-                            row.get(0)
-                        })?;
-                    if birth.is_none() {
-                        return Err(AppError::Validation(
-                            "retirement participants need birth dates".into(),
-                        ));
-                    }
-                }
-                let pensions =
-                    goal.get("pensions")
-                        .and_then(|x| x.as_array())
-                        .ok_or_else(|| {
-                            AppError::Validation("retirement pensions are required".into())
-                        })?;
-                let mut pension_ids = HashSet::new();
-                for pension in pensions {
-                    let id = pension.get("id").and_then(|x| x.as_str()).unwrap_or("");
-                    let name = pension
-                        .get("name")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("")
-                        .trim();
-                    let start = pension
-                        .get("startDate")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("");
-                    if id.is_empty()
-                        || !pension_ids.insert(id)
-                        || name.is_empty()
-                        || !valid_iso_date(start)
-                        || !json_i64(pension, "monthlyCents")
-                            .is_some_and(|x| (1..=MAX_MONEY_CENTS).contains(&x))
-                    {
-                        return Err(AppError::Validation("invalid retirement pension".into()));
-                    }
-                }
-            }
-            tx.execute("INSERT INTO scenario_goals(id,scenario_id,goal_type,priority,payload_json,revision) VALUES(?1,?2,?3,?4,?5,1)",params![id,input.id,kind,priority,serde_json::to_string(goal)?])?;
-        }
-        for (account_id, earmark) in earmarks {
-            let balance:i64=tx.query_row("SELECT opening_balance_cents+COALESCE((SELECT SUM(p.amount_cents) FROM postings p WHERE p.account_id=accounts.id),0) FROM accounts WHERE id=?",[account_id],|row|row.get(0))?;
-            if earmark > balance.max(0) {
-                return Err(AppError::Validation(
-                    "combined goal earmarks exceed the destination account balance".into(),
                 ));
             }
         }
@@ -2051,9 +1899,8 @@ fn delete_scenario(input: DeleteInput, database: tauri::State<Database>) -> Resu
             "DELETE FROM scenario_events WHERE scenario_id=?",
             [&input.id],
         )?;
-        tx.execute("DELETE FROM allocations WHERE scenario_id=?", [&input.id])?;
         tx.execute(
-            "DELETE FROM scenario_goals WHERE scenario_id=?",
+            "DELETE FROM scenario_contributions WHERE scenario_id=?",
             [&input.id],
         )?;
         tx.execute("DELETE FROM scenarios WHERE id=?", [&input.id])?;
@@ -2482,14 +2329,6 @@ fn account_impact(db: &Connection, account_id: &str) -> Result<AccountDeletionIm
             "Disconnect it from {recurring} recurring entry or entries."
         ))
     }
-    let allocations: i64 = db.query_row(
-        "SELECT count(*) FROM allocations WHERE account_id=?",
-        [account_id],
-        |r| r.get(0),
-    )?;
-    if allocations > 0 {
-        blockers.push(format!("Remove {allocations} plan allocation rule(s)."))
-    }
     Ok(AccountDeletionImpact {
         account_id: account_id.into(),
         can_delete: true,
@@ -2521,9 +2360,9 @@ fn delete_account_from(db: &mut Connection, input: &DeleteInput) -> Result<(), A
         return Err(AppError::Conflict);
     }
     tx.execute("UPDATE recurring_entries SET account_id=NULL,revision=revision+1 WHERE account_id=?1 AND household_id=?2",params![input.id,hid])?;
-    tx.execute("DELETE FROM allocations WHERE account_id=?1 AND scenario_id IN (SELECT id FROM scenarios WHERE household_id=?2)",params![input.id,hid])?;
+    tx.execute("DELETE FROM scenario_contributions WHERE destination_type='account' AND destination_id=?1 AND scenario_id IN (SELECT id FROM scenarios WHERE household_id=?2)",params![input.id,hid])?;
+    tx.execute("UPDATE scenario_contributions SET overflow_destination_type=NULL,overflow_destination_id=NULL WHERE overflow_destination_type='account' AND overflow_destination_id=?1 AND scenario_id IN (SELECT id FROM scenarios WHERE household_id=?2)",params![input.id,hid])?;
     tx.execute("DELETE FROM withdrawal_rules WHERE account_id=?1 AND scenario_id IN (SELECT id FROM scenarios WHERE household_id=?2)",params![input.id,hid])?;
-    tx.execute("DELETE FROM scenario_goals WHERE scenario_id IN (SELECT id FROM scenarios WHERE household_id=?2) AND EXISTS (SELECT 1 FROM json_tree(scenario_goals.payload_json) WHERE json_tree.value=?1)",params![input.id,hid])?;
     tx.execute("DELETE FROM scenario_events WHERE scenario_id IN (SELECT id FROM scenarios WHERE household_id=?2) AND EXISTS (SELECT 1 FROM json_tree(scenario_events.payload_json) WHERE json_tree.value=?1)",params![input.id,hid])?;
     let entry_ids: Vec<String> = tx
         .prepare("SELECT DISTINCT entry_id FROM postings WHERE account_id=?1")?
@@ -2843,11 +2682,17 @@ fn delete_asset_from(db: &mut Connection, input: &DeleteInput) -> Result<(), App
         rows
     };
     for liability_id in linked {
+        tx.execute("DELETE FROM scenario_contributions WHERE destination_type='mortgage' AND destination_id=?1",[&liability_id])?;
         tx.execute(
             "DELETE FROM liabilities WHERE id=?1 AND household_id=?2",
             params![liability_id, hid],
         )?;
     }
+    tx.execute(
+        "DELETE FROM scenario_contributions WHERE destination_type='asset' AND destination_id=?1",
+        [&input.id],
+    )?;
+    tx.execute("UPDATE scenario_contributions SET overflow_destination_type=NULL,overflow_destination_id=NULL WHERE overflow_destination_type='asset' AND overflow_destination_id=?1",[&input.id])?;
     let changed = tx.execute(
         "DELETE FROM assets WHERE id=?1 AND household_id=?2 AND revision=?3",
         params![input.id, hid, input.expected_revision],
@@ -2891,6 +2736,7 @@ fn delete_liability(input: DeleteInput, database: tauri::State<Database>) -> Res
 }
 fn delete_liability_from(db: &Connection, input: &DeleteInput) -> Result<(), AppError> {
     let hid = active_household(db)?;
+    db.execute("DELETE FROM scenario_contributions WHERE destination_type='mortgage' AND destination_id=?1",[&input.id])?;
     let changed = db.execute(
         "DELETE FROM liabilities WHERE id=?1 AND household_id=?2 AND revision=?3",
         params![input.id, hid, input.expected_revision],
@@ -3696,9 +3542,8 @@ fn reset_profile_impl(database: &Database) -> Result<WorkspaceSnapshot, AppError
     with_db(database, |db| {
         let transaction = db.transaction()?;
         transaction.execute_batch(
-            "DELETE FROM allocations;
+            "DELETE FROM scenario_contributions;
              DELETE FROM withdrawal_rules;
-             DELETE FROM scenario_goals;
              DELETE FROM scenario_events;
              DELETE FROM scenarios;
              DELETE FROM postings;
@@ -4033,6 +3878,19 @@ mod tests {
             .query_row("SELECT count(*) FROM schema_migrations", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, SCHEMA_VERSION)
+    }
+    #[test]
+    fn version_14_migrates_contributions_without_household_id() {
+        let mut c = seeded();
+        c.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json) VALUES('legacy-scenario','h','Legacy',1,'{}')",[]).unwrap();
+        c.execute_batch("ALTER TABLE scenario_contributions RENAME TO scenario_contributions_v14;
+          CREATE TABLE scenario_contributions(id TEXT PRIMARY KEY,scenario_id TEXT NOT NULL,destination_type TEXT NOT NULL,destination_id TEXT NOT NULL,percent_bps INTEGER NOT NULL,frequency TEXT NOT NULL,target_balance_cents INTEGER,overflow_destination_type TEXT,overflow_destination_id TEXT);
+          INSERT INTO scenario_contributions(id,scenario_id,destination_type,destination_id,percent_bps,frequency) VALUES('legacy-rule','legacy-scenario','account','a',5000,'monthly');
+          DROP TABLE scenario_contributions_v14;
+          DELETE FROM schema_migrations WHERE version=14;").unwrap();
+        migrate(&mut c).unwrap();
+        let row:(String,Option<i64>)=c.query_row("SELECT household_id,monthly_amount_cents FROM scenario_contributions WHERE id='legacy-rule'",[],|r|Ok((r.get(0)?,r.get(1)?))).unwrap();
+        assert_eq!(row, ("h".into(), None));
     }
     #[test]
     fn reset_profile_clears_user_data_and_returns_fresh_onboarding() {
@@ -4509,12 +4367,12 @@ mod tests {
 
         let allocated = seeded();
         allocated.execute("INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json) VALUES('s','h','Base',1,'{}')",[]).unwrap();
-        allocated.execute("INSERT INTO allocations(id,scenario_id,account_id,priority,percent_bps) VALUES('al','s','b',1,10000)",[]).unwrap();
-        assert!(account_impact(&allocated, "b")
+        allocated.execute("INSERT INTO scenario_contributions(id,household_id,scenario_id,destination_type,destination_id,percent_bps,frequency) VALUES('al','h','s','account','b',10000,'monthly')",[]).unwrap();
+        assert!(!account_impact(&allocated, "b")
             .unwrap()
             .blockers
             .iter()
-            .any(|x| x.contains("allocation")));
+            .any(|x| x.contains("contribution")));
 
         let imported = seeded();
         imported.execute("INSERT INTO import_batches(id,account_id,row_count,status) VALUES('batch','b',0,'complete')",[]).unwrap();
@@ -4789,27 +4647,38 @@ mod tests {
     }
 
     #[test]
-    fn scenario_settings_accept_empty_allocations_and_validate_rates_and_catch_all() {
+    fn scenario_settings_accept_empty_contributions_and_validate_rates_and_totals() {
         let mut input = ScenarioUpdateInput {
             id: "scenario".into(),
             name: "Plan".into(),
             assumptions: serde_json::json!({"inflationBps": 250, "thresholdInflationBps": 300}),
             horizon_months: 480,
             events: vec![],
-            allocations: vec![],
+            default_contribution_account_id: Some("a".into()),
+            contributions: vec![],
             withdrawals: vec![],
-            goals: vec![],
             expected_revision: 1,
         };
         assert!(validate_scenario_update(&input).is_ok());
-        input.allocations =
-            vec![serde_json::json!({"id":"rule","accountId":"a","priority":1,"percentBps":5000})];
+        input.contributions = vec![
+            serde_json::json!({"id":"rule","destinationType":"account","destinationId":"a","percentBps":5000,"frequency":"monthly"}),
+        ];
+        assert!(validate_scenario_update(&input).is_ok());
+        input.contributions[0]
+            .as_object_mut()
+            .unwrap()
+            .remove("percentBps");
+        input.contributions[0]["monthlyAmountCents"] = serde_json::json!(50000);
+        assert!(validate_scenario_update(&input).is_ok());
+        input.contributions[0]["percentBps"] = serde_json::json!(5000);
         assert!(matches!(
             validate_scenario_update(&input),
             Err(AppError::Validation(_))
         ));
-        input.allocations[0]["percentBps"] = serde_json::json!(10000);
-        assert!(validate_scenario_update(&input).is_ok());
+        input.contributions[0]
+            .as_object_mut()
+            .unwrap()
+            .remove("percentBps");
         input.assumptions["inflationBps"] = serde_json::json!(2.5);
         assert!(matches!(
             validate_scenario_update(&input),
@@ -4823,7 +4692,7 @@ mod tests {
     }
 
     #[test]
-    fn scenario_aggregate_rejects_duplicate_and_malformed_events_and_allocations() {
+    fn scenario_aggregate_rejects_duplicate_and_malformed_events_and_contributions() {
         let base = serde_json::json!({"id":"event","date":"2026-09-01","type":"one-time-income","amountCents":100});
         let mut input = ScenarioUpdateInput {
             id: "s".into(),
@@ -4831,9 +4700,9 @@ mod tests {
             assumptions: serde_json::json!({"inflationBps":250,"thresholdInflationBps":250}),
             horizon_months: 12,
             events: vec![base.clone(), base],
-            allocations: vec![],
+            default_contribution_account_id: Some("a".into()),
+            contributions: vec![],
             withdrawals: vec![],
-            goals: vec![],
             expected_revision: 1,
         };
         assert!(matches!(
@@ -4848,8 +4717,9 @@ mod tests {
             Err(AppError::Validation(_))
         ));
         input.events.clear();
-        input.allocations =
-            vec![serde_json::json!({"id":"one","accountId":"a","priority":2,"percentBps":10000})];
+        input.contributions = vec![
+            serde_json::json!({"id":"one","destinationType":"account","destinationId":"a","percentBps":10001,"frequency":"monthly"}),
+        ];
         assert!(matches!(
             validate_scenario_update(&input),
             Err(AppError::Validation(_))

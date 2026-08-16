@@ -32,10 +32,14 @@ import {
 import {
   effectiveContributionBps,
   ProjectionEngine,
+  projectedSharePrice,
+  valueForUnits,
   vestedAssetValue,
+  vestedUnitsAt,
   type FinancialSnapshot,
   type Scenario,
 } from "./domain";
+
 import {
   tauriRepository,
   type Bootstrap,
@@ -67,6 +71,10 @@ import {
   GlobalSearch,
   type SearchResult,
 } from "./GlobalSearch";
+
+const units=(micros:number)=>new Intl.NumberFormat(undefined,{maximumFractionDigits:6}).format(micros/1_000_000);
+const equityVestedValue=(asset:Pick<Asset,"equityHolding">,date:string)=>asset.equityHolding?.grants.reduce((sum,grant)=>sum+valueForUnits(vestedUnitsAt(grant,date),projectedSharePrice(asset.equityHolding!,date)),0)??0;
+const nextVest=(grant:import("./domain").RsuGrant,date:string)=>grant.vestEvents.find(event=>event.date>date);
 
 type View = "Overview" | "Activity" | "Plan" | "Net Worth" | "Settings";
 const localIsoDate=()=>{const now=new Date(),offset=now.getTimezoneOffset()*60000;return new Date(now.valueOf()-offset).toISOString().slice(0,10)};
@@ -1372,6 +1380,7 @@ function FinancialRecordDialog({
   const [growthEndRate, setGrowthEndRate] = useState(String((state.asset?.appreciationCurve?.endRateBps ?? state.asset?.annualGrowthBps ?? 0) / 100));
   const [home, setHome] = useState(false);
   const [privateStock, setPrivateStock] = useState(Boolean(state.asset?.privateStock));
+  const equityHolding=state.asset?.equityHolding??null;
   const [vestedPercent, setVestedPercent] = useState(String((state.asset?.privateStock?.vestedBps ?? 2500)/100));
   const [vestingStartDate, setVestingStartDate] = useState(state.asset?.privateStock?.vestingStartDate ?? today());
   const [remainingVestingYears, setRemainingVestingYears] = useState(String((state.asset?.privateStock?.remainingVestingQuarters ?? 16)/4));
@@ -1489,6 +1498,7 @@ function FinancialRecordDialog({
           annualGrowthBps: bps,
           appreciationCurve,
           privateStock: privateStockTerms,
+          equityHolding,
         };
         if (state.asset)
           await repository.updateAsset?.({
@@ -1646,7 +1656,8 @@ function FinancialRecordDialog({
                   <label className="check-row"><input type="checkbox" checked={privateStock} onChange={(e)=>{setPrivateStock(e.target.checked);if(e.target.checked)setHome(false)}} /> This asset is private stock</label>
                 </>
               )}
-              {isAsset && state.asset && !home && <label className="check-row"><input type="checkbox" checked={privateStock} onChange={(e)=>setPrivateStock(e.target.checked)} /> This asset is private stock</label>}
+              {isAsset && state.asset && !home && !equityHolding && <label className="check-row"><input type="checkbox" checked={privateStock} onChange={(e)=>setPrivateStock(e.target.checked)} /> This asset is private stock</label>}
+              {isAsset&&equityHolding&&<section aria-label="RSU grant details"><p><strong>Company equity holding</strong> · {equityHolding.grants.length} separate RSU grants · {units(equityHolding.grants.reduce((sum,grant)=>sum+grant.unitsMicros,0))} total units</p><p className="muted">Share price {money(equityHolding.priceCents)} as of {equityHolding.priceDate}. Grant dates and vest schedules are tracked separately below.</p>{equityHolding.grants.map(grant=>{const upcoming=nextVest(grant,localIsoDate()),vested=vestedUnitsAt(grant,localIsoDate());return <details key={grant.id} open><summary>{grant.id==="original"?"Original grant":grant.id==="promotion"?"Promotion grant":grant.id} · {units(grant.unitsMicros)} units</summary><p>Granted {grant.grantDate} at {money(grant.grantPriceCents)} · {units(vested)} vested · {units(grant.unitsMicros-vested)} unvested{upcoming?` · next vest ${units(upcoming.unitsMicros)} on ${upcoming.date}`:" · fully vested"}</p><div className="sheet-scroll"><table><thead><tr><th>Vest date</th><th>Units</th><th>Status</th><th>FMV</th></tr></thead><tbody>{grant.vestEvents.map(event=><tr key={event.id}><td>{event.date}</td><td>{units(event.unitsMicros)}</td><td>{event.date<=localIsoDate()?"Vested":"Scheduled"}</td><td>{event.actualFmvCents?money(event.actualFmvCents):"Projected"}</td></tr>)}</tbody></table></div></details>})}</section>}
               {isAsset && privateStock && (
                 <>
                   <p className="muted">The full company value appreciates, but only vested value counts toward Net Worth.</p>
@@ -1836,6 +1847,7 @@ function Onboarding({
   const [filingStatus, setFilingStatus] = useState(
     initial.taxProfile?.filingStatus ?? "",
   );
+  const [jointMembers,setJointMembers]=useState<[string,string]>(()=>{const saved=initial.taxProfile?.taxUnit?.memberPersonIds??[];return [saved[0]??initial.people[0]?.id??"",saved[1]??initial.people[1]?.id??""]});
   const categoryId = (kind: "income" | "expense") =>
     initial.categories.find((c) => c.kind === kind)?.id ??
     `${kind}-other-${householdId.current}`;
@@ -1894,6 +1906,7 @@ function Onboarding({
         setError("Select a filing status before continuing.");
         return;
       }
+      if(filingStatus==="married-joint"&&(!jointMembers[0]||!jointMembers[1]||jointMembers[0]===jointMembers[1])){setError("Married filing jointly requires two distinct household people.");return;}
     }
     if (step === 3) {
       const invalid = accounts.findIndex(
@@ -1958,6 +1971,7 @@ function Onboarding({
             state: "CA",
             taxYear: 2026,
             thresholdInflationBps: 250,
+            taxUnit:{id:initial.taxProfile?.taxUnit?.id??`${householdId.current}-tax-unit`,filingStatus:filingStatus as TaxProfile["filingStatus"],memberPersonIds:filingStatus==="married-joint"?jointMembers:[jointMembers[0]||people[0]?.id].filter(Boolean)},
             revision: initial.taxProfile?.revision ?? 1,
           },
         });
@@ -2080,6 +2094,7 @@ function Onboarding({
                   <option value="head-of-household">Head of household</option>
                 </select>
               </label>
+              {filingStatus==="married-joint"&&<fieldset><legend>Joint tax unit</legend><label>First spouse<select value={jointMembers[0]} onChange={event=>setJointMembers([event.target.value,jointMembers[1]])}>{people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label><label>Second spouse<select value={jointMembers[1]} onChange={event=>setJointMembers([jointMembers[0],event.target.value])}><option value="">Select…</option>{people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label></fieldset>}
               <p className="muted">
                 Required for tax-dependent projections. California and the 2026
                 rule pack are used.
@@ -3782,7 +3797,10 @@ function RecurringDialog({
     [growth, setGrowth] = useState(
       String((record?.annualGrowthBps ?? 0) / 100),
     ),
-    [taxTreatment, setTaxTreatment] = useState(record?.taxTreatment ?? "none");
+    [taxTreatment, setTaxTreatment] = useState(record?.taxTreatment ?? "none"),
+    [incomeTaxCategory,setIncomeTaxCategory]=useState(record?.incomeTaxCategory??(record?.incomeType==="salary"?"wages":"taxable-nonwage")),
+    [ownerPersonId,setOwnerPersonId]=useState(record?.ownerPersonId??bootstrap.people[0]?.id??""),
+    [annualGrowthMonth,setAnnualGrowthMonth]=useState(record?.annualGrowthMonth??2);
   const salary=kind==="income"&&available.find(category=>category.id===categoryId)?.name.trim().toLowerCase()==="salary";
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -3814,6 +3832,7 @@ function RecurringDialog({
       return setError(
         "Enter an annual growth rate within the supported range.",
       );
+    if(kind==="income"&&(salary||incomeTaxCategory==="wages")&&!ownerPersonId)return setError("Select the household person who earns these wages.");
     if (
       taxTreatment === "pretax" &&
       (kind !== "expense" ||
@@ -3837,6 +3856,9 @@ function RecurringDialog({
         annualGrowthBps: bps,
         taxTreatment,
         incomeType:salary?"salary" as const:"ordinary" as const,
+        incomeTaxCategory:salary?"wages" as const:kind==="income"?incomeTaxCategory:undefined,
+        ownerPersonId:kind==="income"&&(salary||incomeTaxCategory==="wages")?ownerPersonId:null,
+        annualGrowthMonth:salary?annualGrowthMonth:null,
       };
       if (record)
         await repository.updateRecurring?.({
@@ -3937,6 +3959,8 @@ function RecurringDialog({
                 ))}
               </select>
             </label>
+            {kind==="income"&&!salary&&<label>Tax category<select value={incomeTaxCategory} onChange={event=>setIncomeTaxCategory(event.target.value as typeof incomeTaxCategory)}><option value="taxable-nonwage">Taxable non-wage income</option><option value="wages">W-2 wages</option><option value="nontaxable">Nontaxable income</option></select></label>}
+            {kind==="income"&&(salary||incomeTaxCategory==="wages")&&<label>Employee / owner<select value={ownerPersonId} onChange={event=>setOwnerPersonId(event.target.value)}><option value="">Select…</option>{bootstrap.people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label>}
             {!salary&&<label>
               Account (optional)
               <select
@@ -4002,6 +4026,7 @@ function RecurringDialog({
                 onChange={(e) => setGrowth(e.target.value)}
               />
             </label>
+            {salary&&<label>Annual raise month<select value={annualGrowthMonth} onChange={event=>setAnnualGrowthMonth(Number(event.target.value))}>{Array.from({length:12},(_,index)=><option key={index+1} value={index+1}>{new Date(2026,index,1).toLocaleString(undefined,{month:"long"})}</option>)}</select></label>}
             {!salary&&<label>
                 Tax treatment
                 <select
@@ -4311,8 +4336,8 @@ function PlanView(props:PlanViewProps) {
   const [tab,setTab]=useState<"wealth"|"cash-flow"|"contributions"|"setup">("wealth");
   const [activePoint,setActivePoint]=useState<number|null>(null);
   const scenario=scenarios.find(item=>item.id===selectedScenarioId)??scenarios[0]!;
-  const privateAssets=snapshot.assets.filter(asset=>asset.privateStock);
-  const ordinaryAssets=snapshot.assets.filter(asset=>!asset.privateStock);
+  const privateAssets=snapshot.assets.filter(asset=>asset.privateStock||asset.equityHolding);
+  const ordinaryAssets=snapshot.assets.filter(asset=>!asset.privateStock&&!asset.equityHolding);
   const series:WealthSeries[]=[
     {id:"net-worth",name:"Net Worth",group:"net-worth"},
     ...snapshot.accounts.map(item=>({id:`account:${item.id}`,name:item.name,group:"account" as const})),
@@ -4326,12 +4351,12 @@ function PlanView(props:PlanViewProps) {
   useEffect(()=>{if(!series.some(item=>item.id===selected))setSelected("net-worth");},[selected,series.map(item=>item.id).join("|")]);
   const currentDate=localIsoDate();
   const currentValue=(item:WealthSeries)=>{
-    if(item.group==="net-worth")return snapshot.accounts.reduce((sum,x)=>sum+x.balanceCents,0)+snapshot.assets.reduce((sum,x)=>sum+vestedAssetValue(x,currentDate),0)-snapshot.liabilities.reduce((sum,x)=>sum+x.balanceCents,0);
+    if(item.group==="net-worth")return snapshot.accounts.reduce((sum,x)=>sum+x.balanceCents,0)+snapshot.assets.reduce((sum,x)=>sum+(x.equityHolding?equityVestedValue(x,currentDate):vestedAssetValue(x,currentDate)),0)-snapshot.liabilities.reduce((sum,x)=>sum+x.balanceCents,0);
     const [,id,component]=item.id.split(":");
     if(item.group==="account")return snapshot.accounts.find(x=>x.id===id)?.balanceCents??0;
     if(item.group==="asset")return snapshot.assets.find(x=>x.id===id)?.valueCents??0;
     if(item.group==="debt")return snapshot.liabilities.find(x=>x.id===id)?.balanceCents??0;
-    const asset=snapshot.assets.find(x=>x.id===id);if(!asset)return 0;const vested=vestedAssetValue(asset,currentDate);return component==="vested"?vested:asset.valueCents-vested;
+    const asset=snapshot.assets.find(x=>x.id===id);if(!asset)return 0;const vested=asset.equityHolding?equityVestedValue(asset,currentDate):vestedAssetValue(asset,currentDate),total=asset.equityHolding?asset.equityHolding.grants.reduce((sum,grant)=>sum+valueForUnits(grant.unitsMicros,projectedSharePrice(asset.equityHolding!,currentDate)),0):asset.valueCents;return component==="vested"?vested:total-vested;
   };
   const projectedValue=(item:WealthSeries,month:(typeof projections)[number]["months"][number])=>{
     if(item.group==="net-worth")return month.netWorthCents??0;
@@ -4374,7 +4399,7 @@ function PlanView(props:PlanViewProps) {
       </section>
       <section className="projection-sheet card wide" aria-label="Annual wealth projection"><div className="sheet-scroll"><table><thead><tr><th rowSpan={3} className="year-column">Year</th><th colSpan={1}>Net Worth</th>{snapshot.accounts.length>0&&<th colSpan={snapshot.accounts.length}>Accounts</th>}{snapshot.assets.length>0&&<th colSpan={ordinaryAssets.length+privateAssets.length*2}>Assets</th>}{snapshot.liabilities.length>0&&<th colSpan={snapshot.liabilities.length}>Debts</th>}</tr><tr><th rowSpan={2} className={selected==="net-worth"?"selected":undefined}><button aria-pressed={selected==="net-worth"} onClick={()=>selectSeries("net-worth")}>Net Worth</button></th>{snapshot.accounts.map(item=><th rowSpan={2} key={item.id} className={selected===`account:${item.id}`?"selected":undefined}><button aria-pressed={selected===`account:${item.id}`} onClick={()=>selectSeries(`account:${item.id}`)}>{item.name}</button></th>)}{ordinaryAssets.map(item=><th rowSpan={2} key={item.id} className={selected===`asset:${item.id}`?"selected":undefined}><button aria-pressed={selected===`asset:${item.id}`} onClick={()=>selectSeries(`asset:${item.id}`)}>{item.name}</button></th>)}{privateAssets.map(item=><th colSpan={2} key={item.id}><button aria-pressed={selected===`private:${item.id}:vested`} onClick={()=>selectSeries(`private:${item.id}:vested`)}>{item.name}</button></th>)}{snapshot.liabilities.map(item=><th rowSpan={2} key={item.id} className={selected===`debt:${item.id}`?"selected":undefined}><button aria-pressed={selected===`debt:${item.id}`} onClick={()=>selectSeries(`debt:${item.id}`)}>{item.name}</button></th>)}</tr><tr>{privateAssets.flatMap(item=>([<th key={`${item.id}-v`} className={selected===`private:${item.id}:vested`?"selected":undefined}><button aria-pressed={selected===`private:${item.id}:vested`} onClick={()=>selectSeries(`private:${item.id}:vested`)}>Vested</button></th>,<th key={`${item.id}-u`} className={selected===`private:${item.id}:unvested`?"selected":undefined}><button aria-pressed={selected===`private:${item.id}:unvested`} onClick={()=>selectSeries(`private:${item.id}:unvested`)}>Unvested</button></th>]))}</tr></thead><tbody><tr><th className="year-column" scope="row">Current</th>{series.map(item=>cell(item,currentValue(item),`current-${item.id}`))}</tr>{visibleRows.map(row=><tr key={row.year}><th className="year-column" scope="row">{row.year}</th>{series.map(item=>cell(item,projectedValue(item,row.month),`${row.year}-${item.id}`))}</tr>)}</tbody></table></div></section>
     </>}
-    {tab==="cash-flow"&&<><section className="card wide"><div className="card-title"><div><span className="label assumption">Inputs</span><h3>Income and spending</h3></div><div className="inline-actions"><button onClick={e=>onAddRecurring("income",e.currentTarget)}>Add income</button><button onClick={e=>onAddRecurring("expense",e.currentTarget)}>Add expense</button></div></div>{recurring.map(entry=>{const kind=categories.find(c=>c.id===entry.categoryId)?.kind;return <button key={entry.id} className="transaction transaction-action" onClick={e=>onEditRecurring(entry,e.currentTarget)}><div><strong>{entry.name}</strong><small>{categories.find(c=>c.id===entry.categoryId)?.name??"Uncategorized"} · {entry.frequency}</small></div><b>{money(kind==="income"?entry.amountCents:-entry.amountCents)}</b></button>})}{homeCosts.map(home=><div className="transaction" key={`home-${home.id}`}><div><strong>{home.name} housing</strong><small>Automatic monthly expense · P&amp;I {money(home.principalAndInterest)} + property tax {money(home.propertyTax)} + insurance {money(home.insurance)}{home.hoa?` + HOA ${money(home.hoa)}`:""}</small></div><b>{money(-home.total)}</b></div>)}</section><section className="card wide"><h3>Annual cash flow</h3><div className="year-table"><div className="year-row table-head"><span>Year</span><span>Income</span><span>Spending</span><span>Taxes</span><span>Surplus</span></div>{projections.map(year=><div className="year-row" key={year.year}><span>{year.year}</span><span>{money(year.incomeCents,true)}</span><span>{money(year.expenseCents,true)}</span><span>{money(year.taxCents,true)}</span><strong>{money(year.surplusCents,true)}</strong></div>)}</div></section></>}
+    {tab==="cash-flow"&&<><section className="card wide"><div className="card-title"><div><span className="label assumption">Inputs</span><h3>Income and spending</h3></div><div className="inline-actions"><button onClick={e=>onAddRecurring("income",e.currentTarget)}>Add income</button><button onClick={e=>onAddRecurring("expense",e.currentTarget)}>Add expense</button></div></div>{recurring.map(entry=>{const kind=categories.find(c=>c.id===entry.categoryId)?.kind;return <button key={entry.id} className="transaction transaction-action" onClick={e=>onEditRecurring(entry,e.currentTarget)}><div><strong>{entry.name}</strong><small>{categories.find(c=>c.id===entry.categoryId)?.name??"Uncategorized"} · {entry.frequency}</small></div><b>{money(kind==="income"?entry.amountCents:-entry.amountCents)}</b></button>})}{homeCosts.map(home=><div className="transaction" key={`home-${home.id}`}><div><strong>{home.name} housing</strong><small>Automatic monthly expense · P&amp;I {money(home.principalAndInterest)} + property tax {money(home.propertyTax)} + insurance {money(home.insurance)}{home.hoa?` + HOA ${money(home.hoa)}`:""}</small></div><b>{money(-home.total)}</b></div>)}</section><section className="card wide"><h3>Annual cash flow</h3><p className="muted">Cash taxes reduce projected household cash. RSU sell-to-cover taxes reduce vested shares instead. Full-calendar tax liability appears in the ledger below.</p><div className="year-table"><div className="year-row table-head"><span>Year</span><span>Income</span><span>Spending</span><span>Cash taxes</span><span>RSU sell-to-cover</span><span>Surplus</span></div>{projections.map(year=><div className="year-row" key={year.year}><span>{year.year}</span><span>{money(year.incomeCents,true)}</span><span>{money(year.expenseCents,true)}</span><span>{money(year.cashTaxCents,true)}</span><span>{money(year.rsuSellToCoverTaxCents,true)}</span><strong>{money(year.surplusCents,true)}</strong></div>)}</div></section>{projections.some(year=>year.taxLedger)&&<section className="card wide"><h3>Yearly tax ledger</h3>{projections.map(year=>year.taxLedger&&<details key={year.year}><summary>{year.year} · full-year liability {money(year.taxLedger.fullYearLiabilityCents)} · future cash flow {money(year.taxLedger.futureCashFlowCents)}</summary><p>{year.taxLedger.employees.map(employee=>`${snapshot.household.people.find(person=>person.id===employee.personId)?.name??employee.personId}: wages ${money(employee.salaryCents)}, RSUs ${money(employee.rsuCents)}, Social Security ${money(employee.socialSecurityCents)}, Medicare ${money(employee.medicareCents)}, SDI ${money(employee.sdiCents)}`).join(" · ")}</p><p>Federal: standard {money(year.taxLedger.federalStandardCents)} vs itemized {money(year.taxLedger.federalItemizedCents)}; taxable {money(year.taxLedger.federalTaxableCents)}; tax {money(year.taxLedger.federalCents)}. California: standard {money(year.taxLedger.californiaStandardCents)} vs itemized {money(year.taxLedger.californiaItemizedCents)}; taxable {money(year.taxLedger.californiaTaxableCents)}; tax {money(year.taxLedger.californiaCents)}.</p><p>Additional Medicare {money(year.taxLedger.additionalMedicareCents)} · refund or balance due unknown · {year.taxLedger.projected?"projected assumptions included":"official rules"}. {year.taxLedger.sources.map((source,index)=><span key={`${source.url}-${index}`}><a href={source.url} target="_blank" rel="noreferrer">{source.jurisdiction} source</a>{index<year.taxLedger!.sources.length-1?" · ":""}</span>)}</p></details>)}</section>}</>}
     {tab==="contributions"&&<section className="card wide"><div className="card-title"><div><span className="label assumption">Surplus routing</span><h3>Contributions</h3></div><button onClick={e=>onPlanScenario(e.currentTarget)}>Edit contributions</button></div><p><strong>{effectiveAssignedBps/100}% of projected surplus assigned</strong> · {(10000-effectiveAssignedBps)/100}% remaining</p><p className="muted">Fixed monthly amounts are reserved first. Percentage rules divide the remaining Cash Flow surplus.</p>{scenario.contributions.map(rule=><div className="transaction" key={rule.id}><div><strong>{rule.destinationType} contribution</strong><small>{rule.frequency} · {rule.monthlyAmountCents!==undefined?`${money(rule.monthlyAmountCents)}/month · about ${averageMonthlySurplus?Math.min(100,Math.round(rule.monthlyAmountCents*10000/averageMonthlySurplus)/100):0}% of projected surplus`:`${(rule.percentBps??0)/100}% of remaining surplus`}{rule.targetBalanceCents!==undefined?` · cap ${money(rule.targetBalanceCents)}`:""}</small></div></div>)}{!scenario.contributions.length&&<p className="empty">All positive surplus remains in the default cash account.</p>}</section>}
     {tab==="setup"&&<section className="card wide"><div className="card-title"><div><span className="label assumption">Scenario configuration</span><h3>{scenario?.name}</h3></div><div className="inline-actions"><button onClick={e=>onAddScenario(e.currentTarget)}>New scenario</button><button onClick={e=>onEditScenario(e.currentTarget)}>Edit scenario</button><button onClick={e=>onPlanScenario(e.currentTarget)}>Events &amp; withdrawals</button></div></div><div className="setup-summary"><div><span>Projection horizon</span><strong>{scenario?`${scenario.horizon.months} months`:"—"}</strong></div><div><span>Inflation assumption</span><strong>{scenario?`${scenario.assumptions.inflationBps/100}%`:"—"}</strong></div><div><span>Events</span><strong>{scenario?.events.length??0}</strong></div><div><span>Contribution rules</span><strong>{scenario?.contributions.length??0}</strong></div></div></section>}
   </div>;
@@ -4413,13 +4438,13 @@ function NetWorth({
 }) {
   const assets =
       snapshot.accounts.reduce((s, a) => s + Math.max(0, a.balanceCents), 0) +
-      snapshot.assets.reduce((s, a) => s + vestedAssetValue(a,localIsoDate()), 0),
+      snapshot.assets.reduce((s, a) => s + (a.equityHolding?equityVestedValue(a,localIsoDate()):vestedAssetValue(a,localIsoDate())), 0),
     debt =
       snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0) +
       snapshot.accounts.reduce((s, a) => s + Math.max(0, -a.balanceCents), 0),
     netWorth =
       snapshot.accounts.reduce((s, a) => s + a.balanceCents, 0) +
-      snapshot.assets.reduce((s, a) => s + vestedAssetValue(a,localIsoDate()), 0) -
+      snapshot.assets.reduce((s, a) => s + (a.equityHolding?equityVestedValue(a,localIsoDate()):vestedAssetValue(a,localIsoDate())), 0) -
       snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0);
   return (
     <div className="content">
@@ -4505,20 +4530,23 @@ function NetWorth({
             <div>
               <strong>{a.name}</strong>
               <small>
-                {a.privateStock
+                {a.equityHolding
+                  ? `Private stock holding · ${a.equityHolding.grants.length} RSU grants`
+                  : a.privateStock
                   ? "Private stock"
                   : liabilityRecords.find((l) => l.mortgage?.assetId === a.id)
                   ? `Home · linked to ${liabilityRecords.find((l) => l.mortgage?.assetId === a.id)!.name}`
                   : "Asset"}
               </small>
               {a.privateStock && <small>{money(a.valueCents)} total company value · {money(a.valueCents-vestedAssetValue(a,localIsoDate()))} unvested</small>}
+              {a.equityHolding&&<><small>{units(a.equityHolding.grants.reduce((sum,grant)=>sum+grant.unitsMicros,0))} total units · {units(a.equityHolding.grants.reduce((sum,grant)=>sum+vestedUnitsAt(grant,localIsoDate()),0))} vested · {money(a.valueCents)} total modeled value</small><details><summary>View {a.equityHolding.grants.length} grant schedules</summary>{a.equityHolding.grants.map(grant=>{const vested=vestedUnitsAt(grant,localIsoDate()),upcoming=nextVest(grant,localIsoDate());return <div key={grant.id}><strong>{grant.id==="original"?"Original grant":grant.id==="promotion"?"Promotion grant":grant.id}</strong><small>Granted {grant.grantDate} · {units(grant.unitsMicros)} units at {money(grant.grantPriceCents)} · {units(vested)} vested</small><small>{upcoming?`Next: ${units(upcoming.unitsMicros)} units on ${upcoming.date}`:"Fully vested"}</small></div>})}</details></>}
               {a.purchasePriceCents != null && a.purchasePriceCents > 0 && (
                 <small>
                   {money(a.valueCents - a.purchasePriceCents)} ({(((a.valueCents / a.purchasePriceCents) - 1) * 100).toFixed(1)}%) since purchase
                 </small>
               )}
             </div>
-            <b>{money(vestedAssetValue(a,localIsoDate()))}</b>
+            <b>{money(a.equityHolding?equityVestedValue(a,localIsoDate()):vestedAssetValue(a,localIsoDate()))}</b>
             <button
               data-search-kind="Asset"
               data-search-id={a.id}
@@ -4661,6 +4689,7 @@ function SettingsView({
     message: string;
   } | null>(null);
   const memberAlert = useRef<HTMLParagraphElement>(null);
+  const [filingStatus,setFilingStatus]=useState<TaxProfile["filingStatus"]>(bootstrap.taxProfile?.filingStatus??"single"),[jointMembers,setJointMembers]=useState<[string,string]>(()=>{const ids=bootstrap.taxProfile?.taxUnit?.memberPersonIds??[];return [ids[0]??bootstrap.people[0]?.id??"",ids[1]??bootstrap.people[1]?.id??""]}),[taxSaving,setTaxSaving]=useState(false),[taxResult,setTaxResult]=useState<{kind:"error"|"success";message:string}|null>(null);
   useEffect(() => {
     if (memberResult?.kind === "error") memberAlert.current?.focus();
   }, [memberResult]);
@@ -4674,6 +4703,7 @@ function SettingsView({
       ),
     [bootstrap.people],
   );
+  useEffect(()=>{setFilingStatus(bootstrap.taxProfile?.filingStatus??"single");const ids=bootstrap.taxProfile?.taxUnit?.memberPersonIds??[];setJointMembers([ids[0]??bootstrap.people[0]?.id??"",ids[1]??bootstrap.people[1]?.id??""])},[bootstrap.taxProfile,bootstrap.people]);
   async function createBackup() {
     if (backupBusy || restoreBusy) return;
     setBackupBusy(true);
@@ -4809,6 +4839,9 @@ function SettingsView({
       setMemberSaving(false);
     }
   }
+  async function saveTaxProfile(){
+    setTaxResult(null);if(filingStatus==="married-joint"&&(!jointMembers[0]||!jointMembers[1]||jointMembers[0]===jointMembers[1])){setTaxResult({kind:"error",message:"Married filing jointly requires two distinct household people."});return;}setTaxSaving(true);try{await repository.saveOnboardingStep(8,{taxProfile:{filingStatus,state:"CA",taxYear:2026,thresholdInflationBps:bootstrap.taxProfile?.thresholdInflationBps??250,revision:bootstrap.taxProfile?.revision??1,taxUnit:{id:bootstrap.taxProfile?.taxUnit?.id??`${bootstrap.household?.id??"household"}-tax-unit`,filingStatus,memberPersonIds:filingStatus==="married-joint"?jointMembers:[jointMembers[0]].filter(Boolean)}}});setTaxResult({kind:"success",message:"Joint filing link saved."});onSaved();}catch(error){setTaxResult({kind:"error",message:errorMessage(error,"Could not save the tax profile.")});}finally{setTaxSaving(false);}
+  }
   return (
     <div className="content">
       <section className="card settings-card">
@@ -4870,6 +4903,15 @@ function SettingsView({
           <p role="status">{memberResult.message}</p>
         )}
         {message && <p role="status">{message}</p>}
+      </section>
+      <section className="card settings-card" aria-labelledby="tax-profile-title">
+        <h3 id="tax-profile-title">Tax filing</h3>
+        <p className="muted">Choose whose incomes are combined on the household income-tax return. Payroll taxes remain calculated separately for each employee.</p>
+        <label>Filing status<select aria-label="Tax filing status" value={filingStatus} disabled={taxSaving} onChange={event=>setFilingStatus(event.target.value as TaxProfile["filingStatus"])}><option value="single">Single</option><option value="married-joint">Married filing jointly</option><option value="married-separate">Married filing separately</option><option value="head-of-household">Head of household</option></select></label>
+        {filingStatus==="married-joint"&&<fieldset><legend>People filing together</legend><label>Spouse 1<select aria-label="Joint filer 1" value={jointMembers[0]} disabled={taxSaving} onChange={event=>setJointMembers([event.target.value,jointMembers[1]])}>{people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label><span aria-hidden="true"> + </span><label>Spouse 2<select aria-label="Joint filer 2" value={jointMembers[1]} disabled={taxSaving} onChange={event=>setJointMembers([jointMembers[0],event.target.value])}><option value="">Select…</option>{people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label><p role="status"><strong>{people.find(person=>person.id===jointMembers[0])?.name??"First spouse"} + {people.find(person=>person.id===jointMembers[1])?.name??"Second spouse"}</strong> — incomes combined for federal and California income tax.</p></fieldset>}
+        <div><strong>Linked wage income</strong>{bootstrap.recurring.filter(entry=>entry.incomeType==="salary"||entry.incomeTaxCategory==="wages").map(entry=><p key={entry.id}>{bootstrap.people.find(person=>person.id===entry.ownerPersonId)?.name??"Owner required"}: {entry.name} · {money(entry.amountCents)} annually</p>)}</div>
+        <button className="primary" disabled={taxSaving} onClick={saveTaxProfile}>{taxSaving?"Saving…":"Save tax filing"}</button>
+        {taxResult&&<p role={taxResult.kind==="error"?"alert":"status"} className={taxResult.kind==="error"?"negative":undefined}>{taxResult.message}</p>}
       </section>
       <section className="card settings-card">
         <h3>Appearance</h3>

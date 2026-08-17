@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 17;
+const SCHEMA_VERSION: i64 = 18;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -127,6 +127,7 @@ struct WorkspaceSnapshot {
     liabilities: Vec<Liability>,
     scenarios: Vec<ScenarioRecord>,
     investment_comparison: Option<InvestmentComparisonRecord>,
+    retirement_plan: Option<RetirementPlanRecord>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 struct Household {
@@ -306,6 +307,12 @@ struct InvestmentComparisonRecord { household_id:String, assumptions:serde_json:
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct InvestmentComparisonInput { assumptions:serde_json::Value, expected_revision:i64 }
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RetirementPlanRecord { household_id:String, selected_scenario_id:String, retirement_year:i64, runway_years:i64, withdrawal_rate_bps:i64, expense_buckets:serde_json::Value, selected_source_ids:serde_json::Value, portfolio_items:serde_json::Value, withdrawal_order:serde_json::Value, revision:i64 }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RetirementPlanInput { selected_scenario_id:String, retirement_year:i64, runway_years:i64, withdrawal_rate_bps:i64, expense_buckets:serde_json::Value, selected_source_ids:serde_json::Value, portfolio_items:serde_json::Value, withdrawal_order:serde_json::Value, expected_revision:i64 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RecurringInput {
@@ -863,6 +870,10 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
     if version < 17 {
         transaction.execute_batch("CREATE TABLE IF NOT EXISTS investment_comparisons(household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE RESTRICT,assumptions_json TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);INSERT INTO schema_migrations(version) VALUES(17);")?;
     }
+    let version: i64 = transaction.query_row("SELECT COALESCE(MAX(version),0) FROM schema_migrations",[],|r|r.get(0))?;
+    if version < 18 {
+        transaction.execute_batch("CREATE TABLE IF NOT EXISTS retirement_plans(household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE RESTRICT,selected_scenario_id TEXT NOT NULL DEFAULT '',retirement_year INTEGER NOT NULL,runway_years INTEGER NOT NULL DEFAULT 50,withdrawal_rate_bps INTEGER NOT NULL DEFAULT 300,expense_buckets_json TEXT NOT NULL DEFAULT '[]',selected_source_ids_json TEXT NOT NULL DEFAULT '[]',portfolio_items_json TEXT NOT NULL DEFAULT '[]',withdrawal_order_json TEXT NOT NULL DEFAULT '[\"taxable\",\"pre-tax\",\"roth\"]',revision INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);INSERT INTO schema_migrations(version) VALUES(18);")?;
+    }
     transaction
         .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
     transaction.commit()?;
@@ -903,9 +914,11 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
     let mut liabilities = Vec::new();
     let mut scenarios = Vec::new();
     let mut investment_comparison = None;
+    let mut retirement_plan = None;
     if let Some(h) = &household {
         investment_comparison=connection.query_row("SELECT household_id,assumptions_json,revision FROM investment_comparisons WHERE household_id=?",[&h.id],|r|{let raw:String=r.get(1)?;Ok(InvestmentComparisonRecord{household_id:r.get(0)?,assumptions:serde_json::from_str(&raw).unwrap_or_else(|_|default_investment_assumptions()),revision:r.get(2)?})}).optional()?;
         if investment_comparison.is_none(){investment_comparison=Some(InvestmentComparisonRecord{household_id:h.id.clone(),assumptions:default_investment_assumptions(),revision:1});}
+        retirement_plan=connection.query_row("SELECT household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,revision FROM retirement_plans WHERE household_id=?",[&h.id],|r|Ok(RetirementPlanRecord{household_id:r.get(0)?,selected_scenario_id:r.get(1)?,retirement_year:r.get(2)?,runway_years:r.get(3)?,withdrawal_rate_bps:r.get(4)?,expense_buckets:serde_json::from_str(&r.get::<_,String>(5)?).unwrap_or_else(|_|serde_json::json!([])),selected_source_ids:serde_json::from_str(&r.get::<_,String>(6)?).unwrap_or_else(|_|serde_json::json!([])),portfolio_items:serde_json::from_str(&r.get::<_,String>(7)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_order:serde_json::from_str(&r.get::<_,String>(8)?).unwrap_or_else(|_|serde_json::json!(["taxable","pre-tax","roth"])),revision:r.get(9)?})).optional()?;
         let mut q=connection.prepare("SELECT id,household_id,name,birth_date FROM people WHERE household_id=? ORDER BY rowid")?;
         people = q
             .query_map([&h.id], |r| {
@@ -1137,6 +1150,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
         liabilities,
         scenarios,
         investment_comparison,
+        retirement_plan,
     })
 }
 
@@ -1165,6 +1179,13 @@ fn update_investment_comparison(input:InvestmentComparisonInput,database:tauri::
     with_db(&database,|db|store_investment_comparison(db,input))
 }
 fn store_investment_comparison(db:&mut Connection,input:InvestmentComparisonInput)->Result<InvestmentComparisonRecord,AppError>{let tx=db.transaction()?;let household_id:String=tx.query_row("SELECT id FROM households LIMIT 1",[],|r|r.get(0))?;let existing:Option<i64>=tx.query_row("SELECT revision FROM investment_comparisons WHERE household_id=?",[&household_id],|r|r.get(0)).optional()?;if existing.unwrap_or(1)!=input.expected_revision{return Err(AppError::Conflict)}let next=existing.map_or(1,|r|r+1);tx.execute("INSERT INTO investment_comparisons(household_id,assumptions_json,revision) VALUES(?1,?2,?3) ON CONFLICT(household_id) DO UPDATE SET assumptions_json=excluded.assumptions_json,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,serde_json::to_string(&input.assumptions)?,next])?;tx.commit()?;Ok(InvestmentComparisonRecord{household_id,assumptions:input.assumptions,revision:next})}
+
+#[tauri::command]
+fn update_retirement_plan(input:RetirementPlanInput,database:tauri::State<Database>)->Result<RetirementPlanRecord,AppError>{
+ if input.runway_years!=50||!(1..=10_000).contains(&input.withdrawal_rate_bps)||!input.expense_buckets.is_array()||!input.selected_source_ids.is_array()||!input.portfolio_items.is_array()||!input.withdrawal_order.is_array(){return Err(AppError::Validation("retirement plan is invalid".into()))}
+ with_db(&database,|db|store_retirement_plan(db,input))
+}
+fn store_retirement_plan(db:&mut Connection,input:RetirementPlanInput)->Result<RetirementPlanRecord,AppError>{let tx=db.transaction()?;let household_id:String=tx.query_row("SELECT id FROM households LIMIT 1",[],|r|r.get(0))?;let existing:Option<i64>=tx.query_row("SELECT revision FROM retirement_plans WHERE household_id=?",[&household_id],|r|r.get(0)).optional()?;if existing.unwrap_or(1)!=input.expected_revision{return Err(AppError::Conflict)}let next=existing.map_or(1,|r|r+1);tx.execute("INSERT INTO retirement_plans(household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(household_id) DO UPDATE SET selected_scenario_id=excluded.selected_scenario_id,retirement_year=excluded.retirement_year,runway_years=excluded.runway_years,withdrawal_rate_bps=excluded.withdrawal_rate_bps,expense_buckets_json=excluded.expense_buckets_json,selected_source_ids_json=excluded.selected_source_ids_json,portfolio_items_json=excluded.portfolio_items_json,withdrawal_order_json=excluded.withdrawal_order_json,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,input.selected_scenario_id,input.retirement_year,input.runway_years,input.withdrawal_rate_bps,serde_json::to_string(&input.expense_buckets)?,serde_json::to_string(&input.selected_source_ids)?,serde_json::to_string(&input.portfolio_items)?,serde_json::to_string(&input.withdrawal_order)?,next])?;tx.commit()?;Ok(RetirementPlanRecord{household_id,selected_scenario_id:input.selected_scenario_id,retirement_year:input.retirement_year,runway_years:input.runway_years,withdrawal_rate_bps:input.withdrawal_rate_bps,expense_buckets:input.expense_buckets,selected_source_ids:input.selected_source_ids,portfolio_items:input.portfolio_items,withdrawal_order:input.withdrawal_order,revision:next})}
 
 #[tauri::command]
 fn get_bootstrap(database: tauri::State<Database>) -> Result<WorkspaceSnapshot, AppError> {
@@ -3995,6 +4016,7 @@ pub fn run() {
             update_scenario,
             delete_scenario,
             update_investment_comparison,
+            update_retirement_plan,
             inspect_csv,
             preview_csv,
             commit_csv,
@@ -4084,6 +4106,18 @@ mod tests {
         let updated=store_investment_comparison(&mut c,InvestmentComparisonInput{assumptions:default_investment_assumptions(),expected_revision:1}).unwrap();
         assert_eq!(updated.revision,2);
         assert!(matches!(store_investment_comparison(&mut c,InvestmentComparisonInput{assumptions:default_investment_assumptions(),expected_revision:1}),Err(AppError::Conflict)));
+    }
+    #[test]
+    fn retirement_plan_round_trips_and_enforces_revisions() {
+        let mut c=seeded();
+        assert!(bootstrap(&c).unwrap().retirement_plan.is_none());
+        let make=|expected_revision|RetirementPlanInput{selected_scenario_id:"base".into(),retirement_year:2040,runway_years:50,withdrawal_rate_bps:300,expense_buckets:serde_json::json!([{"id":"housing","name":"Housing","mode":"annual","annualCents":2400000}]),selected_source_ids:serde_json::json!(["a"]),portfolio_items:serde_json::json!([]),withdrawal_order:serde_json::json!(["taxable","pre-tax","roth"]),expected_revision};
+        let saved=store_retirement_plan(&mut c,make(1)).unwrap();
+        assert_eq!(saved.revision,1);
+        assert_eq!(bootstrap(&c).unwrap().retirement_plan.unwrap().retirement_year,2040);
+        let updated=store_retirement_plan(&mut c,make(1)).unwrap();
+        assert_eq!(updated.revision,2);
+        assert!(matches!(store_retirement_plan(&mut c,make(1)),Err(AppError::Conflict)));
     }
     #[test]
     fn version_15_adds_the_optional_salary_growth_cap() {

@@ -28,6 +28,7 @@ import {
   Sparkles,
   Sun,
   TrendingUp,
+  Umbrella,
   WalletCards,
 } from "lucide-react";
 import {
@@ -68,6 +69,8 @@ import {
 } from "./repository";
 import { ScenarioPlanningDialog } from "./ScenarioPlanningDialog";
 import { InvestmentView } from "./InvestmentView";
+import { RetirementView, investmentPropertyCopy } from "./RetirementView";
+import { defaultRetirementPlan, type RetirementPlanRecord } from "./domain";
 import {
   buildSearchIndex,
   GlobalSearch,
@@ -78,13 +81,14 @@ const units=(micros:number)=>new Intl.NumberFormat(undefined,{maximumFractionDig
 const equityVestedValue=(asset:Pick<Asset,"equityHolding">,date:string)=>asset.equityHolding?.grants.reduce((sum,grant)=>sum+valueForUnits(vestedUnitsAt(grant,date),projectedSharePrice(asset.equityHolding!,date)),0)??0;
 const nextVest=(grant:import("./domain").RsuGrant,date:string)=>grant.vestEvents.find(event=>event.date>date);
 
-type View = "Overview" | "Activity" | "Plan" | "Investment" | "Net Worth" | "Settings";
+type View = "Overview" | "Activity" | "Plan" | "Investment" | "Retirement" | "Net Worth" | "Settings";
 const localIsoDate=()=>{const now=new Date(),offset=now.getTimezoneOffset()*60000;return new Date(now.valueOf()-offset).toISOString().slice(0,10)};
 const nav: [View, typeof LayoutDashboard][] = [
   ["Overview", LayoutDashboard],
   ["Activity", Activity],
   ["Plan", PiggyBank],
   ["Investment", TrendingUp],
+  ["Retirement", Umbrella],
   ["Net Worth", Landmark],
   ["Settings", Settings],
 ];
@@ -98,6 +102,7 @@ const money = (cents: number, compact = false) => {
     notation: compact ? "compact" : "standard",
   }).format(cents / 100);
 };
+const defaultRetirementFallback=(current:RetirementPlanRecord|null,bootstrap:Bootstrap,scenarioId:string):RetirementPlanRecord=>current??{...defaultRetirementPlan(),householdId:bootstrap.household?.id??"local",selectedScenarioId:scenarioId};
 
 const baseline: Scenario = {
   id: "base",
@@ -124,6 +129,7 @@ const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
   assets: value.assets ?? [],
   liabilities: value.liabilities ?? [],
   scenarios: (value.scenarios ?? []).map((scenario)=>({...scenario,defaultContributionAccountId:scenario.defaultContributionAccountId??value.accounts.find(account=>account.liquid&&(account.kind==="checking"||account.kind==="savings"))?.id??null,withdrawals:scenario.withdrawals??[],contributions:(scenario.contributions??[]).map(rule=>({...rule,percentBps:rule.percentBps??undefined,monthlyAmountCents:rule.monthlyAmountCents??undefined,targetBalanceCents:rule.targetBalanceCents??undefined,overflowDestinationType:rule.overflowDestinationType??undefined,overflowDestinationId:rule.overflowDestinationId??undefined}))})),
+  retirementPlan: value.retirementPlan ?? null,
   accounts: value.accounts.map((a) => ({
     ...a,
     balanceCents: "balanceCents" in a ? a.balanceCents : a.openingBalanceCents,
@@ -442,6 +448,9 @@ function Workspace({
     }catch{return undefined}
   },[snapshot,bootstrap.taxProfile,selectedScenario]);
   const projectedPositiveMonths=projections?.[0]?.months.filter(month=>month.surplusCents>0)??[],projectedMonthlySurplusCents=projectedPositiveMonths.length?projectedPositiveMonths.reduce((sum,month)=>sum+month.surplusCents,0)/projectedPositiveMonths.length:0;
+  const retirementProjections=useMemo(()=>bootstrap.taxProfile?ProjectionEngine.calculate(snapshot,selectedScenario,localIsoDate()):[],[snapshot,bootstrap.taxProfile,selectedScenario]);
+  const [retirementPlan,setRetirementPlan]=useState<RetirementPlanRecord|null>(bootstrap.retirementPlan??null);
+  useEffect(()=>setRetirementPlan(bootstrap.retirementPlan??null),[bootstrap.retirementPlan]);
   return (
     <div
       className={dark ? "app dark" : "app"}
@@ -614,7 +623,10 @@ function Workspace({
             </section>
           </div>
         )}
-        <div hidden={view !== "Investment"}><InvestmentView initial={bootstrap.investmentComparison} repository={repository} taxContext={investmentTaxContext}/></div>
+        <div hidden={view !== "Investment"}><InvestmentView initial={bootstrap.investmentComparison} repository={repository} taxContext={investmentTaxContext} onAddToRetirement={(assumptions)=>{const copy=investmentPropertyCopy(assumptions);setRetirementPlan(current=>({...defaultRetirementFallback(current,bootstrap,selectedScenario.id),portfolioItems:[...(current?.portfolioItems??[]),copy]}));setView("Retirement")}}/></div>
+        {view === "Retirement" && (
+          <RetirementView initial={retirementPlan} repository={repository} bootstrap={bootstrap} snapshot={snapshot} scenarios={scenarios} projections={retirementProjections} onPlanChange={setRetirementPlan}/>
+        )}
         {view === "Net Worth" && (
           <NetWorth
             snapshot={snapshot}

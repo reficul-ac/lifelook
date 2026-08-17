@@ -182,10 +182,12 @@ export function InvestmentView({
   initial,
   repository,
   taxContext,
+  onAddToRetirement,
 }: {
   initial?: InvestmentComparisonRecord | null;
   repository: Repository;
   taxContext?: InvestmentTaxContext;
+  onAddToRetirement?:(assumptions:InvestmentAssumptions)=>void;
 }) {
   const base = { ...defaultInvestmentAssumptions, ...initial?.assumptions };
   const [draft, setDraft] = useState<Record<string, string>>(() =>
@@ -306,6 +308,7 @@ export function InvestmentView({
             <h2>Compare buying with renting and investing</h2>
           </div>
           <div className="investment-actions">
+            {onAddToRetirement&&<button type="button" onClick={()=>onAddToRetirement(assumptions)}>Add to Retirement Portfolio</button>}
             <span
               className={`save-state ${saveState}`}
               role="status"
@@ -594,7 +597,7 @@ export function InvestmentView({
         </details>
         <span hidden>Rental income is invested monthly.</span>
       </section>
-      <section className="card retirement-settings">
+      {false && <section className="card retirement-settings">
         <p className="eyebrow">Independent annual snapshots</p>
         <h2>FIRE / Retirement Income</h2>
         <div className="investment-fields">
@@ -605,7 +608,7 @@ export function InvestmentView({
         <p className="muted">Amounts and results are shown in today’s dollars. Future tax calculations inflate them using Plan inflation. Current income is modeled as fully taxable ordinary non-wage income without payroll tax.</p>
         {taxSettings.retirementIncomeMode === "desired" && <p className="muted">The after-tax target remains the source of truth; its ordinary-income gross equivalent is solved within each path’s tax calculation.</p>}
         {/* TODO: Replace manual income with a Retirement tab driven by Plan post-wage income, account types, Social Security/pensions, and multiple properties. */}
-      </section>
+      </section>}
       {!calculation.ok ? (
         <section className="card investment-error" role="alert">
           <h2>Adjust the assumptions to compare</h2>
@@ -727,7 +730,6 @@ function Results({
     equityDiff = end.stockValueCents - end.buyRetainedTotalCents,
     saleDiff = end.stockValueCents - end.buySaleTotalCents;
   const leader = equityDiff >= 0 ? "Renting and investing" : "Buying";
-  const selectedYear = result.retirementYears[Math.max(0, Math.min(result.retirementYears.length - 1, Math.ceil((scrub ?? result.months.length - 1) / 12) - 1))];
   const timing = (items: typeof result.equityCrossovers) =>
     items[0]
       ? `Year ${items[0].year}, month ${((items[0].month - 1) % 12) + 1}`
@@ -859,21 +861,8 @@ function Results({
           </p>
         </details>
       </section>
-      <RetirementResults year={selectedYear} years={result.retirementYears} desired={assumptions.retirementIncomeMode === "desired"} />
     </>
   );
-}
-function RetirementResults({year,years,desired}:{year: Extract<ReturnType<typeof calculateInvestmentComparison>,{ok:true}>["result"]["retirementYears"][number];years: Extract<ReturnType<typeof calculateInvestmentComparison>,{ok:true}>["result"]["retirementYears"];desired:boolean}) {
-  const paths = [year.paths.stocks, year.paths.keep, year.paths.sell];
-  const names = {stocks:"Stocks",keep:"Buy & keep",sell:"Buy & sell"} as const;
-  const max = Math.max(1,...paths.map(p=>p.afterTaxInvestmentIncomeCents),year.targetCents??0);
-  return <>
-    <section className="retirement-summary" aria-label={`Retirement income at year ${year.year}`}>
-      {paths.map(p=><article className="card" key={p.path}><p className="eyebrow">Retire at end of year {year.year}</p><h3>{names[p.path]}</h3><strong>{cash(p.totalAfterTaxIncomeCents)}</strong><small>Total spendable income · today’s dollars</small><dl><div><dt>Wealth</dt><dd>{cash(p.wealthCents)}</dd></div><div><dt>After-tax investment income</dt><dd>{cash(p.afterTaxInvestmentIncomeCents)}</dd></div><div><dt>Effective yield</dt><dd>{(p.effectiveYieldBps/100).toFixed(2)}%</dd></div>{desired&&<><div><dt>Target coverage</dt><dd>{((p.targetCoverageBps??0)/100).toFixed(0)}%</dd></div><div><dt>Shortfall</dt><dd>{cash(p.shortfallCents)}</dd></div><div><dt>Additional stock needed</dt><dd>{cash(p.additionalStockValueCents)}</dd></div></>}</dl><details><summary>Income and tax breakdown</summary><p>Gross stock withdrawal {cash(p.grossStockWithdrawalCents)}</p><p>Long-term realized gain {cash(p.realizedLongTermGainCents)}</p>{p.path==="keep"&&<><p>Gross rent {cash(p.propertyGrossRentCents)}</p><p>Property cash costs {cash(p.propertyCashCostsCents)}</p></>}<p>Incremental tax {cash(p.incrementalTaxCents)}</p></details></article>)}
-    </section>
-    <section className="card retirement-income-chart"><h2>After-tax investment income</h2>{paths.map(p=><div className="income-bar-row" key={p.path}><span>{names[p.path]}</span><i style={{width:`${p.afterTaxInvestmentIncomeCents/max*100}%`}}/><strong>{cash(p.afterTaxInvestmentIncomeCents)}</strong></div>)}{desired&&<p className="muted">Desired income: {cash(year.targetCents??0)}</p>}</section>
-    <section className="card annual-results retirement-tracker"><h2>Annual retirement tracker</h2><p className="muted">Each year is an independent “retire at the end of this year” snapshot in today’s dollars.</p><div className="table-scroll"><table><thead><tr><th>Year</th><th>Stocks</th><th>Buy &amp; keep</th><th>Buy &amp; sell</th></tr></thead><tbody>{years.map(y=><tr key={y.year}><th scope="row">{y.year}</th>{([y.paths.stocks,y.paths.keep,y.paths.sell]).map(p=><td key={p.path}><dl aria-label={`${names[p.path]} results for year ${y.year}`}><div><dt>Wealth</dt><dd>{cash(p.wealthCents)}</dd></div><div><dt>Investment income</dt><dd>{cash(p.afterTaxInvestmentIncomeCents)}</dd></div><div><dt>Spendable income</dt><dd>{cash(p.totalAfterTaxIncomeCents)}</dd></div><div><dt>Yield</dt><dd>{(p.effectiveYieldBps/100).toFixed(2)}%</dd></div>{desired&&<><div><dt>Coverage</dt><dd>{((p.targetCoverageBps??0)/100).toFixed(0)}%</dd></div><div><dt>Shortfall</dt><dd>{cash(p.shortfallCents)}</dd></div><div><dt>Additional stock</dt><dd>{cash(p.additionalStockValueCents)}</dd></div></>}</dl></td>)}</tr>)}</tbody></table></div></section>
-  </>;
 }
 function Chart({
   result,

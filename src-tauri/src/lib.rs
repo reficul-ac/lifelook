@@ -1140,13 +1140,13 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
     })
 }
 
-fn default_investment_assumptions()->serde_json::Value{serde_json::json!({"homePriceCents":50000000,"downPaymentBps":2000,"mortgageRateBps":650,"mortgageTermYears":30,"monthlyRentCents":250000,"stockReturnBps":700,"homeAppreciationBps":300,"horizonYears":30,"purchaseCostBps":300,"sellingCostBps":600,"rentGrowthBps":300,"propertyTaxBps":110,"annualInsuranceCents":200000,"insuranceGrowthBps":300,"monthlyHoaCents":0,"hoaGrowthBps":300,"maintenanceBps":100})}
+fn default_investment_assumptions()->serde_json::Value{serde_json::json!({"homePriceCents":50000000,"downPaymentBps":2000,"mortgageRateBps":650,"mortgageTermYears":30,"monthlyRentCents":250000,"stockReturnBps":700,"homeAppreciationBps":300,"horizonYears":30,"purchaseCostBps":300,"sellingCostBps":600,"rentGrowthBps":300,"propertyTaxBps":110,"annualInsuranceCents":200000,"insuranceGrowthBps":300,"monthlyHoaCents":0,"hoaGrowthBps":300,"maintenanceBps":100,"monthlyRentalIncomeCents":0,"rentalIncomeGrowthBps":300})}
 
 fn valid_investment_assumptions(value:&serde_json::Value)->bool{
     let integer=|key:&str,min:i64,max:i64|value.get(key).and_then(|v|v.as_i64()).is_some_and(|n|(min..=max).contains(&n));
-    ["homePriceCents","monthlyRentCents","annualInsuranceCents","monthlyHoaCents"].iter().all(|k|integer(k,0,MAX_MONEY_CENTS))
+    ["homePriceCents","monthlyRentCents","annualInsuranceCents","monthlyHoaCents","monthlyRentalIncomeCents"].iter().all(|k|integer(k,0,MAX_MONEY_CENTS))
       && integer("homePriceCents",1,MAX_MONEY_CENTS) && integer("downPaymentBps",0,9999)
-      && ["mortgageRateBps","stockReturnBps","homeAppreciationBps","purchaseCostBps","sellingCostBps","rentGrowthBps","propertyTaxBps","insuranceGrowthBps","hoaGrowthBps","maintenanceBps"].iter().all(|k|integer(k,0,10000))
+      && ["mortgageRateBps","stockReturnBps","homeAppreciationBps","purchaseCostBps","sellingCostBps","rentGrowthBps","propertyTaxBps","insuranceGrowthBps","hoaGrowthBps","maintenanceBps","rentalIncomeGrowthBps"].iter().all(|k|integer(k,0,10000))
       && integer("mortgageTermYears",1,50)&&integer("horizonYears",1,50)
 }
 

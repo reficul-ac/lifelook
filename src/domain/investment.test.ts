@@ -30,4 +30,13 @@ describe("investment comparison",()=>{
     const result=calculateInvestmentComparison({...defaultInvestmentAssumptions,stockReturnBps:0,homeAppreciationBps:10_000,horizonYears:5});
     if(result.ok)expect(result.result.equityCrossovers.length).toBeGreaterThanOrEqual(0);
   });
+  it("invests Buy-path rental income at month end and includes it in Buy totals",()=>{
+    const result=calculateInvestmentComparison({...defaultInvestmentAssumptions,horizonYears:1,monthlyRentCents:0,stockReturnBps:0,monthlyRentalIncomeCents:100_000,rentalIncomeGrowthBps:0});
+    if(!result.ok)throw new Error("invalid");
+    const end=result.result.months.at(-1)!;
+    expect(end.rentalPortfolioCents).toBe(1_200_000);
+    expect(end.buyRetainedTotalCents).toBe(end.equityCents+1_200_000);
+    expect(end.buySaleTotalCents).toBe(end.saleProceedsCents+1_200_000);
+    expect(result.result.years[0].rentalIncomeCents).toBe(1_200_000);
+  });
 });

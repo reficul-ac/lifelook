@@ -31,7 +31,7 @@ export const TAX_RULES_2025:TaxRulePack={year:2025,federal:{
   "married-joint":{standardDeductionCents:11412_00,brackets:ca2025.joint},
   "married-separate":{standardDeductionCents:5706_00,brackets:ca2025.single},
   "head-of-household":{standardDeductionCents:11412_00,brackets:ca2025.head},
-},socialSecurityWageBaseCents:176100_00,additionalMedicareThresholdCents:{single:200000_00,"married-joint":250000_00,"married-separate":125000_00,"head-of-household":200000_00},sources:sources(2025)};
+},federalLongTermCapitalGains:{single:brackets([[48350,0],[533400,1500],[null,2000]]),"married-joint":brackets([[96700,0],[600050,1500],[null,2000]]),"married-separate":brackets([[48350,0],[300000,1500],[null,2000]]),"head-of-household":brackets([[64750,0],[566700,1500],[null,2000]])},unrecapturedSection1250MaxRateBps:2500,netInvestmentIncomeThresholdCents:{single:200000_00,"married-joint":250000_00,"married-separate":125000_00,"head-of-household":200000_00},socialSecurityWageBaseCents:176100_00,additionalMedicareThresholdCents:{single:200000_00,"married-joint":250000_00,"married-separate":125000_00,"head-of-household":200000_00},sources:sources(2025)};
 
 export const TAX_RULES_2026:TaxRulePack={year:2026,federal:{
   single:{standardDeductionCents:16100_00,brackets:brackets([[12400,1000],[50400,1200],[105700,2200],[201775,2400],[256225,3200],[640600,3500],[null,3700]])},
@@ -43,7 +43,7 @@ export const TAX_RULES_2026:TaxRulePack={year:2026,federal:{
   "married-joint":{standardDeductionCents:Math.round(11412_00*1.025),brackets:inflateBrackets(ca2025.joint,250)},
   "married-separate":{standardDeductionCents:Math.round(5706_00*1.025),brackets:inflateBrackets(ca2025.single,250)},
   "head-of-household":{standardDeductionCents:Math.round(11412_00*1.025),brackets:inflateBrackets(ca2025.head,250)},
-},socialSecurityWageBaseCents:184500_00,additionalMedicareThresholdCents:TAX_RULES_2025.additionalMedicareThresholdCents,sources:sources(2026)};
+},federalLongTermCapitalGains:{single:brackets([[49450,0],[545500,1500],[null,2000]]),"married-joint":brackets([[98900,0],[613700,1500],[null,2000]]),"married-separate":brackets([[49450,0],[306850,1500],[null,2000]]),"head-of-household":brackets([[66200,0],[579600,1500],[null,2000]])},unrecapturedSection1250MaxRateBps:2500,netInvestmentIncomeThresholdCents:TAX_RULES_2025.netInvestmentIncomeThresholdCents,socialSecurityWageBaseCents:184500_00,additionalMedicareThresholdCents:TAX_RULES_2025.additionalMedicareThresholdCents,sources:sources(2026)};
 
 function progressive(amount:Cents,items:readonly TaxBracket[]):Cents{let tax=0,previous=0;for(const item of items){const ceiling=item.upToCents??amount;tax+=Math.round(Math.max(0,Math.min(amount,ceiling)-previous)*item.rateBps/10000);if(amount<=ceiling)break;previous=ceiling;}return tax;}
 function marginal(amount:Cents,items:readonly TaxBracket[]):number{if(amount<=0)return 0;return items.find(x=>x.upToCents===null||amount<=x.upToCents)?.rateBps??0;}
@@ -70,7 +70,8 @@ export function projectedTaxRules(year:number,thresholdInflationBps:number):TaxR
   const statuses=Object.keys(TAX_RULES_2026.federal) as FilingStatus[];
   const federal=Object.fromEntries(statuses.map(status=>[status,{standardDeductionCents:roundHundreds(TAX_RULES_2026.federal[status].standardDeductionCents*factor),brackets:inflate(TAX_RULES_2026.federal[status].brackets)}])) as unknown as TaxRulePack["federal"];
   const california=Object.fromEntries(statuses.map(status=>[status,{standardDeductionCents:roundDollars(TAX_RULES_2026.california[status].standardDeductionCents*factor),brackets:inflate(TAX_RULES_2026.california[status].brackets)}])) as unknown as TaxRulePack["california"];
-  return {year:2026,federal,california,socialSecurityWageBaseCents:roundHundreds(TAX_RULES_2026.socialSecurityWageBaseCents*factor),additionalMedicareThresholdCents:TAX_RULES_2026.additionalMedicareThresholdCents,sources:TAX_RULES_2026.sources.map(source=>({...source,status:"projected" as const}))};
+  const federalLongTermCapitalGains=Object.fromEntries(statuses.map(status=>[status,inflate(TAX_RULES_2026.federalLongTermCapitalGains[status])])) as unknown as TaxRulePack["federalLongTermCapitalGains"];
+  return {year:2026,federal,california,federalLongTermCapitalGains,unrecapturedSection1250MaxRateBps:TAX_RULES_2026.unrecapturedSection1250MaxRateBps,netInvestmentIncomeThresholdCents:TAX_RULES_2026.netInvestmentIncomeThresholdCents,socialSecurityWageBaseCents:roundHundreds(TAX_RULES_2026.socialSecurityWageBaseCents*factor),additionalMedicareThresholdCents:TAX_RULES_2026.additionalMedicareThresholdCents,sources:TAX_RULES_2026.sources.map(source=>({...source,status:"projected" as const}))};
 }
 
 function saltCap(year:number,agiCents:number,status:FilingStatus){

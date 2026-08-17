@@ -27,6 +27,7 @@ import {
   Settings,
   Sparkles,
   Sun,
+  TrendingUp,
   WalletCards,
 } from "lucide-react";
 import {
@@ -66,6 +67,7 @@ import {
   emptySettings,
 } from "./repository";
 import { ScenarioPlanningDialog } from "./ScenarioPlanningDialog";
+import { InvestmentView } from "./InvestmentView";
 import {
   buildSearchIndex,
   GlobalSearch,
@@ -76,12 +78,13 @@ const units=(micros:number)=>new Intl.NumberFormat(undefined,{maximumFractionDig
 const equityVestedValue=(asset:Pick<Asset,"equityHolding">,date:string)=>asset.equityHolding?.grants.reduce((sum,grant)=>sum+valueForUnits(vestedUnitsAt(grant,date),projectedSharePrice(asset.equityHolding!,date)),0)??0;
 const nextVest=(grant:import("./domain").RsuGrant,date:string)=>grant.vestEvents.find(event=>event.date>date);
 
-type View = "Overview" | "Activity" | "Plan" | "Net Worth" | "Settings";
+type View = "Overview" | "Activity" | "Plan" | "Investment" | "Net Worth" | "Settings";
 const localIsoDate=()=>{const now=new Date(),offset=now.getTimezoneOffset()*60000;return new Date(now.valueOf()-offset).toISOString().slice(0,10)};
 const nav: [View, typeof LayoutDashboard][] = [
   ["Overview", LayoutDashboard],
   ["Activity", Activity],
   ["Plan", PiggyBank],
+  ["Investment", TrendingUp],
   ["Net Worth", Landmark],
   ["Settings", Settings],
 ];
@@ -602,6 +605,7 @@ function Workspace({
             </section>
           </div>
         )}
+        {view === "Investment" && <InvestmentView initial={bootstrap.investmentComparison} repository={repository}/>}
         {view === "Net Worth" && (
           <NetWorth
             snapshot={snapshot}

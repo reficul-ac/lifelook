@@ -44,7 +44,7 @@ describe("LifeLook exact-package control matrix", () => {
       if ((await motion.getAttribute("aria-checked")) !== String(reducedMotion)) await motion.click();
       await browser.waitUntil(async () => (await motion.getAttribute("aria-checked")) === String(reducedMotion));
 
-      for (const destination of ["Overview", "Activity", "Plan", "Net Worth", "Settings"]) {
+      for (const destination of ["Overview", "Activity", "Plan", "Investment", "Net Worth", "Settings"]) {
         let nav = await $(`//nav[@aria-label="Primary navigation"]//button[normalize-space()="${destination}"]`);
         await nav.click();
         nav = await $(`//nav[@aria-label="Primary navigation"]//button[normalize-space()="${destination}"]`);

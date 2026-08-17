@@ -142,6 +142,13 @@ describe("ProjectionEngine",()=>{
     expect(year.months[0].incomeCents).toBe(10_000_01);
     expect(year.months.slice(1).every(month=>month.incomeCents===10_000_00)).toBe(true);
   });
+  it("stops annual salary growth at the optional salary cap",()=>{
+    const financial={...snapshot,accounts:[{...snapshot.accounts[0],balanceCents:0}],recurring:[{id:"salary",name:"Salary",kind:"income" as const,incomeType:"salary" as const,amountCents:100_000_00,frequency:"monthly" as const,startDate:"2025-01-01",annualGrowthBps:1000,annualGrowthMonth:1,annualGrowthCapCents:115_000_00,taxTreatment:"none" as const}]};
+    const result=calculate(financial,{...scenario,horizon:{start:"2025-01",months:36}});
+    expect(result[0].incomeCents).toBe(100_000_00);
+    expect(result[1].incomeCents).toBe(110_000_00);
+    expect(result[2].incomeCents).toBe(115_000_00);
+  });
   it("keeps capped contribution overflow in default cash",()=>{
     const financial={...snapshot,taxProfile:{...snapshot.taxProfile,filingStatus:"single" as const},recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0},{...snapshot.accounts[0],id:"b",balanceCents:0}]};
     const planned:Scenario={...scenario,events:[{id:"cash",date:"2025-01-01",type:"one-time-income" as const,amountCents:1000}],contributions:[{id:"capped",destinationType:"account",destinationId:"b",percentBps:10000,frequency:"monthly",targetBalanceCents:200}],horizon:{start:"2025-01",months:1}};

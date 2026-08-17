@@ -66,7 +66,8 @@ function occurrences(entry: RecurringEntry, month: string) {
 }
 function recurringAmount(entry:RecurringEntry,annualOrOccurrenceCents:number,month:string,growthBps:number,growthMonths:number,count:number){
   const salaryRaiseMonth=entry.annualGrowthMonth??new Date(`${entry.startDate}T00:00:00Z`).getUTCMonth()+1,currentYear=Number(month.slice(0,4)),currentMonth=Number(month.slice(5,7)),startYear=Number(entry.startDate.slice(0,4)),raises=entry.incomeType==="salary"?Math.max(0,currentYear-startYear-(currentMonth<salaryRaiseMonth?1:0)):0;
-  const grown=entry.incomeType==="salary"?Math.round(annualOrOccurrenceCents*Math.pow(1+growthBps/10_000,raises)):grow(annualOrOccurrenceCents,growthBps,growthMonths);
+  const uncapped=entry.incomeType==="salary"?Math.round(annualOrOccurrenceCents*Math.pow(1+growthBps/10_000,raises)):grow(annualOrOccurrenceCents,growthBps,growthMonths);
+  const grown=entry.incomeType==="salary"&&entry.annualGrowthCapCents!=null?Math.min(uncapped,entry.annualGrowthCapCents):uncapped;
   if(entry.incomeType!=="salary")return grown*count;
   const base=Math.floor(grown/12),remainder=grown-base*12,calendarMonth=Number(month.slice(5,7))-1;
   return base+(calendarMonth<remainder?1:0);

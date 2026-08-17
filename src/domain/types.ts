@@ -13,7 +13,7 @@ export interface Category { id: string; name: string; kind: "income" | "expense"
 export interface Transaction { id: string; date: string; amountCents: Cents; accountId: string; categoryId: string; transferAccountId?: string; note?: string }
 export type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
 export type IncomeTaxCategory="wages"|"taxable-nonwage"|"nontaxable";
-export interface RecurringEntry { id: string; name: string; amountCents: Cents; kind: "income" | "expense"; incomeType?:"ordinary"|"salary"; incomeTaxCategory?:IncomeTaxCategory; ownerPersonId?:string|null; categoryId?: string; accountId?: string; frequency?: RecurringFrequency; startDate: string; endDate?: string; annualGrowthBps?: BasisPoints; annualGrowthMonth?:number|null; taxTreatment: "none" | "pretax" }
+export interface RecurringEntry { id: string; name: string; amountCents: Cents; kind: "income" | "expense"; incomeType?:"ordinary"|"salary"; incomeTaxCategory?:IncomeTaxCategory; ownerPersonId?:string|null; categoryId?: string; accountId?: string; frequency?: RecurringFrequency; startDate: string; endDate?: string; annualGrowthBps?: BasisPoints; annualGrowthMonth?:number|null; annualGrowthCapCents?:Cents|null; taxTreatment: "none" | "pretax" }
 export interface ImportProfile { id: string; name: string; columns: Readonly<Record<string, string>> }
 export interface ImportBatch { id: string; importedAt: string; profileId?: string; rowCount: number }
 export interface HousingCosts { propertyTaxRateBps: BasisPoints; insuranceMonthlyCents: Cents; insuranceAnnualGrowthBps: BasisPoints; hoaMonthlyCents: Cents; hoaAnnualGrowthBps: BasisPoints }

@@ -1140,11 +1140,16 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
     })
 }
 
-fn default_investment_assumptions()->serde_json::Value{serde_json::json!({"homePriceCents":50000000,"downPaymentBps":2000,"mortgageRateBps":650,"mortgageTermYears":30,"monthlyRentCents":250000,"stockReturnBps":700,"homeAppreciationBps":300,"horizonYears":30,"purchaseCostBps":300,"sellingCostBps":600,"rentGrowthBps":300,"propertyTaxBps":110,"annualInsuranceCents":200000,"insuranceGrowthBps":300,"monthlyHoaCents":0,"hoaGrowthBps":300,"maintenanceBps":100,"monthlyRentalIncomeCents":0,"rentalIncomeGrowthBps":300,"factorRentalTaxes":false,"propertyTaxBasisOverrideCents":null,"buildingBasisOverrideCents":null,"mfsLivedApartAllYear":false,"rentalType":"long-term","shortTermMaterialParticipation":false,"longTermRealEstateProfessional":false,"longTermMaterialParticipation":false})}
+fn default_investment_assumptions()->serde_json::Value{serde_json::json!({"fireWithdrawalRateBps":300,"retirementIncomeMode":"current","annualRetirementIncomeCents":0,"primaryResidence":false,"rentalUseBps":0,"homePriceCents":50000000,"downPaymentBps":2000,"mortgageRateBps":650,"mortgageTermYears":30,"monthlyRentCents":250000,"stockReturnBps":700,"homeAppreciationBps":300,"horizonYears":30,"purchaseCostBps":300,"sellingCostBps":600,"rentGrowthBps":300,"propertyTaxBps":110,"annualInsuranceCents":200000,"insuranceGrowthBps":300,"monthlyHoaCents":0,"hoaGrowthBps":300,"maintenanceBps":100,"monthlyRentalIncomeCents":0,"rentalIncomeGrowthBps":300,"factorRentalTaxes":false,"propertyTaxBasisOverrideCents":null,"buildingBasisOverrideCents":null,"mfsLivedApartAllYear":false,"rentalType":"long-term","shortTermMaterialParticipation":false,"longTermRealEstateProfessional":false,"longTermMaterialParticipation":false})}
 
 fn valid_investment_assumptions(value:&serde_json::Value)->bool{
     let integer=|key:&str,min:i64,max:i64|value.get(key).and_then(|v|v.as_i64()).is_some_and(|n|(min..=max).contains(&n));
-    ["homePriceCents","monthlyRentCents","annualInsuranceCents","monthlyHoaCents","monthlyRentalIncomeCents"].iter().all(|k|integer(k,0,MAX_MONEY_CENTS))
+    integer("fireWithdrawalRateBps",1,10000) && integer("annualRetirementIncomeCents",0,MAX_MONEY_CENTS)
+      && value.get("retirementIncomeMode").and_then(|v|v.as_str()).is_some_and(|v|matches!(v,"current"|"desired"))
+      && value.get("primaryResidence").and_then(|v|v.as_bool()).is_some()
+      && integer("rentalUseBps",0,9900)
+      && if value.get("primaryResidence").and_then(|v|v.as_bool()).unwrap_or(false) && value.get("monthlyRentalIncomeCents").and_then(|v|v.as_i64()).unwrap_or(0)>0 { integer("rentalUseBps",100,9900) } else { integer("rentalUseBps",0,0) }
+      && ["homePriceCents","monthlyRentCents","annualInsuranceCents","monthlyHoaCents","monthlyRentalIncomeCents"].iter().all(|k|integer(k,0,MAX_MONEY_CENTS))
       && integer("homePriceCents",1,MAX_MONEY_CENTS) && integer("downPaymentBps",0,9999)
       && ["mortgageRateBps","stockReturnBps","homeAppreciationBps","purchaseCostBps","sellingCostBps","rentGrowthBps","propertyTaxBps","insuranceGrowthBps","hoaGrowthBps","maintenanceBps","rentalIncomeGrowthBps"].iter().all(|k|integer(k,0,10000))
       && integer("mortgageTermYears",1,50)&&integer("horizonYears",1,50)

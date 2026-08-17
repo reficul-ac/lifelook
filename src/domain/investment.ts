@@ -2,6 +2,11 @@ import { projectedTaxRules } from "./tax";
 import type { BasisPoints, Cents, FilingStatus, TaxBracket } from "./types";
 
 export interface InvestmentAssumptions {
+  fireWithdrawalRateBps: BasisPoints;
+  retirementIncomeMode: "current" | "desired";
+  annualRetirementIncomeCents: Cents;
+  primaryResidence: boolean;
+  rentalUseBps: BasisPoints;
   homePriceCents: Cents;
   downPaymentBps: BasisPoints;
   mortgageRateBps: BasisPoints;
@@ -103,12 +108,55 @@ export interface InvestmentResult {
   equityCrossovers: InvestmentCrossover[];
   saleCrossovers: InvestmentCrossover[];
   taxRuleYears: number[];
+  retirementYears: RetirementYearResult[];
+}
+export type RetirementPath = "stocks" | "keep" | "sell";
+export interface RetirementPathResult {
+  path: RetirementPath;
+  wealthCents: Cents;
+  grossStockWithdrawalCents: Cents;
+  realizedShortTermGainCents: Cents;
+  realizedLongTermGainCents: Cents;
+  propertyGrossRentCents: Cents;
+  propertyCashCostsCents: Cents;
+  incrementalTaxCents: Cents;
+  afterTaxInvestmentIncomeCents: Cents;
+  totalAfterTaxIncomeCents: Cents;
+  effectiveYieldBps: BasisPoints;
+  targetCoverageBps: BasisPoints | null;
+  shortfallCents: Cents;
+  requiredStockValueCents: Cents;
+  additionalStockValueCents: Cents;
+}
+export interface RetirementYearResult {
+  year: number;
+  calendarYear: number;
+  retirementMonth: number;
+  inflationFactor: number;
+  targetCents: Cents | null;
+  paths: Record<RetirementPath, RetirementPathResult>;
 }
 export type InvestmentCalculation =
   | { ok: true; result: InvestmentResult }
   | { ok: false; errors: InvestmentValidationError[] };
+type StockLot = { value: number; basis: number; acquiredMonth: number };
+const applyLotFlow = (lots: StockLot[], flow: number, month: number) => {
+  if (flow >= 0) { if (flow) lots.push({value:flow,basis:flow,acquiredMonth:month}); return; }
+  let sale = -flow;
+  while (sale > .01 && lots.length) { const lot=lots[0], used=Math.min(sale,lot.value), ratio=used/lot.value; lot.value-=used;lot.basis-=lot.basis*ratio;sale-=used;if(lot.value<.01)lots.shift(); }
+};
+const sellLotsFifo = (source: readonly StockLot[], amount: number, month: number) => {
+  const lots=source.map(x=>({...x})); let remaining=Math.min(amount,lots.reduce((s,x)=>s+x.value,0)), short=0,long=0;
+  while(remaining>.01&&lots.length){const lot=lots.shift()!,used=Math.min(remaining,lot.value),basis=lot.basis*used/lot.value,gain=Math.max(0,used-basis);if(month-lot.acquiredMonth<=12)short+=gain;else long+=gain;remaining-=used;}
+  return {short,long};
+};
 
 export const defaultInvestmentAssumptions: InvestmentAssumptions = {
+  fireWithdrawalRateBps: 300,
+  retirementIncomeMode: "current",
+  annualRetirementIncomeCents: 0,
+  primaryResidence: false,
+  rentalUseBps: 0,
   homePriceCents: 50_000_000,
   downPaymentBps: 2000,
   mortgageRateBps: 650,
@@ -150,6 +198,15 @@ export function validateInvestmentAssumptions(
   a: InvestmentAssumptions,
 ): InvestmentValidationError[] {
   const errors: InvestmentValidationError[] = [];
+  if (a.retirementIncomeMode !== "current" && a.retirementIncomeMode !== "desired")
+    errors.push({ field: "retirementIncomeMode", message: "Choose a valid retirement income mode." });
+  if (!safe(a.annualRetirementIncomeCents))
+    errors.push({ field: "annualRetirementIncomeCents", message: "Enter a valid non-negative annual amount." });
+  if (!Number.isInteger(a.fireWithdrawalRateBps) || a.fireWithdrawalRateBps < 1 || a.fireWithdrawalRateBps > 10_000)
+    errors.push({ field: "fireWithdrawalRateBps", message: "FIRE withdrawal rate must be greater than 0% and no more than 100%." });
+  const needsRentalShare = a.primaryResidence && a.monthlyRentalIncomeCents > 0;
+  if (!Number.isInteger(a.rentalUseBps) || (needsRentalShare ? a.rentalUseBps < 100 || a.rentalUseBps > 9900 : a.rentalUseBps !== 0))
+    errors.push({ field: "rentalUseBps", message: needsRentalShare ? "Rental use must be from 1% to 99%." : "Rental use must be zero unless a primary residence has tenant income." });
   if (a.rentalType !== "long-term" && a.rentalType !== "short-term")
     errors.push({ field: "rentalType", message: "Choose a valid rental type." });
   const money: (keyof InvestmentAssumptions)[] = [
@@ -353,6 +410,7 @@ export function calculateInvestmentComparison(
     accumDep = 0,
     fedCarry = 0,
     caCarry = 0;
+  const stockLots: StockLot[]=[{value:stock,basis:stock,acquiredMonth:0}], portfolioLots: StockLot[]=[], annualLots:{stock:StockLot[];portfolio:StockLot[]}[]=[];
   const zero = {
     rentalIncomeCents: 0,
     principalCents: 0,
@@ -419,12 +477,13 @@ export function calculateInvestmentComparison(
         Math.pow(1 + a.rentalIncomeGrowthBps / 120_000, elapsed),
       rent =
         a.monthlyRentCents * Math.pow(1 + a.rentGrowthBps / 120_000, elapsed),
-      operating = tax + maintenance + insurance + hoa,
+      rentalShare = a.primaryResidence ? a.rentalUseBps / 10_000 : 1,
+      operating = (tax + maintenance + insurance + hoa) * rentalShare,
       owner = principal + interest + operating,
       year = Number(addMonths(start, elapsed).slice(0, 4)),
       depreciation = a.factorRentalTaxes
         ? depreciationForMonth(
-            effectiveBuildingBasis(a),
+            effectiveBuildingBasis(a) * rentalShare,
             Number(start.slice(5)),
             month,
           )
@@ -536,6 +595,8 @@ export function calculateInvestmentComparison(
   for (const row of raw) {
     stock *= 1 + stockMonthly;
     portfolio *= 1 + stockMonthly;
+    stockLots.forEach(l=>l.value*=1+stockMonthly);
+    portfolioLots.forEach(l=>l.value*=1+stockMonthly);
     const adj = adjustments.get(row.year)!,
       yearRows = raw.filter((x) => x.year === row.year),
       weight = yearRows.reduce((s, x) => s + x.income, 0),
@@ -544,15 +605,21 @@ export function calculateInvestmentComparison(
       buyContribution = row.income + taxDelta;
     stock += row.owner;
     portfolio += buyContribution;
+    applyLotFlow(stockLots,row.owner,row.month);
+    applyLotFlow(portfolioLots,buyContribution,row.month);
     accumDep += row.depreciation;
     const equity = row.home - row.balance,
       preTaxSale = row.home * (1 - a.sellingCostBps / 10_000) - row.balance;
     let sale = preTaxSale;
     if (a.factorRentalTaxes && taxContext) {
       const held = row.month,
-        gain =
+        rawGain =
           row.home * (1 - a.sellingCostBps / 10_000) -
           (effectivePropertyTaxBasis(a) - accumDep),
+        exclusion = a.primaryResidence && held >= 24
+          ? Math.min(Math.max(0, rawGain - accumDep), taxContext.filingStatus === "married-joint" ? 50_000_000 : 25_000_000)
+          : 0,
+        gain = rawGain - exclusion,
         ctx = contextFor(taxContext, row.year),
         pack = projectedTaxRules(row.year, taxContext.thresholdInflationBps);
       let federal = 0,
@@ -649,6 +716,7 @@ export function calculateInvestmentComparison(
       netTaxDeltaCents: taxDelta,
       taxAdjustedBuyContributionCents: Math.round(buyContribution),
     });
+    if(row.month%12===0)annualLots.push({stock:stockLots.map(x=>({...x})),portfolio:portfolioLots.map(x=>({...x}))});
   }
   const years: InvestmentYear[] = [];
   for (let i = 0; i < a.horizonYears; i++) {
@@ -676,6 +744,67 @@ export function calculateInvestmentComparison(
       taxAdjustedBuyContributionCents: sum("taxAdjustedBuyContributionCents"),
     });
   }
+  const retirementYears = years.map((year): RetirementYearResult => {
+    const inflationFactor = Math.pow(1 + (taxContext?.thresholdInflationBps ?? 0) / 10_000, year.year);
+    const ctx = taxContext && contextFor(taxContext, year.calendarYear);
+    const pack = taxContext && projectedTaxRules(year.calendarYear, taxContext.thresholdInflationBps);
+    const otherNominal = a.annualRetirementIncomeCents * inflationFactor;
+    const targetNominal = a.retirementIncomeMode === "desired" ? otherNominal : null;
+    const ordinaryTax = (ordinary: number, shortGain: number, longGain = 0) => {
+      if (!ctx || !pack || !taxContext) return 0;
+      const fedOrdinary = progressive(Math.max(0, ctx.federalTaxableCents + ordinary + shortGain), pack.federal[taxContext.filingStatus].brackets) - ctx.federalTaxCents;
+      const fedCapital = progressive(ctx.federalTaxableCents + ordinary + shortGain + longGain, pack.federalLongTermCapitalGains[taxContext.filingStatus]) - progressive(ctx.federalTaxableCents + ordinary + shortGain, pack.federalLongTermCapitalGains[taxContext.filingStatus]);
+      const gains=shortGain+longGain, ca = progressive(Math.max(0, ctx.californiaTaxableCents + ordinary + gains), pack.california[taxContext.filingStatus].brackets) - ctx.californiaTaxCents;
+      const niit = Math.min(gains, Math.max(0, ctx.modifiedAgiCents + ordinary + gains - pack.netInvestmentIncomeThresholdCents[taxContext.filingStatus])) * 0.038;
+      return Math.max(0, Math.round(fedOrdinary + fedCapital + ca + niit));
+    };
+    const make = (path: RetirementPath, wealth: number, stockPool: number, lots: readonly StockLot[], rentalCash = 0): RetirementPathResult => {
+      const cap = Math.max(0, stockPool * a.fireWithdrawalRateBps / 10_000);
+      const baseOtherTax = a.retirementIncomeMode === "current" ? ordinaryTax(otherNominal, 0, 0) : 0;
+      const netFor = (gross: number) => {
+        const gains=sellLotsFifo(lots,gross,year.year*12);
+        const combinedTax = ordinaryTax(a.retirementIncomeMode === "current" ? otherNominal : 0, gains.short, gains.long);
+        const tax = Math.max(0, combinedTax - baseOtherTax);
+        return { ...gains, tax, net: gross + rentalCash - tax };
+      };
+      let gross = cap;
+      if (targetNominal !== null) {
+        let lo = 0, hi = cap;
+        for (let i = 0; i < 32; i++) { const mid = (lo + hi) / 2; if (netFor(mid).net >= targetNominal) hi = mid; else lo = mid; }
+        gross = netFor(hi).net >= targetNominal ? hi : cap;
+      }
+      const calc = netFor(gross), investmentNominal = calc.net;
+      const otherAfterTax = a.retirementIncomeMode === "current" ? otherNominal - baseOtherTax : 0;
+      const totalNominal = investmentNominal + otherAfterTax;
+      const target = targetNominal ?? 0;
+      let required = 0;
+      if (targetNominal !== null && netFor(cap).net < target) {
+        let lo = stockPool, hi = Math.max(stockPool, target * 100_000 / a.fireWithdrawalRateBps);
+        for (let i = 0; i < 40; i++) { const mid=(lo+hi)/2; if (netFor(mid*a.fireWithdrawalRateBps/10_000).net >= target) hi=mid; else lo=mid; }
+        required = hi;
+      } else if (targetNominal !== null) required = gross * 10_000 / a.fireWithdrawalRateBps;
+      return {
+        path, wealthCents: Math.round(wealth), grossStockWithdrawalCents: Math.round(gross / inflationFactor),
+        realizedShortTermGainCents: Math.round(calc.short / inflationFactor), realizedLongTermGainCents: Math.round(calc.long / inflationFactor),
+        propertyGrossRentCents: Math.round((path === "keep" ? year.rentalIncomeCents : 0) / inflationFactor),
+        propertyCashCostsCents: Math.round((path === "keep" ? year.deductibleOperatingExpensesCents + (year.principalCents + year.interestCents) * (a.primaryResidence ? a.rentalUseBps / 10_000 : 1) : 0) / inflationFactor),
+        incrementalTaxCents: Math.round(calc.tax / inflationFactor), afterTaxInvestmentIncomeCents: Math.round(investmentNominal / inflationFactor),
+        totalAfterTaxIncomeCents: Math.round(totalNominal / inflationFactor), effectiveYieldBps: wealth > 0 ? Math.round(investmentNominal * 10_000 / wealth) : 0,
+        targetCoverageBps: targetNominal === null ? null : target ? Math.round(Math.min(1, totalNominal / target) * 10_000) : 10_000,
+        shortfallCents: Math.round(Math.max(0, target - totalNominal) / inflationFactor), requiredStockValueCents: Math.round(required / inflationFactor),
+        additionalStockValueCents: Math.round(Math.max(0, required - stockPool) / inflationFactor),
+      };
+    };
+    const rentalShare = a.primaryResidence ? a.rentalUseBps / 10_000 : 1;
+    const rentalCash = year.rentalIncomeCents - year.deductibleOperatingExpensesCents - (year.principalCents + year.interestCents) * rentalShare + year.netTaxDeltaCents;
+    return { year: year.year, calendarYear: year.calendarYear, retirementMonth: year.year * 12, inflationFactor,
+      targetCents: targetNominal === null ? null : a.annualRetirementIncomeCents,
+      paths: {
+        stocks: make("stocks", year.stockValueCents, year.stockValueCents, annualLots[year.year-1].stock),
+        keep: make("keep", year.buyRetainedTotalCents, year.rentalPortfolioCents, annualLots[year.year-1].portfolio, rentalCash),
+        sell: make("sell", year.buySaleTotalCents, year.buySaleTotalCents, [...annualLots[year.year-1].portfolio,{value:year.saleProceedsCents,basis:year.saleProceedsCents,acquiredMonth:year.year*12}]),
+      }};
+  });
   return {
     ok: true,
     result: {
@@ -684,6 +813,7 @@ export function calculateInvestmentComparison(
       equityCrossovers: crossover(months, (m) => m.buyRetainedTotalCents),
       saleCrossovers: crossover(months, (m) => m.buySaleTotalCents),
       taxRuleYears: [...new Set(raw.map((x) => x.year))],
+      retirementYears,
     },
   };
 }

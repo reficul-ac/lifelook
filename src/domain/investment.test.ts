@@ -87,6 +87,21 @@ describe("investment comparison", () => {
     expect(end.buySaleTotalCents).toBe(end.saleProceedsCents + 1_200_000);
     expect(result.result.years[0].rentalIncomeCents).toBe(1_200_000);
   });
+  it("builds independent FIRE snapshots in current and desired modes", () => {
+    const current = calculateInvestmentComparison({...defaultInvestmentAssumptions,horizonYears:2,stockReturnBps:0,fireWithdrawalRateBps:400,annualRetirementIncomeCents:20_000_00});
+    if (!current.ok) throw new Error("invalid");
+    expect(current.result.retirementYears).toHaveLength(2);
+    expect(current.result.retirementYears[0].paths.stocks.grossStockWithdrawalCents).toBe(Math.round(current.result.years[0].stockValueCents*.04));
+    expect(current.result.retirementYears[1].paths.stocks.wealthCents).toBe(current.result.years[1].stockValueCents);
+    const desired = calculateInvestmentComparison({...defaultInvestmentAssumptions,horizonYears:1,retirementIncomeMode:"desired",annualRetirementIncomeCents:1_000_00,fireWithdrawalRateBps:400});
+    if (!desired.ok) throw new Error("invalid");
+    expect(desired.result.retirementYears[0].paths.stocks.totalAfterTaxIncomeCents).toBeCloseTo(1_000_00,-1);
+    expect(desired.result.retirementYears[0].paths.stocks.grossStockWithdrawalCents).toBeLessThan(desired.result.years[0].stockValueCents*.04);
+  });
+  it("requires a mixed-use share only for a primary residence with tenant rent", () => {
+    expect(validateInvestmentAssumptions({...defaultInvestmentAssumptions,primaryResidence:true,monthlyRentalIncomeCents:100_00,rentalUseBps:0}).map(e=>e.field)).toContain("rentalUseBps");
+    expect(validateInvestmentAssumptions({...defaultInvestmentAssumptions,primaryResidence:true,monthlyRentalIncomeCents:100_00,rentalUseBps:2500}).map(e=>e.field)).not.toContain("rentalUseBps");
+  });
   it("uses 27.5-year mid-month building depreciation and excludes land", () => {
     const basis = 44_000_000;
     expect(depreciationForMonth(basis, 8, 1)).toBeCloseTo(basis / 330 / 2, 5);

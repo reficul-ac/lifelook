@@ -1,0 +1,14 @@
+import { describe, expect, it } from "vitest";
+import { annualBucketAmount, calculateRetirement, defaultRetirementPlan, type RetirementCalculationInput, type RetirementPlanRecord } from "./retirement";
+import type { Scenario } from "./types";
+const scenario:Scenario={id:"s",name:"Plan",assumptions:{inflationBps:300,thresholdInflationBps:300},assumptionsInherited:false,events:[],contributions:[],withdrawals:[],horizon:{start:"2026-01",months:24}};
+const plan=(patch:Partial<RetirementPlanRecord>={}):RetirementPlanRecord=>({...defaultRetirementPlan(2026),householdId:"h",selectedScenarioId:"s",...patch});
+const input=(p:RetirementPlanRecord):RetirementCalculationInput=>({plan:p,currentYear:2026,scenario,projections:[],assets:[],liabilities:[],accounts:[{id:"taxable",name:"Brokerage",kind:"investment",balanceCents:10_000_000,annualReturnBps:700,liquid:true}]});
+describe("retirement spending",()=>{
+ it("supports monthly, annual, and after-tax percentage buckets",()=>{expect(annualBucketAmount({id:"m",name:"Housing",mode:"monthly",monthlyCents:100_000},6_000_000)).toBe(1_200_000);expect(annualBucketAmount({id:"a",name:"Travel",mode:"annual",annualCents:500_000},6_000_000)).toBe(500_000);expect(annualBucketAmount({id:"p",name:"Food",mode:"percent",percentBps:2500},6_000_000)).toBe(1_500_000)});
+ it("allows percentages over 100% and reports the shortfall",()=>{const result=calculateRetirement(input(plan({portfolioItems:[{id:"x",kind:"stock",name:"Stocks",targetBalanceCents:10_000_000,sourceAccountId:"taxable",taxClass:"roth",annualReturnBps:0}],selectedSourceIds:["taxable"],expenseBuckets:[{id:"p",name:"Everything",mode:"percent",percentBps:12_000}]}))).selected;expect(result.plannedSpendingCents).toBeGreaterThan(result.spendableIncomeCents);expect(result.leftoverCents).toBeLessThan(0)});
+});
+describe("retirement funding",()=>{
+ it("does not count one Plan source twice",()=>{const target={kind:"stock" as const,name:"Stocks",targetBalanceCents:10_000_000,sourceAccountId:"taxable",taxClass:"taxable" as const,annualReturnBps:700};const result=calculateRetirement(input(plan({selectedSourceIds:["taxable"],portfolioItems:[{...target,id:"one"},{...target,id:"two"}]}))).selected;expect(result.projectedCapitalCents).toBe(10_000_000);expect(result.requiredFundingCents).toBe(20_000_000);expect(result.fundingGapCents).toBe(10_000_000)});
+ it("inflates future startup needs but reports today's dollars",()=>{const result=calculateRetirement(input(plan({retirementYear:2027,portfolioItems:[{id:"p",kind:"property",origin:"manual",name:"Home",valueCents:10_000_000,monthlyRentCents:0,downPaymentBps:2000,purchaseCostBps:300,mortgageRateBps:600,mortgageTermYears:30,appreciationBps:300,propertyTaxBps:100,annualInsuranceCents:0,monthlyHoaCents:0,maintenanceBps:100,incomeGrowthBps:300}]}))).selected;expect(result.requiredFundingCents).toBe(2_300_000)});
+});

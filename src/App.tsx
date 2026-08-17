@@ -432,6 +432,15 @@ function Workspace({
         : null,
     [snapshot, bootstrap.taxProfile, selectedScenario,planRange],
   );
+  const investmentTaxContext = useMemo(()=>{
+    if(!bootstrap.taxProfile?.taxUnit)return undefined;
+    try{
+      const annual=ProjectionEngine.calculate(snapshot,{...selectedScenario,horizon:{...selectedScenario.horizon,months:480}},localIsoDate());
+      const years=annual.flatMap(row=>row.taxLedger?[{year:row.year,federalTaxableCents:row.taxLedger.federalTaxableCents,californiaTaxableCents:row.taxLedger.californiaTaxableCents,federalTaxCents:row.taxLedger.federalCents,californiaTaxCents:row.taxLedger.californiaCents,modifiedAgiCents:Math.max(0,row.taxLedger.grossIncomeCents)}]:[]);
+      const now=new Date(),startMonth=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+      return years.length?{filingStatus:bootstrap.taxProfile.filingStatus,thresholdInflationBps:selectedScenario.assumptions.thresholdInflationBps,startMonth,years}:undefined;
+    }catch{return undefined}
+  },[snapshot,bootstrap.taxProfile,selectedScenario]);
   const projectedPositiveMonths=projections?.[0]?.months.filter(month=>month.surplusCents>0)??[],projectedMonthlySurplusCents=projectedPositiveMonths.length?projectedPositiveMonths.reduce((sum,month)=>sum+month.surplusCents,0)/projectedPositiveMonths.length:0;
   return (
     <div
@@ -605,7 +614,7 @@ function Workspace({
             </section>
           </div>
         )}
-        <div hidden={view !== "Investment"}><InvestmentView initial={bootstrap.investmentComparison} repository={repository}/></div>
+        <div hidden={view !== "Investment"}><InvestmentView initial={bootstrap.investmentComparison} repository={repository} taxContext={investmentTaxContext}/></div>
         {view === "Net Worth" && (
           <NetWorth
             snapshot={snapshot}

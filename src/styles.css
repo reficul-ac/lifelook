@@ -486,19 +486,45 @@ h1 {
 .chart-ranges { display:flex; gap:4px; }
 .chart-ranges button { border:1px solid transparent; border-radius:16px; background:transparent; color:var(--muted); padding:5px 9px; cursor:pointer; }
 .chart-ranges button[aria-pressed="true"] { border-color:var(--line); background:var(--surface2); color:var(--text); }
-.wealth-summary { display:grid; grid-template-columns:repeat(3,max-content); gap:2px 24px; margin:12px 0; }
+.wealth-summary { display:grid; grid-template-columns:repeat(3,max-content); gap:2px 32px; margin:16px 0 6px; padding:0 2px; }
 .wealth-summary strong { font-size:15px; }
 .wealth-summary span { color:var(--muted); font-size:10px; grid-row:2; }
-.chart-canvas { height:260px; position:relative; }
+.chart-canvas { height:280px; position:relative; margin-top:8px; border-radius:10px; background:linear-gradient(180deg,color-mix(in srgb,var(--surface2) 45%,transparent),transparent 72%); cursor:crosshair; touch-action:none; }
+.chart-canvas:focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
 .chart-canvas svg { width:100%; height:100%; overflow:visible; }
-.chart-line { fill:none; stroke:var(--series); stroke-width:1.5; vector-effect:non-scaling-stroke; }
-.chart-area { fill:color-mix(in srgb,var(--series) 12%,transparent); }
-.chart-zero { stroke:var(--line); stroke-width:1; vector-effect:non-scaling-stroke; stroke-dasharray:3 3; }
-.chart-canvas circle { fill:var(--surface); stroke:var(--series); stroke-width:1.5; vector-effect:non-scaling-stroke; cursor:pointer; }
-.chart-canvas circle:focus { outline:none; stroke:var(--focus); stroke-width:3; }
-.chart-tooltip { position:absolute; translate:-50% calc(-100% - 8px); display:grid; z-index:3; min-width:max-content; padding:6px 8px; border:1px solid var(--line); border-radius:7px; background:var(--surface); color:var(--muted); font-size:10px; box-shadow:0 4px 16px #0002; pointer-events:none; }
+.chart-line { fill:none; stroke:var(--series); stroke-width:2.25; vector-effect:non-scaling-stroke; stroke-linecap:round; stroke-linejoin:round; }
+.chart-area { fill:url(#wealth-chart-fill); }
+.chart-grid { stroke:color-mix(in srgb,var(--line) 65%,transparent); stroke-width:1; vector-effect:non-scaling-stroke; stroke-dasharray:1 5; }
+.chart-zero { stroke:color-mix(in srgb,var(--muted) 50%,transparent); stroke-width:1; vector-effect:non-scaling-stroke; stroke-dasharray:4 4; }
+.chart-point { position:absolute; translate:-50% -50%; width:9px; height:9px; padding:0; border:2px solid var(--series); border-radius:50%; background:var(--surface); box-shadow:0 0 0 2px color-mix(in srgb,var(--surface) 75%,transparent); cursor:pointer; transition:transform .12s ease,box-shadow .12s ease; }
+.chart-point:hover,.chart-point:focus-visible { transform:scale(1.45); outline:0; box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 24%,transparent); }
+.chart-scrub-line { position:absolute; top:8%; bottom:8%; width:1px; translate:-50% 0; border-left:1px dashed color-mix(in srgb,var(--muted) 65%,transparent); pointer-events:none; }
+.chart-scrub-point { position:absolute; width:11px; height:11px; translate:-50% -50%; border:3px solid var(--series); border-radius:50%; background:var(--surface); box-shadow:0 0 0 3px color-mix(in srgb,var(--surface) 72%,transparent); pointer-events:none; }
+.chart-tooltip { position:absolute; translate:-50% calc(-100% - 11px); display:grid; z-index:3; min-width:max-content; gap:2px; padding:8px 10px; border:1px solid color-mix(in srgb,var(--line) 80%,transparent); border-radius:9px; background:color-mix(in srgb,var(--surface) 96%,transparent); color:var(--muted); font-size:10px; box-shadow:0 8px 24px #00000018; pointer-events:none; backdrop-filter:blur(8px); }
 .chart-tooltip strong { color:var(--text); }
-.wealth-chart.account { --series:#547ea8; }.wealth-chart.asset { --series:#9a7848; }.wealth-chart.private-stock { --series:#8669a5; }.wealth-chart.debt { --series:#a65e58; }
+.wealth-chart.series-account { --series:#547ea8; }.wealth-chart.series-asset { --series:#9a7848; }.wealth-chart.series-private-stock { --series:#8669a5; }.wealth-chart.series-debt { --series:#a65e58; }
+.wealth-chart,.cash-flow-chart { position:relative; --chart-height:280px; }
+.chart-y-axis { position:absolute; z-index:2; left:22px; right:22px; bottom:22px; height:var(--chart-height); pointer-events:none; }
+.chart-y-axis span { position:absolute; left:5px; translate:0 -50%; padding:1px 4px; border-radius:4px; background:color-mix(in srgb,var(--surface) 84%,transparent); color:var(--muted); font-size:9px; font-variant-numeric:tabular-nums; line-height:1.2; }
+.chart-x-axis { position:absolute; z-index:1; left:22px; right:22px; bottom:22px; height:var(--chart-height); pointer-events:none; }
+.chart-x-axis span { position:absolute; top:92%; translate:-50% 0; color:var(--muted); font-size:9px; font-variant-numeric:tabular-nums; line-height:1; }
+.chart-x-axis span i { position:absolute; left:50%; bottom:14px; width:1px; height:calc(var(--chart-height) * .76); border-left:1px dotted color-mix(in srgb,var(--line) 72%,transparent); }
+.cash-flow-legend { display:flex; flex-wrap:wrap; gap:8px 24px; margin:17px 2px 4px; }
+.cash-flow-legend div { display:grid; grid-template-columns:8px auto; gap:1px 7px; min-width:138px; padding:0; }
+.cash-flow-legend i,.cash-flow-table i { width:7px; height:7px; border-radius:50%; align-self:center; }
+.cash-flow-legend span { color:var(--muted); font-size:10px; }
+.cash-flow-legend strong,.cash-flow-legend small { grid-column:2; }
+.cash-flow-legend strong { font-size:14px; }.cash-flow-legend small { color:var(--muted); font-size:9px; }
+.cash-chart-line { fill:none; stroke:currentColor; stroke-width:2.25; vector-effect:non-scaling-stroke; stroke-linecap:round; stroke-linejoin:round; }
+.cash-chart-area { fill:currentColor; opacity:.035; }
+.cash-point { border-color:currentColor; }
+.cash-scrub-tooltip { gap:4px; }
+.cash-scrub-tooltip strong { display:flex; align-items:center; gap:6px; }
+.cash-scrub-tooltip strong i { width:7px; height:7px; border-radius:50%; }
+.cash-flow-inputs { border-top:1px solid var(--line); }
+.cash-flow-inputs summary { display:flex; align-items:center; justify-content:space-between; padding:12px 4px 0; color:var(--muted); font-size:11px; font-weight:650; cursor:pointer; }
+.cash-flow-inputs summary span { font-weight:500; }
+.cash-flow-inputs[open] summary { padding-bottom:8px; }
 .projection-sheet { padding:0; overflow:hidden; }
 .sheet-scroll { overflow:auto; max-height:520px; }
 .projection-sheet table { border-collapse:separate; border-spacing:0; min-width:100%; width:max-content; font-size:11px; }
@@ -518,13 +544,13 @@ h1 {
 .setup-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
 .setup-summary div { display:grid; gap:4px; padding:14px; border:1px solid var(--line); border-radius:9px; }
 .setup-summary span { color:var(--muted); font-size:10px; }
-@media (max-width:650px) { .plan-toolbar { align-items:stretch; flex-direction:column; }.plan-toolbar label { justify-content:space-between; }.wealth-summary { grid-template-columns:repeat(3,1fr); gap:8px; }.chart-canvas { height:210px; }.setup-summary { grid-template-columns:repeat(2,1fr); }.plan-tabs { overflow-x:auto; } }
+@media (max-width:650px) { .plan-toolbar { align-items:stretch; flex-direction:column; }.plan-toolbar label { justify-content:space-between; }.wealth-summary { grid-template-columns:repeat(3,1fr); gap:8px; }.chart-canvas { height:210px; }.wealth-chart,.cash-flow-chart { --chart-height:210px; }.setup-summary { grid-template-columns:repeat(2,1fr); }.plan-tabs { overflow-x:auto; } }
 .year-table {
   font-size: 12px;
 }
 .year-row {
   display: grid;
-  grid-template-columns: 1fr repeat(4, 0.9fr);
+  grid-template-columns: 1fr repeat(5, 0.9fr);
   width: 100%;
   text-align: right;
   padding: 12px 7px;
@@ -533,6 +559,10 @@ h1 {
   background: transparent;
   cursor: pointer;
 }
+.cash-flow-table .table-head button { display:flex; align-items:center; justify-content:flex-end; gap:5px; border:0; background:transparent; color:inherit; padding:0; text-transform:inherit; letter-spacing:inherit; cursor:pointer; }
+.cash-flow-table .table-head button[aria-pressed="true"] { color:var(--text); font-weight:750; }
+.cash-flow-table .table-head button:not([aria-pressed="true"]) i { opacity:.3; }
+.cash-flow-table .table-head button:focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
 .year-row span:first-child {
   text-align: left;
   display: flex;

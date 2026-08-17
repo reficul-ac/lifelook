@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 15;
+const SCHEMA_VERSION: i64 = 16;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -226,6 +226,7 @@ struct RecurringEntry {
     income_tax_category: String,
     owner_person_id: Option<String>,
     annual_growth_month: Option<i64>,
+    annual_growth_cap_cents: Option<i64>,
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -320,6 +321,8 @@ struct RecurringInput {
     owner_person_id: Option<String>,
     #[serde(default)]
     annual_growth_month: Option<i64>,
+    #[serde(default)]
+    annual_growth_cap_cents: Option<i64>,
     expected_revision: Option<i64>,
 }
 fn default_tax_treatment() -> String {
@@ -831,6 +834,24 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
           CREATE TABLE IF NOT EXISTS equity_vest_events(id TEXT PRIMARY KEY,grant_id TEXT NOT NULL REFERENCES equity_grants(id) ON DELETE CASCADE,vest_date TEXT NOT NULL,units_micros INTEGER NOT NULL CHECK(units_micros>0),actual_fmv_cents INTEGER CHECK(actual_fmv_cents>=0));
           INSERT INTO schema_migrations(version) VALUES(15);")?;
     }
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 16 {
+        let recurring_columns = transaction
+            .prepare("PRAGMA table_info(recurring_entries)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        if !recurring_columns
+            .iter()
+            .any(|x| x == "annual_growth_cap_cents")
+        {
+            transaction.execute("ALTER TABLE recurring_entries ADD COLUMN annual_growth_cap_cents INTEGER CHECK(annual_growth_cap_cents > 0)",[])?;
+        }
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(16)", [])?;
+    }
     transaction
         .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
     transaction.commit()?;
@@ -954,7 +975,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,category_id,account_id,name,amount_cents,frequency,income_type,start_date,end_date,annual_growth_bps,revision,tax_treatment,income_tax_category,owner_person_id,annual_growth_month FROM recurring_entries WHERE household_id=? ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,household_id,category_id,account_id,name,amount_cents,frequency,income_type,start_date,end_date,annual_growth_bps,revision,tax_treatment,income_tax_category,owner_person_id,annual_growth_month,annual_growth_cap_cents FROM recurring_entries WHERE household_id=? ORDER BY name")?;
         recurring = q
             .query_map([&h.id], |r| {
                 Ok(RecurringEntry {
@@ -974,6 +995,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     income_tax_category: r.get(13)?,
                     owner_person_id: r.get(14)?,
                     annual_growth_month: r.get(15)?,
+                    annual_growth_cap_cents: r.get(16)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -1427,6 +1449,19 @@ fn validate_recurring(input: &RecurringInput) -> Result<(), AppError> {
     if !(-10000..=100000).contains(&input.annual_growth_bps) {
         return Err(AppError::Validation("annual growth is out of range".into()));
     }
+    if input
+        .annual_growth_cap_cents
+        .is_some_and(|cap| cap < input.amount_cents || cap > MAX_MONEY_CENTS)
+    {
+        return Err(AppError::Validation(
+            "salary cap must be at least the starting salary and within the supported range".into(),
+        ));
+    }
+    if input.annual_growth_cap_cents.is_some() && input.income_type != "salary" {
+        return Err(AppError::Validation(
+            "salary cap is only supported for salary income".into(),
+        ));
+    }
     if !matches!(input.tax_treatment.as_str(), "none" | "pretax") {
         return Err(AppError::Validation(
             "invalid recurring tax treatment".into(),
@@ -1458,7 +1493,7 @@ fn create_recurring(
         validate_recurring(&input)?;
         validate_recurring_tax_treatment(db, &input)?;
         let hid: String = db.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
-        db.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,frequency,income_type,start_date,end_date,annual_growth_bps,tax_treatment,income_tax_category,owner_person_id,annual_growth_month) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15 WHERE EXISTS(SELECT 1 FROM categories WHERE id=?3 AND household_id=?2 AND (?8='ordinary' OR kind='income')) AND (?4 IS NULL OR EXISTS(SELECT 1 FROM accounts WHERE id=?4 AND household_id=?2)) AND (?14 IS NULL OR EXISTS(SELECT 1 FROM people WHERE id=?14 AND household_id=?2))",params![input.id,hid,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.income_type,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment,input.income_tax_category,input.owner_person_id,input.annual_growth_month]).and_then(|n|if n==1{Ok(n)}else{Err(rusqlite::Error::QueryReturnedNoRows)}).map_err(|_|AppError::Validation("category, account, or wage owner does not belong to this household".into()))?;
+        db.execute("INSERT INTO recurring_entries(id,household_id,category_id,account_id,name,amount_cents,frequency,income_type,start_date,end_date,annual_growth_bps,tax_treatment,income_tax_category,owner_person_id,annual_growth_month,annual_growth_cap_cents) SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16 WHERE EXISTS(SELECT 1 FROM categories WHERE id=?3 AND household_id=?2 AND (?8='ordinary' OR kind='income')) AND (?4 IS NULL OR EXISTS(SELECT 1 FROM accounts WHERE id=?4 AND household_id=?2)) AND (?14 IS NULL OR EXISTS(SELECT 1 FROM people WHERE id=?14 AND household_id=?2))",params![input.id,hid,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.income_type,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment,input.income_tax_category,input.owner_person_id,input.annual_growth_month,input.annual_growth_cap_cents]).and_then(|n|if n==1{Ok(n)}else{Err(rusqlite::Error::QueryReturnedNoRows)}).map_err(|_|AppError::Validation("category, account, or wage owner does not belong to this household".into()))?;
         Ok(())
     })
 }
@@ -1473,7 +1508,7 @@ fn update_recurring(
         let revision = input
             .expected_revision
             .ok_or_else(|| AppError::Validation("expected revision is required".into()))?;
-        let n=db.execute("UPDATE recurring_entries SET category_id=?2,account_id=?3,name=?4,amount_cents=?5,frequency=?6,income_type=?7,start_date=?8,end_date=?9,annual_growth_bps=?10,tax_treatment=?11,income_tax_category=?13,owner_person_id=?14,annual_growth_month=?15,revision=revision+1 WHERE id=?1 AND revision=?12 AND EXISTS(SELECT 1 FROM categories c WHERE c.id=?2 AND c.household_id=recurring_entries.household_id AND (?7='ordinary' OR c.kind='income')) AND (?3 IS NULL OR EXISTS(SELECT 1 FROM accounts a WHERE a.id=?3 AND a.household_id=recurring_entries.household_id))",params![input.id,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.income_type,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment,revision,input.income_tax_category,input.owner_person_id,input.annual_growth_month])?;
+        let n=db.execute("UPDATE recurring_entries SET category_id=?2,account_id=?3,name=?4,amount_cents=?5,frequency=?6,income_type=?7,start_date=?8,end_date=?9,annual_growth_bps=?10,tax_treatment=?11,income_tax_category=?13,owner_person_id=?14,annual_growth_month=?15,annual_growth_cap_cents=?16,revision=revision+1 WHERE id=?1 AND revision=?12 AND EXISTS(SELECT 1 FROM categories c WHERE c.id=?2 AND c.household_id=recurring_entries.household_id AND (?7='ordinary' OR c.kind='income')) AND (?3 IS NULL OR EXISTS(SELECT 1 FROM accounts a WHERE a.id=?3 AND a.household_id=recurring_entries.household_id))",params![input.id,input.category_id,input.account_id,input.name.trim(),input.amount_cents,input.frequency,input.income_type,input.start_date,input.end_date,input.annual_growth_bps,input.tax_treatment,revision,input.income_tax_category,input.owner_person_id,input.annual_growth_month,input.annual_growth_cap_cents])?;
         if n == 0 {
             return Err(AppError::Conflict);
         }
@@ -3995,6 +4030,30 @@ mod tests {
             .query_row("SELECT count(*) FROM schema_migrations", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, SCHEMA_VERSION)
+    }
+    #[test]
+    fn version_15_adds_the_optional_salary_growth_cap() {
+        let mut c = seeded();
+        c.execute_batch(
+            "ALTER TABLE recurring_entries DROP COLUMN annual_growth_cap_cents;
+          DELETE FROM schema_migrations WHERE version=16;",
+        )
+        .unwrap();
+        migrate(&mut c).unwrap();
+        let columns = c
+            .prepare("PRAGMA table_info(recurring_entries)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(columns.iter().any(|name| name == "annual_growth_cap_cents"));
+        let version: i64 = c
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(version, 16);
     }
     #[test]
     fn version_14_migrates_contributions_without_household_id() {

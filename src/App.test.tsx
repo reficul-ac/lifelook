@@ -37,8 +37,8 @@ describe("LifeLook shell", () => {
   it("stores salary as an annual amount distributed monthly",async()=>{
     const data=await testRepository.bootstrap(),category={id:"salary",householdId:"test",name:"Salary",kind:"income" as const,revision:1},scenario={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:12,revision:1,events:[],contributions:[]},createRecurring=vi.fn();
     render(<App repository={{...testRepository,createRecurring,bootstrap:async()=>({...data,categories:[category],scenarios:[scenario],taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})}}/>);
-    fireEvent.click(await screen.findByRole("button",{name:/Plan/}));fireEvent.click(screen.getByRole("tab",{name:"cash flow"}));fireEvent.click(screen.getByRole("button",{name:"Add income"}));expect(screen.getByLabelText("Type")).toHaveValue("income");expect(screen.getByLabelText("Recurring category")).toHaveDisplayValue("Salary");fireEvent.change(screen.getByLabelText("Name"),{target:{value:"Household salary"}});fireEvent.change(screen.getByLabelText("Annual salary (USD)"),{target:{value:"155000"}});expect(screen.queryByLabelText("Frequency")).not.toBeInTheDocument();expect(screen.queryByLabelText("Account (optional)")).not.toBeInTheDocument();expect(screen.queryByLabelText("Tax treatment")).not.toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"Save"}));
-    await waitFor(()=>expect(createRecurring).toHaveBeenCalledWith(expect.objectContaining({incomeType:"salary",amountCents:15500000,frequency:"monthly"})));
+    fireEvent.click(await screen.findByRole("button",{name:/Plan/}));fireEvent.click(screen.getByRole("tab",{name:"cash flow"}));fireEvent.click(screen.getByRole("button",{name:"Add income"}));expect(screen.getByLabelText("Type")).toHaveValue("income");expect(screen.getByLabelText("Recurring category")).toHaveDisplayValue("Salary");fireEvent.change(screen.getByLabelText("Name"),{target:{value:"Household salary"}});fireEvent.change(screen.getByLabelText("Annual salary (USD)"),{target:{value:"155000"}});fireEvent.change(screen.getByLabelText("Maximum annual salary (USD, optional)"),{target:{value:"200000"}});expect(screen.queryByLabelText("Frequency")).not.toBeInTheDocument();expect(screen.queryByLabelText("Account (optional)")).not.toBeInTheDocument();expect(screen.queryByLabelText("Tax treatment")).not.toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"Save"}));
+    await waitFor(()=>expect(createRecurring).toHaveBeenCalledWith(expect.objectContaining({incomeType:"salary",amountCents:15500000,annualGrowthCapCents:20000000,frequency:"monthly"})));
   });
 
   it("selects and configures one active planning scenario", async () => {
@@ -110,6 +110,31 @@ describe("LifeLook shell", () => {
     fireEvent.click(accountHeader);
     expect(accountHeader).toHaveAttribute("aria-pressed","true");
     expect(screen.getByRole("heading",{name:"Test checking"})).toBeInTheDocument();
+    const chart=screen.getByRole("heading",{name:"Test checking"}).closest("section");
+    expect(chart).toHaveClass("series-account");
+    expect(chart).not.toHaveClass("account");
+  });
+  it("defaults Cash Flow to surplus, supports multiple chart columns, and collapses input details",async()=>{
+    const data=await testRepository.bootstrap();
+    render(<App repository={{...testRepository,bootstrap:async()=>({...data,taxProfile:{filingStatus:"single" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1}})}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Plan/}));
+    fireEvent.click(screen.getByRole("tab",{name:"cash flow"}));
+    expect(screen.getByRole("heading",{name:"Surplus"})).toBeInTheDocument();
+    const details=screen.getByText(/Show income and expense details/).closest("details");
+    expect(details).not.toHaveAttribute("open");
+    expect(screen.getByRole("button",{name:"Add income"})).toBeVisible();
+    expect(screen.getByRole("button",{name:"Add expense"})).toBeVisible();
+    const income=screen.getByRole("button",{name:"Income"}),surplus=screen.getByRole("button",{name:"Surplus"});
+    expect(surplus).toHaveAttribute("aria-pressed","true");
+    expect(income).toHaveAttribute("aria-pressed","false");
+    fireEvent.click(income);
+    expect(income).toHaveAttribute("aria-pressed","true");
+    expect(surplus).toHaveAttribute("aria-pressed","true");
+    expect(screen.getByRole("heading",{name:"Income, Surplus"})).toBeInTheDocument();
+    const scrubber=screen.getByRole("slider",{name:"Explore estimated monthly cash flow"});
+    expect(Number(scrubber.getAttribute("aria-valuemax"))).toBeGreaterThan(100);
+    fireEvent.keyDown(scrubber,{key:"ArrowRight"});
+    expect(scrubber).toHaveAttribute("aria-valuenow","1");
   });
   it("recalculates and expands Plan for each projection range",async()=>{
     const data=await testRepository.bootstrap(),scenario={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:30*12,revision:1,events:[],contributions:[]};

@@ -1,4 +1,5 @@
 export * from "./types";
+export * from "./investment";
 export * from "./tax";
 export * from "./equity";
 export * from "./projection";

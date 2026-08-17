@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { testRepository } from "./repository";
+import {defaultInvestmentAssumptions} from "./domain/investment";
 describe("LifeLook shell", () => {
   it("shows and saves the two incomes linked for married filing jointly",async()=>{
     const data=await testRepository.bootstrap(),people=[{id:"FilerA",householdId:"test",name:"FilerA"},{id:"FilerB",householdId:"test",name:"FilerB"}],categories=[{id:"salary",householdId:"test",name:"Salary",kind:"income" as const,revision:1}],recurring=[{id:"a-pay",householdId:"test",categoryId:"salary",name:"FilerA",amountCents:15500000,frequency:"monthly" as const,incomeType:"salary" as const,incomeTaxCategory:"wages" as const,ownerPersonId:"FilerA",startDate:"2026-01-01",annualGrowthBps:1000,annualGrowthMonth:2,taxTreatment:"none" as const,revision:1},{id:"t-pay",householdId:"test",categoryId:"salary",name:"FilerB",amountCents:5000000,frequency:"monthly" as const,incomeType:"salary" as const,incomeTaxCategory:"wages" as const,ownerPersonId:"FilerB",startDate:"2026-01-01",annualGrowthBps:0,taxTreatment:"none" as const,revision:1}],taxProfile={filingStatus:"married-joint" as const,state:"CA" as const,taxYear:2026 as const,thresholdInflationBps:250,revision:1,taxUnit:{id:"joint",filingStatus:"married-joint" as const,memberPersonIds:["FilerA","FilerB"]}},saveOnboardingStep=vi.fn();render(<App repository={{...testRepository,saveOnboardingStep,bootstrap:async()=>({...data,people,categories,recurring,taxProfile})}}/>);fireEvent.click(await screen.findByRole("button",{name:/Settings/}));expect(screen.getByRole("heading",{name:"Tax filing"})).toBeInTheDocument();expect(screen.getByLabelText("Tax filing status")).toHaveValue("married-joint");expect(screen.getByText(/FilerA \+ FilerB/)).toBeInTheDocument();expect(screen.getByText(/FilerA: FilerA · \$155,000.00 annually/)).toBeInTheDocument();expect(screen.getByText(/FilerB: FilerB · \$50,000.00 annually/)).toBeInTheDocument();fireEvent.click(screen.getByRole("button",{name:"Save tax filing"}));await waitFor(()=>expect(saveOnboardingStep).toHaveBeenCalledWith(8,expect.objectContaining({taxProfile:expect.objectContaining({filingStatus:"married-joint",taxUnit:expect.objectContaining({memberPersonIds:["FilerA","FilerB"]})})})));
@@ -55,6 +56,17 @@ describe("LifeLook shell", () => {
     expect(screen.getByRole("heading", { name: "Plan" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Plan/ })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: /Overview/ })).not.toHaveAttribute("aria-current");
+  });
+  it("renders the isolated Investment comparison with accessible results",async()=>{
+    const data=await testRepository.bootstrap();
+    render(<App repository={{...testRepository,bootstrap:async()=>({...data,investmentComparison:{householdId:"test",revision:1,assumptions:{...defaultInvestmentAssumptions,horizonYears:10}}})}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Investment/}));
+    expect(screen.getByRole("heading",{name:"Investment"})).toBeInTheDocument();
+    expect(screen.getByLabelText("Home price")).toHaveValue(500000);
+    expect(screen.getByText("Advanced assumptions")).toBeInTheDocument();
+    expect(screen.getByRole("img",{name:/Line chart comparing/})).toBeInTheDocument();
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getAllByRole("row")).toHaveLength(11);
   });
 
   it("recovers from a startup failure without reloading", async () => {

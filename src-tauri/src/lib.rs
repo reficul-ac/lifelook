@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 16;
+const SCHEMA_VERSION: i64 = 17;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -126,6 +126,7 @@ struct WorkspaceSnapshot {
     assets: Vec<Asset>,
     liabilities: Vec<Liability>,
     scenarios: Vec<ScenarioRecord>,
+    investment_comparison: Option<InvestmentComparisonRecord>,
 }
 #[derive(Debug, Serialize, Deserialize)]
 struct Household {
@@ -299,6 +300,12 @@ struct ScenarioRecord {
     contributions: Vec<serde_json::Value>,
     withdrawals: Vec<serde_json::Value>,
 }
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InvestmentComparisonRecord { household_id:String, assumptions:serde_json::Value, revision:i64 }
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InvestmentComparisonInput { assumptions:serde_json::Value, expected_revision:i64 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RecurringInput {
@@ -852,6 +859,10 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         }
         transaction.execute("INSERT INTO schema_migrations(version) VALUES(16)", [])?;
     }
+    let version: i64 = transaction.query_row("SELECT COALESCE(MAX(version),0) FROM schema_migrations",[],|r|r.get(0))?;
+    if version < 17 {
+        transaction.execute_batch("CREATE TABLE IF NOT EXISTS investment_comparisons(household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE RESTRICT,assumptions_json TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);INSERT INTO schema_migrations(version) VALUES(17);")?;
+    }
     transaction
         .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
     transaction.commit()?;
@@ -891,7 +902,10 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
     let mut assets = Vec::new();
     let mut liabilities = Vec::new();
     let mut scenarios = Vec::new();
+    let mut investment_comparison = None;
     if let Some(h) = &household {
+        investment_comparison=connection.query_row("SELECT household_id,assumptions_json,revision FROM investment_comparisons WHERE household_id=?",[&h.id],|r|{let raw:String=r.get(1)?;Ok(InvestmentComparisonRecord{household_id:r.get(0)?,assumptions:serde_json::from_str(&raw).unwrap_or_else(|_|default_investment_assumptions()),revision:r.get(2)?})}).optional()?;
+        if investment_comparison.is_none(){investment_comparison=Some(InvestmentComparisonRecord{household_id:h.id.clone(),assumptions:default_investment_assumptions(),revision:1});}
         let mut q=connection.prepare("SELECT id,household_id,name,birth_date FROM people WHERE household_id=? ORDER BY rowid")?;
         people = q
             .query_map([&h.id], |r| {
@@ -1122,8 +1136,26 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
         assets,
         liabilities,
         scenarios,
+        investment_comparison,
     })
 }
+
+fn default_investment_assumptions()->serde_json::Value{serde_json::json!({"homePriceCents":50000000,"downPaymentBps":2000,"mortgageRateBps":650,"mortgageTermYears":30,"monthlyRentCents":250000,"stockReturnBps":700,"homeAppreciationBps":300,"horizonYears":30,"purchaseCostBps":300,"sellingCostBps":600,"rentGrowthBps":300,"propertyTaxBps":110,"annualInsuranceCents":200000,"insuranceGrowthBps":300,"monthlyHoaCents":0,"hoaGrowthBps":300,"maintenanceBps":100})}
+
+fn valid_investment_assumptions(value:&serde_json::Value)->bool{
+    let integer=|key:&str,min:i64,max:i64|value.get(key).and_then(|v|v.as_i64()).is_some_and(|n|(min..=max).contains(&n));
+    ["homePriceCents","monthlyRentCents","annualInsuranceCents","monthlyHoaCents"].iter().all(|k|integer(k,0,MAX_MONEY_CENTS))
+      && integer("homePriceCents",1,MAX_MONEY_CENTS) && integer("downPaymentBps",0,9999)
+      && ["mortgageRateBps","stockReturnBps","homeAppreciationBps","purchaseCostBps","sellingCostBps","rentGrowthBps","propertyTaxBps","insuranceGrowthBps","hoaGrowthBps","maintenanceBps"].iter().all(|k|integer(k,0,10000))
+      && integer("mortgageTermYears",1,50)&&integer("horizonYears",1,50)
+}
+
+#[tauri::command]
+fn update_investment_comparison(input:InvestmentComparisonInput,database:tauri::State<Database>)->Result<InvestmentComparisonRecord,AppError>{
+    if !valid_investment_assumptions(&input.assumptions){return Err(AppError::Validation("investment assumptions are invalid".into()))}
+    with_db(&database,|db|store_investment_comparison(db,input))
+}
+fn store_investment_comparison(db:&mut Connection,input:InvestmentComparisonInput)->Result<InvestmentComparisonRecord,AppError>{let tx=db.transaction()?;let household_id:String=tx.query_row("SELECT id FROM households LIMIT 1",[],|r|r.get(0))?;let existing:Option<i64>=tx.query_row("SELECT revision FROM investment_comparisons WHERE household_id=?",[&household_id],|r|r.get(0)).optional()?;if existing.unwrap_or(1)!=input.expected_revision{return Err(AppError::Conflict)}let next=existing.map_or(1,|r|r+1);tx.execute("INSERT INTO investment_comparisons(household_id,assumptions_json,revision) VALUES(?1,?2,?3) ON CONFLICT(household_id) DO UPDATE SET assumptions_json=excluded.assumptions_json,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,serde_json::to_string(&input.assumptions)?,next])?;tx.commit()?;Ok(InvestmentComparisonRecord{household_id,assumptions:input.assumptions,revision:next})}
 
 #[tauri::command]
 fn get_bootstrap(database: tauri::State<Database>) -> Result<WorkspaceSnapshot, AppError> {
@@ -3953,6 +3985,7 @@ pub fn run() {
             create_scenario,
             update_scenario,
             delete_scenario,
+            update_investment_comparison,
             inspect_csv,
             preview_csv,
             commit_csv,
@@ -4032,11 +4065,23 @@ mod tests {
         assert_eq!(n, SCHEMA_VERSION)
     }
     #[test]
+    fn investment_defaults_round_trip_and_enforce_revisions() {
+        let mut c=seeded();
+        let initial=bootstrap(&c).unwrap().investment_comparison.unwrap();
+        assert_eq!(initial.assumptions["homePriceCents"],50_000_000);
+        let mut changed=initial.assumptions.clone();changed["homePriceCents"]=serde_json::json!(60_000_000);
+        let saved=store_investment_comparison(&mut c,InvestmentComparisonInput{assumptions:changed.clone(),expected_revision:1}).unwrap();
+        assert_eq!(saved.revision,1);assert_eq!(bootstrap(&c).unwrap().investment_comparison.unwrap().assumptions,changed);
+        let updated=store_investment_comparison(&mut c,InvestmentComparisonInput{assumptions:default_investment_assumptions(),expected_revision:1}).unwrap();
+        assert_eq!(updated.revision,2);
+        assert!(matches!(store_investment_comparison(&mut c,InvestmentComparisonInput{assumptions:default_investment_assumptions(),expected_revision:1}),Err(AppError::Conflict)));
+    }
+    #[test]
     fn version_15_adds_the_optional_salary_growth_cap() {
         let mut c = seeded();
         c.execute_batch(
             "ALTER TABLE recurring_entries DROP COLUMN annual_growth_cap_cents;
-          DELETE FROM schema_migrations WHERE version=16;",
+          DELETE FROM schema_migrations WHERE version>=16;",
         )
         .unwrap();
         migrate(&mut c).unwrap();
@@ -4053,7 +4098,7 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(version, 16);
+        assert_eq!(version, SCHEMA_VERSION);
     }
     #[test]
     fn version_14_migrates_contributions_without_household_id() {

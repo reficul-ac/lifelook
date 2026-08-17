@@ -890,3 +890,217 @@ main.standalone {
 .transaction-action { width:100%; border-left:0;border-right:0;border-bottom:0;background:transparent;color:inherit;text-align:left;cursor:pointer; }
 .transaction-action:hover { background:var(--surface2); }
 .account>button { border:1px solid var(--line);background:var(--surface);color:var(--muted);border-radius:7px;padding:5px 7px; }
+
+/* Orinoco interface system -------------------------------------------------
+   A quiet, high-contrast workspace language shared by every tab. These
+   rules intentionally live after the feature styles so new screens inherit
+   the same controls, elevation and interaction feedback by default. */
+:root {
+  color-scheme: light;
+  background: #f5f6f3;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+body { min-width: 720px; }
+.app {
+  --bg: #f5f6f3;
+  --surface: rgba(255,255,255,.9);
+  --surface2: #f1f3ef;
+  --text: #20231f;
+  --muted: #686e66;
+  --line: #dfe3dc;
+  --accent: #5d705b;
+  --accent-soft: #e8eee6;
+  --positive: #3f7650;
+  --negative: #a24e49;
+  --focus: #4869c7;
+  grid-template-columns: 232px minmax(0,1fr);
+  background:
+    radial-gradient(circle at 82% -10%, rgba(129,151,120,.11), transparent 30rem),
+    var(--bg);
+}
+.app.dark {
+  color-scheme: dark;
+  --bg: #141714;
+  --surface: rgba(29,33,29,.94);
+  --surface2: #242924;
+  --text: #f3f4ef;
+  --muted: #a1a79e;
+  --line: #353b34;
+  --accent: #a8bca3;
+  --accent-soft: #293228;
+  --positive: #8fd29c;
+  --negative: #f09a91;
+  --focus: #9bb4ff;
+  background:
+    radial-gradient(circle at 82% -10%, rgba(118,145,112,.1), transparent 30rem),
+    var(--bg);
+}
+::selection { background: color-mix(in srgb,var(--accent) 26%,transparent); }
+.app aside {
+  width:232px;
+  z-index:10;
+  padding:22px 14px 16px;
+  border-right-color:color-mix(in srgb,var(--line) 78%,transparent);
+  background:color-mix(in srgb,var(--bg) 86%,transparent);
+  backdrop-filter:blur(22px) saturate(135%);
+}
+.brand { min-height:46px; padding:0 10px 24px; font-size:17px; letter-spacing:-.015em; }
+.brandmark { width:32px; height:32px; border-radius:10px; background:linear-gradient(145deg,#7f9379,#536650); box-shadow:0 5px 14px #30402d2e,inset 0 1px #ffffff52; }
+nav { gap:3px; }
+nav button { min-height:42px; padding:10px 12px; border-radius:11px; font-size:13px; font-weight:560; transition:background .16s ease,color .16s ease,transform .16s ease; }
+nav button:hover { background:color-mix(in srgb,var(--surface2) 82%,transparent); color:var(--text); }
+nav button:active { transform:scale(.985); }
+nav button.active { background:var(--surface); box-shadow:0 1px 2px #0000000a,0 8px 24px #1f2c1c0a; font-weight:680; }
+.profile { border-radius:12px; padding:9px; }
+.profile:hover { background:var(--surface2); }
+.profile > span { width:32px; height:32px; }
+.profile strong { font-size:12px; line-height:1.3; }
+.profile small { font-size:10px; margin-top:2px; }
+main { min-width:0; }
+header { position:sticky; top:0; z-index:8; height:88px; padding:18px clamp(24px,3.4vw,48px); background:color-mix(in srgb,var(--bg) 82%,transparent); border-color:color-mix(in srgb,var(--line) 80%,transparent); backdrop-filter:blur(20px) saturate(135%); }
+.eyebrow { margin-bottom:4px; font-size:10px; font-weight:700; letter-spacing:.11em; }
+h1 { font-size:27px; font-weight:730; letter-spacing:-.035em; }
+.content { width:100%; max-width:1440px; padding:28px clamp(24px,3.4vw,48px) 64px; }
+.header-actions { align-items:center; gap:7px; }
+.header-actions button,.toolbar button,.card-title button,.scenario-bar button,.setting button,.investment-actions>button {
+  min-height:38px;
+  border-color:var(--line);
+  border-radius:10px;
+  background:var(--surface);
+  font-size:12px;
+  font-weight:650;
+  box-shadow:0 1px 1px #00000008;
+  transition:background .15s ease,border-color .15s ease,transform .15s ease,box-shadow .15s ease;
+}
+.header-actions button:hover,.toolbar button:hover,.scenario-bar button:hover,.investment-actions>button:hover { background:var(--surface2); border-color:color-mix(in srgb,var(--line) 50%,var(--muted)); }
+.header-actions button:active,.toolbar button:active,.scenario-bar button:active,.investment-actions>button:active { transform:scale(.97); }
+.header-actions .icon { width:38px; justify-content:center; padding:0; }
+.header-actions .add,.entry-modal .primary,.form-actions .primary,.form-actions .add { background:linear-gradient(180deg,#70816b,#5d6f59); border-color:#596b55; color:#fff; box-shadow:0 1px 2px #0002,0 7px 18px #40523d20; }
+.header-actions .add:hover,.entry-modal .primary:hover,.form-actions .primary:hover { background:linear-gradient(180deg,#798c73,#63775f); }
+button:disabled { cursor:not-allowed; opacity:.48; }
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible { outline:3px solid color-mix(in srgb,var(--focus) 58%,transparent); outline-offset:2px; }
+
+.card,.metric,.hero,.scenario-bar { border-color:var(--line); border-radius:16px; background:var(--surface); box-shadow:0 1px 2px #17201508,0 12px 36px #1d291a08; }
+.card { padding:22px; }
+.hero { border-radius:18px; padding:32px; }
+.hero h2 { font-size:40px; font-variant-numeric:tabular-nums; }
+.metrics { gap:14px; margin:14px 0; }
+.metric { min-height:114px; padding:18px 19px; }
+.metric-head { font-size:12px; font-weight:570; }
+.metric > strong { margin:14px 0 5px; font-size:21px; font-variant-numeric:tabular-nums; }
+.metric > small { font-size:10px; color:var(--muted); }
+.two-col { gap:14px; }
+.card-title { min-height:34px; margin-bottom:15px; }
+.card-title h3,.scenario-bar h3 { font-size:15px; letter-spacing:-.01em; }
+.transaction,.account { min-height:58px; padding:13px 2px; }
+.transaction strong,.account strong { font-size:12px; }
+.transaction small,.account small { font-size:10px; line-height:1.4; }
+.transaction b,.account b { font-variant-numeric:tabular-nums; }
+
+/* Controls and editors */
+.app input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),.app select,.app textarea,
+.onboarding input:not([type="checkbox"]):not([type="radio"]),.member-setting input {
+  min-height:40px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--surface2);
+  color:var(--text);
+  padding:9px 11px;
+  box-shadow:inset 0 1px 1px #00000008;
+  transition:border-color .15s ease,box-shadow .15s ease,background .15s ease;
+}
+.app select { cursor:pointer; padding-right:32px; }
+.app textarea { line-height:1.5; resize:vertical; }
+.app input:hover,.app select:hover,.app textarea:hover { border-color:color-mix(in srgb,var(--line) 45%,var(--muted)); }
+.app input:focus,.app select:focus,.app textarea:focus { background:var(--surface); border-color:color-mix(in srgb,var(--focus) 60%,var(--line)); box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 13%,transparent); outline:0; }
+.app input[type="checkbox"],.app input[type="radio"] { accent-color:var(--accent); }
+.search { min-height:40px; border-radius:10px; background:var(--surface); }
+.search input { min-height:0 !important; padding:0 !important; border:0 !important; background:transparent !important; box-shadow:none !important; }
+.toolbar { flex-wrap:wrap; align-items:center; gap:9px; margin-bottom:16px; }
+.toolbar .search { min-width:180px; }
+.toolbar select { min-width:140px; }
+.input-affix { min-height:40px; border-radius:10px; }
+.input-affix input { min-height:38px !important; border:0 !important; background:transparent !important; box-shadow:none !important; }
+details > summary { border-radius:8px; padding:4px; }
+
+/* Planning, investment and retirement workspaces */
+.plan-tabs,.subtabs { gap:4px; overflow-x:auto; scrollbar-width:none; }
+.plan-tabs button,.subtabs button { min-height:40px; white-space:nowrap; }
+.chart-ranges { padding:3px; border:1px solid var(--line); border-radius:12px; background:var(--surface2); }
+.chart-ranges button { min-width:34px; min-height:28px; border-radius:8px; font-size:11px; }
+.chart-ranges button[aria-pressed="true"] { background:var(--surface); box-shadow:0 1px 4px #0001; }
+.chart-canvas { border:1px solid color-mix(in srgb,var(--line) 72%,transparent); border-radius:13px; }
+.projection-sheet,.annual-results { border-radius:16px; }
+.projection-sheet thead th,.annual-results th { font-weight:700; letter-spacing:.015em; }
+.projection-sheet tbody tr:hover td,.annual-results tbody tr:hover { background:color-mix(in srgb,var(--accent-soft) 52%,var(--surface)); }
+.investment-view,.retirement-view { gap:16px; }
+.investment-summary,.retirement-cards { gap:14px; }
+.investment-summary article,.retirement-cards article { min-height:108px; }
+.investment-fields label,.retirement-view label,.entry-modal label { font-weight:620; }
+.assumption-sections section,.advanced-assumption-sections section,.portfolio-editor { border-radius:12px; }
+.readiness-status,.retirement-fact { border-radius:12px; }
+
+/* Settings, overlays and onboarding */
+.settings-card { max-width:880px; margin-bottom:16px; padding:24px; }
+.settings-card > h3 { margin-bottom:5px; font-size:15px; }
+.setting { min-height:68px; padding:17px 0; gap:20px; }
+.setting strong { font-size:12px; }
+.setting p { max-width:560px; font-size:11px; line-height:1.5; }
+.setting .switch { flex:0 0 auto; width:44px; height:26px; padding:3px; box-shadow:inset 0 1px 2px #0002; cursor:pointer; }
+.switch span { width:20px; height:20px; box-shadow:0 1px 3px #0004; }
+.switch.on span { transform:translateX(18px); }
+.member-setting { grid-template-columns:minmax(180px,1fr) minmax(200px,280px) auto; gap:10px; padding:13px 0; }
+.modal-backdrop { background:#10151070; backdrop-filter:blur(8px); }
+.modal { border-radius:18px; padding:24px; box-shadow:0 28px 80px #0006; }
+.entry-modal form { gap:15px; }
+.entry-modal fieldset { gap:15px; }
+.add-choices { gap:12px; }
+.add-choices button { min-height:76px; border-radius:13px; font-weight:680; }
+.profile-menu { border-radius:14px; box-shadow:0 18px 50px #0004; }
+.global-search { border-radius:17px; }
+.standalone .onboarding { border-radius:20px; box-shadow:0 24px 70px #1f2a1c18; }
+
+@media (max-width:1050px) {
+  .app { grid-template-columns:204px minmax(0,1fr); }
+  .app aside { width:204px; }
+  header { padding-inline:24px; }
+  .content { padding-inline:24px; }
+  .investment-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:800px) {
+  body { min-width:360px; }
+  .app { display:block; padding-bottom:72px; }
+  .app aside { position:fixed; inset:auto 0 0; width:auto; height:66px; padding:7px 10px max(7px,env(safe-area-inset-bottom)); border:1px solid var(--line); border-width:1px 0 0; background:color-mix(in srgb,var(--bg) 88%,transparent); }
+  .brand,.aside-bottom { display:none; }
+  nav { height:100%; flex-direction:row; justify-content:space-around; gap:2px; overflow-x:auto; }
+  nav button { flex:1 0 68px; min-width:62px; min-height:52px; flex-direction:column; justify-content:center; gap:3px; padding:5px 4px; font-size:9px; }
+  nav button svg { width:17px; height:17px; }
+  nav button i { position:absolute; margin:-28px 0 0 24px; }
+  header { height:78px; padding:14px 16px; }
+  h1 { font-size:23px; }
+  .eyebrow { max-width:44vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .header-actions { gap:5px; }
+  .header-actions .icon { width:36px; min-height:36px; }
+  .header-actions .add { min-height:36px; padding:8px 10px; }
+  .content { padding:18px 16px 38px; }
+  .hero { grid-template-columns:1fr; padding:24px; }
+  .hero-chart { min-height:170px; }
+  .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .toolbar { align-items:stretch; }
+  .toolbar .search { flex-basis:100%; }
+  .toolbar select { flex:1; min-width:0; }
+  .member-setting { grid-template-columns:1fr; }
+  .member-setting button { min-height:38px; }
+  .investment-fields,.assumption-sections .investment-fields,.advanced-assumption-sections .investment-fields { grid-template-columns:1fr; }
+  .retirement-header { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .retirement-heading { grid-column:1/-1; }
+}
+@media (max-width:520px) {
+  .header-actions .add { font-size:0; width:36px; padding:0; justify-content:center; }
+  .header-actions .add svg { width:18px; height:18px; }
+  .metrics,.retirement-cards,.source-grid { grid-template-columns:1fr; }
+  .hero h2 { font-size:34px; }
+  .card,.settings-card { padding:18px; }
+  .add-choices { grid-template-columns:1fr; }
+}

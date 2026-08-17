@@ -63,10 +63,40 @@ describe("LifeLook shell", () => {
     fireEvent.click(await screen.findByRole("button",{name:/Investment/}));
     expect(screen.getByRole("heading",{name:"Investment"})).toBeInTheDocument();
     expect(screen.getByLabelText("Home price")).toHaveValue(500000);
+    expect(screen.getByRole("heading",{name:"General assumptions"})).toBeInTheDocument();
+    expect(screen.getAllByRole("heading",{name:"Buy assumptions"}).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("heading",{name:"Rent assumptions"}).length).toBeGreaterThan(0);
     expect(screen.getByText("Advanced assumptions")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Advanced assumptions"));
+    expect(screen.getByLabelText("Monthly rental income")).toHaveValue(0);
+    expect(screen.getByText(/Rental income is invested monthly/)).toBeInTheDocument();
     expect(screen.getByRole("img",{name:/Line chart comparing/})).toBeInTheDocument();
+    const chart=screen.getByRole("slider",{name:/Explore projected investment comparison/});
+    expect(chart).toHaveAttribute("aria-valuemax","120");
+    fireEvent.keyDown(chart,{key:"ArrowRight"});
+    expect(chart).toHaveAttribute("aria-valuenow","1");
+    fireEvent.click(screen.getByRole("button",{name:"5Y"}));
+    expect(screen.getByRole("button",{name:"5Y"})).toHaveAttribute("aria-pressed","true");
+    expect(chart).toHaveAttribute("aria-valuemax","60");
     expect(screen.getByRole("table")).toBeInTheDocument();
     expect(screen.getAllByRole("row")).toHaveLength(11);
+  });
+  it("keeps Investment drafts across tabs, autosaves assumptions, and resets defaults",async()=>{
+    const data=await testRepository.bootstrap(),updateInvestmentComparison=vi.fn(async input=>({householdId:"test",assumptions:input.assumptions,revision:input.expectedRevision+1}));
+    render(<App repository={{...testRepository,updateInvestmentComparison,bootstrap:async()=>({...data,investmentComparison:{householdId:"test",revision:1,assumptions:{...defaultInvestmentAssumptions,horizonYears:10}}})}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Investment/}));
+    fireEvent.change(screen.getByLabelText("Home price"),{target:{value:"625000"}});
+    fireEvent.click(screen.getByRole("button",{name:/Overview/}));
+    fireEvent.click(screen.getByRole("button",{name:/Investment/}));
+    expect(screen.getByLabelText("Home price")).toHaveValue(625000);
+    await waitFor(()=>expect(updateInvestmentComparison).toHaveBeenLastCalledWith(expect.objectContaining({assumptions:expect.objectContaining({homePriceCents:62500000})})),{timeout:1500});
+    fireEvent.change(screen.getByLabelText("Current monthly rent"),{target:{value:"10000"}});
+    expect(await screen.findByText(/Rent exceeds the homeowner outlay/)).toBeInTheDocument();
+    await waitFor(()=>expect(updateInvestmentComparison).toHaveBeenLastCalledWith(expect.objectContaining({assumptions:expect.objectContaining({monthlyRentCents:1000000})})),{timeout:1500});
+    fireEvent.click(screen.getByRole("button",{name:"Reset to defaults"}));
+    expect(screen.getByLabelText("Home price")).toHaveValue(500000);
+    expect(screen.getByLabelText("Current monthly rent")).toHaveValue(2500);
+    await waitFor(()=>expect(updateInvestmentComparison).toHaveBeenLastCalledWith(expect.objectContaining({assumptions:defaultInvestmentAssumptions})),{timeout:1500});
   });
 
   it("recovers from a startup failure without reloading", async () => {

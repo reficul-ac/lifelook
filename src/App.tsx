@@ -605,7 +605,7 @@ function Workspace({
             </section>
           </div>
         )}
-        {view === "Investment" && <InvestmentView initial={bootstrap.investmentComparison} repository={repository}/>}
+        <div hidden={view !== "Investment"}><InvestmentView initial={bootstrap.investmentComparison} repository={repository}/></div>
         {view === "Net Worth" && (
           <NetWorth
             snapshot={snapshot}

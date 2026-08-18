@@ -8,6 +8,12 @@ export interface InvestmentAssumptions {
   primaryResidence: boolean;
   rentalUseBps: BasisPoints;
   homePriceCents: Cents;
+  homeSquareFeet: number;
+  aduPlanned: boolean;
+  aduSquareFeet: number;
+  aduBuildYear: number;
+  aduBuildCostCents: Cents;
+  aduMonthlyRentCents: Cents;
   downPaymentBps: BasisPoints;
   mortgageRateBps: BasisPoints;
   mortgageTermYears: number;
@@ -158,6 +164,12 @@ export const defaultInvestmentAssumptions: InvestmentAssumptions = {
   primaryResidence: false,
   rentalUseBps: 0,
   homePriceCents: 50_000_000,
+  homeSquareFeet: 1_500,
+  aduPlanned: false,
+  aduSquareFeet: 500,
+  aduBuildYear: 5,
+  aduBuildCostCents: 15_000_000,
+  aduMonthlyRentCents: 200_000,
   downPaymentBps: 2000,
   mortgageRateBps: 650,
   mortgageTermYears: 30,
@@ -204,13 +216,15 @@ export function validateInvestmentAssumptions(
     errors.push({ field: "annualRetirementIncomeCents", message: "Enter a valid non-negative annual amount." });
   if (!Number.isInteger(a.fireWithdrawalRateBps) || a.fireWithdrawalRateBps < 1 || a.fireWithdrawalRateBps > 10_000)
     errors.push({ field: "fireWithdrawalRateBps", message: "FIRE withdrawal rate must be greater than 0% and no more than 100%." });
-  const needsRentalShare = a.primaryResidence && a.monthlyRentalIncomeCents > 0;
+  const needsRentalShare = a.primaryResidence && (a.monthlyRentalIncomeCents > 0 || (a.aduPlanned && a.aduMonthlyRentCents > 0));
   if (!Number.isInteger(a.rentalUseBps) || (needsRentalShare ? a.rentalUseBps < 100 || a.rentalUseBps > 9900 : a.rentalUseBps !== 0))
     errors.push({ field: "rentalUseBps", message: needsRentalShare ? "Rental use must be from 1% to 99%." : "Rental use must be zero unless a primary residence has tenant income." });
   if (a.rentalType !== "long-term" && a.rentalType !== "short-term")
     errors.push({ field: "rentalType", message: "Choose a valid rental type." });
   const money: (keyof InvestmentAssumptions)[] = [
     "homePriceCents",
+    "aduBuildCostCents",
+    "aduMonthlyRentCents",
     "monthlyRentCents",
     "annualInsuranceCents",
     "monthlyHoaCents",
@@ -225,6 +239,12 @@ export function validateInvestmentAssumptions(
       field: "homePriceCents",
       message: "Home price must be greater than zero.",
     });
+  if (!Number.isInteger(a.homeSquareFeet) || a.homeSquareFeet < 1)
+    errors.push({ field: "homeSquareFeet", message: "Home square footage must be greater than zero." });
+  if (!Number.isInteger(a.aduSquareFeet) || a.aduSquareFeet < 0 || (a.aduPlanned && a.aduSquareFeet < 1))
+    errors.push({ field: "aduSquareFeet", message: "ADU square footage must be greater than zero when an ADU is planned." });
+  if (!Number.isInteger(a.aduBuildYear) || a.aduBuildYear < 1 || (a.aduPlanned && a.aduBuildYear > a.horizonYears))
+    errors.push({ field: "aduBuildYear", message: "ADU build year must fall within the projection horizon." });
   const rates: (keyof InvestmentAssumptions)[] = [
     "mortgageRateBps",
     "stockReturnBps",
@@ -405,6 +425,8 @@ export function calculateInvestmentComparison(
   let stock =
       (a.homePriceCents * (a.downPaymentBps + a.purchaseCostBps)) / 10_000,
     home = a.homePriceCents,
+    baseHome = a.homePriceCents,
+    assessedValue = a.propertyTaxBasisOverrideCents ?? a.homePriceCents,
     balance = loan,
     portfolio = 0,
     accumDep = 0,
@@ -459,13 +481,22 @@ export function calculateInvestmentComparison(
     balance: number;
   }[] = [];
   for (let month = 1; month <= a.horizonYears * 12; month++) {
+    baseHome *= 1 + homeMonthly;
     home *= 1 + homeMonthly;
+    assessedValue *= Math.pow(1.02,1/12);
+    const aduBuildMonth = (a.aduBuildYear - 1) * 12 + 1,
+      buildsAdu = a.aduPlanned && month === aduBuildMonth;
+    if (buildsAdu) {
+      const aduAddedValue=baseHome / a.homeSquareFeet * a.aduSquareFeet;
+      home += aduAddedValue;
+      assessedValue += aduAddedValue;
+    }
     const interest =
         month <= term ? (balance * a.mortgageRateBps) / 120_000 : 0,
       principal = month <= term ? Math.min(balance, payment - interest) : 0;
     balance = Math.max(0, balance - principal);
     const elapsed = month - 1,
-      tax = (home * a.propertyTaxBps) / 120_000,
+      tax = (assessedValue * a.propertyTaxBps) / 120_000,
       maintenance = (home * a.maintenanceBps) / 120_000,
       insurance =
         (a.annualInsuranceCents *
@@ -474,12 +505,15 @@ export function calculateInvestmentComparison(
       hoa = a.monthlyHoaCents * Math.pow(1 + a.hoaGrowthBps / 120_000, elapsed),
       income =
         a.monthlyRentalIncomeCents *
-        Math.pow(1 + a.rentalIncomeGrowthBps / 120_000, elapsed),
+        Math.pow(1 + a.rentalIncomeGrowthBps / 120_000, elapsed) +
+        (a.aduPlanned && month >= aduBuildMonth
+          ? a.aduMonthlyRentCents * Math.pow(1 + a.rentalIncomeGrowthBps / 120_000, month - aduBuildMonth)
+          : 0),
       rent =
         a.monthlyRentCents * Math.pow(1 + a.rentGrowthBps / 120_000, elapsed),
       rentalShare = a.primaryResidence ? a.rentalUseBps / 10_000 : 1,
       operating = (tax + maintenance + insurance + hoa) * rentalShare,
-      owner = principal + interest + operating,
+      owner = principal + interest + operating + (buildsAdu ? a.aduBuildCostCents : 0),
       year = Number(addMonths(start, elapsed).slice(0, 4)),
       depreciation = a.factorRentalTaxes
         ? depreciationForMonth(

@@ -87,6 +87,35 @@ describe("investment comparison", () => {
     expect(end.buySaleTotalCents).toBe(end.saleProceedsCents + 1_200_000);
     expect(result.result.years[0].rentalIncomeCents).toBe(1_200_000);
   });
+  it("adds ADU value from the home's build-time price per square foot", () => {
+    const withoutAdu = calculateInvestmentComparison({
+      ...defaultInvestmentAssumptions,
+      horizonYears: 1,
+      homeAppreciationBps: 0,
+      stockReturnBps: 0,
+    });
+    const withAdu = calculateInvestmentComparison({
+      ...defaultInvestmentAssumptions,
+      horizonYears: 1,
+      homeAppreciationBps: 0,
+      stockReturnBps: 0,
+      homeSquareFeet: 1_000,
+      aduPlanned: true,
+      aduSquareFeet: 500,
+      aduBuildYear: 1,
+      aduBuildCostCents: 15_000_000,
+      aduMonthlyRentCents: 200_000,
+      rentalIncomeGrowthBps: 0,
+    });
+    if (!withoutAdu.ok || !withAdu.ok) throw new Error("invalid");
+    expect(withAdu.result.months[1].homeValueCents - withoutAdu.result.months[1].homeValueCents).toBe(25_000_000);
+    expect(withAdu.result.months[1].ownerOutlayCents - withoutAdu.result.months[1].ownerOutlayCents).toBeGreaterThanOrEqual(15_000_000);
+    expect(withAdu.result.years[0].rentalIncomeCents).toBe(2_400_000);
+  });
+  it("validates planned ADU dimensions and timing", () => {
+    const fields = validateInvestmentAssumptions({...defaultInvestmentAssumptions,horizonYears:4,aduPlanned:true,homeSquareFeet:0,aduSquareFeet:0,aduBuildYear:5}).map(x=>x.field);
+    expect(fields).toEqual(expect.arrayContaining(["homeSquareFeet","aduSquareFeet","aduBuildYear"]));
+  });
   it("builds independent FIRE snapshots in current and desired modes", () => {
     const current = calculateInvestmentComparison({...defaultInvestmentAssumptions,horizonYears:2,stockReturnBps:0,fireWithdrawalRateBps:400,annualRetirementIncomeCents:20_000_00});
     if (!current.ok) throw new Error("invalid");

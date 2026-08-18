@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import {
   effectiveContributionBps,
+  californiaAssessedValue,
   ProjectionEngine,
   projectedSharePrice,
   valueForUnits,
@@ -623,7 +624,7 @@ function Workspace({
             </section>
           </div>
         )}
-        <div hidden={view !== "Investment"}><InvestmentView initial={bootstrap.investmentComparison} repository={repository} taxContext={investmentTaxContext} onAddToRetirement={(assumptions)=>{const copy=investmentPropertyCopy(assumptions);setRetirementPlan(current=>({...defaultRetirementFallback(current,bootstrap,selectedScenario.id),portfolioItems:[...(current?.portfolioItems??[]),copy]}));setView("Retirement")}}/></div>
+        <div hidden={view !== "Investment"}><InvestmentView initial={bootstrap.investmentComparison} repository={repository} taxContext={investmentTaxContext} onAddToRetirement={(assumptions,includeAdu)=>{const copy=investmentPropertyCopy(assumptions,includeAdu);setRetirementPlan(current=>({...defaultRetirementFallback(current,bootstrap,selectedScenario.id),portfolioItems:[...(current?.portfolioItems??[]),copy]}));setView("Retirement")}}/></div>
         {view === "Retirement" && (
           <RetirementView initial={retirementPlan} repository={repository} bootstrap={bootstrap} snapshot={snapshot} scenarios={scenarios} projections={retirementProjections} onPlanChange={setRetirementPlan}/>
         )}
@@ -4431,7 +4432,7 @@ function PlanView(props:PlanViewProps) {
     return Boolean(housing&&(mortgage||asset.purchaseDate||asset.purchasePriceCents||housing.propertyTaxRateBps||housing.insuranceMonthlyCents||housing.hoaMonthlyCents));
   }).map(asset=>{
     const mortgage=snapshot.liabilities.find(item=>item.mortgage?.assetId===asset.id),housing=asset.housingCosts!;
-    const principalAndInterest=mortgage?.minimumPaymentCents??0,propertyTax=Math.round(asset.valueCents*housing.propertyTaxRateBps/120000),insurance=housing.insuranceMonthlyCents,hoa=housing.hoaMonthlyCents;
+    const principalAndInterest=mortgage?.minimumPaymentCents??0,propertyTax=Math.round(californiaAssessedValue(asset,localIsoDate().slice(0,7))*housing.propertyTaxRateBps/120000),insurance=housing.insuranceMonthlyCents,hoa=housing.hoaMonthlyCents;
     return {id:asset.id,name:asset.name,principalAndInterest,propertyTax,insurance,hoa,total:principalAndInterest+propertyTax+insurance+hoa};
   });
   const selectSeries=(id:string)=>{setSelected(id);setActivePoint(null)};

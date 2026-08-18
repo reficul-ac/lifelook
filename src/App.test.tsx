@@ -99,6 +99,16 @@ describe("LifeLook shell", () => {
     await waitFor(()=>expect(updateInvestmentComparison).toHaveBeenLastCalledWith(expect.objectContaining({assumptions:defaultInvestmentAssumptions})),{timeout:1500});
   });
 
+  it("persists a retirement property even when navigating away immediately",async()=>{
+    const data=await testRepository.bootstrap(),scenario={id:"base",householdId:"test",name:"Baseline",isBaseline:true,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:120,revision:1,events:[],contributions:[],withdrawals:[]},updateRetirementPlan=vi.fn(async input=>({householdId:"test",...input,revision:input.expectedRevision+1}));
+    render(<App repository={{...testRepository,updateRetirementPlan,bootstrap:async()=>({...data,scenarios:[scenario],retirementPlan:null})}}/>);
+    fireEvent.click(await screen.findByRole("button",{name:/Retirement/}));
+    fireEvent.click(screen.getByRole("tab",{name:"Portfolio"}));
+    fireEvent.click(screen.getByRole("button",{name:"Add property"}));
+    fireEvent.click(screen.getByRole("button",{name:/Overview/}));
+    await waitFor(()=>expect(updateRetirementPlan).toHaveBeenCalledWith(expect.objectContaining({portfolioItems:expect.arrayContaining([expect.objectContaining({kind:"property"})])})));
+  });
+
   it("recovers from a startup failure without reloading", async () => {
     const bootstrap=vi.fn().mockRejectedValue({code:"corrupt",message:"Integrity check failed",profilePath:"/data/lifelook.db",retryable:true});
     let resolveRetry:(value:Awaited<ReturnType<typeof testRepository.bootstrap>>)=>void=()=>{};

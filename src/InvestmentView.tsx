@@ -38,6 +38,7 @@ type NumericAssumptionKey = Exclude<
   | "longTermMaterialParticipation"
   | "retirementIncomeMode"
   | "primaryResidence"
+  | "aduPlanned"
 >;
 const fields: {
   key: NumericAssumptionKey;
@@ -47,6 +48,11 @@ const fields: {
   advanced?: boolean;
 }[] = [
   { key: "homePriceCents", label: "Home price", kind: "money", group: "Buy" },
+  { key: "homeSquareFeet", label: "Home square footage at purchase", kind: "number", group: "Buy" },
+  { key: "aduSquareFeet", label: "ADU square footage", kind: "number", group: "Buy", advanced: true },
+  { key: "aduBuildYear", label: "ADU build year (year of projection)", kind: "number", group: "Buy", advanced: true },
+  { key: "aduBuildCostCents", label: "ADU build cost", kind: "money", group: "Buy", advanced: true },
+  { key: "aduMonthlyRentCents", label: "Added monthly ADU rent", kind: "money", group: "Buy", advanced: true },
   {
     key: "downPaymentBps",
     label: "Down payment",
@@ -187,7 +193,7 @@ export function InvestmentView({
   initial?: InvestmentComparisonRecord | null;
   repository: Repository;
   taxContext?: InvestmentTaxContext;
-  onAddToRetirement?:(assumptions:InvestmentAssumptions)=>void;
+  onAddToRetirement?:(assumptions:InvestmentAssumptions,includeAdu:boolean)=>void;
 }) {
   const base = { ...defaultInvestmentAssumptions, ...initial?.assumptions };
   const [draft, setDraft] = useState<Record<string, string>>(() =>
@@ -201,6 +207,7 @@ export function InvestmentView({
     [scrub, setScrub] = useState<number | null>(null),
     [chartRange, setChartRange] = useState<5 | 10 | 15 | 20 | "max">("max"),
     [retryToken, setRetryToken] = useState(0);
+  const [includeAduInRetirement,setIncludeAduInRetirement]=useState(true);
   const [taxSettings, setTaxSettings] = useState(() => ({
     factorRentalTaxes: base.factorRentalTaxes,
     mfsLivedApartAllYear: base.mfsLivedApartAllYear,
@@ -214,6 +221,7 @@ export function InvestmentView({
     retirementIncomeMode: base.retirementIncomeMode,
     annualRetirementIncomeCents: base.annualRetirementIncomeCents,
     primaryResidence: base.primaryResidence,
+    aduPlanned: base.aduPlanned,
     rentalUseBps: base.rentalUseBps,
   }));
   const [basisDraft, setBasisDraft] = useState(() => ({
@@ -284,6 +292,7 @@ export function InvestmentView({
       retirementIncomeMode: defaultInvestmentAssumptions.retirementIncomeMode,
       annualRetirementIncomeCents: defaultInvestmentAssumptions.annualRetirementIncomeCents,
       primaryResidence: false,
+      aduPlanned: false,
       rentalUseBps: 0,
     });
     setBasisDraft({
@@ -308,7 +317,8 @@ export function InvestmentView({
             <h2>Compare buying with renting and investing</h2>
           </div>
           <div className="investment-actions">
-            {onAddToRetirement&&<button type="button" onClick={()=>onAddToRetirement(assumptions)}>Add to Retirement Portfolio</button>}
+            {onAddToRetirement&&<button type="button" onClick={()=>onAddToRetirement(assumptions,includeAduInRetirement)}>Add to Retirement Portfolio</button>}
+            {onAddToRetirement&&assumptions.aduPlanned&&<label className="check-row"><input type="checkbox" checked={includeAduInRetirement} onChange={e=>setIncludeAduInRetirement(e.target.checked)}/> Include ADU in retirement property</label>}
             <span
               className={`save-state ${saveState}`}
               role="status"
@@ -369,10 +379,14 @@ export function InvestmentView({
                         stock portfolio.
                       </p>
                       <label className="check-row">
-                        <input type="checkbox" checked={taxSettings.primaryResidence} onChange={e=>setTaxSettings(s=>({...s,primaryResidence:e.target.checked,rentalUseBps:e.target.checked && assumptions.monthlyRentalIncomeCents>0 ? (s.rentalUseBps || 2500) : 0}))}/>{" "}
+                        <input type="checkbox" checked={taxSettings.aduPlanned} onChange={e=>setTaxSettings(s=>({...s,aduPlanned:e.target.checked}))}/>{" "}
+                        Plan an ADU
+                      </label>
+                      <label className="check-row">
+                        <input type="checkbox" checked={taxSettings.primaryResidence} onChange={e=>setTaxSettings(s=>({...s,primaryResidence:e.target.checked,rentalUseBps:e.target.checked && (assumptions.monthlyRentalIncomeCents>0||(assumptions.aduPlanned&&assumptions.aduMonthlyRentCents>0)) ? (s.rentalUseBps || 2500) : 0}))}/>{" "}
                         Primary residence
                       </label>
-                      {taxSettings.primaryResidence && assumptions.monthlyRentalIncomeCents > 0 && <label>Rental use percentage<span className="input-affix"><input aria-label="Rental use percentage" type="number" min="1" max="99" value={taxSettings.rentalUseBps/100} onChange={e=>setTaxSettings(s=>({...s,rentalUseBps:Math.round(Number(e.target.value)*100)}))}/><i>%</i></span><small>Shared interest, costs, and building basis are allocated to rental use; gross tenant rent is not scaled.</small></label>}
+                      {taxSettings.primaryResidence && (assumptions.monthlyRentalIncomeCents > 0||(assumptions.aduPlanned&&assumptions.aduMonthlyRentCents>0)) && <label>Rental use percentage<span className="input-affix"><input aria-label="Rental use percentage" type="number" min="1" max="99" value={taxSettings.rentalUseBps/100} onChange={e=>setTaxSettings(s=>({...s,rentalUseBps:Math.round(Number(e.target.value)*100)}))}/><i>%</i></span><small>Shared interest, costs, and building basis are allocated to rental use; gross tenant rent is not scaled.</small></label>}
                       <label className="check-row">
                         <input
                           type="checkbox"
@@ -581,7 +595,7 @@ export function InvestmentView({
                     </>
                   )}
                   <div className="investment-fields">
-                    {grouped.map((f) => (
+                    {grouped.filter(f=>!f.key.startsWith("adu")||taxSettings.aduPlanned).map((f) => (
                       <Field
                         key={f.key}
                         field={f}

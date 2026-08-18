@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { appreciationRateForYear, effectiveContributionBps, ProjectionEngine, vestedAssetValue, vestedBpsAtDate } from "./projection";
+import { appreciationRateForYear, californiaAssessedValue, effectiveContributionBps, ProjectionEngine, vestedAssetValue, vestedBpsAtDate } from "./projection";
 import { estimateTax, TAX_RULES_2025 } from "./tax";
 import type { FinancialSnapshot, Scenario } from "./types";
 
 const snapshot: FinancialSnapshot = { household:{id:"h",name:"H",state:"CA",people:[]}, taxProfile:{filingStatus:"single",state:"CA",taxYear:2025,thresholdInflationBps:250}, accounts:[{id:"a",name:"Cash",kind:"checking",balanceCents:100_00,annualReturnBps:0,liquid:true}], recurring:[{id:"i",name:"Pay",kind:"income",amountCents:1000_00,startDate:"2025-01-01",taxTreatment:"none"},{id:"e",name:"Rent",kind:"expense",amountCents:400_00,startDate:"2025-01-01",taxTreatment:"none"}],assets:[],liabilities:[] };
 const scenario: Scenario = {id:"s",name:"Base",assumptions:{inflationBps:0,thresholdInflationBps:250},assumptionsInherited:false,events:[],defaultContributionAccountId:"a",contributions:[],withdrawals:[],horizon:{start:"2025-01",months:12}};
 const calculate=(financial:FinancialSnapshot=snapshot,planned:Scenario=scenario)=>ProjectionEngine.calculate(financial,planned,"2025-01-15");
+describe("California assessed values",()=>{
+  it("grows purchase value at the Proposition 13 cap instead of market appreciation",()=>{
+    expect(californiaAssessedValue({valueCents:200_000_00,purchasePriceCents:100_000_00,purchaseDate:"2020-01-15"},"2025-01")).toBeCloseTo(11_040_808,-1);
+  });
+});
 describe("asset appreciation curves",()=>{
   const asset={annualGrowthBps:1000,appreciationCurve:{startYear:2026,startRateBps:5000,endYear:2035,endRateBps:800}};
   it("interpolates yearly and holds the endpoint rates",()=>{

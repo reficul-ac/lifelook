@@ -4,10 +4,12 @@ import type { AnnualProjection, ContributionResult, ContributionRule, FinancialS
 
 const monthKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 const grow = (cents: number, bps: number, months: number) => Math.round(cents * Math.pow(1 + bps / 10_000, months / 12));
+const monthsBetween=(from:string,to:string)=>Math.max(0,(Number(to.slice(0,4))-Number(from.slice(0,4)))*12+Number(to.slice(5,7))-Number(from.slice(5,7)));
+export const californiaAssessedValue=(asset:Pick<import("./types").Asset,"valueCents"|"purchasePriceCents"|"purchaseDate">,date:string,fallbackStart=date)=>grow(asset.purchasePriceCents??asset.valueCents,200,monthsBetween(asset.purchaseDate??fallbackStart,date));
 export const appreciationRateForYear=(asset:Pick<import("./types").Asset,"annualGrowthBps"|"appreciationCurve">,year:number)=>{const curve=asset.appreciationCurve;if(!curve)return asset.annualGrowthBps;if(year<=curve.startYear)return curve.startRateBps;if(year>=curve.endYear)return curve.endRateBps;return Math.round(curve.startRateBps+(curve.endRateBps-curve.startRateBps)*(year-curve.startYear)/(curve.endYear-curve.startYear));};
 export const vestedBpsAtDate=(asset:Pick<import("./types").Asset,"privateStock">,date:string)=>{const stock=asset.privateStock;if(!stock)return 10000;const start=isoDate(stock.vestingStartDate),current=isoDate(date);if(current<start)return stock.vestedBps;const months=(current.getUTCFullYear()-start.getUTCFullYear())*12+current.getUTCMonth()-start.getUTCMonth();const quarters=Math.min(stock.remainingVestingQuarters,Math.floor(months/3));return Math.min(10000,Math.round(stock.vestedBps+(10000-stock.vestedBps)*quarters/stock.remainingVestingQuarters));};
 export const vestedAssetValue=(asset:Pick<import("./types").Asset,"valueCents"|"privateStock">&{value?:number},date:string)=>Math.round((asset.value??asset.valueCents)*vestedBpsAtDate(asset,date)/10000);
-const vestedEquityValue=(asset:Pick<import("./types").Asset,"equityHolding">,date:string)=>asset.equityHolding?.grants.reduce((sum,grant)=>sum+valueForUnits(vestedUnitsAt(grant,date),projectedSharePrice(asset.equityHolding!,date)),0)??0;
+export const vestedEquityValue=(asset:Pick<import("./types").Asset,"equityHolding">,date:string)=>asset.equityHolding?.grants.reduce((sum,grant)=>sum+valueForUnits(vestedUnitsAt(grant,date),projectedSharePrice(asset.equityHolding!,date)),0)??0;
 const isoDate = (value: string) => {
   const date = new Date(`${value}T00:00:00Z`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(date.valueOf()) || date.toISOString().slice(0, 10) !== value) throw new RangeError(`Invalid date: ${value}`);
@@ -21,7 +23,7 @@ const addMonths = (date: Date, count: number) => {
 };
 function annualHousingDeductions(snapshot:FinancialSnapshot,year:number){
   let mortgageInterestCents=0,propertyTaxCents=0,mortgageDebtCents=0;
-  for(const asset of snapshot.assets)if(asset.housingCosts?.propertyTaxRateBps)propertyTaxCents+=Math.round(asset.valueCents*asset.housingCosts.propertyTaxRateBps/10_000);
+  for(const asset of snapshot.assets)if(asset.housingCosts?.propertyTaxRateBps)propertyTaxCents+=Math.round(californiaAssessedValue(asset,`${year}-01`,`${year}-01`)*asset.housingCosts.propertyTaxRateBps/10_000);
   for(const liability of snapshot.liabilities){const mortgage=liability.mortgage;if(!mortgage)continue;mortgageDebtCents+=mortgage.originalPrincipalCents;let balance=mortgage.originalPrincipalCents,cursor=isoDate(mortgage.startDate);for(let count=0;count<mortgage.termMonths&&balance>0;count++,cursor=addMonths(cursor,1)){const interest=Math.round(balance*liability.annualRateBps/120_000);if(cursor.getUTCFullYear()===year)mortgageInterestCents+=interest;if(cursor.getUTCFullYear()>year)break;const payment=Math.min(mortgage.paymentOverrideCents??liability.minimumPaymentCents,balance+interest);balance=balance+interest-payment;}}
   return {mortgageInterestCents,propertyTaxCents,mortgageDebtCents};
 }
@@ -163,7 +165,7 @@ export const ProjectionEngine = {
         else if (event.type === "account-transfer") { account(event.fromAccountId).balance -= event.amountCents; account(event.toAccountId).balance += event.amountCents; }
         else if (event.type === "asset-purchase") {
           account(event.fundingAccountId).balance -= event.downPaymentCents + event.costsCents;
-          assets.set(event.assetId, { id: event.assetId, name: event.name, valueCents: event.valueCents, value: event.valueCents, withheld:0, annualGrowthBps: event.annualGrowthBps, housingCosts:event.housingCosts });
+          assets.set(event.assetId, { id: event.assetId, name: event.name, valueCents: event.valueCents, value: event.valueCents, withheld:0, annualGrowthBps: event.annualGrowthBps, housingCosts:event.housingCosts,purchasePriceCents:event.valueCents,purchaseDate:event.date });
           if (event.financing) debts.set(event.financing.liabilityId, { id: event.financing.liabilityId, name: event.financing.name, balanceCents: event.financing.principalCents, balance: event.financing.principalCents, annualRateBps: event.financing.annualRateBps, minimumPaymentCents: event.financing.minimumPaymentCents, payment: event.financing.minimumPaymentCents });
         } else if (event.type === "debt-origination") {
           account(event.accountId).balance += event.principalCents;
@@ -179,7 +181,7 @@ export const ProjectionEngine = {
       let housingCostCents=0,principalAndInterestCents=0;
       for(const item of assets.values()) if(item.housingCosts){
         const age=Math.max(0,index);
-        housingCostCents+=Math.round(item.value*item.housingCosts.propertyTaxRateBps/120000);
+        housingCostCents+=Math.round(californiaAssessedValue(item,key,asOfMonth)*item.housingCosts.propertyTaxRateBps/120000);
         housingCostCents+=grow(item.housingCosts.insuranceMonthlyCents,item.housingCosts.insuranceAnnualGrowthBps,age);
         housingCostCents+=grow(item.housingCosts.hoaMonthlyCents,item.housingCosts.hoaAnnualGrowthBps,age);
       }

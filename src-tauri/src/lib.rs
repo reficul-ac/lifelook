@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 18;
+const SCHEMA_VERSION: i64 = 19;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -309,10 +309,10 @@ struct InvestmentComparisonRecord { household_id:String, assumptions:serde_json:
 struct InvestmentComparisonInput { assumptions:serde_json::Value, expected_revision:i64 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct RetirementPlanRecord { household_id:String, selected_scenario_id:String, retirement_year:i64, runway_years:i64, withdrawal_rate_bps:i64, expense_buckets:serde_json::Value, selected_source_ids:serde_json::Value, portfolio_items:serde_json::Value, withdrawal_order:serde_json::Value, revision:i64 }
+struct RetirementPlanRecord { household_id:String, selected_scenario_id:String, retirement_year:i64, runway_years:i64, withdrawal_rate_bps:i64, expense_buckets:serde_json::Value, selected_source_ids:serde_json::Value, portfolio_items:serde_json::Value, withdrawal_order:serde_json::Value, retirement_years:serde_json::Value, scheduled_income:serde_json::Value, withdrawal_account_order:serde_json::Value, legacy_review_dismissed:bool, revision:i64 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RetirementPlanInput { selected_scenario_id:String, retirement_year:i64, runway_years:i64, withdrawal_rate_bps:i64, expense_buckets:serde_json::Value, selected_source_ids:serde_json::Value, portfolio_items:serde_json::Value, withdrawal_order:serde_json::Value, expected_revision:i64 }
+struct RetirementPlanInput { selected_scenario_id:String, retirement_year:i64, runway_years:i64, withdrawal_rate_bps:i64, expense_buckets:serde_json::Value, selected_source_ids:serde_json::Value, portfolio_items:serde_json::Value, withdrawal_order:serde_json::Value, #[serde(default)] retirement_years:serde_json::Value, #[serde(default)] scheduled_income:serde_json::Value, #[serde(default)] withdrawal_account_order:serde_json::Value, #[serde(default)] legacy_review_dismissed:bool, expected_revision:i64 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RecurringInput {
@@ -874,6 +874,15 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
     if version < 18 {
         transaction.execute_batch("CREATE TABLE IF NOT EXISTS retirement_plans(household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE RESTRICT,selected_scenario_id TEXT NOT NULL DEFAULT '',retirement_year INTEGER NOT NULL,runway_years INTEGER NOT NULL DEFAULT 50,withdrawal_rate_bps INTEGER NOT NULL DEFAULT 300,expense_buckets_json TEXT NOT NULL DEFAULT '[]',selected_source_ids_json TEXT NOT NULL DEFAULT '[]',portfolio_items_json TEXT NOT NULL DEFAULT '[]',withdrawal_order_json TEXT NOT NULL DEFAULT '[\"taxable\",\"pre-tax\",\"roth\"]',revision INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);INSERT INTO schema_migrations(version) VALUES(18);")?;
     }
+    let version: i64 = transaction.query_row("SELECT COALESCE(MAX(version),0) FROM schema_migrations",[],|r|r.get(0))?;
+    if version < 19 {
+        let columns=transaction.prepare("PRAGMA table_info(retirement_plans)")?.query_map([],|r|r.get::<_,String>(1))?.collect::<Result<Vec<_>,_>>()?;
+        if !columns.iter().any(|x|x=="retirement_years_json"){transaction.execute("ALTER TABLE retirement_plans ADD COLUMN retirement_years_json TEXT NOT NULL DEFAULT '{}'",[])?;}
+        if !columns.iter().any(|x|x=="scheduled_income_json"){transaction.execute("ALTER TABLE retirement_plans ADD COLUMN scheduled_income_json TEXT NOT NULL DEFAULT '[]'",[])?;}
+        if !columns.iter().any(|x|x=="withdrawal_account_order_json"){transaction.execute("ALTER TABLE retirement_plans ADD COLUMN withdrawal_account_order_json TEXT NOT NULL DEFAULT '[]'",[])?;}
+        if !columns.iter().any(|x|x=="legacy_review_dismissed"){transaction.execute("ALTER TABLE retirement_plans ADD COLUMN legacy_review_dismissed INTEGER NOT NULL DEFAULT 0",[])?;}
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(19)",[])?;
+    }
     transaction
         .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
     transaction.commit()?;
@@ -918,7 +927,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
     if let Some(h) = &household {
         investment_comparison=connection.query_row("SELECT household_id,assumptions_json,revision FROM investment_comparisons WHERE household_id=?",[&h.id],|r|{let raw:String=r.get(1)?;Ok(InvestmentComparisonRecord{household_id:r.get(0)?,assumptions:serde_json::from_str(&raw).unwrap_or_else(|_|default_investment_assumptions()),revision:r.get(2)?})}).optional()?;
         if investment_comparison.is_none(){investment_comparison=Some(InvestmentComparisonRecord{household_id:h.id.clone(),assumptions:default_investment_assumptions(),revision:1});}
-        retirement_plan=connection.query_row("SELECT household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,revision FROM retirement_plans WHERE household_id=?",[&h.id],|r|Ok(RetirementPlanRecord{household_id:r.get(0)?,selected_scenario_id:r.get(1)?,retirement_year:r.get(2)?,runway_years:r.get(3)?,withdrawal_rate_bps:r.get(4)?,expense_buckets:serde_json::from_str(&r.get::<_,String>(5)?).unwrap_or_else(|_|serde_json::json!([])),selected_source_ids:serde_json::from_str(&r.get::<_,String>(6)?).unwrap_or_else(|_|serde_json::json!([])),portfolio_items:serde_json::from_str(&r.get::<_,String>(7)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_order:serde_json::from_str(&r.get::<_,String>(8)?).unwrap_or_else(|_|serde_json::json!(["taxable","pre-tax","roth"])),revision:r.get(9)?})).optional()?;
+        retirement_plan=connection.query_row("SELECT household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,revision FROM retirement_plans WHERE household_id=?",[&h.id],|r|Ok(RetirementPlanRecord{household_id:r.get(0)?,selected_scenario_id:r.get(1)?,retirement_year:r.get(2)?,runway_years:r.get(3)?,withdrawal_rate_bps:r.get(4)?,expense_buckets:serde_json::from_str(&r.get::<_,String>(5)?).unwrap_or_else(|_|serde_json::json!([])),selected_source_ids:serde_json::from_str(&r.get::<_,String>(6)?).unwrap_or_else(|_|serde_json::json!([])),portfolio_items:serde_json::from_str(&r.get::<_,String>(7)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_order:serde_json::from_str(&r.get::<_,String>(8)?).unwrap_or_else(|_|serde_json::json!(["taxable","pre-tax","roth"])),retirement_years:serde_json::from_str(&r.get::<_,String>(9)?).unwrap_or_else(|_|serde_json::json!({})),scheduled_income:serde_json::from_str(&r.get::<_,String>(10)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_account_order:serde_json::from_str(&r.get::<_,String>(11)?).unwrap_or_else(|_|serde_json::json!([])),legacy_review_dismissed:r.get(12)?,revision:r.get(13)?})).optional()?;
         let mut q=connection.prepare("SELECT id,household_id,name,birth_date FROM people WHERE household_id=? ORDER BY rowid")?;
         people = q
             .query_map([&h.id], |r| {
@@ -1190,7 +1199,7 @@ fn update_retirement_plan(input:RetirementPlanInput,database:tauri::State<Databa
  if input.runway_years!=50||!(1..=10_000).contains(&input.withdrawal_rate_bps)||!input.expense_buckets.is_array()||!input.selected_source_ids.is_array()||!input.portfolio_items.is_array()||!input.withdrawal_order.is_array(){return Err(AppError::Validation("retirement plan is invalid".into()))}
  with_db(&database,|db|store_retirement_plan(db,input))
 }
-fn store_retirement_plan(db:&mut Connection,input:RetirementPlanInput)->Result<RetirementPlanRecord,AppError>{let tx=db.transaction()?;let household_id:String=tx.query_row("SELECT id FROM households LIMIT 1",[],|r|r.get(0))?;let existing:Option<i64>=tx.query_row("SELECT revision FROM retirement_plans WHERE household_id=?",[&household_id],|r|r.get(0)).optional()?;if existing.unwrap_or(1)!=input.expected_revision{return Err(AppError::Conflict)}let next=existing.map_or(1,|r|r+1);tx.execute("INSERT INTO retirement_plans(household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10) ON CONFLICT(household_id) DO UPDATE SET selected_scenario_id=excluded.selected_scenario_id,retirement_year=excluded.retirement_year,runway_years=excluded.runway_years,withdrawal_rate_bps=excluded.withdrawal_rate_bps,expense_buckets_json=excluded.expense_buckets_json,selected_source_ids_json=excluded.selected_source_ids_json,portfolio_items_json=excluded.portfolio_items_json,withdrawal_order_json=excluded.withdrawal_order_json,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,input.selected_scenario_id,input.retirement_year,input.runway_years,input.withdrawal_rate_bps,serde_json::to_string(&input.expense_buckets)?,serde_json::to_string(&input.selected_source_ids)?,serde_json::to_string(&input.portfolio_items)?,serde_json::to_string(&input.withdrawal_order)?,next])?;tx.commit()?;Ok(RetirementPlanRecord{household_id,selected_scenario_id:input.selected_scenario_id,retirement_year:input.retirement_year,runway_years:input.runway_years,withdrawal_rate_bps:input.withdrawal_rate_bps,expense_buckets:input.expense_buckets,selected_source_ids:input.selected_source_ids,portfolio_items:input.portfolio_items,withdrawal_order:input.withdrawal_order,revision:next})}
+fn store_retirement_plan(db:&mut Connection,input:RetirementPlanInput)->Result<RetirementPlanRecord,AppError>{let tx=db.transaction()?;let household_id:String=tx.query_row("SELECT id FROM households LIMIT 1",[],|r|r.get(0))?;let existing:Option<i64>=tx.query_row("SELECT revision FROM retirement_plans WHERE household_id=?",[&household_id],|r|r.get(0)).optional()?;if existing.unwrap_or(1)!=input.expected_revision{return Err(AppError::Conflict)}let next=existing.map_or(1,|r|r+1);tx.execute("INSERT INTO retirement_plans(household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14) ON CONFLICT(household_id) DO UPDATE SET selected_scenario_id=excluded.selected_scenario_id,retirement_year=excluded.retirement_year,expense_buckets_json=excluded.expense_buckets_json,retirement_years_json=excluded.retirement_years_json,scheduled_income_json=excluded.scheduled_income_json,withdrawal_account_order_json=excluded.withdrawal_account_order_json,legacy_review_dismissed=excluded.legacy_review_dismissed,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,input.selected_scenario_id,input.retirement_year,input.runway_years,input.withdrawal_rate_bps,serde_json::to_string(&input.expense_buckets)?,serde_json::to_string(&input.selected_source_ids)?,serde_json::to_string(&input.portfolio_items)?,serde_json::to_string(&input.withdrawal_order)?,serde_json::to_string(&input.retirement_years)?,serde_json::to_string(&input.scheduled_income)?,serde_json::to_string(&input.withdrawal_account_order)?,input.legacy_review_dismissed,next])?;tx.commit()?;Ok(RetirementPlanRecord{household_id,selected_scenario_id:input.selected_scenario_id,retirement_year:input.retirement_year,runway_years:input.runway_years,withdrawal_rate_bps:input.withdrawal_rate_bps,expense_buckets:input.expense_buckets,selected_source_ids:input.selected_source_ids,portfolio_items:input.portfolio_items,withdrawal_order:input.withdrawal_order,retirement_years:input.retirement_years,scheduled_income:input.scheduled_income,withdrawal_account_order:input.withdrawal_account_order,legacy_review_dismissed:input.legacy_review_dismissed,revision:next})}
 
 #[tauri::command]
 fn get_bootstrap(database: tauri::State<Database>) -> Result<WorkspaceSnapshot, AppError> {
@@ -1667,6 +1676,7 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
         "account-transfer",
         "account-contribution",
         "asset-purchase",
+        "adu-build",
         "asset-sale",
         "debt-origination",
         "debt-payoff",
@@ -1704,6 +1714,7 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
             | "account-transfer"
             | "account-contribution" => &["amountCents"],
             "asset-purchase" => &["valueCents", "downPaymentCents", "costsCents"],
+            "adu-build" => &["costCents"],
             "asset-sale" => &["proceedsCents", "costsCents"],
             "debt-origination" => &["principalCents", "minimumPaymentCents"],
             _ => &[],
@@ -1906,7 +1917,7 @@ fn update_scenario(
             let account_keys: &[&str] = match kind {
                 "account-transfer" => &["fromAccountId", "toAccountId"],
                 "account-contribution" => &["accountId"],
-                "asset-purchase" => &["fundingAccountId"],
+                "asset-purchase" | "adu-build" => &["fundingAccountId"],
                 "asset-sale" => &["destinationAccountId"],
                 "debt-origination" | "debt-payoff" => &["accountId"],
                 _ => &[],
@@ -1952,6 +1963,10 @@ fn update_scenario(
                         return Err(AppError::Validation("sale payoff must reference an existing liability or a strictly earlier origination".into()));
                     }
                 }
+            }
+            if kind == "adu-build" {
+                let id=event.get("assetId").and_then(|x|x.as_str()).unwrap_or("");
+                if !created_assets.get(id).is_some_and(|created|*created<date)&&!owns("assets",id)? {return Err(AppError::Validation("ADU build must reference an owned property or a strictly earlier purchase".into()));}
             }
             if kind == "debt-payoff" {
                 let id = event
@@ -4116,7 +4131,7 @@ mod tests {
     fn retirement_plan_round_trips_and_enforces_revisions() {
         let mut c=seeded();
         assert!(bootstrap(&c).unwrap().retirement_plan.is_none());
-        let make=|expected_revision|RetirementPlanInput{selected_scenario_id:"base".into(),retirement_year:2040,runway_years:50,withdrawal_rate_bps:300,expense_buckets:serde_json::json!([{"id":"housing","name":"Housing","mode":"annual","annualCents":2400000}]),selected_source_ids:serde_json::json!(["a"]),portfolio_items:serde_json::json!([]),withdrawal_order:serde_json::json!(["taxable","pre-tax","roth"]),expected_revision};
+        let make=|expected_revision|RetirementPlanInput{selected_scenario_id:"base".into(),retirement_year:2040,runway_years:50,withdrawal_rate_bps:300,expense_buckets:serde_json::json!([{"id":"housing","name":"Housing","mode":"annual","annualCents":2400000}]),selected_source_ids:serde_json::json!(["a"]),portfolio_items:serde_json::json!([]),withdrawal_order:serde_json::json!(["taxable","pre-tax","roth"]),retirement_years:serde_json::json!({}),scheduled_income:serde_json::json!([]),withdrawal_account_order:serde_json::json!([]),legacy_review_dismissed:false,expected_revision};
         let saved=store_retirement_plan(&mut c,make(1)).unwrap();
         assert_eq!(saved.revision,1);
         assert_eq!(bootstrap(&c).unwrap().retirement_plan.unwrap().retirement_year,2040);

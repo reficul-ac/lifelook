@@ -17,7 +17,12 @@ export type RetirementPortfolioItem = RetirementStockTarget | RetirementProperty
 export interface RetirementPlanRecord {
   householdId:string; selectedScenarioId:string; retirementYear:number; runwayYears:50; withdrawalRateBps:BasisPoints;
   expenseBuckets:RetirementExpenseBucket[]; selectedSourceIds:string[]; portfolioItems:RetirementPortfolioItem[]; withdrawalOrder:RetirementTaxClass[]; revision:number;
+  retirementYears?:Record<string,number>; scheduledIncome?:RetirementIncome[]; withdrawalAccountOrder?:string[]; legacyReviewDismissed?:boolean;
 }
+export interface RetirementIncome { id:string; name:string; ownerPersonId:string; startYear:number; annualAmountCents:Cents; annualGrowthBps:BasisPoints; taxableBps:BasisPoints }
+export type RetirementStressPreset="baseline"|"lower-returns"|"higher-inflation"|"higher-spending"|"longevity"|"combined";
+export interface RetirementOutlookYear { year:number; grossIncomeCents:Cents; taxAndPenaltyCents:Cents; afterTaxIncomeCents:Cents; spendingCents:Cents; excessCents:Cents; withdrawalsCents:Cents; endingBalanceCents:Cents; rmdCents:Cents }
+export interface RetirementOutlook { years:RetirementOutlookYear[]; firstDepletionYear?:number; endingBalanceCents:Cents; ready:boolean; warnings:string[]; preset:RetirementStressPreset }
 export const defaultRetirementPlan = (year=new Date().getFullYear()):Omit<RetirementPlanRecord,"householdId"> => ({
   selectedScenarioId:"", retirementYear:year, runwayYears:50, withdrawalRateBps:300,
   expenseBuckets:[], selectedSourceIds:[], portfolioItems:[], withdrawalOrder:["taxable","pre-tax","roth"], revision:1,
@@ -109,4 +114,33 @@ export function calculateRetirement(input:RetirementCalculationInput):Retirement
   });
   const selected=years.find(x=>x.year===input.plan.retirementYear)??years[0],selectedYearAffordable=acquisitionYear===input.plan.retirementYear;
   return {years,selected,acquisitionYear,selectedYearAffordable,earliestReadyYear:run?.runwayPasses?acquisitionYear:undefined};
+}
+
+const accountTaxClass=(account:Account):RetirementTaxClass=>account.subtype==="traditional-ira"||account.subtype==="employer-pre-tax"?"pre-tax":account.subtype==="roth-ira"||account.subtype==="employer-roth"?"roth":"taxable";
+const ageAtEnd=(birthDate:string|null|undefined,year:number)=>birthDate?year-Number(birthDate.slice(0,4)):100;
+/** Versioned, deterministic retirement rules. 2026 pack; special-case exceptions are intentionally not inferred. */
+export const RETIREMENT_RULE_PACK={version:"2026.1",rmdStartAge:73,earlyWithdrawalAge:59.5,earlyPenaltyBps:1000,employerSeparationAge:55,rothFiveYearRule:5} as const;
+export function calculateRetirementOutlook(input:RetirementCalculationInput&{people?:readonly {id:string;birthDate?:string|null}[];recurring?:readonly import("./types").RecurringEntry[];preset?:RetirementStressPreset}):RetirementOutlook{
+  const preset=input.preset??"baseline",cutoffYear=Math.min(...Object.values(input.plan.retirementYears??{}),input.plan.retirementYear),firstRetirement=cutoffYear+1,years=preset==="longevity"||preset==="combined"?60:50;
+  const inflationBps=input.scenario.assumptions.inflationBps+(preset==="higher-inflation"||preset==="combined"?100:0),spendFactor=preset==="higher-spending"||preset==="combined"?1.1:1,returnDelta=preset==="lower-returns"||preset==="combined"?-200:0;
+  const cutoff=input.projections.find(x=>x.year===cutoffYear)?.months.at(-1)?.balances?.accounts;
+  const balances=new Map(input.accounts.map(a=>[a.id,Math.max(0,cutoff?.[a.id]??a.balanceCents)])),basis=new Map(input.accounts.map(a=>[a.id,a.taxableCostBasisCents??a.rothContributionBasisCents??0]));
+  const ordered=[...(input.plan.withdrawalAccountOrder??[]),...input.accounts.map(a=>a.id)].filter((x,i,a)=>a.indexOf(x)===i&&balances.has(x));
+  const warnings:string[]=[];for(const a of input.accounts)if(!a.ownerPersonId||!a.subtype)warnings.push(`${a.name}: owner or tax metadata is missing; conservative withdrawal taxes apply.`);
+  if(input.plan.portfolioItems.length&&!input.plan.legacyReviewDismissed)warnings.push("Legacy retirement-only portfolio items need review; they are excluded until added to Plan or dismissed.");
+  const rows:RetirementOutlookYear[]=[];let firstDepletionYear:number|undefined;
+  for(let offset=0;offset<years;offset++){
+    const year=firstRetirement+offset,inflation=Math.pow(1+inflationBps/10000,offset),spending=Math.round(input.plan.expenseBuckets.reduce((s,b)=>s+annualBucketAmount(b,0),0)*inflation*spendFactor);
+    let gross=0,tax=0,rmd=0;
+    for(const entry of input.recurring??[])if(entry.kind==="income"&&entry.ownerPersonId&&year<=(input.plan.retirementYears?.[entry.ownerPersonId]??cutoffYear)){const multiplier=entry.incomeType==="salary"||entry.frequency==="annual"?1:entry.frequency==="monthly"||!entry.frequency?12:entry.frequency==="quarterly"?4:entry.frequency==="biweekly"?26:52;const amount=Math.round(entry.amountCents*multiplier*Math.pow(1+(entry.annualGrowthBps??0)/10000,Math.max(0,year-Number(entry.startDate.slice(0,4)))));gross+=amount;tax+=Math.round(amount*.25)}
+    for(const income of input.plan.scheduledIncome??[])if(year>=income.startYear){const amount=Math.round(income.annualAmountCents*Math.pow(1+income.annualGrowthBps/10000,year-income.startYear));gross+=amount;tax+=Math.round(amount*income.taxableBps/10000*.25)}
+    // RMDs are retained as cash when they exceed spending needs.
+    for(const account of input.accounts.filter(a=>accountTaxClass(a)==="pre-tax"))if(ageAtEnd(input.people?.find(p=>p.id===account.ownerPersonId)?.birthDate,year)>=RETIREMENT_RULE_PACK.rmdStartAge){const amount=Math.min(balances.get(account.id)??0,Math.round((balances.get(account.id)??0)/Math.max(2,27.4-offset)));balances.set(account.id,(balances.get(account.id)??0)-amount);gross+=amount;rmd+=amount;tax+=Math.round(amount*.25)}
+    let afterTax=gross-tax,need=Math.max(0,spending-afterTax),withdrawals=0;
+    for(const id of ordered){if(need<=0)break;const account=input.accounts.find(a=>a.id===id)!;let available=balances.get(id)??0;if(!available)continue;const kind=accountTaxClass(account),ownerAge=ageAtEnd(input.people?.find(p=>p.id===account.ownerPersonId)?.birthDate,year),basisAvailable=basis.get(id)??0;let rate=kind==="pre-tax"?2500:kind==="taxable"?Math.round(2000*Math.max(0,1-basisAvailable/Math.max(1,available))):0;if(ownerAge<RETIREMENT_RULE_PACK.earlyWithdrawalAge&&kind==="pre-tax"&&!(account.subtype==="employer-pre-tax"&&ownerAge>=55))rate+=RETIREMENT_RULE_PACK.earlyPenaltyBps;if(kind==="roth"&&ownerAge<59.5&&year-(account.rothOpeningYear??year)<5)rate=1000;const take=Math.min(available,Math.ceil(need/(1-rate/10000)));balances.set(id,available-take);const accountTax=Math.round(take*rate/10000);tax+=accountTax;withdrawals+=take;afterTax+=take-accountTax;need=Math.max(0,spending-afterTax);if(basisAvailable)basis.set(id,Math.max(0,basisAvailable-take));}
+    const surplus=Math.max(0,afterTax-spending);if(surplus){const cash=input.accounts.find(a=>a.subtype==="cash"||a.kind==="checking"||a.kind==="savings");if(cash)balances.set(cash.id,(balances.get(cash.id)??0)+surplus)}
+    for(const account of input.accounts)balances.set(account.id,Math.round((balances.get(account.id)??0)*(1+Math.max(-10000,account.annualReturnBps+returnDelta)/10000)));
+    const ending=[...balances.values()].reduce((s,x)=>s+x,0);if(need>0&&firstDepletionYear===undefined)firstDepletionYear=year;rows.push({year,grossIncomeCents:gross+withdrawals,taxAndPenaltyCents:tax,afterTaxIncomeCents:afterTax,spendingCents:spending,excessCents:afterTax-spending,withdrawalsCents:withdrawals,endingBalanceCents:ending,rmdCents:rmd});
+  }
+  return {years:rows,firstDepletionYear,endingBalanceCents:rows.at(-1)?.endingBalanceCents??0,ready:firstDepletionYear===undefined,warnings,preset};
 }

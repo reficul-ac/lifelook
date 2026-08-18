@@ -188,12 +188,14 @@ export function InvestmentView({
   initial,
   repository,
   taxContext,
-  onAddToRetirement,
+  onAddToPlan,
+  scenarios=[],accounts=[],
 }: {
   initial?: InvestmentComparisonRecord | null;
   repository: Repository;
   taxContext?: InvestmentTaxContext;
-  onAddToRetirement?:(assumptions:InvestmentAssumptions,includeAdu:boolean)=>void;
+  onAddToPlan?:(assumptions:InvestmentAssumptions,options:{scenarioId:string;date:string;fundingAccountIds:string[];includeAdu:boolean})=>void;
+  scenarios?:readonly {id:string;name:string}[];accounts?:readonly {id:string;name:string}[];
 }) {
   const base = { ...defaultInvestmentAssumptions, ...initial?.assumptions };
   const [draft, setDraft] = useState<Record<string, string>>(() =>
@@ -208,6 +210,7 @@ export function InvestmentView({
     [chartRange, setChartRange] = useState<5 | 10 | 15 | 20 | "max">("max"),
     [retryToken, setRetryToken] = useState(0);
   const [includeAduInRetirement,setIncludeAduInRetirement]=useState(true);
+  const [addOpen,setAddOpen]=useState(false),[addScenario,setAddScenario]=useState(scenarios[0]?.id??""),[addDate,setAddDate]=useState(new Date().toISOString().slice(0,10)),[funding,setFunding]=useState<string[]>(accounts[0]?[accounts[0].id]:[]);
   const [taxSettings, setTaxSettings] = useState(() => ({
     factorRentalTaxes: base.factorRentalTaxes,
     mfsLivedApartAllYear: base.mfsLivedApartAllYear,
@@ -317,8 +320,7 @@ export function InvestmentView({
             <h2>Compare buying with renting and investing</h2>
           </div>
           <div className="investment-actions">
-            {onAddToRetirement&&<button type="button" onClick={()=>onAddToRetirement(assumptions,includeAduInRetirement)}>Add to Retirement Portfolio</button>}
-            {onAddToRetirement&&assumptions.aduPlanned&&<label className="check-row"><input type="checkbox" checked={includeAduInRetirement} onChange={e=>setIncludeAduInRetirement(e.target.checked)}/> Include ADU in retirement property</label>}
+            {onAddToPlan&&<button type="button" onClick={()=>setAddOpen(x=>!x)}>Add to Plan</button>}
             <span
               className={`save-state ${saveState}`}
               role="status"
@@ -334,6 +336,7 @@ export function InvestmentView({
                 ""
               )}
             </span>
+            {addOpen&&<div className="card portfolio-editor"><label>Scenario<select value={addScenario} onChange={e=>setAddScenario(e.target.value)}>{scenarios.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label>Purchase date<input type="date" value={addDate} onChange={e=>setAddDate(e.target.value)}/></label><fieldset><legend>Funding accounts (in order)</legend>{accounts.map(a=><label className="check-row" key={a.id}><input type="checkbox" checked={funding.includes(a.id)} onChange={e=>setFunding(e.target.checked?[...funding,a.id]:funding.filter(x=>x!==a.id))}/>{a.name}</label>)}</fieldset>{assumptions.aduPlanned&&<label className="check-row"><input type="checkbox" checked={includeAduInRetirement} onChange={e=>setIncludeAduInRetirement(e.target.checked)}/> Include dated ADU build</label>}<button disabled={!addScenario||!addDate||!funding.length} onClick={()=>{onAddToPlan?.(assumptions,{scenarioId:addScenario,date:addDate,fundingAccountIds:funding,includeAdu:includeAduInRetirement});setAddOpen(false)}}>Add purchase to Plan</button></div>}
             <button type="button" onClick={reset}>
               Reset to defaults
             </button>

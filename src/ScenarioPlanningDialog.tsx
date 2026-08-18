@@ -16,6 +16,7 @@ const labels: Record<Kind, string> = {
   "account-transfer": "Account transfer",
   "account-contribution": "Account contribution",
   "asset-purchase": "Asset purchase",
+  "adu-build": "ADU build",
   "asset-sale": "Asset sale",
   "debt-origination": "Debt origination",
   "debt-payoff": "Debt payoff",
@@ -412,6 +413,7 @@ function EventEditor({
                 }
               : undefined,
         };
+      else if(kind==="adu-build") event={...base,type:kind,assetId:f("assetId"),name:f("name").trim(),costCents:m("costCents")!,addedValueCents:m("addedValueCents",true),monthlyRentalIncomeCents:m("monthlyRentalIncomeCents",true),rentalIncomeGrowthBps:r("rentalIncomeGrowthBps"),fundingAccountId:f("fundingAccountId")};
       else
         event = {
           ...base,
@@ -577,6 +579,7 @@ function EventEditor({
           {money("costsCents", "Purchase costs (USD)")}
         </>
       )}
+      {kind === "adu-build"&&<><label>Name<input required value={f("name")} onChange={e=>set("name",e.target.value)}/></label><label>Property<select required value={f("assetId")} onChange={e=>set("assetId",e.target.value)}><option value="">Choose property</option>{assets.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>{account("fundingAccountId","Funding account")}{money("costCents","Build cost (USD)")}{money("addedValueCents","Added property value (optional)",true)}{money("monthlyRentalIncomeCents","Monthly rental income (optional)",true)}<label>Rent growth (%)<input inputMode="decimal" value={f("rentalIncomeGrowthBps")} onChange={e=>set("rentalIncomeGrowthBps",e.target.value)}/></label></>}
       {kind === "asset-sale" && (
         <>
           <label>

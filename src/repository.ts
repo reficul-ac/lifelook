@@ -7,7 +7,7 @@ export interface RepositoryError { code:string; message:string; field?:string; d
 export interface StartupError extends RepositoryError { profilePath?:string; retryable:boolean }
 export interface WorkspaceInfo { householdName:string; profilePath:string }
 export interface BootstrapPerson { id:string; householdId:string; name:string; birthDate?:string|null; revision?:number }
-export interface BootstrapAccount { id:string; householdId:string; name:string; kind:AccountKind; openingBalanceCents:number; balanceCents:number; annualReturnBps:number; liquid:boolean; revision:number }
+export interface BootstrapAccount { id:string; householdId:string; name:string; kind:AccountKind; openingBalanceCents:number; balanceCents:number; annualReturnBps:number; liquid:boolean; revision:number; ownerPersonId?:string|null; subtype?:import("./domain/types").AccountSubtype; taxableCostBasisCents?:number|null; rothContributionBasisCents?:number|null; rothOpeningYear?:number|null }
 export interface TaxProfile { filingStatus:"single"|"married-joint"|"married-separate"|"head-of-household"; state:"CA"; taxYear:2025|2026; thresholdInflationBps:number; taxUnit?:import("./domain/types").TaxUnit; revision:number }
 export interface Settings { theme:Theme; reducedMotion:boolean; revision:number }
 export interface Category { id:string; householdId:string; name:string; kind:"income"|"expense"|"transfer"; revision:number; archived?:boolean }

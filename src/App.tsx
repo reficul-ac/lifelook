@@ -70,8 +70,8 @@ import {
 } from "./repository";
 import { ScenarioPlanningDialog } from "./ScenarioPlanningDialog";
 import { InvestmentView } from "./InvestmentView";
-import { RetirementView, investmentPropertyCopy } from "./RetirementView";
-import { defaultRetirementPlan, type RetirementPlanRecord } from "./domain";
+import { RetirementView } from "./RetirementView";
+import { type RetirementPlanRecord } from "./domain";
 import {
   buildSearchIndex,
   GlobalSearch,
@@ -103,7 +103,6 @@ const money = (cents: number, compact = false) => {
     notation: compact ? "compact" : "standard",
   }).format(cents / 100);
 };
-const defaultRetirementFallback=(current:RetirementPlanRecord|null,bootstrap:Bootstrap,scenarioId:string):RetirementPlanRecord=>current??{...defaultRetirementPlan(),householdId:bootstrap.household?.id??"local",selectedScenarioId:scenarioId};
 
 const baseline: Scenario = {
   id: "base",
@@ -624,7 +623,7 @@ function Workspace({
             </section>
           </div>
         )}
-        <div hidden={view !== "Investment"}><InvestmentView initial={bootstrap.investmentComparison} repository={repository} taxContext={investmentTaxContext} onAddToRetirement={(assumptions,includeAdu)=>{const copy=investmentPropertyCopy(assumptions,includeAdu);setRetirementPlan(current=>({...defaultRetirementFallback(current,bootstrap,selectedScenario.id),portfolioItems:[...(current?.portfolioItems??[]),copy]}));setView("Retirement")}}/></div>
+        <div hidden={view !== "Investment"}><InvestmentView initial={bootstrap.investmentComparison} repository={repository} taxContext={investmentTaxContext} scenarios={scenarios} accounts={bootstrap.accounts} onAddToPlan={async(assumptions,options)=>{const record=bootstrap.scenarios.find(s=>s.id===options.scenarioId);if(!record||!repository.updateScenario)return;const assetId=`investment-${Date.now()}`,principal=Math.round(assumptions.homePriceCents*(1-assumptions.downPaymentBps/10000)),monthlyRate=assumptions.mortgageRateBps/10000/12,months=assumptions.mortgageTermYears*12,payment=Math.round(monthlyRate?principal*monthlyRate*Math.pow(1+monthlyRate,months)/(Math.pow(1+monthlyRate,months)-1):principal/months),fundingSources=options.fundingAccountIds.map(accountId=>({accountId}));const purchase:import("./domain").ScenarioEvent={id:`buy-${assetId}`,date:options.date,type:"asset-purchase",assetId,name:"Investment home",valueCents:assumptions.homePriceCents,annualGrowthBps:assumptions.homeAppreciationBps,fundingAccountId:options.fundingAccountIds[0],fundingSources,downPaymentCents:Math.round(assumptions.homePriceCents*assumptions.downPaymentBps/10000),costsCents:Math.round(assumptions.homePriceCents*assumptions.purchaseCostBps/10000),monthlyRentalIncomeCents:assumptions.monthlyRentalIncomeCents,rentalIncomeGrowthBps:assumptions.rentalIncomeGrowthBps,maintenanceBps:assumptions.maintenanceBps,housingCosts:{propertyTaxRateBps:assumptions.propertyTaxBps,insuranceMonthlyCents:Math.round(assumptions.annualInsuranceCents/12),insuranceAnnualGrowthBps:assumptions.insuranceGrowthBps,hoaMonthlyCents:assumptions.monthlyHoaCents,hoaAnnualGrowthBps:assumptions.hoaGrowthBps},financing:{liabilityId:`loan-${assetId}`,name:"Investment mortgage",principalCents:principal,annualRateBps:assumptions.mortgageRateBps,minimumPaymentCents:payment}};const events=[...record.events,purchase];if(options.includeAdu&&assumptions.aduPlanned){const date=new Date(`${options.date}T00:00:00Z`);date.setUTCFullYear(date.getUTCFullYear()+Math.max(0,assumptions.aduBuildYear-1));events.push({id:`adu-${assetId}`,date:date.toISOString().slice(0,10),type:"adu-build",assetId,name:"Build ADU",costCents:assumptions.aduBuildCostCents,addedValueCents:assumptions.aduBuildCostCents,monthlyRentalIncomeCents:assumptions.aduMonthlyRentCents,rentalIncomeGrowthBps:assumptions.rentalIncomeGrowthBps,fundingAccountId:options.fundingAccountIds[0],fundingSources})}await repository.updateScenario({id:record.id,name:record.name,assumptions:record.assumptions,horizonMonths:record.horizonMonths,events,defaultContributionAccountId:record.defaultContributionAccountId,contributions:record.contributions,withdrawals:record.withdrawals,expectedRevision:record.revision});await onRefresh();setSelectedScenarioId(record.id);setView("Plan")}}/></div>
         {view === "Retirement" && (
           <RetirementView initial={retirementPlan} repository={repository} bootstrap={bootstrap} snapshot={snapshot} scenarios={scenarios} projections={retirementProjections} onPlanChange={setRetirementPlan}/>
         )}

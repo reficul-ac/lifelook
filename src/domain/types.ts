@@ -8,7 +8,8 @@ export interface TaxUnit { id:string; filingStatus:FilingStatus; memberPersonIds
 export interface TaxProfile { filingStatus: FilingStatus; state: "CA"; taxYear: 2025 | 2026; thresholdInflationBps: BasisPoints; taxUnit?:TaxUnit }
 export interface AppSettings { theme: "system" | "light" | "dark"; currency: "USD"; reducedMotion: boolean }
 export type AccountKind = "checking" | "savings" | "investment" | "retirement" | "credit";
-export interface Account { id: string; name: string; kind: AccountKind; balanceCents: Cents; annualReturnBps: BasisPoints; liquid: boolean }
+export type AccountSubtype = "cash" | "taxable-brokerage" | "traditional-ira" | "employer-pre-tax" | "roth-ira" | "employer-roth";
+export interface Account { id: string; name: string; kind: AccountKind; balanceCents: Cents; annualReturnBps: BasisPoints; liquid: boolean; ownerPersonId?:string|null; subtype?:AccountSubtype; taxableCostBasisCents?:Cents|null; rothContributionBasisCents?:Cents|null; rothOpeningYear?:number|null }
 export interface Category { id: string; name: string; kind: "income" | "expense" | "transfer"; archived: boolean }
 export interface Transaction { id: string; date: string; amountCents: Cents; accountId: string; categoryId: string; transferAccountId?: string; note?: string }
 export type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
@@ -30,6 +31,7 @@ export type ContributionDestinationType = "account" | "asset" | "mortgage";
 export type ContributionOverflowType = "account" | "asset";
 export interface ContributionRule { id: string; destinationType: ContributionDestinationType; destinationId: string; percentBps?: BasisPoints; monthlyAmountCents?: Cents; frequency: RecurringFrequency; targetBalanceCents?: Cents; overflowDestinationType?: ContributionOverflowType; overflowDestinationId?: string }
 export interface WithdrawalRule { id?: string; accountId: string; priority: number }
+export interface EventFundingSource { accountId:string; capCents?:Cents|null }
 export interface ProjectionHorizon { start: string; months: number }
 export type ScenarioEvent =
   | { id: string; date: string; type: "recurring-change" | "income-change"; entryId: string; amountCents: Cents }
@@ -37,7 +39,8 @@ export type ScenarioEvent =
   | { id: string; date: string; type: "one-time-expense"; amountCents: Cents }
   | { id: string; date: string; type: "account-transfer"; fromAccountId: string; toAccountId: string; amountCents: Cents }
   | { id: string; date: string; type: "account-contribution"; accountId: string; amountCents: Cents }
-  | { id: string; date: string; type: "asset-purchase"; assetId: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; housingCosts?: HousingCosts; fundingAccountId: string; downPaymentCents: Cents; costsCents: Cents; financing?: { liabilityId: string; name: string; principalCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents } }
+  | { id: string; date: string; type: "asset-purchase"; assetId: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; housingCosts?: HousingCosts; fundingAccountId: string; fundingSources?:readonly EventFundingSource[]; downPaymentCents: Cents; costsCents: Cents; monthlyRentalIncomeCents?:Cents; rentalIncomeGrowthBps?:BasisPoints; maintenanceBps?:BasisPoints; financing?: { liabilityId: string; name: string; principalCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents } }
+  | { id:string; date:string; type:"adu-build"; assetId:string; name:string; costCents:Cents; fundingAccountId:string; fundingSources?:readonly EventFundingSource[]; addedValueCents?:Cents; monthlyRentalIncomeCents?:Cents; rentalIncomeGrowthBps?:BasisPoints }
   | { id: string; date: string; type: "asset-sale"; assetId: string; proceedsCents: Cents; costsCents: Cents; destinationAccountId: string; payoff?: { liabilityId: string; mode: "none" | "partial" | "full"; amountCents?: Cents } }
   | { id: string; date: string; type: "debt-origination"; liabilityId: string; name: string; principalCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; accountId: string }
   | { id: string; date: string; type: "debt-payoff"; liabilityId: string; accountId: string; amountCents?: Cents };
@@ -45,7 +48,7 @@ export interface Scenario { id: string; name: string; assumptions: GrowthAssumpt
 export interface LedgerActual { date: string; kind: "income" | "expense" | "transfer" | "adjustment"; amountCents: Cents }
 export interface FinancialSnapshot { household: Household; taxProfile: TaxProfile; accounts: readonly Account[]; recurring: readonly RecurringEntry[]; assets: readonly Asset[]; liabilities: readonly Liability[]; actuals?: readonly LedgerActual[] }
 export type ProjectionStatus = "actual" | "blended" | "projected";
-export interface ProjectionWarning { code: "account-depleted" | "unfunded-deficit" | "invalid-contribution" | "aggressive-assumption" | "negative-balance" | "payment-below-interest"; message: string; month: string; entityId?: string; inputField?: string }
+export interface ProjectionWarning { code: "account-depleted" | "unfunded-deficit" | "invalid-contribution" | "aggressive-assumption" | "negative-balance" | "payment-below-interest" | "event-unfunded"; message: string; month: string; entityId?: string; inputField?: string }
 export interface ProjectionBalances {
   accounts: Readonly<Record<string, Cents>>;
   assets: Readonly<Record<string, Cents>>;

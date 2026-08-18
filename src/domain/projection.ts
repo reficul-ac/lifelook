@@ -158,15 +158,25 @@ export const ProjectionEngine = {
         if (entry.kind === "income") income += value; else {expense += value;if(entry.taxTreatment==="pretax"){if(!entry.accountId||accountKind(snapshot,entry.accountId)!=="retirement")throw new RangeError("Pre-tax contributions require a retirement destination account");account(entry.accountId).balance+=value;}}
       }
       const currentEvents = events.filter(e => e.date.slice(0, 7) === key);
+      const fundEvent=(event:{id:string;fundingAccountId:string;fundingSources?:readonly {accountId:string;capCents?:number|null}[]},needed:number)=>{
+        const sources=event.fundingSources?.length?event.fundingSources:[{accountId:event.fundingAccountId}];
+        const available=sources.reduce((sum,source)=>sum+Math.min(Math.max(0,account(source.accountId).balance),source.capCents??Number.POSITIVE_INFINITY),0);
+        if(available<needed){warnings.push({code:"event-unfunded",message:`${needed-available} cents are still needed; this event was not executed.`,month:key,entityId:event.id,inputField:"fundingSources"});return false}
+        let remaining=needed;for(const source of sources){const target=account(source.accountId),draw=Math.min(remaining,Math.max(0,target.balance),source.capCents??Number.POSITIVE_INFINITY);target.balance-=draw;remaining-=draw;if(!remaining)break}return true;
+      };
       for (const event of currentEvents) {
         if (event.type === "one-time-income") income += event.amountCents;
         else if (event.type === "one-time-expense") expense += event.amountCents;
         else if (event.type === "account-contribution") account(event.accountId).balance += event.amountCents;
         else if (event.type === "account-transfer") { account(event.fromAccountId).balance -= event.amountCents; account(event.toAccountId).balance += event.amountCents; }
         else if (event.type === "asset-purchase") {
-          account(event.fundingAccountId).balance -= event.downPaymentCents + event.costsCents;
+          if(!fundEvent(event,event.downPaymentCents+event.costsCents))continue;
           assets.set(event.assetId, { id: event.assetId, name: event.name, valueCents: event.valueCents, value: event.valueCents, withheld:0, annualGrowthBps: event.annualGrowthBps, housingCosts:event.housingCosts,purchasePriceCents:event.valueCents,purchaseDate:event.date });
           if (event.financing) debts.set(event.financing.liabilityId, { id: event.financing.liabilityId, name: event.financing.name, balanceCents: event.financing.principalCents, balance: event.financing.principalCents, annualRateBps: event.financing.annualRateBps, minimumPaymentCents: event.financing.minimumPaymentCents, payment: event.financing.minimumPaymentCents });
+        } else if(event.type==="adu-build") {
+          if(!assets.has(event.assetId)){warnings.push({code:"event-unfunded",message:"The ADU build was skipped because its property is not owned.",month:key,entityId:event.id,inputField:"assetId"});continue}
+          if(!fundEvent(event,event.costCents))continue;
+          const target=assets.get(event.assetId)!;target.value+=event.addedValueCents??event.costCents;
         } else if (event.type === "debt-origination") {
           account(event.accountId).balance += event.principalCents;
           debts.set(event.liabilityId, { id: event.liabilityId, name: event.name, balanceCents: event.principalCents, balance: event.principalCents, annualRateBps: event.annualRateBps, minimumPaymentCents: event.minimumPaymentCents, payment: event.minimumPaymentCents });

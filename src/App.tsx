@@ -81,6 +81,7 @@ import { ActionButton, AnchoredMenu, DetailDisclosure, InfoPopover } from "./ui"
 
 const units=(micros:number)=>new Intl.NumberFormat(undefined,{maximumFractionDigits:6}).format(micros/1_000_000);
 const equityVestedValue=(asset:Pick<Asset,"equityHolding">,date:string)=>asset.equityHolding?.grants.reduce((sum,grant)=>sum+valueForUnits(vestedUnitsAt(grant,date),projectedSharePrice(asset.equityHolding!,date)),0)??0;
+const currentAssetValue=(asset:Pick<Asset,"valueCents"|"privateStock"|"equityHolding">,date:string)=>asset.equityHolding?equityVestedValue(asset,date):vestedAssetValue(asset,date);
 const nextVest=(grant:import("./domain").RsuGrant,date:string)=>grant.vestEvents.find(event=>event.date>date);
 
 type View = "Overview" | "Activity" | "Plan" | "Investment" | "Retirement" | "Net Worth" | "Settings";
@@ -3008,9 +3009,10 @@ function Overview({
   navigate: (view: View) => void;
   onAdd:(el:HTMLElement)=>void;
 }) {
+  const currentDate=localIsoDate();
   const currentNetWorth =
     bootstrap.accounts.reduce((sum, a) => sum + a.balanceCents, 0) +
-    bootstrap.assets.reduce((sum, a) => sum + a.valueCents, 0) -
+    bootstrap.assets.reduce((sum, a) => sum + currentAssetValue(a,currentDate), 0) -
     bootstrap.liabilities.reduce((sum, a) => sum + a.balanceCents, 0);
   const year = String(new Date().getFullYear());
   const actual = bootstrap.activity.filter(
@@ -3022,7 +3024,7 @@ function Overview({
   const spending = -actual
     .filter((x) => x.kind === "expense")
     .reduce((s, x) => s + x.amountCents, 0);
-  const assets=bootstrap.accounts.filter(a=>a.balanceCents>0).reduce((s,a)=>s+a.balanceCents,0)+bootstrap.assets.reduce((s,a)=>s+a.valueCents,0), debt=bootstrap.accounts.filter(a=>a.balanceCents<0).reduce((s,a)=>s-a.balanceCents,0)+bootstrap.liabilities.reduce((s,a)=>s+a.balanceCents,0), compositionTotal=Math.max(1,assets+debt);
+  const assets=bootstrap.accounts.filter(a=>a.balanceCents>0).reduce((s,a)=>s+a.balanceCents,0)+bootstrap.assets.reduce((s,a)=>s+currentAssetValue(a,currentDate),0), debt=bootstrap.accounts.filter(a=>a.balanceCents<0).reduce((s,a)=>s-a.balanceCents,0)+bootstrap.liabilities.reduce((s,a)=>s+a.balanceCents,0), compositionTotal=Math.max(1,assets+debt);
   const recent=[...bootstrap.activity.reduce((map,row)=>map.set(row.entryId,[...(map.get(row.entryId)??[]),row]),new Map<string,ActivityPosting[]>()).values()].sort((a,b)=>b[0].occurredOn.localeCompare(a[0].occurredOn)).slice(0,4);
   return (
     <div className="content">
@@ -4415,7 +4417,7 @@ function PlanView(props:PlanViewProps) {
   useEffect(()=>{if(!series.some(item=>item.id===selected))setSelected("net-worth");},[selected,series.map(item=>item.id).join("|")]);
   const currentDate=localIsoDate();
   const currentValue=(item:WealthSeries)=>{
-    if(item.group==="net-worth")return snapshot.accounts.reduce((sum,x)=>sum+x.balanceCents,0)+snapshot.assets.reduce((sum,x)=>sum+(x.equityHolding?equityVestedValue(x,currentDate):vestedAssetValue(x,currentDate)),0)-snapshot.liabilities.reduce((sum,x)=>sum+x.balanceCents,0);
+    if(item.group==="net-worth")return snapshot.accounts.reduce((sum,x)=>sum+x.balanceCents,0)+snapshot.assets.reduce((sum,x)=>sum+currentAssetValue(x,currentDate),0)-snapshot.liabilities.reduce((sum,x)=>sum+x.balanceCents,0);
     const [,id,component]=item.id.split(":");
     if(item.group==="account")return snapshot.accounts.find(x=>x.id===id)?.balanceCents??0;
     if(item.group==="asset")return snapshot.assets.find(x=>x.id===id)?.valueCents??0;
@@ -4540,13 +4542,13 @@ function NetWorth({
 }) {
   const assets =
       snapshot.accounts.reduce((s, a) => s + Math.max(0, a.balanceCents), 0) +
-      snapshot.assets.reduce((s, a) => s + (a.equityHolding?equityVestedValue(a,localIsoDate()):vestedAssetValue(a,localIsoDate())), 0),
+      snapshot.assets.reduce((s, a) => s + currentAssetValue(a,localIsoDate()), 0),
     debt =
       snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0) +
       snapshot.accounts.reduce((s, a) => s + Math.max(0, -a.balanceCents), 0),
     netWorth =
       snapshot.accounts.reduce((s, a) => s + a.balanceCents, 0) +
-      snapshot.assets.reduce((s, a) => s + (a.equityHolding?equityVestedValue(a,localIsoDate()):vestedAssetValue(a,localIsoDate())), 0) -
+      snapshot.assets.reduce((s, a) => s + currentAssetValue(a,localIsoDate()), 0) -
       snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0);
   return (
     <div className="content">

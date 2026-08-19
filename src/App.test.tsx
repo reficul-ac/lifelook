@@ -57,6 +57,15 @@ describe("LifeLook shell", () => {
     expect(screen.getByRole("button", { name: /Plan/ })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: /Overview/ })).not.toHaveAttribute("aria-current");
   });
+  it("excludes unvested private stock from the Overview net worth", async () => {
+    const data=await testRepository.bootstrap();
+    const privateStock={id:"equity",householdId:"test",name:"Private equity",valueCents:40_000_00,annualGrowthBps:0,privateStock:{vestedBps:2500,vestingStartDate:"2099-01-01",remainingVestingQuarters:16},revision:1};
+    render(<App repository={{...testRepository,bootstrap:async()=>({...data,accounts:[{...data.accounts[0],balanceCents:20_000_00}],assets:[privateStock],liabilities:[{id:"loan",householdId:"test",name:"Loan",balanceCents:5_000_00,annualRateBps:0,minimumPaymentCents:0,revision:1}]})}}/>);
+    expect(await screen.findByRole("heading",{name:"Overview"})).toBeInTheDocument();
+    expect(screen.getByText("$25,000.00")).toBeInTheDocument();
+    expect(screen.getByLabelText("Financial position: $30,000.00 assets and $5,000.00 debt")).toBeInTheDocument();
+    expect(screen.queryByText("$55,000.00")).not.toBeInTheDocument();
+  });
   it("renders the isolated Investment comparison with accessible results",async()=>{
     const data=await testRepository.bootstrap();
     render(<App repository={{...testRepository,bootstrap:async()=>({...data,investmentComparison:{householdId:"test",revision:1,assumptions:{...defaultInvestmentAssumptions,horizonYears:10}}})}}/>);

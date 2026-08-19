@@ -20,8 +20,11 @@ export interface RetirementPlanRecord {
   expenseBuckets:RetirementExpenseBucket[]; selectedSourceIds:string[]; portfolioItems:RetirementPortfolioItem[]; withdrawalOrder:RetirementTaxClass[]; revision:number;
   retirementYears?:Record<string,number>; scheduledIncome?:RetirementIncome[]; withdrawalAccountOrder?:string[]; legacyReviewDismissed?:boolean;
   spendingMode?:"manual"|"plan"; liquidatableAssetIds?:string[]; earlyRothAccountIds?:string[]; migrationReview?:string[];
+  taxAssumptions?:RetirementTaxAssumptions;
 }
-export type RetirementIncomeClassification="social-security"|"ordinary"|"nontaxable"|"unclassified";
+export interface RetirementTaxAssumptions { annualQcdCents:Cents; charitableCents:Cents; medicalCents:Cents; federalShortLossCents:Cents; federalLongLossCents:Cents; californiaShortLossCents:Cents; californiaLongLossCents:Cents; mfsLivedApartAllYear:boolean }
+export const defaultRetirementTaxAssumptions=():RetirementTaxAssumptions=>({annualQcdCents:0,charitableCents:0,medicalCents:0,federalShortLossCents:0,federalLongLossCents:0,californiaShortLossCents:0,californiaLongLossCents:0,mfsLivedApartAllYear:false});
+export type RetirementIncomeClassification="social-security"|"ordinary"|"interest"|"qualified-dividend"|"nonqualified-dividend"|"tax-exempt-interest"|"nontaxable"|"unclassified";
 export interface RetirementIncome { id:string; name:string; ownerPersonId:string; startYear:number; annualAmountCents:Cents; annualGrowthBps:BasisPoints; taxableBps?:BasisPoints; classification?:RetirementIncomeClassification }
 export type RetirementStressPreset="baseline"|"lower-returns"|"higher-inflation"|"higher-spending"|"longevity"|"combined";
 export type RetirementIncomeSourceKind="employment"|"rental"|"scheduled"|"other"|"rmd"|"withdrawal";
@@ -33,7 +36,7 @@ export interface RetirementPortfolioPart { id:string; name:string; kind:"account
 export interface RetirementOutlook { years:RetirementOutlookYear[]; cutoffYear:number; firstRetirementYear:number; cutoffBalanceCents:Cents; cutoffAccountBalanceCents:Cents; cutoffAssetValueCents:Cents; cutoffLiabilityBalanceCents:Cents; portfolioParts:RetirementPortfolioPart[]; firstDepletionYear?:number; endingBalanceCents:Cents; ready:boolean|null; complete:boolean; missingData:string[]; warnings:string[]; preset:"baseline" }
 export const defaultRetirementPlan = (year=new Date().getFullYear()):Omit<RetirementPlanRecord,"householdId"> => ({
   selectedScenarioId:"", retirementYear:year, runwayYears:50, withdrawalRateBps:300,
-  expenseBuckets:[], selectedSourceIds:[], portfolioItems:[], withdrawalOrder:["taxable","pre-tax","roth"], spendingMode:"manual", liquidatableAssetIds:[], earlyRothAccountIds:[], revision:1,
+  expenseBuckets:[], selectedSourceIds:[], portfolioItems:[], withdrawalOrder:["taxable","pre-tax","roth"], spendingMode:"manual", liquidatableAssetIds:[], earlyRothAccountIds:[], taxAssumptions:defaultRetirementTaxAssumptions(), revision:1,
 });
 export const annualBucketAmount=(bucket:RetirementExpenseBucket,spendableCents:number)=>bucket.mode==="monthly"?bucket.monthlyCents*12:bucket.mode==="annual"?bucket.annualCents:Math.round(spendableCents*bucket.percentBps/10_000);
 

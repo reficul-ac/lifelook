@@ -1770,6 +1770,49 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
                 {
                     return Err(AppError::Validation("financing name is required".into()));
                 }
+                if let Some(term) = json_i64(financing, "termMonths") {
+                    if !(1..=600).contains(&term) {
+                        return Err(AppError::Validation("financing termMonths is invalid".into()));
+                    }
+                }
+            }
+            if let Some(details) = event.get("propertyDetails") {
+                if !details.is_object() {
+                    return Err(AppError::Validation("propertyDetails must be an object".into()));
+                }
+                for key in ["maintenanceBps", "rentalIncomeGrowthBps", "rentalUseBps"] {
+                    if let Some(rate) = json_i64(details, key) {
+                        if !(-10000..=100000).contains(&rate) || key == "rentalUseBps" && rate > 10000 {
+                            return Err(AppError::Validation(format!("propertyDetails {key} is invalid")));
+                        }
+                    }
+                }
+                if let Some(term) = json_i64(details, "mortgageTermMonths") {
+                    if !(1..=600).contains(&term) {
+                        return Err(AppError::Validation("propertyDetails mortgageTermMonths is invalid".into()));
+                    }
+                }
+                if let Some(kind) = details.get("rentalType") {
+                    if !kind.as_str().is_some_and(|x| ["long-term", "short-term"].contains(&x)) {
+                        return Err(AppError::Validation("propertyDetails rentalType is invalid".into()));
+                    }
+                }
+                for key in ["monthlyRentalIncomeCents", "propertyTaxBasisCents", "buildingBasisCents"] {
+                    if let Some(value) = details.get(key).filter(|x| !x.is_null()) {
+                        if value.as_i64().is_none_or(|x| !(0..=MAX_MONEY_CENTS).contains(&x)) {
+                            return Err(AppError::Validation(format!("propertyDetails {key} is invalid")));
+                        }
+                    }
+                }
+            }
+        }
+        if kind == "adu-build" {
+            for key in ["homeSquareFeet", "aduSquareFeet"] {
+                if !json_i64(event, key).is_some_and(|x| (1..=1_000_000).contains(&x)) {
+                    return Err(AppError::Validation(format!(
+                        "ADU build {key} must be a positive whole number"
+                    )));
+                }
             }
         }
         if kind == "asset-sale" {

@@ -1,6 +1,6 @@
 import { estimateHouseholdTax, estimateTax, TAX_RULES_2025, TAX_RULES_2026 } from "./tax";
 import { projectedSharePrice, valueForUnits, vestValue, vestedUnitsAt } from "./equity";
-import type { AnnualProjection, ContributionResult, ContributionRule, FinancialSnapshot, MonthlyProjection, ProjectionWarning, RecurringEntry, Scenario } from "./types";
+import type { AnnualProjection, ContributionResult, ContributionRule, FinancialSnapshot, MonthlyProjection, ProjectionWarning, PropertyProjectionResult, PropertyProjectionStatus, RecurringEntry, Scenario } from "./types";
 
 const monthKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 const grow = (cents: number, bps: number, months: number) => Math.round(cents * Math.pow(1 + bps / 10_000, months / 12));
@@ -91,6 +91,9 @@ export const ProjectionEngine = {
     const pending=new Map(contributions.map(rule=>[rule.id,0]));
     // Stored JSON array order is not part of the calculation contract.
     const events = [...scenario.events].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+    const propertyEvents=events.filter((event):event is Extract<(typeof events)[number],{type:"asset-purchase"}>=>event.type==="asset-purchase");
+    const propertyStatus=new Map<string,PropertyProjectionStatus>(propertyEvents.map(event=>[event.assetId,"planned"]));
+    const propertyShortfall=new Map<string,number>(),aduActive=new Set<string>(),aduBuildResults=new Map<string,{costCents:number;addedValueCents:number}>();
     const planned=[...Array(scenario.horizon.months)].map((_,index)=>{const date=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+index,1)),key=monthKey(date);let gross=0,pretax=0;for(const entry of snapshot.recurring){const count=occurrences(entry,key);if(!count)continue;const changes=events.filter(e=>(e.type==="recurring-change"||e.type==="income-change")&&e.entryId===entry.id&&e.date.slice(0,7)<=key);const base=changes.length?(changes.at(-1)! as {amountCents:number}).amountCents:entry.amountCents,value=recurringAmount(entry,base,key,entry.annualGrowthBps??(entry.kind==="expense"?scenario.assumptions.inflationBps:0),index,count);if(entry.kind==="income")gross+=value;else if(entry.taxTreatment==="pretax")pretax+=value;}for(const event of events.filter(e=>e.date.slice(0,7)===key))if(event.type==="one-time-income")gross+=event.amountCents;return {key,year:date.getUTCFullYear(),gross,pretax};});
     const vestIncomeByMonth=new Map<string,number>();
     const vestOwnerByMonth=new Map<string,Map<string,number>>();
@@ -138,7 +141,7 @@ export const ProjectionEngine = {
       const actual = snapshot.actuals?.filter(x => x.date.slice(0, 7) === key) ?? [];
       const income = actual.filter(x => x.kind === "income").reduce((s, x) => s + Math.abs(x.amountCents), 0);
       const expense = actual.filter(x => x.kind === "expense").reduce((s, x) => s + Math.abs(x.amountCents), 0);
-      months.push({month:key,status:"actual",incomeCents:income,expenseCents:expense,actualIncomeCents:income,actualExpenseCents:expense,incomeVarianceCents:0,expenseVarianceCents:0,taxCents:0,cashTaxCents:0,rsuSellToCoverTaxCents:0,surplusCents:income-expense,liquidWorthCents:null,netWorthCents:null,debtCents:null,balances:null,unfundedDeficitCents:0,contributionCents:0,contributionResults:[],principalAndInterestCents:0,housingCostCents:0,warnings:[]});
+      months.push({month:key,status:"actual",incomeCents:income,expenseCents:expense,actualIncomeCents:income,actualExpenseCents:expense,incomeVarianceCents:0,expenseVarianceCents:0,taxCents:0,cashTaxCents:0,rsuSellToCoverTaxCents:0,surplusCents:income-expense,liquidWorthCents:null,netWorthCents:null,debtCents:null,balances:null,unfundedDeficitCents:0,contributionCents:0,contributionResults:[],principalAndInterestCents:0,housingCostCents:0,properties:[],warnings:[]});
     }
     let cumulativeDeficit = 0;
     for (let index = 0; index < scenario.horizon.months; index++) {
@@ -170,33 +173,53 @@ export const ProjectionEngine = {
         else if (event.type === "account-contribution") account(event.accountId).balance += event.amountCents;
         else if (event.type === "account-transfer") { account(event.fromAccountId).balance -= event.amountCents; account(event.toAccountId).balance += event.amountCents; }
         else if (event.type === "asset-purchase") {
-          if(!fundEvent(event,event.downPaymentCents+event.costsCents))continue;
+          const required=event.downPaymentCents+event.costsCents;
+          const sources=event.fundingSources?.length?event.fundingSources:[{accountId:event.fundingAccountId}],available=sources.reduce((sum,source)=>sum+Math.min(Math.max(0,account(source.accountId).balance),source.capCents??Number.POSITIVE_INFINITY),0);
+          if(!fundEvent(event,required)){propertyStatus.set(event.assetId,"unfunded");propertyShortfall.set(event.assetId,Math.max(0,required-available));continue;}
+          propertyStatus.set(event.assetId,"active");propertyShortfall.set(event.assetId,0);
           assets.set(event.assetId, { id: event.assetId, name: event.name, valueCents: event.valueCents, value: event.valueCents, withheld:0, annualGrowthBps: event.annualGrowthBps, housingCosts:event.housingCosts,purchasePriceCents:event.valueCents,purchaseDate:event.date });
-          if (event.financing) debts.set(event.financing.liabilityId, { id: event.financing.liabilityId, name: event.financing.name, balanceCents: event.financing.principalCents, balance: event.financing.principalCents, annualRateBps: event.financing.annualRateBps, minimumPaymentCents: event.financing.minimumPaymentCents, payment: event.financing.minimumPaymentCents });
+          if (event.financing) debts.set(event.financing.liabilityId, { id: event.financing.liabilityId, name: event.financing.name, balanceCents: event.financing.principalCents, balance: event.financing.principalCents, annualRateBps: event.financing.annualRateBps, minimumPaymentCents: event.financing.minimumPaymentCents, payment: event.financing.minimumPaymentCents, mortgage:{originalPrincipalCents:event.financing.principalCents,termMonths:event.financing.termMonths??event.propertyDetails?.mortgageTermMonths??360,startDate:event.date,assetId:event.assetId} });
         } else if(event.type==="adu-build") {
           if(!assets.has(event.assetId)){warnings.push({code:"event-unfunded",message:"The ADU build was skipped because its property is not owned.",month:key,entityId:event.id,inputField:"assetId"});continue}
           if(!fundEvent(event,event.costCents))continue;
-          const target=assets.get(event.assetId)!;target.value+=event.addedValueCents??event.costCents;
+          const target=assets.get(event.assetId)!;
+          if(!Number.isInteger(event.homeSquareFeet)||event.homeSquareFeet<=0||!Number.isInteger(event.aduSquareFeet)||event.aduSquareFeet<=0)throw new RangeError("ADU builds require positive home and ADU square footage");
+          const addedValueCents=Math.round(target.value/event.homeSquareFeet*event.aduSquareFeet);
+          target.value+=addedValueCents;
+          aduBuildResults.set(`${event.assetId}:${key}`,{costCents:event.costCents,addedValueCents});
+          aduActive.add(event.assetId);
         } else if (event.type === "debt-origination") {
           account(event.accountId).balance += event.principalCents;
           debts.set(event.liabilityId, { id: event.liabilityId, name: event.name, balanceCents: event.principalCents, balance: event.principalCents, annualRateBps: event.annualRateBps, minimumPaymentCents: event.minimumPaymentCents, payment: event.minimumPaymentCents });
         } else if (event.type === "debt-payoff") { const d = debt(event.liabilityId), paid = Math.min(d.balance, event.amountCents ?? d.balance); account(event.accountId).balance -= paid; d.balance -= paid;
         } else if (event.type === "asset-sale") {
-          if (!assets.has(event.assetId)) throw new RangeError(`Unknown asset: ${event.assetId}`);
-          assets.delete(event.assetId); let payoff = 0;
+          if (!assets.has(event.assetId)) {
+            if(propertyEvents.some(item=>item.assetId===event.assetId)){warnings.push({code:"event-unfunded",message:"The sale was skipped because its planned property is not owned.",month:key,entityId:event.id,inputField:"assetId"});continue;}
+            throw new RangeError(`Unknown asset: ${event.assetId}`);
+          }
+          assets.delete(event.assetId);propertyStatus.set(event.assetId,"sold"); let payoff = 0;
           if (event.payoff && event.payoff.mode !== "none") { const d = debt(event.payoff.liabilityId); payoff = Math.min(d.balance, event.payoff.mode === "full" ? d.balance : event.payoff.amountCents ?? 0); d.balance -= payoff; }
           account(event.destinationAccountId).balance += event.proceedsCents - event.costsCents - payoff;
         }
       }
       let housingCostCents=0,principalAndInterestCents=0;
+      const propertyCosts=new Map<string,{propertyTaxCents:number;insuranceCents:number;hoaCents:number;maintenanceCents:number}>();
       for(const item of assets.values()) if(item.housingCosts){
         const age=Math.max(0,index);
-        housingCostCents+=Math.round(californiaAssessedValue(item,key,asOfMonth)*item.housingCosts.propertyTaxRateBps/120000);
-        housingCostCents+=grow(item.housingCosts.insuranceMonthlyCents,item.housingCosts.insuranceAnnualGrowthBps,age);
-        housingCostCents+=grow(item.housingCosts.hoaMonthlyCents,item.housingCosts.hoaAnnualGrowthBps,age);
+        const propertyTaxCents=Math.round(californiaAssessedValue(item,key,asOfMonth)*item.housingCosts.propertyTaxRateBps/120000),insuranceCents=grow(item.housingCosts.insuranceMonthlyCents,item.housingCosts.insuranceAnnualGrowthBps,age),hoaCents=grow(item.housingCosts.hoaMonthlyCents,item.housingCosts.hoaAnnualGrowthBps,age),purchase=propertyEvents.find(event=>event.assetId===item.id),maintenanceCents=Math.round(item.value*(purchase?.propertyDetails?.maintenanceBps??purchase?.maintenanceBps??0)/120000);
+        propertyCosts.set(item.id,{propertyTaxCents,insuranceCents,hoaCents,maintenanceCents});housingCostCents+=propertyTaxCents+insuranceCents+hoaCents+maintenanceCents;
       }
       expense+=housingCostCents;
-      for (const item of debts.values()) { if (item.balance <= 0) continue; const interest=Math.round(item.balance * item.annualRateBps / 120_000),due = item.balance + interest; const paid = Math.min(item.payment, due); if(item.payment<interest)warnings.push({code:"payment-below-interest",message:`${item.name}'s payment is below monthly interest.`,month:key,entityId:item.id,inputField:"minimumPaymentCents"}); expense += paid; principalAndInterestCents+=paid; item.balance = due - paid; }
+      const mortgageParts=new Map<string,{principalCents:number;interestCents:number}>();
+      for (const item of debts.values()) { if (item.balance <= 0) continue; const interest=Math.round(item.balance * item.annualRateBps / 120_000),due = item.balance + interest; const paid = Math.min(item.payment, due),principal=Math.max(0,paid-interest); if(item.payment<interest)warnings.push({code:"payment-below-interest",message:`${item.name}'s payment is below monthly interest.`,month:key,entityId:item.id,inputField:"minimumPaymentCents"}); expense += paid; principalAndInterestCents+=paid;item.balance = due - paid;if(item.mortgage?.assetId)mortgageParts.set(item.mortgage.assetId,{principalCents:principal,interestCents:interest}); }
+      const properties:PropertyProjectionResult[]=propertyEvents.map(event=>{
+        const state=propertyStatus.get(event.assetId)??"planned",asset=assets.get(event.assetId),loan=event.financing?debts.get(event.financing.liabilityId):undefined,cost=propertyCosts.get(event.assetId)??{propertyTaxCents:0,insuranceCents:0,hoaCents:0,maintenanceCents:0},mortgage=mortgageParts.get(event.assetId)??{principalCents:0,interestCents:0},age=monthsBetween(event.date,key),details=event.propertyDetails,rentalTaxModelingEnabled=details?.rentalTaxModelingEnabled??false,rentalShare=(details?.rentalUseBps??((details?.primaryResidence??true)?0:10000))/10000;
+        const rent=state==="active"?grow(details?.monthlyRentalIncomeCents??event.monthlyRentalIncomeCents??0,details?.rentalIncomeGrowthBps??event.rentalIncomeGrowthBps??0,age):0,aduIncome=state==="active"&&aduActive.has(event.assetId)?grow(details?.adu?.monthlyRentalIncomeCents??0,details?.adu?.rentalIncomeGrowthBps??details?.rentalIncomeGrowthBps??0,age):0,depreciation=rentalTaxModelingEnabled&&state==="active"?Math.round((details?.buildingBasisCents??Math.round(event.valueCents*.8))*rentalShare/330):0,operating=cost.propertyTaxCents+cost.insuranceCents+cost.hoaCents+cost.maintenanceCents,taxableRental=rentalTaxModelingEnabled?rent+aduIncome-Math.round((mortgage.interestCents+operating)*rentalShare)-depreciation:0;
+        income+=rent+aduIncome;
+        const aduBuild=aduBuildResults.get(`${event.assetId}:${key}`);
+        const rowWarnings:string[]=[];if(state==="unfunded")rowWarnings.push(`Funding shortfall: ${propertyShortfall.get(event.assetId)??0} cents.`);if(!rentalTaxModelingEnabled&&(rent||aduIncome||details===undefined))rowWarnings.push("Rental tax modeling not included");
+        return {assetId:event.assetId,liabilityId:event.financing?.liabilityId,name:event.name,month:key,status:state,executionShortfallCents:propertyShortfall.get(event.assetId)??0,assetValueCents:state==="active"?asset?.value??null:null,mortgageBalanceCents:state==="active"?(loan?.balance??0):null,equityCents:state==="active"&&asset?asset.value-(loan?.balance??0):null,purchaseCashCents:key===event.date.slice(0,7)&&state==="active"?event.downPaymentCents+event.costsCents:0,rentCents:rent,principalCents:mortgage.principalCents,interestCents:mortgage.interestCents,...cost,aduCostCents:aduBuild?.costCents??0,aduAddedValueCents:aduBuild?.addedValueCents??0,aduIncomeCents:aduIncome,depreciationCents:depreciation,taxableRentalCents:taxableRental,federalAllowedRentalCents:taxableRental,californiaAllowedRentalCents:taxableRental,federalPassiveCarryforwardCents:0,californiaPassiveCarryforwardCents:0,estimatedTaxEffectCents:0,rentalTaxModelingEnabled,warnings:rowWarnings};
+      });
       const tax = taxByMonth.get(key)??0,stockTax=stockTaxByMonth.get(key)??0;
       let coveredStockTax=0;
       if(stockTax){const taxable=[...assets.values()].filter(item=>item.privateStock?.taxOnVest||item.equityHolding),weights=taxable.map(item=>item.equityHolding?item.equityHolding.grants.flatMap(grant=>grant.vestEvents).filter(event=>event.date.slice(0,7)===key).reduce((sum,event)=>sum+vestValue(item.equityHolding!,event),0):(()=>{const previous=vestedBpsAtDate(item,monthKey(addMonths(date,-1))+"-01"),current=vestedBpsAtDate(item,`${key}-01`);return Math.max(0,Math.round(item.value*(current-previous)/10000));})()),total=weights.reduce((sum,value)=>sum+value,0);let assigned=0;taxable.forEach((item,i)=>{const amount=i===taxable.length-1?stockTax-assigned:(total?Math.floor(stockTax*weights[i]/total):0),sellToCover=item.equityHolding?.sellToCover??item.privateStock?.taxOnVest??false;if(sellToCover){item.withheld+=amount;coveredStockTax+=amount;}assigned+=amount;});}
@@ -235,13 +258,14 @@ export const ProjectionEngine = {
         privateStock:Object.fromEntries([...assets].filter(([,item])=>item.privateStock||item.equityHolding).map(([id,item])=>{const grossVested=item.equityHolding?vestedEquityValue(item,balanceDate):vestedAssetValue(item,balanceDate),total=item.equityHolding?item.equityHolding.grants.reduce((sum,grant)=>sum+valueForUnits(grant.unitsMicros,projectedSharePrice(item.equityHolding!,balanceDate)),0):item.value,vestedCents=Math.max(0,grossVested-item.withheld);return [id,{vestedCents,unvestedCents:Math.max(0,total-grossVested)}];})),
         liabilities:Object.fromEntries([...debts].map(([id,item])=>[id,Math.max(0,item.balance)])),
       };
-      months.push({ month: key, status, incomeCents: income, expenseCents: expense, actualIncomeCents:actualIncome,actualExpenseCents:actualExpense,incomeVarianceCents:actualIncome-income,expenseVarianceCents:actualExpense-expense,taxCents: tax,cashTaxCents:tax-coveredStockTax,rsuSellToCoverTaxCents:coveredStockTax, surplusCents: surplus, contributionCents,contributionResults, liquidWorthCents: liquid, netWorthCents: accountTotal + assetTotal - debtTotal - cumulativeDeficit, debtCents: debtTotal, balances, unfundedDeficitCents: unfunded,principalAndInterestCents,housingCostCents,warnings });
+      months.push({ month: key, status, incomeCents: income, expenseCents: expense, actualIncomeCents:actualIncome,actualExpenseCents:actualExpense,incomeVarianceCents:actualIncome-income,expenseVarianceCents:actualExpense-expense,taxCents: tax,cashTaxCents:tax-coveredStockTax,rsuSellToCoverTaxCents:coveredStockTax, surplusCents: surplus, contributionCents,contributionResults, liquidWorthCents: liquid, netWorthCents: accountTotal + assetTotal - debtTotal - cumulativeDeficit, debtCents: debtTotal, balances, unfundedDeficitCents: unfunded,principalAndInterestCents,housingCostCents,properties,warnings });
     }
     const grouped = new Map<number, MonthlyProjection[]>();
     for (const month of months) { const year = Number(month.month.slice(0, 4)); grouped.set(year, [...(grouped.get(year) ?? []), month]); }
-    return [...grouped].map(([year, items]) => {const income=sum(items,"incomeCents"),surplus=sum(items,"surplusCents");return ({ year, incomeCents:income,actualIncomeCents:sum(items,"actualIncomeCents"),actualExpenseCents:sum(items,"actualExpenseCents"), expenseCents: sum(items, "expenseCents"), taxCents: sum(items, "taxCents"),cashTaxCents:sum(items,"cashTaxCents"),rsuSellToCoverTaxCents:sum(items,"rsuSellToCoverTaxCents"),taxLedger:taxLedgerByYear.get(year), savingsRateBps:income?Math.round(Math.max(0,surplus)*10000/income):0,surplusCents:surplus,contributionCents:sum(items,"contributionCents"),contributionResults:items.flatMap(x=>x.contributionResults), liquidWorthCents: items.at(-1)!.liquidWorthCents, endingNetWorthCents: items.at(-1)!.netWorthCents, debtCents: items.at(-1)!.debtCents, debtPayoffMonth:items.find(x=>x.debtCents===0)?.month, unfundedDeficitCents: sum(items, "unfundedDeficitCents"), warnings: items.flatMap(x => x.warnings), months: items });});
+    return [...grouped].map(([year, items]) => {const income=sum(items,"incomeCents"),surplus=sum(items,"surplusCents"),properties=propertyEvents.map(event=>aggregateProperty(year,event.assetId,items));return ({ year, incomeCents:income,actualIncomeCents:sum(items,"actualIncomeCents"),actualExpenseCents:sum(items,"actualExpenseCents"), expenseCents: sum(items, "expenseCents"), taxCents: sum(items, "taxCents"),cashTaxCents:sum(items,"cashTaxCents"),rsuSellToCoverTaxCents:sum(items,"rsuSellToCoverTaxCents"),taxLedger:taxLedgerByYear.get(year), savingsRateBps:income?Math.round(Math.max(0,surplus)*10000/income):0,surplusCents:surplus,contributionCents:sum(items,"contributionCents"),contributionResults:items.flatMap(x=>x.contributionResults), liquidWorthCents: items.at(-1)!.liquidWorthCents, endingNetWorthCents: items.at(-1)!.netWorthCents, debtCents: items.at(-1)!.debtCents, debtPayoffMonth:items.find(x=>x.debtCents===0)?.month, unfundedDeficitCents: sum(items, "unfundedDeficitCents"),properties, warnings: items.flatMap(x => x.warnings), months: items });});
   }
 } as const;
 
 function sum(items: MonthlyProjection[], key: "incomeCents" | "expenseCents" | "actualIncomeCents" | "actualExpenseCents" | "taxCents"|"cashTaxCents"|"rsuSellToCoverTaxCents" | "surplusCents" | "unfundedDeficitCents"|"contributionCents") { return items.reduce((total, item) => total + item[key], 0); }
 function accountKind(snapshot:FinancialSnapshot,id:string){return snapshot.accounts.find(x=>x.id===id)?.kind;}
+function aggregateProperty(year:number,assetId:string,items:readonly MonthlyProjection[]):PropertyProjectionResult{const rows=items.flatMap(item=>item.properties).filter(item=>item.assetId===assetId),last=rows.at(-1)!;const total=(key:keyof PropertyProjectionResult)=>rows.reduce((sum,row)=>sum+(typeof row[key]==="number"?(row[key] as number):0),0);return {...last,month:undefined,year,purchaseCashCents:total("purchaseCashCents"),rentCents:total("rentCents"),principalCents:total("principalCents"),interestCents:total("interestCents"),propertyTaxCents:total("propertyTaxCents"),insuranceCents:total("insuranceCents"),hoaCents:total("hoaCents"),maintenanceCents:total("maintenanceCents"),aduCostCents:total("aduCostCents"),aduAddedValueCents:total("aduAddedValueCents"),aduIncomeCents:total("aduIncomeCents"),depreciationCents:total("depreciationCents"),taxableRentalCents:total("taxableRentalCents"),federalAllowedRentalCents:total("federalAllowedRentalCents"),californiaAllowedRentalCents:total("californiaAllowedRentalCents"),estimatedTaxEffectCents:total("estimatedTaxEffectCents"),warnings:[...new Set(rows.flatMap(row=>row.warnings))]};}

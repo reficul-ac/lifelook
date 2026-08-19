@@ -63,25 +63,44 @@ const investableAsset = (
       asset.housingCosts.insuranceMonthlyCents ||
       asset.housingCosts.hoaMonthlyCents)
   );
-function eventFields(value: ScenarioEvent | null) {
+function eventFields(value: ScenarioEvent | null, bootstrap?:Bootstrap) {
   if (!value) return {};
   const result: Record<string, string> = {};
   for (const [key, item] of Object.entries(value))
     if (typeof item !== "object")
       result[key] =
         typeof item === "number"
-          ? key.endsWith("Bps")
+          ? key.endsWith("SquareFeet")
+            ? String(item)
+            : key.endsWith("Bps")
             ? rate(item)
             : dollars(item)
           : String(item);
-  if (value.type === "asset-purchase" && value.financing)
-    for (const [key, item] of Object.entries(value.financing))
-      result[`financing.${key}`] =
-        typeof item === "number"
-          ? key.endsWith("Bps")
-            ? rate(item)
-            : dollars(item)
-          : String(item);
+  if (value.type === "asset-purchase") {
+    if(value.financing) for (const [key, item] of Object.entries(value.financing))
+        result[`financing.${key}`] =
+          typeof item === "number"
+            ? key === "termMonths"
+              ? String(item)
+              : key.endsWith("Bps")
+                ? rate(item)
+                : dollars(item)
+            : String(item);
+    if(value.financing&&!result["financing.termMonths"])result["financing.termMonths"]=String(value.propertyDetails?.mortgageTermMonths??360);
+    if(value.housingCosts) for(const [key,item] of Object.entries(value.housingCosts))result[`housing.${key}`]=key.endsWith("Bps")?rate(item):dollars(item);
+    const details=value.propertyDetails,investment=!details&&value.assetId.startsWith("investment-")?bootstrap?.investmentComparison?.assumptions:undefined;
+    const primaryResidence=details?.primaryResidence??investment?.primaryResidence??true;
+    result["property.primaryResidence"]=String(primaryResidence);
+    result["property.rentalTaxModelingEnabled"]=String(details?.rentalTaxModelingEnabled??investment?.factorRentalTaxes??false);
+    result["property.rentalType"]=details?.rentalType??investment?.rentalType??"long-term";
+    result["property.rentalUseBps"]=rate(details?.rentalUseBps??(primaryResidence?investment?.rentalUseBps??0:10000));
+    result["property.monthlyRentalIncomeCents"]=dollars(details?.monthlyRentalIncomeCents??value.monthlyRentalIncomeCents);
+    result["property.rentalIncomeGrowthBps"]=rate(details?.rentalIncomeGrowthBps??value.rentalIncomeGrowthBps);
+    result["property.maintenanceBps"]=rate(details?.maintenanceBps??value.maintenanceBps);
+    result["property.propertyTaxBasisCents"]=dollars(details?.propertyTaxBasisCents??investment?.propertyTaxBasisOverrideCents??undefined);
+    result["property.buildingBasisCents"]=dollars(details?.buildingBasisCents??investment?.buildingBasisOverrideCents??undefined);
+    for(const key of ["mfsLivedApartAllYear","shortTermMaterialParticipation","longTermRealEstateProfessional","longTermMaterialParticipation"] as const)result[`property.${key}`]=String(details?.[key]??investment?.[key]??false);
+  }
   if (value.type === "asset-sale" && value.payoff)
     for (const [key, item] of Object.entries(value.payoff))
       result[`payoff.${key}`] =
@@ -95,6 +114,7 @@ export function ScenarioPlanningDialog({
   repository,
   projectedMonthlySurplusCents = 0,
   focusedEntry,
+  focusedEventId,
   close,
   refresh,
 }: {
@@ -103,6 +123,7 @@ export function ScenarioPlanningDialog({
   repository: Repository;
   projectedMonthlySurplusCents?: number;
   focusedEntry?: "event" | "contribution";
+  focusedEventId?: string;
   close: () => void;
   refresh: () => Promise<void>;
 }) {
@@ -126,7 +147,11 @@ export function ScenarioPlanningDialog({
         .map((x, i) => ({ ...x, priority: i + 1 })),
     ),
     [editing, setEditing] = useState<ScenarioEvent | null | undefined>(
-      focusedEntry === "event" ? null : undefined,
+      focusedEventId
+        ? record.events.find((event) => event.id === focusedEventId)
+        : focusedEntry === "event"
+          ? null
+          : undefined,
     ),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -297,7 +322,7 @@ export function ScenarioPlanningDialog({
             events={events}
             bootstrap={bootstrap}
             horizonMonths={record.horizonMonths}
-            cancel={() => setEditing(undefined)}
+            cancel={() => focusedEventId ? close() : setEditing(undefined)}
             commit={(event) => {
               setEvents((xs) =>
                 sorted([...xs.filter((x) => x.id !== event.id), event]),
@@ -317,18 +342,21 @@ export function ScenarioPlanningDialog({
               {events.map((e) => (
                 <div className="transaction" key={e.id}>
                   <div>
-                    <strong>{labels[e.type]}</strong>
-                    <small>{e.date}</small>
+                    <strong>{e.type === "asset-purchase" ? e.name : labels[e.type]}</strong>
+                    <small>{e.date}{e.type === "asset-purchase" ? ` · ${dollars(e.downPaymentCents + e.costsCents)} required` : ""}</small>
                   </div>
                   <OverflowMenu
                     label={`More options for ${labels[e.type]} on ${e.date}`}
                     items={[
                       { label: "Edit", onSelect: () => setEditing(e) },
                       {
-                        label: "Delete",
+                        label: e.type === "asset-purchase" ? "Remove from Plan" : "Delete",
                         danger: true,
-                        onSelect: () =>
-                          setEvents((xs) => xs.filter((x) => x.id !== e.id)),
+                        onSelect: () => {
+                          if(e.type!=="asset-purchase"){setEvents((xs) => xs.filter((x) => x.id !== e.id));return;}
+                          const liabilityId=e.financing?.liabilityId,linked=events.filter(x=>x.id!==e.id&&(("assetId" in x&&x.assetId===e.assetId)||("liabilityId" in x&&x.liabilityId===liabilityId)||(x.type==="asset-sale"&&x.payoff?.liabilityId===liabilityId)));
+                          if(window.confirm(`Remove ${e.name} and ${linked.length} linked event${linked.length===1?"":"s"} from this scenario?`))setEvents(xs=>xs.filter(x=>x.id!==e.id&&!linked.some(item=>item.id===x.id)));
+                        },
                       },
                     ]}
                   />
@@ -788,7 +816,7 @@ function EventEditor({
       value?.date ?? new Date().toISOString().slice(0, 10),
     ),
     [fields, setFields] = useState<Record<string, string>>(() =>
-      eventFields(value),
+      eventFields(value,bootstrap),
     ),
     [error, setError] = useState("");
   const prior = useMemo(
@@ -844,6 +872,9 @@ function EventEditor({
       />
     </label>
   );
+  const percent = (name:string,label:string) => (
+    <label>{label}<input inputMode="decimal" value={f(name)} onChange={(e)=>set(name,e.target.value)} /></label>
+  );
   function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -862,6 +893,21 @@ function EventEditor({
         throw new Error(`${k} is invalid.`);
       return n;
     };
+    const whole = (k: string) => {
+      const n = Number(f(k));
+      if (!Number.isInteger(n) || n <= 0)
+        throw new Error(`${k} must be a positive whole number.`);
+      return n;
+    };
+    const nonnegativeMoney = (k: string) => {
+      if (!f(k).trim()) return 0;
+      const n=cents(f(k));
+      if(n===null||n<0)throw new Error(`${k} must be zero or a positive amount.`);
+      return n;
+    };
+    const nullableMoney=(k:string)=>f(k).trim()?nonnegativeMoney(k):null;
+    const optionalRate=(k:string,fallback=0)=>f(k).trim()?r(k):fallback;
+    const checked=(k:string)=>f(k)==="true";
     try {
       let event: ScenarioEvent;
       const base = { id: value?.id ?? crypto.randomUUID(), date };
@@ -921,6 +967,12 @@ function EventEditor({
           fundingAccountId: f("fundingAccountId"),
           downPaymentCents: m("downPaymentCents")!,
           costsCents: m("costsCents")!,
+          fundingSources:value?.type==="asset-purchase"?value.fundingSources:undefined,
+          housingCosts:{propertyTaxRateBps:optionalRate("housing.propertyTaxRateBps"),insuranceMonthlyCents:nonnegativeMoney("housing.insuranceMonthlyCents"),insuranceAnnualGrowthBps:optionalRate("housing.insuranceAnnualGrowthBps"),hoaMonthlyCents:nonnegativeMoney("housing.hoaMonthlyCents"),hoaAnnualGrowthBps:optionalRate("housing.hoaAnnualGrowthBps")},
+          monthlyRentalIncomeCents:nonnegativeMoney("property.monthlyRentalIncomeCents"),
+          rentalIncomeGrowthBps:optionalRate("property.rentalIncomeGrowthBps"),
+          maintenanceBps:optionalRate("property.maintenanceBps"),
+          propertyDetails:{...(value?.type==="asset-purchase"?value.propertyDetails:undefined),primaryResidence:checked("property.primaryResidence"),rentalUseBps:optionalRate("property.rentalUseBps"),rentalTaxModelingEnabled:checked("property.rentalTaxModelingEnabled"),rentalType:(f("property.rentalType")||"long-term") as "long-term"|"short-term",monthlyRentalIncomeCents:nonnegativeMoney("property.monthlyRentalIncomeCents"),rentalIncomeGrowthBps:optionalRate("property.rentalIncomeGrowthBps"),maintenanceBps:optionalRate("property.maintenanceBps"),propertyTaxBasisCents:nullableMoney("property.propertyTaxBasisCents"),buildingBasisCents:nullableMoney("property.buildingBasisCents"),mfsLivedApartAllYear:checked("property.mfsLivedApartAllYear"),shortTermMaterialParticipation:checked("property.shortTermMaterialParticipation"),longTermRealEstateProfessional:checked("property.longTermRealEstateProfessional"),longTermMaterialParticipation:checked("property.longTermMaterialParticipation")},
           financing:
             f("financing.enabled") || f("financing.liabilityId")
               ? {
@@ -930,6 +982,8 @@ function EventEditor({
                   principalCents: m("financing.principalCents")!,
                   annualRateBps: r("financing.annualRateBps"),
                   minimumPaymentCents: m("financing.minimumPaymentCents")!,
+                  termMonths:
+                    f("financing.termMonths") ? whole("financing.termMonths") : value?.type === "asset-purchase" ? value.financing?.termMonths : undefined,
                 }
               : undefined,
         };
@@ -940,7 +994,8 @@ function EventEditor({
           assetId: f("assetId"),
           name: f("name").trim(),
           costCents: m("costCents")!,
-          addedValueCents: m("addedValueCents", true),
+          homeSquareFeet: whole("homeSquareFeet"),
+          aduSquareFeet: whole("aduSquareFeet"),
           monthlyRentalIncomeCents: m("monthlyRentalIncomeCents", true),
           rentalIncomeGrowthBps: r("rentalIncomeGrowthBps"),
           fundingAccountId: f("fundingAccountId"),
@@ -1137,7 +1192,14 @@ function EventEditor({
           </label>
           {account("fundingAccountId", "Funding account")}
           {money("costCents", "Build cost (USD)")}
-          {money("addedValueCents", "Added property value (optional)", true)}
+          <label>
+            Existing home area (sq. ft.)
+            <input required inputMode="numeric" value={f("homeSquareFeet")} onChange={(e) => set("homeSquareFeet", e.target.value)} />
+          </label>
+          <label>
+            ADU area (sq. ft.)
+            <input required inputMode="numeric" value={f("aduSquareFeet")} onChange={(e) => set("aduSquareFeet", e.target.value)} />
+          </label>
           {money(
             "monthlyRentalIncomeCents",
             "Monthly rental income (optional)",
@@ -1213,8 +1275,32 @@ function EventEditor({
                 />
               </label>
               {money("financing.minimumPaymentCents", "Minimum payment (USD)")}
+              <label>Mortgage term (months)<input required inputMode="numeric" value={f("financing.termMonths")} onChange={(e)=>set("financing.termMonths",e.target.value)} /></label>
             </>
           )}
+        </fieldset>
+      )}
+      {kind === "asset-purchase" && (
+        <fieldset className="property-settings-fields">
+          <legend>Property income, costs, and taxes</legend>
+          <label className="check"><input type="checkbox" checked={f("property.primaryResidence")==="true"} onChange={(e)=>{set("property.primaryResidence",String(e.target.checked));set("property.rentalUseBps",e.target.checked?"25.00":"100.00");}} /> Primary residence or mixed use</label>
+          {percent("property.rentalUseBps","Rental-use allocation (%)")}
+          {money("property.monthlyRentalIncomeCents","Monthly rental income (USD)",true)}
+          {percent("property.rentalIncomeGrowthBps","Annual rent growth (%)")}
+          {percent("property.maintenanceBps","Annual maintenance (% of value)")}
+          {percent("housing.propertyTaxRateBps","Property-tax rate (%)")}
+          {money("housing.insuranceMonthlyCents","Monthly insurance (USD)",true)}
+          {percent("housing.insuranceAnnualGrowthBps","Annual insurance growth (%)")}
+          {money("housing.hoaMonthlyCents","Monthly HOA (USD)",true)}
+          {percent("housing.hoaAnnualGrowthBps","Annual HOA growth (%)")}
+          <label className="check"><input type="checkbox" checked={f("property.rentalTaxModelingEnabled")==="true"} onChange={(e)=>set("property.rentalTaxModelingEnabled",String(e.target.checked))} /> Include rental income taxes, deductions, and depreciation</label>
+          {f("property.rentalTaxModelingEnabled")==="true"&&<>
+            <label>Rental type<select value={f("property.rentalType")||"long-term"} onChange={(e)=>set("property.rentalType",e.target.value)}><option value="long-term">Long-term rental</option><option value="short-term">Short-term rental</option></select></label>
+            {money("property.propertyTaxBasisCents","Property-tax basis override (optional)",true)}
+            {money("property.buildingBasisCents","Depreciable building basis override (optional)",true)}
+            {bootstrap.taxProfile?.filingStatus==="married-separate"&&<label className="check"><input type="checkbox" checked={f("property.mfsLivedApartAllYear")==="true"} onChange={(e)=>set("property.mfsLivedApartAllYear",String(e.target.checked))} /> Lived apart from spouse all year</label>}
+            {f("property.rentalType")==="short-term"?<label className="check"><input type="checkbox" checked={f("property.shortTermMaterialParticipation")==="true"} onChange={(e)=>set("property.shortTermMaterialParticipation",String(e.target.checked))} /> Materially participate in short-term rental</label>:<><label className="check"><input type="checkbox" checked={f("property.longTermRealEstateProfessional")==="true"} onChange={(e)=>set("property.longTermRealEstateProfessional",String(e.target.checked))} /> Qualify as a real-estate professional</label><label className="check"><input type="checkbox" checked={f("property.longTermMaterialParticipation")==="true"} onChange={(e)=>set("property.longTermMaterialParticipation",String(e.target.checked))} /> Materially participate in long-term rental</label></>}
+          </>}
         </fieldset>
       )}
       {kind === "asset-sale" && (

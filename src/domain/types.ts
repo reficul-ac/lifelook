@@ -32,6 +32,23 @@ export type ContributionOverflowType = "account" | "asset";
 export interface ContributionRule { id: string; destinationType: ContributionDestinationType; destinationId: string; percentBps?: BasisPoints; monthlyAmountCents?: Cents; frequency: RecurringFrequency; targetBalanceCents?: Cents; overflowDestinationType?: ContributionOverflowType; overflowDestinationId?: string }
 export interface WithdrawalRule { id?: string; accountId: string; priority: number }
 export interface EventFundingSource { accountId:string; capCents?:Cents|null }
+export interface PlannedPropertyDetails {
+  mortgageTermMonths?: number;
+  maintenanceBps?: BasisPoints;
+  monthlyRentalIncomeCents?: Cents;
+  rentalIncomeGrowthBps?: BasisPoints;
+  primaryResidence?: boolean;
+  rentalUseBps?: BasisPoints;
+  rentalTaxModelingEnabled?: boolean;
+  rentalType?: "long-term" | "short-term";
+  propertyTaxBasisCents?: Cents | null;
+  buildingBasisCents?: Cents | null;
+  mfsLivedApartAllYear?: boolean;
+  shortTermMaterialParticipation?: boolean;
+  longTermRealEstateProfessional?: boolean;
+  longTermMaterialParticipation?: boolean;
+  adu?: { planned: boolean; buildDate?: string; costCents: Cents; homeSquareFeet?: number; squareFeet?: number; monthlyRentalIncomeCents?: Cents; rentalIncomeGrowthBps?: BasisPoints };
+}
 export interface ProjectionHorizon { start: string; months: number }
 export type ScenarioEvent =
   | { id: string; date: string; type: "recurring-change" | "income-change"; entryId: string; amountCents: Cents }
@@ -39,8 +56,8 @@ export type ScenarioEvent =
   | { id: string; date: string; type: "one-time-expense"; amountCents: Cents }
   | { id: string; date: string; type: "account-transfer"; fromAccountId: string; toAccountId: string; amountCents: Cents }
   | { id: string; date: string; type: "account-contribution"; accountId: string; amountCents: Cents }
-  | { id: string; date: string; type: "asset-purchase"; assetId: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; housingCosts?: HousingCosts; fundingAccountId: string; fundingSources?:readonly EventFundingSource[]; downPaymentCents: Cents; costsCents: Cents; monthlyRentalIncomeCents?:Cents; rentalIncomeGrowthBps?:BasisPoints; maintenanceBps?:BasisPoints; financing?: { liabilityId: string; name: string; principalCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents } }
-  | { id:string; date:string; type:"adu-build"; assetId:string; name:string; costCents:Cents; fundingAccountId:string; fundingSources?:readonly EventFundingSource[]; addedValueCents?:Cents; monthlyRentalIncomeCents?:Cents; rentalIncomeGrowthBps?:BasisPoints }
+  | { id: string; date: string; type: "asset-purchase"; assetId: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; housingCosts?: HousingCosts; fundingAccountId: string; fundingSources?:readonly EventFundingSource[]; downPaymentCents: Cents; costsCents: Cents; monthlyRentalIncomeCents?:Cents; rentalIncomeGrowthBps?:BasisPoints; maintenanceBps?:BasisPoints; propertyDetails?:PlannedPropertyDetails; financing?: { liabilityId: string; name: string; principalCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; termMonths?:number } }
+  | { id:string; date:string; type:"adu-build"; assetId:string; name:string; costCents:Cents; homeSquareFeet:number; aduSquareFeet:number; fundingAccountId:string; fundingSources?:readonly EventFundingSource[]; monthlyRentalIncomeCents?:Cents; rentalIncomeGrowthBps?:BasisPoints }
   | { id: string; date: string; type: "asset-sale"; assetId: string; proceedsCents: Cents; costsCents: Cents; destinationAccountId: string; payoff?: { liabilityId: string; mode: "none" | "partial" | "full"; amountCents?: Cents } }
   | { id: string; date: string; type: "debt-origination"; liabilityId: string; name: string; principalCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; accountId: string }
   | { id: string; date: string; type: "debt-payoff"; liabilityId: string; accountId: string; amountCents?: Cents };
@@ -56,8 +73,10 @@ export interface ProjectionBalances {
   liabilities: Readonly<Record<string, Cents>>;
 }
 export interface ContributionResult { ruleId: string; destinationType: ContributionDestinationType; destinationId: string; amountCents: Cents }
-export interface MonthlyProjection { month: string; status: ProjectionStatus; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; incomeVarianceCents: Cents; expenseVarianceCents: Cents; taxCents: Cents; cashTaxCents:Cents; rsuSellToCoverTaxCents:Cents; surplusCents: Cents; liquidWorthCents: Cents | null; netWorthCents: Cents | null; debtCents: Cents | null; balances: ProjectionBalances | null; unfundedDeficitCents: Cents; contributionCents: Cents; contributionResults:readonly ContributionResult[]; principalAndInterestCents: Cents; housingCostCents: Cents; warnings: readonly ProjectionWarning[] }
-export interface AnnualProjection { year: number; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; taxCents: Cents; cashTaxCents:Cents; rsuSellToCoverTaxCents:Cents; taxLedger?:TaxLedger; savingsRateBps: BasisPoints; surplusCents: Cents; contributionCents: Cents; contributionResults:readonly ContributionResult[]; liquidWorthCents: Cents | null; endingNetWorthCents: Cents | null; debtCents: Cents | null; debtPayoffMonth?: string; unfundedDeficitCents: Cents; warnings: readonly ProjectionWarning[]; months: readonly MonthlyProjection[] }
+export type PropertyProjectionStatus="planned"|"unfunded"|"active"|"sold";
+export interface PropertyProjectionResult { assetId:string; liabilityId?:string; name:string; month?:string; year?:number; status:PropertyProjectionStatus; executionShortfallCents:Cents; assetValueCents:Cents|null; mortgageBalanceCents:Cents|null; equityCents:Cents|null; purchaseCashCents:Cents; rentCents:Cents; principalCents:Cents; interestCents:Cents; propertyTaxCents:Cents; insuranceCents:Cents; hoaCents:Cents; maintenanceCents:Cents; aduCostCents:Cents; aduAddedValueCents:Cents; aduIncomeCents:Cents; depreciationCents:Cents; taxableRentalCents:Cents; federalAllowedRentalCents:Cents; californiaAllowedRentalCents:Cents; federalPassiveCarryforwardCents:Cents; californiaPassiveCarryforwardCents:Cents; estimatedTaxEffectCents:Cents; rentalTaxModelingEnabled:boolean; warnings:readonly string[] }
+export interface MonthlyProjection { month: string; status: ProjectionStatus; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; incomeVarianceCents: Cents; expenseVarianceCents: Cents; taxCents: Cents; cashTaxCents:Cents; rsuSellToCoverTaxCents:Cents; surplusCents: Cents; liquidWorthCents: Cents | null; netWorthCents: Cents | null; debtCents: Cents | null; balances: ProjectionBalances | null; unfundedDeficitCents: Cents; contributionCents: Cents; contributionResults:readonly ContributionResult[]; principalAndInterestCents: Cents; housingCostCents: Cents; properties:readonly PropertyProjectionResult[]; warnings: readonly ProjectionWarning[] }
+export interface AnnualProjection { year: number; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; taxCents: Cents; cashTaxCents:Cents; rsuSellToCoverTaxCents:Cents; taxLedger?:TaxLedger; savingsRateBps: BasisPoints; surplusCents: Cents; contributionCents: Cents; contributionResults:readonly ContributionResult[]; liquidWorthCents: Cents | null; endingNetWorthCents: Cents | null; debtCents: Cents | null; debtPayoffMonth?: string; unfundedDeficitCents: Cents; properties:readonly PropertyProjectionResult[]; warnings: readonly ProjectionWarning[]; months: readonly MonthlyProjection[] }
 export interface TaxBracket { upToCents: Cents | null; rateBps: BasisPoints }
 export interface TaxSource { jurisdiction: "federal" | "california" | "payroll"; sourceYear: number; status: "official" | "projected"; url: string }
 export interface TaxRulePack { year: 2025 | 2026; federal: Record<FilingStatus, { standardDeductionCents: Cents; brackets: readonly TaxBracket[] }>; california: Record<FilingStatus, { standardDeductionCents: Cents; brackets: readonly TaxBracket[] }>; federalLongTermCapitalGains:Record<FilingStatus,readonly TaxBracket[]>; unrecapturedSection1250MaxRateBps:BasisPoints; netInvestmentIncomeThresholdCents:Record<FilingStatus,Cents>; socialSecurityWageBaseCents: Cents; additionalMedicareThresholdCents: Record<FilingStatus, Cents>; sources: readonly TaxSource[] }

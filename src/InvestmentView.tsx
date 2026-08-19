@@ -489,76 +489,6 @@ export function InvestmentView({
                     ""
                   )}
                 </span>
-                {addOpen && (
-                  <div className="card portfolio-editor">
-                    <label>
-                      Scenario
-                      <select
-                        value={addScenario}
-                        onChange={(e) => setAddScenario(e.target.value)}
-                      >
-                        {scenarios.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Purchase date
-                      <input
-                        type="date"
-                        value={addDate}
-                        onChange={(e) => setAddDate(e.target.value)}
-                      />
-                    </label>
-                    <fieldset>
-                      <legend>Funding accounts (in order)</legend>
-                      {accounts.map((a) => (
-                        <label className="check-row" key={a.id}>
-                          <input
-                            type="checkbox"
-                            checked={funding.includes(a.id)}
-                            onChange={(e) =>
-                              setFunding(
-                                e.target.checked
-                                  ? [...funding, a.id]
-                                  : funding.filter((x) => x !== a.id),
-                              )
-                            }
-                          />
-                          {a.name}
-                        </label>
-                      ))}
-                    </fieldset>
-                    {assumptions.aduPlanned && (
-                      <label className="check-row">
-                        <input
-                          type="checkbox"
-                          checked={includeAduInRetirement}
-                          onChange={(e) =>
-                            setIncludeAduInRetirement(e.target.checked)
-                          }
-                        />{" "}
-                        Include dated ADU build
-                      </label>
-                    )}
-                    <button
-                      disabled={!addScenario || !addDate || !funding.length}
-                      onClick={() => {
-                        onAddToPlan?.(assumptions, {
-                          scenarioId: addScenario,
-                          date: addDate,
-                          fundingAccountIds: funding,
-                          includeAdu: includeAduInRetirement,
-                        });
-                        setAddOpen(false);
-                      }}
-                    >
-                      Add purchase to Plan
-                    </button>
-                  </div>
-                )}
                 <button type="button" onClick={reset}>
                   Reset to defaults
                 </button>
@@ -570,6 +500,76 @@ export function InvestmentView({
                 </ActionButton>
               </div>
             </div>
+            {addOpen && (
+              <div className="add-investment-setup">
+                <label>
+                  Scenario
+                  <select
+                    value={addScenario}
+                    onChange={(e) => setAddScenario(e.target.value)}
+                  >
+                    {scenarios.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Purchase date
+                  <input
+                    type="date"
+                    value={addDate}
+                    onChange={(e) => setAddDate(e.target.value)}
+                  />
+                </label>
+                <fieldset>
+                  <legend>Funding accounts (in order)</legend>
+                  {accounts.map((a) => (
+                    <label className="check-row" key={a.id}>
+                      <input
+                        type="checkbox"
+                        checked={funding.includes(a.id)}
+                        onChange={(e) =>
+                          setFunding(
+                            e.target.checked
+                              ? [...funding, a.id]
+                              : funding.filter((x) => x !== a.id),
+                          )
+                        }
+                      />
+                      {a.name}
+                    </label>
+                  ))}
+                </fieldset>
+                {assumptions.aduPlanned && (
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={includeAduInRetirement}
+                      onChange={(e) =>
+                        setIncludeAduInRetirement(e.target.checked)
+                      }
+                    />{" "}
+                    Include dated ADU build
+                  </label>
+                )}
+                <button
+                  disabled={!addScenario || !addDate || !funding.length}
+                  onClick={() => {
+                    onAddToPlan?.(assumptions, {
+                      scenarioId: addScenario,
+                      date: addDate,
+                      fundingAccountIds: funding,
+                      includeAdu: includeAduInRetirement,
+                    });
+                    setAddOpen(false);
+                  }}
+                >
+                  Add purchase to Plan
+                </button>
+              </div>
+            )}
             <p className="muted">
               The comparison does not modify your Plan. Tax estimates privately
               use the active scenario at its maximum projection.

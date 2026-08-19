@@ -10,7 +10,7 @@ const appearances = [
   { id: "system-light", setting: "System", system: "default", dark: false },
   { id: "system-dark", setting: "System", system: "prefer-dark", dark: true },
 ];
-const viewports = [[920, 650], [1024, 768], [1280, 820], [1600, 1000]];
+const viewports = [[800, 900], [920, 650], [1280, 820], [1600, 1000]];
 const artifactDir = resolve(process.env.LIFELOOK_E2E_ARTIFACT_DIR ?? "artifacts/control-matrix");
 const packageSha256 = process.env.LIFELOOK_E2E_PACKAGE_SHA256 ?? "unrecorded";
 
@@ -44,7 +44,7 @@ describe("LifeLook exact-package control matrix", () => {
       if ((await motion.getAttribute("aria-checked")) !== String(reducedMotion)) await motion.click();
       await browser.waitUntil(async () => (await motion.getAttribute("aria-checked")) === String(reducedMotion));
 
-      for (const destination of ["Overview", "Activity", "Plan", "Investment", "Net Worth", "Settings"]) {
+      for (const destination of ["Overview", "Activity", "Plan", "Investment", "Retirement", "Net Worth", "Settings"]) {
         let nav = await $(`//nav[@aria-label="Primary navigation"]//button[normalize-space()="${destination}"]`);
         await nav.click();
         nav = await $(`//nav[@aria-label="Primary navigation"]//button[normalize-space()="${destination}"]`);
@@ -62,11 +62,11 @@ describe("LifeLook exact-package control matrix", () => {
 
       const add = await $("aria/Add");
       await add.click();
-      await $("aria/What would you like to add?").waitForDisplayed();
+      await $('[role="menu"][aria-label="Add"]').waitForDisplayed();
       await browser.keys("Escape");
-      assert.equal(await $('[role="dialog"]').isExisting(), false);
+      assert.equal(await $('[role="menu"][aria-label="Add"]').isExisting(), false);
       await keyboardActivate(add);
-      await $("aria/What would you like to add?").waitForDisplayed();
+      await $('[role="menu"][aria-label="Add"]').waitForDisplayed();
       await browser.keys("Escape");
 
       await browser.keys(["Control", "k"]);

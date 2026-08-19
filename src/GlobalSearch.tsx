@@ -144,6 +144,11 @@ export function GlobalSearch({
     return () => invoker?.focus();
   }, [invoker]);
   useEffect(() => setActive(0), [query]);
+  useEffect(() => {
+    if (!results.length) return;
+    const option = document.getElementById(`search-result-${active}`);
+    option?.scrollIntoView?.({ block: "nearest" });
+  }, [active, results.length]);
   function keyDown(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -192,6 +197,10 @@ export function GlobalSearch({
           <Search size={19} />
           <input
             ref={input}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={results.length > 0}
+            aria-haspopup="listbox"
             aria-label="Search workspace"
             placeholder="Search your workspace"
             value={query}

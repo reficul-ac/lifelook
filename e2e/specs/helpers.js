@@ -23,7 +23,7 @@ export async function saveDialog() {
 
 export async function openAdd(kind) {
   await $("aria/Add").click();
-  await $(`//section[@role="dialog"]//button[normalize-space()="${kind}"]`).click();
+  await $(`//div[@role="menu"]//button[@role="menuitem" and normalize-space()="${kind}"]`).click();
 }
 
 export async function onboard({ secondAccount = false } = {}) {

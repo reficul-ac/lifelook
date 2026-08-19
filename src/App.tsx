@@ -77,23 +77,59 @@ import {
   GlobalSearch,
   type SearchResult,
 } from "./GlobalSearch";
-import { ActionButton, AnchoredMenu, DetailDisclosure, InfoPopover } from "./ui";
+import {
+  ActionButton,
+  AnchoredMenu,
+  DetailDisclosure,
+  InfoPopover,
+  OverflowMenu,
+} from "./ui";
 
-const units=(micros:number)=>new Intl.NumberFormat(undefined,{maximumFractionDigits:6}).format(micros/1_000_000);
-const equityVestedValue=(asset:Pick<Asset,"equityHolding">,date:string)=>asset.equityHolding?.grants.reduce((sum,grant)=>sum+valueForUnits(vestedUnitsAt(grant,date),projectedSharePrice(asset.equityHolding!,date)),0)??0;
-const currentAssetValue=(asset:Pick<Asset,"valueCents"|"privateStock"|"equityHolding">,date:string)=>asset.equityHolding?equityVestedValue(asset,date):vestedAssetValue(asset,date);
-const nextVest=(grant:import("./domain").RsuGrant,date:string)=>grant.vestEvents.find(event=>event.date>date);
+const units = (micros: number) =>
+  new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 }).format(
+    micros / 1_000_000,
+  );
+const equityVestedValue = (asset: Pick<Asset, "equityHolding">, date: string) =>
+  asset.equityHolding?.grants.reduce(
+    (sum, grant) =>
+      sum +
+      valueForUnits(
+        vestedUnitsAt(grant, date),
+        projectedSharePrice(asset.equityHolding!, date),
+      ),
+    0,
+  ) ?? 0;
+const currentAssetValue = (
+  asset: Pick<Asset, "valueCents" | "privateStock" | "equityHolding">,
+  date: string,
+) =>
+  asset.equityHolding
+    ? equityVestedValue(asset, date)
+    : vestedAssetValue(asset, date);
+const nextVest = (grant: import("./domain").RsuGrant, date: string) =>
+  grant.vestEvents.find((event) => event.date > date);
 
-type View = "Overview" | "Activity" | "Plan" | "Investment" | "Retirement" | "Net Worth" | "Settings";
-const localIsoDate=()=>{const now=new Date(),offset=now.getTimezoneOffset()*60000;return new Date(now.valueOf()-offset).toISOString().slice(0,10)};
+type View =
+  | "Overview"
+  | "Activity"
+  | "Plan"
+  | "Investment"
+  | "Retirement"
+  | "Net Worth"
+  | "Settings";
+const localIsoDate = () => {
+  const now = new Date(),
+    offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.valueOf() - offset).toISOString().slice(0, 10);
+};
 const nav: [View, typeof LayoutDashboard, string][] = [
-  ["Overview", LayoutDashboard,"Overview"],
-  ["Plan", PiggyBank,"Planning"],
-  ["Investment", TrendingUp,"Planning"],
-  ["Retirement", Umbrella,"Planning"],
-  ["Activity", Activity,"Records"],
-  ["Net Worth", Landmark,"Records"],
-  ["Settings", Settings,"Settings"],
+  ["Overview", LayoutDashboard, "Overview"],
+  ["Plan", PiggyBank, "Planning"],
+  ["Investment", TrendingUp, "Planning"],
+  ["Retirement", Umbrella, "Planning"],
+  ["Activity", Activity, "Records"],
+  ["Net Worth", Landmark, "Records"],
+  ["Settings", Settings, "Settings"],
 ];
 const money = (cents: number, compact = false) => {
   const showMillionDecimals = compact && Math.abs(cents) >= 100_000_000;
@@ -130,7 +166,26 @@ const normalizeBootstrap = (value: BootstrapInput): Bootstrap => ({
   })),
   assets: value.assets ?? [],
   liabilities: value.liabilities ?? [],
-  scenarios: (value.scenarios ?? []).map((scenario)=>({...scenario,defaultContributionAccountId:scenario.defaultContributionAccountId??value.accounts.find(account=>account.liquid&&(account.kind==="checking"||account.kind==="savings"))?.id??null,withdrawals:scenario.withdrawals??[],contributions:(scenario.contributions??[]).map(rule=>({...rule,percentBps:rule.percentBps??undefined,monthlyAmountCents:rule.monthlyAmountCents??undefined,targetBalanceCents:rule.targetBalanceCents??undefined,overflowDestinationType:rule.overflowDestinationType??undefined,overflowDestinationId:rule.overflowDestinationId??undefined}))})),
+  scenarios: (value.scenarios ?? []).map((scenario) => ({
+    ...scenario,
+    defaultContributionAccountId:
+      scenario.defaultContributionAccountId ??
+      value.accounts.find(
+        (account) =>
+          account.liquid &&
+          (account.kind === "checking" || account.kind === "savings"),
+      )?.id ??
+      null,
+    withdrawals: scenario.withdrawals ?? [],
+    contributions: (scenario.contributions ?? []).map((rule) => ({
+      ...rule,
+      percentBps: rule.percentBps ?? undefined,
+      monthlyAmountCents: rule.monthlyAmountCents ?? undefined,
+      targetBalanceCents: rule.targetBalanceCents ?? undefined,
+      overflowDestinationType: rule.overflowDestinationType ?? undefined,
+      overflowDestinationId: rule.overflowDestinationId ?? undefined,
+    })),
+  })),
   retirementPlan: value.retirementPlan ?? null,
   accounts: value.accounts.map((a) => ({
     ...a,
@@ -279,19 +334,48 @@ function Workspace({
     media.addEventListener("change", change);
     return () => media.removeEventListener("change", change);
   }, []);
-  useEffect(()=>{if(settings.theme!=="system"||!repository.systemThemeDark)return;let active=true;const refresh=()=>repository.systemThemeDark?.().then(value=>{if(active&&value!==null&&value!==undefined)setOsDark(value)}).catch(()=>{});refresh();const timer=window.setInterval(refresh,500);return()=>{active=false;window.clearInterval(timer)}},[settings.theme,repository]);
+  useEffect(() => {
+    if (settings.theme !== "system" || !repository.systemThemeDark) return;
+    let active = true;
+    const refresh = () =>
+      repository
+        .systemThemeDark?.()
+        .then((value) => {
+          if (active && value !== null && value !== undefined) setOsDark(value);
+        })
+        .catch(() => {});
+    refresh();
+    const timer = window.setInterval(refresh, 500);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [settings.theme, repository]);
   const dark =
     settings.theme === "dark" || (settings.theme === "system" && osDark);
-  async function toggleTheme(){
-    const previous=settings,next={...settings,theme:dark?"light" as const:"dark" as const};
+  async function toggleTheme() {
+    const previous = settings,
+      next = {
+        ...settings,
+        theme: dark ? ("light" as const) : ("dark" as const),
+      };
     setSettings(next);
-    if(!repository.updateSettings)return;
-    try{setSettings(await repository.updateSettings({theme:next.theme,reducedMotion:next.reducedMotion,expectedRevision:previous.revision}));}
-    catch{setSettings(previous);}
+    if (!repository.updateSettings) return;
+    try {
+      setSettings(
+        await repository.updateSettings({
+          theme: next.theme,
+          reducedMotion: next.reducedMotion,
+          expectedRevision: previous.revision,
+        }),
+      );
+    } catch {
+      setSettings(previous);
+    }
   }
   const [expanded, setExpanded] = useState<number | null>(null);
-  const [planSeries,setPlanSeries]=useState("net-worth");
-  const [planRange,setPlanRange]=useState<5|10|15|20|"max">(10);
+  const [planSeries, setPlanSeries] = useState("net-worth");
+  const [planRange, setPlanRange] = useState<5 | 10 | 15 | 20 | "max">(10);
   const [selectedScenarioId, setSelectedScenarioId] = useState(
     bootstrap.scenarios[0]?.id ?? "",
   );
@@ -306,13 +390,80 @@ function Workspace({
   const addButton = useRef<HTMLButtonElement>(null);
   const profileButton = useRef<HTMLButtonElement>(null);
   const profileMenu = useRef<HTMLDivElement>(null);
-  const [profileOpen,setProfileOpen]=useState(false);
-  const [workspaceInfo,setWorkspaceInfo]=useState<WorkspaceInfo|null>(null);
-  const [profileResult,setProfileResult]=useState("");
-  const [profileBusy,setProfileBusy]=useState(false);
-  useEffect(()=>{if(!profileOpen)return;setProfileResult("");setWorkspaceInfo(null);repository.workspaceInfo?.().then(setWorkspaceInfo).catch(error=>setProfileResult(errorMessage(error,"Could not read workspace information.")));requestAnimationFrame(()=>profileMenu.current?.querySelector<HTMLElement>("button")?.focus());const dismiss=(event:MouseEvent)=>{if(!profileMenu.current?.contains(event.target as Node)&&!profileButton.current?.contains(event.target as Node)){setProfileOpen(false);profileButton.current?.focus()}};const escape=(event:globalThis.KeyboardEvent)=>{if(event.key==="Escape"){setProfileOpen(false);profileButton.current?.focus()}};document.addEventListener("mousedown",dismiss);document.addEventListener("keydown",escape);return()=>{document.removeEventListener("mousedown",dismiss);document.removeEventListener("keydown",escape)}},[profileOpen,repository]);
-  async function backupFromProfile(){setProfileResult("");setProfileBusy(true);try{const destination=await repository.selectBackupDestination?.();if(!destination)return;await repository.backupDatabase?.(destination);setProfileResult("Backup created successfully.")}catch(error){setProfileResult(errorMessage(error,"Could not create the backup."))}finally{setProfileBusy(false)}}
-  function profileMenuKey(event:React.KeyboardEvent){const items=[...profileMenu.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')??[]];const current=items.indexOf(document.activeElement as HTMLButtonElement);let next=current;if(event.key==="ArrowDown")next=(current+1)%items.length;else if(event.key==="ArrowUp")next=(current-1+items.length)%items.length;else if(event.key==="Home")next=0;else if(event.key==="End")next=items.length-1;else return;event.preventDefault();items[next]?.focus()}
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [workspaceInfo, setWorkspaceInfo] = useState<WorkspaceInfo | null>(
+    null,
+  );
+  const [profileResult, setProfileResult] = useState("");
+  const [profileBusy, setProfileBusy] = useState(false);
+  useEffect(() => {
+    if (!profileOpen) return;
+    setProfileResult("");
+    setWorkspaceInfo(null);
+    repository
+      .workspaceInfo?.()
+      .then(setWorkspaceInfo)
+      .catch((error) =>
+        setProfileResult(
+          errorMessage(error, "Could not read workspace information."),
+        ),
+      );
+    requestAnimationFrame(() =>
+      profileMenu.current?.querySelector<HTMLElement>("button")?.focus(),
+    );
+    const dismiss = (event: MouseEvent) => {
+      if (
+        !profileMenu.current?.contains(event.target as Node) &&
+        !profileButton.current?.contains(event.target as Node)
+      ) {
+        setProfileOpen(false);
+        profileButton.current?.focus();
+      }
+    };
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setProfileOpen(false);
+        profileButton.current?.focus();
+      }
+    };
+    document.addEventListener("mousedown", dismiss);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("mousedown", dismiss);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [profileOpen, repository]);
+  async function backupFromProfile() {
+    setProfileResult("");
+    setProfileBusy(true);
+    try {
+      const destination = await repository.selectBackupDestination?.();
+      if (!destination) return;
+      await repository.backupDatabase?.(destination);
+      setProfileResult("Backup created successfully.");
+    } catch (error) {
+      setProfileResult(errorMessage(error, "Could not create the backup."));
+    } finally {
+      setProfileBusy(false);
+    }
+  }
+  function profileMenuKey(event: React.KeyboardEvent) {
+    const items = [
+      ...(profileMenu.current?.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitem"]',
+      ) ?? []),
+    ];
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    let next = current;
+    if (event.key === "ArrowDown") next = (current + 1) % items.length;
+    else if (event.key === "ArrowUp")
+      next = (current - 1 + items.length) % items.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = items.length - 1;
+    else return;
+    event.preventDefault();
+    items[next]?.focus();
+  }
   const openDialog = (state: DialogState, invoker?: HTMLElement | null) =>
     setDialog({
       ...state,
@@ -381,7 +532,7 @@ function Workspace({
         accountId: r.accountId ?? undefined,
         endDate: r.endDate ?? undefined,
         taxTreatment: r.taxTreatment ?? "none",
-        incomeType:r.incomeType??"ordinary",
+        incomeType: r.incomeType ?? "ordinary",
         kind:
           bootstrap.categories.find((c) => c.id === r.categoryId)?.kind ===
           "income"
@@ -399,60 +550,129 @@ function Workspace({
             }
           : undefined,
       })),
-      actuals: bootstrap.activity.map((posting) => ({date:posting.occurredOn,kind:posting.kind,amountCents:posting.amountCents})),
+      actuals: bootstrap.activity.map((posting) => ({
+        date: posting.occurredOn,
+        kind: posting.kind,
+        amountCents: posting.amountCents,
+      })),
     }),
     [bootstrap],
   );
   const scenarios = useMemo(
     () =>
-      bootstrap.scenarios.map((record): Scenario => ({
-        id: record.id,
-        name: record.name,
-        assumptions: {
-          inflationBps: record.assumptions.inflationBps ?? 250,
-          thresholdInflationBps:
-            record.assumptions.thresholdInflationBps ?? 250,
-        },
-        assumptionsInherited: false,
-        events: record.events,
-        defaultContributionAccountId: record.defaultContributionAccountId??undefined,
-        contributions: record.contributions,
-        withdrawals: record.withdrawals ?? [],
-        horizon: {
-          start: new Date().toISOString().slice(0, 7),
-          months: record.horizonMonths,
-        },
-      })),
+      bootstrap.scenarios.map(
+        (record): Scenario => ({
+          id: record.id,
+          name: record.name,
+          assumptions: {
+            inflationBps: record.assumptions.inflationBps ?? 250,
+            thresholdInflationBps:
+              record.assumptions.thresholdInflationBps ?? 250,
+          },
+          assumptionsInherited: false,
+          events: record.events,
+          defaultContributionAccountId:
+            record.defaultContributionAccountId ?? undefined,
+          contributions: record.contributions,
+          withdrawals: record.withdrawals ?? [],
+          horizon: {
+            start: new Date().toISOString().slice(0, 7),
+            months: record.horizonMonths,
+          },
+        }),
+      ),
     [bootstrap.scenarios],
   );
   const selectedScenario = scenarios.find((s) => s.id === selectedScenarioId) ??
     scenarios[0] ?? {
       ...baseline,
-      defaultContributionAccountId: snapshot.accounts.find(account=>account.liquid&&(account.kind==="checking"||account.kind==="savings"))?.id,
+      defaultContributionAccountId: snapshot.accounts.find(
+        (account) =>
+          account.liquid &&
+          (account.kind === "checking" || account.kind === "savings"),
+      )?.id,
     };
   const projections = useMemo(
     () =>
       bootstrap.taxProfile
-        ? ProjectionEngine.calculate(snapshot,{
-            ...selectedScenario,
-            horizon:{...selectedScenario.horizon,months:planRange==="max"?selectedScenario.horizon.months:planRange*12},
-          },localIsoDate())
+        ? ProjectionEngine.calculate(
+            snapshot,
+            {
+              ...selectedScenario,
+              horizon: {
+                ...selectedScenario.horizon,
+                months:
+                  planRange === "max"
+                    ? selectedScenario.horizon.months
+                    : planRange * 12,
+              },
+            },
+            localIsoDate(),
+          )
         : null,
-    [snapshot, bootstrap.taxProfile, selectedScenario,planRange],
+    [snapshot, bootstrap.taxProfile, selectedScenario, planRange],
   );
-  const investmentTaxContext = useMemo(()=>{
-    if(!bootstrap.taxProfile?.taxUnit)return undefined;
-    try{
-      const annual=ProjectionEngine.calculate(snapshot,{...selectedScenario,horizon:{...selectedScenario.horizon,months:480}},localIsoDate());
-      const years=annual.flatMap(row=>row.taxLedger?[{year:row.year,federalTaxableCents:row.taxLedger.federalTaxableCents,californiaTaxableCents:row.taxLedger.californiaTaxableCents,federalTaxCents:row.taxLedger.federalCents,californiaTaxCents:row.taxLedger.californiaCents,modifiedAgiCents:Math.max(0,row.taxLedger.grossIncomeCents)}]:[]);
-      const now=new Date(),startMonth=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
-      return years.length?{filingStatus:bootstrap.taxProfile.filingStatus,thresholdInflationBps:selectedScenario.assumptions.thresholdInflationBps,startMonth,years}:undefined;
-    }catch{return undefined}
-  },[snapshot,bootstrap.taxProfile,selectedScenario]);
-  const projectedPositiveMonths=projections?.[0]?.months.filter(month=>month.surplusCents>0)??[],projectedMonthlySurplusCents=projectedPositiveMonths.length?projectedPositiveMonths.reduce((sum,month)=>sum+month.surplusCents,0)/projectedPositiveMonths.length:0;
-  const retirementProjections=useMemo(()=>bootstrap.taxProfile?ProjectionEngine.calculate(snapshot,selectedScenario,localIsoDate()):[],[snapshot,bootstrap.taxProfile,selectedScenario]);
-  const [retirementPlan,setRetirementPlan]=useState<RetirementPlanRecord|null>(bootstrap.retirementPlan??null);
-  useEffect(()=>setRetirementPlan(bootstrap.retirementPlan??null),[bootstrap.retirementPlan]);
+  const investmentTaxContext = useMemo(() => {
+    if (!bootstrap.taxProfile?.taxUnit) return undefined;
+    try {
+      const annual = ProjectionEngine.calculate(
+        snapshot,
+        {
+          ...selectedScenario,
+          horizon: { ...selectedScenario.horizon, months: 480 },
+        },
+        localIsoDate(),
+      );
+      const years = annual.flatMap((row) =>
+        row.taxLedger
+          ? [
+              {
+                year: row.year,
+                federalTaxableCents: row.taxLedger.federalTaxableCents,
+                californiaTaxableCents: row.taxLedger.californiaTaxableCents,
+                federalTaxCents: row.taxLedger.federalCents,
+                californiaTaxCents: row.taxLedger.californiaCents,
+                modifiedAgiCents: Math.max(0, row.taxLedger.grossIncomeCents),
+              },
+            ]
+          : [],
+      );
+      const now = new Date(),
+        startMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      return years.length
+        ? {
+            filingStatus: bootstrap.taxProfile.filingStatus,
+            thresholdInflationBps:
+              selectedScenario.assumptions.thresholdInflationBps,
+            startMonth,
+            years,
+          }
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }, [snapshot, bootstrap.taxProfile, selectedScenario]);
+  const projectedPositiveMonths =
+      projections?.[0]?.months.filter((month) => month.surplusCents > 0) ?? [],
+    projectedMonthlySurplusCents = projectedPositiveMonths.length
+      ? projectedPositiveMonths.reduce(
+          (sum, month) => sum + month.surplusCents,
+          0,
+        ) / projectedPositiveMonths.length
+      : 0;
+  const retirementProjections = useMemo(
+    () =>
+      bootstrap.taxProfile
+        ? ProjectionEngine.calculate(snapshot, selectedScenario, localIsoDate())
+        : [],
+    [snapshot, bootstrap.taxProfile, selectedScenario],
+  );
+  const [retirementPlan, setRetirementPlan] =
+    useState<RetirementPlanRecord | null>(bootstrap.retirementPlan ?? null);
+  useEffect(
+    () => setRetirementPlan(bootstrap.retirementPlan ?? null),
+    [bootstrap.retirementPlan],
+  );
   return (
     <div
       className={dark ? "app dark" : "app"}
@@ -466,21 +686,26 @@ function Workspace({
           <span>LifeLook</span>
         </div>
         <nav aria-label="Primary navigation">
-          {nav.map(([name, Icon,group],index) => (
+          {nav.map(([name, Icon, group], index) => (
             <div className="nav-item" key={name} data-group={group}>
-            {(index===0||nav[index-1][2]!==group)&&<span className="nav-group">{group}</span>}
-            <button
-              className={view === name ? "active" : ""}
-              aria-label={name}
-              aria-current={view === name ? "page" : undefined}
-              onClick={() => setView(name)}
-            >
-              <Icon size={18} />
-              <span>{name}</span>
-              {name === "Activity" && bootstrap.activity.length > 0 && (
-                <i>{new Set(bootstrap.activity.map((x) => x.entryId)).size}</i>
+              {(index === 0 || nav[index - 1][2] !== group) && (
+                <span className="nav-group">{group}</span>
               )}
-            </button>
+              <button
+                className={view === name ? "active" : ""}
+                aria-label={name}
+                title={name}
+                aria-current={view === name ? "page" : undefined}
+                onClick={() => setView(name)}
+              >
+                <Icon size={18} />
+                <span>{name}</span>
+                {name === "Activity" && bootstrap.activity.length > 0 && (
+                  <i>
+                    {new Set(bootstrap.activity.map((x) => x.entryId)).size}
+                  </i>
+                )}
+              </button>
             </div>
           ))}
         </nav>
@@ -490,7 +715,7 @@ function Workspace({
             className="profile"
             aria-haspopup="menu"
             aria-expanded={profileOpen}
-            onClick={()=>setProfileOpen(open=>!open)}
+            onClick={() => setProfileOpen((open) => !open)}
           >
             <span>
               {bootstrap.people[0]?.name.slice(0, 2).toUpperCase() || "LL"}
@@ -501,7 +726,51 @@ function Workspace({
             </div>
             <MoreHorizontal size={17} />
           </button>
-          {profileOpen&&<div className="profile-menu card" role="menu" aria-label="Workspace" ref={profileMenu} onKeyDown={profileMenuKey}><strong>{workspaceInfo?.householdName??bootstrap.household?.name??"Local household"}</strong><small>Local workspace</small><code>{workspaceInfo?.profilePath??"Loading profile path…"}</code><button role="menuitem" onClick={()=>{setProfileOpen(false);setView("Settings")}}>Open Settings</button><button role="menuitem" disabled={profileBusy} onClick={backupFromProfile}>{profileBusy?"Creating backup…":"Create Backup"}</button>{profileResult&&<p role={profileResult.includes("successfully")?"status":"alert"} aria-live="polite">{profileResult}</p>}</div>}
+          {profileOpen && (
+            <div
+              className="profile-menu card"
+              role="menu"
+              aria-label="Workspace"
+              ref={profileMenu}
+              onKeyDown={profileMenuKey}
+            >
+              <strong>
+                {workspaceInfo?.householdName ??
+                  bootstrap.household?.name ??
+                  "Local household"}
+              </strong>
+              <small>Local workspace</small>
+              <code>
+                {workspaceInfo?.profilePath ?? "Loading profile path…"}
+              </code>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setProfileOpen(false);
+                  setView("Settings");
+                }}
+              >
+                Open Settings
+              </button>
+              <button
+                role="menuitem"
+                disabled={profileBusy}
+                onClick={backupFromProfile}
+              >
+                {profileBusy ? "Creating backup…" : "Create Backup"}
+              </button>
+              {profileResult && (
+                <p
+                  role={
+                    profileResult.includes("successfully") ? "status" : "alert"
+                  }
+                  aria-live="polite"
+                >
+                  {profileResult}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </aside>
       <main>
@@ -515,6 +784,7 @@ function Workspace({
               ref={searchButton}
               className="icon"
               aria-label="Search workspace"
+              title="Search workspace"
               onClick={() => setSearchInvoker(searchButton.current)}
             >
               <Search size={18} />
@@ -523,17 +793,49 @@ function Workspace({
               className="icon"
               onClick={toggleTheme}
               aria-label="Toggle theme"
+              title="Toggle theme"
             >
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <AnchoredMenu primary label="Add" icon={<Plus size={17}/>} items={[
-              {label:"Income",onSelect:(el)=>openDialog({type:"transaction",kind:"income"},el)},
-              {label:"Expense",onSelect:(el)=>openDialog({type:"transaction",kind:"expense"},el)},
-              {label:"Transfer",onSelect:(el)=>openDialog({type:"transfer"},el)},
-              {label:"Account",onSelect:(el)=>openDialog({type:"account"},el)},
-              {label:"Asset",onSelect:(el)=>openDialog({type:"asset"},el)},
-              {label:"Debt",onSelect:(el)=>openDialog({type:"liability"},el)},
-            ]}/>
+            <AnchoredMenu
+              primary
+              label="Add"
+              icon={<Plus size={17} />}
+              items={[
+                {
+                  label: "Income",
+                  group: "Transactions",
+                  onSelect: (el) =>
+                    openDialog({ type: "transaction", kind: "income" }, el),
+                },
+                {
+                  label: "Expense",
+                  group: "Transactions",
+                  onSelect: (el) =>
+                    openDialog({ type: "transaction", kind: "expense" }, el),
+                },
+                {
+                  label: "Transfer",
+                  group: "Transactions",
+                  onSelect: (el) => openDialog({ type: "transfer" }, el),
+                },
+                {
+                  label: "Account",
+                  group: "Holdings",
+                  onSelect: (el) => openDialog({ type: "account" }, el),
+                },
+                {
+                  label: "Asset",
+                  group: "Holdings",
+                  onSelect: (el) => openDialog({ type: "asset" }, el),
+                },
+                {
+                  label: "Debt",
+                  group: "Holdings",
+                  onSelect: (el) => openDialog({ type: "liability" }, el),
+                },
+              ]}
+            />
           </div>
         </header>
         {view === "Overview" && (
@@ -541,7 +843,14 @@ function Workspace({
             bootstrap={bootstrap}
             projections={projections}
             navigate={setView}
-            onAdd={(el)=>openDialog({type:"transaction",kind:"expense"},el)}
+            onAdd={(kind, el) =>
+              openDialog(
+                kind === "transfer"
+                  ? { type: "transfer" }
+                  : { type: "transaction", kind },
+                el,
+              )
+            }
           />
         )}
         {view === "Activity" && (
@@ -552,14 +861,35 @@ function Workspace({
             revealEntryId={
               focusTarget?.kind === "Activity" ? focusTarget.id : null
             }
-            preferenceKey={`lifelook:ui:v1:${bootstrap.household?.id??"local"}:activity-breakdown`}
-            onAdd={(el)=>openDialog({type:"transaction",kind:"expense"},el)}
+            preferenceKey={`lifelook:ui:v1:${bootstrap.household?.id ?? "local"}:activity-breakdown`}
+            onAdd={(kind, el) =>
+              openDialog(
+                kind === "transfer"
+                  ? { type: "transfer" }
+                  : { type: "transaction", kind },
+                el,
+              )
+            }
             onImport={(el) => openDialog({ type: "import" }, el)}
-            onEdit={(entry) =>
-              openDialog({
-                type: entry[0].kind === "transfer" ? "transfer" : "transaction",
-                entry,
-              })
+            onEdit={(entry, el) =>
+              openDialog(
+                {
+                  type:
+                    entry[0].kind === "transfer" ? "transfer" : "transaction",
+                  entry,
+                },
+                el,
+              )
+            }
+            onDelete={(entry, el) =>
+              openDialog(
+                {
+                  type: entry[0].kind === "transfer" ? "transfer" : "transaction",
+                  entry,
+                  requestDelete: true,
+                },
+                el,
+              )
             }
           />
         )}
@@ -603,13 +933,14 @@ function Workspace({
                 el,
               )
             }
-            onPlanScenario={(el) =>
+            onPlanScenario={(el, focusedEntry) =>
               openDialog(
                 {
                   type: "scenario-plan",
                   scenario: bootstrap.scenarios.find(
                     (s) => s.id === selectedScenario.id,
                   ),
+                  focusedEntry,
                 },
                 el,
               )
@@ -618,6 +949,7 @@ function Workspace({
             onSelectSeries={setPlanSeries}
             range={planRange}
             onRange={setPlanRange}
+            preferenceKey={`lifelook:ui:v1:${bootstrap.household?.id ?? "local"}:plan`}
           />
         )}
         {view === "Plan" && !projections && (
@@ -632,9 +964,124 @@ function Workspace({
             </section>
           </div>
         )}
-        <div hidden={view !== "Investment"}><InvestmentView initial={bootstrap.investmentComparison} repository={repository} taxContext={investmentTaxContext} scenarios={scenarios} accounts={bootstrap.accounts} onAddToPlan={async(assumptions,options)=>{const record=bootstrap.scenarios.find(s=>s.id===options.scenarioId);if(!record||!repository.updateScenario)return;const assetId=`investment-${Date.now()}`,principal=Math.round(assumptions.homePriceCents*(1-assumptions.downPaymentBps/10000)),monthlyRate=assumptions.mortgageRateBps/10000/12,months=assumptions.mortgageTermYears*12,payment=Math.round(monthlyRate?principal*monthlyRate*Math.pow(1+monthlyRate,months)/(Math.pow(1+monthlyRate,months)-1):principal/months),fundingSources=options.fundingAccountIds.map(accountId=>({accountId}));const purchase:import("./domain").ScenarioEvent={id:`buy-${assetId}`,date:options.date,type:"asset-purchase",assetId,name:"Investment home",valueCents:assumptions.homePriceCents,annualGrowthBps:assumptions.homeAppreciationBps,fundingAccountId:options.fundingAccountIds[0],fundingSources,downPaymentCents:Math.round(assumptions.homePriceCents*assumptions.downPaymentBps/10000),costsCents:Math.round(assumptions.homePriceCents*assumptions.purchaseCostBps/10000),monthlyRentalIncomeCents:assumptions.monthlyRentalIncomeCents,rentalIncomeGrowthBps:assumptions.rentalIncomeGrowthBps,maintenanceBps:assumptions.maintenanceBps,housingCosts:{propertyTaxRateBps:assumptions.propertyTaxBps,insuranceMonthlyCents:Math.round(assumptions.annualInsuranceCents/12),insuranceAnnualGrowthBps:assumptions.insuranceGrowthBps,hoaMonthlyCents:assumptions.monthlyHoaCents,hoaAnnualGrowthBps:assumptions.hoaGrowthBps},financing:{liabilityId:`loan-${assetId}`,name:"Investment mortgage",principalCents:principal,annualRateBps:assumptions.mortgageRateBps,minimumPaymentCents:payment}};const events=[...record.events,purchase];if(options.includeAdu&&assumptions.aduPlanned){const date=new Date(`${options.date}T00:00:00Z`);date.setUTCFullYear(date.getUTCFullYear()+Math.max(0,assumptions.aduBuildYear-1));events.push({id:`adu-${assetId}`,date:date.toISOString().slice(0,10),type:"adu-build",assetId,name:"Build ADU",costCents:assumptions.aduBuildCostCents,addedValueCents:assumptions.aduBuildCostCents,monthlyRentalIncomeCents:assumptions.aduMonthlyRentCents,rentalIncomeGrowthBps:assumptions.rentalIncomeGrowthBps,fundingAccountId:options.fundingAccountIds[0],fundingSources})}await repository.updateScenario({id:record.id,name:record.name,assumptions:record.assumptions,horizonMonths:record.horizonMonths,events,defaultContributionAccountId:record.defaultContributionAccountId,contributions:record.contributions,withdrawals:record.withdrawals,expectedRevision:record.revision});await onRefresh();setSelectedScenarioId(record.id);setView("Plan")}}/></div>
+        <div hidden={view !== "Investment"}>
+          <InvestmentView
+            initial={bootstrap.investmentComparison}
+            repository={repository}
+            taxContext={investmentTaxContext}
+            scenarios={scenarios}
+            accounts={bootstrap.accounts}
+            householdId={bootstrap.household?.id ?? "local"}
+            onAddToPlan={async (assumptions, options) => {
+              const record = bootstrap.scenarios.find(
+                (s) => s.id === options.scenarioId,
+              );
+              if (!record || !repository.updateScenario) return;
+              const assetId = `investment-${Date.now()}`,
+                principal = Math.round(
+                  assumptions.homePriceCents *
+                    (1 - assumptions.downPaymentBps / 10000),
+                ),
+                monthlyRate = assumptions.mortgageRateBps / 10000 / 12,
+                months = assumptions.mortgageTermYears * 12,
+                payment = Math.round(
+                  monthlyRate
+                    ? (principal *
+                        monthlyRate *
+                        Math.pow(1 + monthlyRate, months)) /
+                        (Math.pow(1 + monthlyRate, months) - 1)
+                    : principal / months,
+                ),
+                fundingSources = options.fundingAccountIds.map((accountId) => ({
+                  accountId,
+                }));
+              const purchase: import("./domain").ScenarioEvent = {
+                id: `buy-${assetId}`,
+                date: options.date,
+                type: "asset-purchase",
+                assetId,
+                name: "Investment home",
+                valueCents: assumptions.homePriceCents,
+                annualGrowthBps: assumptions.homeAppreciationBps,
+                fundingAccountId: options.fundingAccountIds[0],
+                fundingSources,
+                downPaymentCents: Math.round(
+                  (assumptions.homePriceCents * assumptions.downPaymentBps) /
+                    10000,
+                ),
+                costsCents: Math.round(
+                  (assumptions.homePriceCents * assumptions.purchaseCostBps) /
+                    10000,
+                ),
+                monthlyRentalIncomeCents: assumptions.monthlyRentalIncomeCents,
+                rentalIncomeGrowthBps: assumptions.rentalIncomeGrowthBps,
+                maintenanceBps: assumptions.maintenanceBps,
+                housingCosts: {
+                  propertyTaxRateBps: assumptions.propertyTaxBps,
+                  insuranceMonthlyCents: Math.round(
+                    assumptions.annualInsuranceCents / 12,
+                  ),
+                  insuranceAnnualGrowthBps: assumptions.insuranceGrowthBps,
+                  hoaMonthlyCents: assumptions.monthlyHoaCents,
+                  hoaAnnualGrowthBps: assumptions.hoaGrowthBps,
+                },
+                financing: {
+                  liabilityId: `loan-${assetId}`,
+                  name: "Investment mortgage",
+                  principalCents: principal,
+                  annualRateBps: assumptions.mortgageRateBps,
+                  minimumPaymentCents: payment,
+                },
+              };
+              const events = [...record.events, purchase];
+              if (options.includeAdu && assumptions.aduPlanned) {
+                const date = new Date(`${options.date}T00:00:00Z`);
+                date.setUTCFullYear(
+                  date.getUTCFullYear() +
+                    Math.max(0, assumptions.aduBuildYear - 1),
+                );
+                events.push({
+                  id: `adu-${assetId}`,
+                  date: date.toISOString().slice(0, 10),
+                  type: "adu-build",
+                  assetId,
+                  name: "Build ADU",
+                  costCents: assumptions.aduBuildCostCents,
+                  addedValueCents: assumptions.aduBuildCostCents,
+                  monthlyRentalIncomeCents: assumptions.aduMonthlyRentCents,
+                  rentalIncomeGrowthBps: assumptions.rentalIncomeGrowthBps,
+                  fundingAccountId: options.fundingAccountIds[0],
+                  fundingSources,
+                });
+              }
+              await repository.updateScenario({
+                id: record.id,
+                name: record.name,
+                assumptions: record.assumptions,
+                horizonMonths: record.horizonMonths,
+                events,
+                defaultContributionAccountId:
+                  record.defaultContributionAccountId,
+                contributions: record.contributions,
+                withdrawals: record.withdrawals,
+                expectedRevision: record.revision,
+              });
+              await onRefresh();
+              setSelectedScenarioId(record.id);
+              setView("Plan");
+            }}
+          />
+        </div>
         {view === "Retirement" && (
-          <RetirementView initial={retirementPlan} repository={repository} bootstrap={bootstrap} snapshot={snapshot} scenarios={scenarios} projections={retirementProjections} onPlanChange={setRetirementPlan}/>
+          <RetirementView
+            initial={retirementPlan}
+            repository={repository}
+            bootstrap={bootstrap}
+            snapshot={snapshot}
+            scenarios={scenarios}
+            projections={retirementProjections}
+            onPlanChange={setRetirementPlan}
+          />
         )}
         {view === "Net Worth" && (
           <NetWorth
@@ -655,16 +1102,38 @@ function Workspace({
             onAddAsset={(el) => openDialog({ type: "asset" }, el)}
             onAddLiability={(el) => openDialog({ type: "liability" }, el)}
             onEditAsset={(asset, el) =>
-              openDialog({ type: "asset", asset, linkedLiability: bootstrap.liabilities.find((liability)=>liability.mortgage?.assetId===asset.id) }, el)
+              openDialog(
+                {
+                  type: "asset",
+                  asset,
+                  linkedLiability: bootstrap.liabilities.find(
+                    (liability) => liability.mortgage?.assetId === asset.id,
+                  ),
+                },
+                el,
+              )
             }
             onDeleteAsset={(asset, el) =>
-              openDialog({ type: "asset", asset, linkedLiability: bootstrap.liabilities.find((liability)=>liability.mortgage?.assetId===asset.id), requestDelete: true }, el)
+              openDialog(
+                {
+                  type: "asset",
+                  asset,
+                  linkedLiability: bootstrap.liabilities.find(
+                    (liability) => liability.mortgage?.assetId === asset.id,
+                  ),
+                  requestDelete: true,
+                },
+                el,
+              )
             }
             onEditLiability={(liability, el) =>
               openDialog({ type: "liability", liability }, el)
             }
             onDeleteLiability={(liability, el) =>
-              openDialog({ type: "liability", liability, requestDelete: true }, el)
+              openDialog(
+                { type: "liability", liability, requestDelete: true },
+                el,
+              )
             }
           />
         )}
@@ -713,6 +1182,7 @@ function Workspace({
           repository={repository}
           close={closeDialog}
           refresh={onRefresh}
+          focusedEntry={dialog.focusedEntry}
         />
       ) : dialog?.type === "import" ? (
         <CsvImportWizard
@@ -769,6 +1239,7 @@ type DialogState = {
   requestDelete?: boolean;
   recurring?: RecurringEntry;
   scenario?: ScenarioRecord;
+  focusedEntry?: "event" | "contribution";
   invoker?: HTMLElement | null;
 };
 
@@ -1133,7 +1604,10 @@ function EntryDialog({
               {isAccount
                 ? state.account?.name
                 : entry?.description || "this entry"}
-              . {isAccount ? "The related records listed above will be removed or disconnected." : "Financial history is never cascaded."}
+              .{" "}
+              {isAccount
+                ? "The related records listed above will be removed or disconnected."
+                : "Financial history is never cascaded."}
             </p>
             <div className="actions">
               <button disabled={busy} onClick={() => setConfirmDelete(false)}>
@@ -1394,7 +1868,9 @@ function FinancialRecordDialog({
   const isAsset = state.type === "asset";
   const record = isAsset ? state.asset : state.liability;
   const liability = state.liability;
-  const linkedMortgage = state.linkedLiability ?? (!isAsset && liability?.mortgage?.assetId ? liability : undefined);
+  const linkedMortgage =
+    state.linkedLiability ??
+    (!isAsset && liability?.mortgage?.assetId ? liability : undefined);
   const [name, setName] = useState(record?.name ?? "");
   const [value, setValue] = useState("0");
   useEffect(() => {
@@ -1407,18 +1883,50 @@ function FinancialRecordDialog({
         0) / 100,
     ),
   );
-  const [advancedGrowth, setAdvancedGrowth] = useState(Boolean(isAsset && state.asset?.appreciationCurve));
-  const [growthStartYear, setGrowthStartYear] = useState(String(state.asset?.appreciationCurve?.startYear ?? new Date().getFullYear()));
-  const [growthStartRate, setGrowthStartRate] = useState(String((state.asset?.appreciationCurve?.startRateBps ?? state.asset?.annualGrowthBps ?? 0) / 100));
-  const [growthEndYear, setGrowthEndYear] = useState(String(state.asset?.appreciationCurve?.endYear ?? new Date().getFullYear() + 10));
-  const [growthEndRate, setGrowthEndRate] = useState(String((state.asset?.appreciationCurve?.endRateBps ?? state.asset?.annualGrowthBps ?? 0) / 100));
+  const [advancedGrowth, setAdvancedGrowth] = useState(
+    Boolean(isAsset && state.asset?.appreciationCurve),
+  );
+  const [growthStartYear, setGrowthStartYear] = useState(
+    String(
+      state.asset?.appreciationCurve?.startYear ?? new Date().getFullYear(),
+    ),
+  );
+  const [growthStartRate, setGrowthStartRate] = useState(
+    String(
+      (state.asset?.appreciationCurve?.startRateBps ??
+        state.asset?.annualGrowthBps ??
+        0) / 100,
+    ),
+  );
+  const [growthEndYear, setGrowthEndYear] = useState(
+    String(
+      state.asset?.appreciationCurve?.endYear ?? new Date().getFullYear() + 10,
+    ),
+  );
+  const [growthEndRate, setGrowthEndRate] = useState(
+    String(
+      (state.asset?.appreciationCurve?.endRateBps ??
+        state.asset?.annualGrowthBps ??
+        0) / 100,
+    ),
+  );
   const [home, setHome] = useState(false);
-  const [privateStock, setPrivateStock] = useState(Boolean(state.asset?.privateStock));
-  const equityHolding=state.asset?.equityHolding??null;
-  const [vestedPercent, setVestedPercent] = useState(String((state.asset?.privateStock?.vestedBps ?? 2500)/100));
-  const [vestingStartDate, setVestingStartDate] = useState(state.asset?.privateStock?.vestingStartDate ?? today());
-  const [remainingVestingYears, setRemainingVestingYears] = useState(String((state.asset?.privateStock?.remainingVestingQuarters ?? 16)/4));
-  const [taxOnVest,setTaxOnVest]=useState(state.asset?.privateStock?.taxOnVest??false);
+  const [privateStock, setPrivateStock] = useState(
+    Boolean(state.asset?.privateStock),
+  );
+  const equityHolding = state.asset?.equityHolding ?? null;
+  const [vestedPercent, setVestedPercent] = useState(
+    String((state.asset?.privateStock?.vestedBps ?? 2500) / 100),
+  );
+  const [vestingStartDate, setVestingStartDate] = useState(
+    state.asset?.privateStock?.vestingStartDate ?? today(),
+  );
+  const [remainingVestingYears, setRemainingVestingYears] = useState(
+    String((state.asset?.privateStock?.remainingVestingQuarters ?? 16) / 4),
+  );
+  const [taxOnVest, setTaxOnVest] = useState(
+    state.asset?.privateStock?.taxOnVest ?? false,
+  );
   const [purchasePrice, setPurchasePrice] = useState("0");
   const [financed, setFinanced] = useState(true);
   const [purchaseDate, setPurchaseDate] = useState(today());
@@ -1447,7 +1955,9 @@ function FinancialRecordDialog({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(Boolean(state.requestDelete));
+  const [confirmDelete, setConfirmDelete] = useState(
+    Boolean(state.requestDelete),
+  );
   useEffect(() => {
     modal.current?.querySelector<HTMLElement>("button,input,select")?.focus();
     return () => state.invoker?.focus();
@@ -1472,18 +1982,52 @@ function FinancialRecordDialog({
     const bps = parsePercent(rate);
     let appreciationCurve = null;
     if (isAsset && advancedGrowth) {
-      const startYear = Number(growthStartYear), endYear = Number(growthEndYear);
-      const startRateBps = parsePercent(growthStartRate), endRateBps = parsePercent(growthEndRate);
-      if (!Number.isInteger(startYear) || !Number.isInteger(endYear) || endYear <= startYear || startYear < 1900 || endYear > 2500 || startRateBps == null || endRateBps == null || startRateBps < -10000 || endRateBps < -10000 || startRateBps > 100000 || endRateBps > 100000)
-        return setError("Enter valid appreciation years and rates; the ending year must be after the starting year.");
-      appreciationCurve = {startYear,startRateBps,endYear,endRateBps};
+      const startYear = Number(growthStartYear),
+        endYear = Number(growthEndYear);
+      const startRateBps = parsePercent(growthStartRate),
+        endRateBps = parsePercent(growthEndRate);
+      if (
+        !Number.isInteger(startYear) ||
+        !Number.isInteger(endYear) ||
+        endYear <= startYear ||
+        startYear < 1900 ||
+        endYear > 2500 ||
+        startRateBps == null ||
+        endRateBps == null ||
+        startRateBps < -10000 ||
+        endRateBps < -10000 ||
+        startRateBps > 100000 ||
+        endRateBps > 100000
+      )
+        return setError(
+          "Enter valid appreciation years and rates; the ending year must be after the starting year.",
+        );
+      appreciationCurve = { startYear, startRateBps, endYear, endRateBps };
     }
     let privateStockTerms = null;
     if (isAsset && privateStock) {
-      const vestedBps=parsePercent(vestedPercent),years=Number(remainingVestingYears),remainingVestingQuarters=Math.round(years*4);
-      if(vestedBps==null||vestedBps<0||vestedBps>10000||!/^\d{4}-\d{2}-\d{2}$/.test(vestingStartDate)||!Number.isFinite(years)||years<=0||remainingVestingQuarters<1||Math.abs(years*4-remainingVestingQuarters)>1e-9)
-        return setError("Enter a vested percentage from 0–100 and a remaining vesting term in quarter-year increments.");
-      privateStockTerms={vestedBps,vestingStartDate,remainingVestingQuarters,taxOnVest};
+      const vestedBps = parsePercent(vestedPercent),
+        years = Number(remainingVestingYears),
+        remainingVestingQuarters = Math.round(years * 4);
+      if (
+        vestedBps == null ||
+        vestedBps < 0 ||
+        vestedBps > 10000 ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(vestingStartDate) ||
+        !Number.isFinite(years) ||
+        years <= 0 ||
+        remainingVestingQuarters < 1 ||
+        Math.abs(years * 4 - remainingVestingQuarters) > 1e-9
+      )
+        return setError(
+          "Enter a vested percentage from 0–100 and a remaining vesting term in quarter-year increments.",
+        );
+      privateStockTerms = {
+        vestedBps,
+        vestingStartDate,
+        remainingVestingQuarters,
+        taxOnVest,
+      };
     }
     if (!name.trim())
       return setError(`${isAsset ? "Asset" : "Debt"} name is required.`);
@@ -1505,17 +2049,48 @@ function FinancialRecordDialog({
           const months = /^\d+$/.test(term) ? Number(term) : 0;
           if (!purchasePriceCents || purchasePriceCents < 0)
             throw { message: "Enter the original home purchase price." };
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate) || purchaseDate > today())
-            throw { message: "Enter a purchase date that is not in the future." };
-          if (propertyTaxRateBps == null || propertyTaxRateBps < 0 || insuranceAnnualCents == null || insuranceAnnualCents < 0)
-            throw { message: "Enter valid property tax and annual insurance amounts." };
-          if (financed && (downPaymentBps == null || downPaymentBps < 0 || downPaymentBps > 10000 || loanRateBps == null || loanRateBps < 0 || months < 1 || months > 480))
-            throw { message: "Enter valid down payment, interest rate, and a term from 1 to 480 months." };
+          if (
+            !/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate) ||
+            purchaseDate > today()
+          )
+            throw {
+              message: "Enter a purchase date that is not in the future.",
+            };
+          if (
+            propertyTaxRateBps == null ||
+            propertyTaxRateBps < 0 ||
+            insuranceAnnualCents == null ||
+            insuranceAnnualCents < 0
+          )
+            throw {
+              message: "Enter valid property tax and annual insurance amounts.",
+            };
+          if (
+            financed &&
+            (downPaymentBps == null ||
+              downPaymentBps < 0 ||
+              downPaymentBps > 10000 ||
+              loanRateBps == null ||
+              loanRateBps < 0 ||
+              months < 1 ||
+              months > 480)
+          )
+            throw {
+              message:
+                "Enter valid down payment, interest rate, and a term from 1 to 480 months.",
+            };
           await repository.createHome?.({
             assetId: crypto.randomUUID(),
             liabilityId: financed ? crypto.randomUUID() : null,
-            name: name.trim(), purchasePriceCents, currentValueCents: cents, annualGrowthBps: bps, appreciationCurve,
-            purchaseDate, propertyTaxRateBps, insuranceAnnualCents, financed,
+            name: name.trim(),
+            purchasePriceCents,
+            currentValueCents: cents,
+            annualGrowthBps: bps,
+            appreciationCurve,
+            purchaseDate,
+            propertyTaxRateBps,
+            insuranceAnnualCents,
+            financed,
             downPaymentBps: financed ? downPaymentBps : undefined,
             termMonths: financed ? months : undefined,
             annualRateBps: financed ? loanRateBps : undefined,
@@ -1625,7 +2200,7 @@ function FinancialRecordDialog({
     <div className="modal-backdrop">
       <section
         ref={modal}
-        className="card modal entry-modal"
+        className="card entry-modal side-sheet"
         role={confirmDelete ? "alertdialog" : "dialog"}
         aria-modal="true"
         aria-labelledby="financial-record-title"
@@ -1676,7 +2251,11 @@ function FinancialRecordDialog({
                 />
               </label>
               <label>
-                {isAsset && home ? "Current home value (USD)" : isAsset ? "Current value (USD)" : "Current balance (USD)"}
+                {isAsset && home
+                  ? "Current home value (USD)"
+                  : isAsset
+                    ? "Current value (USD)"
+                    : "Current balance (USD)"}
                 <input
                   required
                   inputMode="decimal"
@@ -1686,35 +2265,247 @@ function FinancialRecordDialog({
               </label>
               {isAsset && !state.asset && (
                 <>
-                  <label className="check-row"><input type="checkbox" checked={home} onChange={(e)=>{setHome(e.target.checked);if(e.target.checked)setPrivateStock(false)}} /> This asset is a home</label>
-                  <label className="check-row"><input type="checkbox" checked={privateStock} onChange={(e)=>{setPrivateStock(e.target.checked);if(e.target.checked)setHome(false)}} /> This asset is private stock</label>
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={home}
+                      onChange={(e) => {
+                        setHome(e.target.checked);
+                        if (e.target.checked) setPrivateStock(false);
+                      }}
+                    />{" "}
+                    This asset is a home
+                  </label>
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={privateStock}
+                      onChange={(e) => {
+                        setPrivateStock(e.target.checked);
+                        if (e.target.checked) setHome(false);
+                      }}
+                    />{" "}
+                    This asset is private stock
+                  </label>
                 </>
               )}
-              {isAsset && state.asset && !home && !equityHolding && <label className="check-row"><input type="checkbox" checked={privateStock} onChange={(e)=>setPrivateStock(e.target.checked)} /> This asset is private stock</label>}
-              {isAsset&&equityHolding&&<section aria-label="RSU grant details"><p><strong>Company equity holding</strong> · {equityHolding.grants.length} separate RSU grants · {units(equityHolding.grants.reduce((sum,grant)=>sum+grant.unitsMicros,0))} total units</p><p className="muted">Share price {money(equityHolding.priceCents)} as of {equityHolding.priceDate}. Grant dates and vest schedules are tracked separately below.</p>{equityHolding.grants.map(grant=>{const upcoming=nextVest(grant,localIsoDate()),vested=vestedUnitsAt(grant,localIsoDate());return <details key={grant.id} open><summary>{grant.id==="original"?"Original grant":grant.id==="promotion"?"Promotion grant":grant.id} · {units(grant.unitsMicros)} units</summary><p>Granted {grant.grantDate} at {money(grant.grantPriceCents)} · {units(vested)} vested · {units(grant.unitsMicros-vested)} unvested{upcoming?` · next vest ${units(upcoming.unitsMicros)} on ${upcoming.date}`:" · fully vested"}</p><div className="sheet-scroll"><table><thead><tr><th>Vest date</th><th>Units</th><th>Status</th><th>FMV</th></tr></thead><tbody>{grant.vestEvents.map(event=><tr key={event.id}><td>{event.date}</td><td>{units(event.unitsMicros)}</td><td>{event.date<=localIsoDate()?"Vested":"Scheduled"}</td><td>{event.actualFmvCents?money(event.actualFmvCents):"Projected"}</td></tr>)}</tbody></table></div></details>})}</section>}
+              {isAsset && state.asset && !home && !equityHolding && (
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={privateStock}
+                    onChange={(e) => setPrivateStock(e.target.checked)}
+                  />{" "}
+                  This asset is private stock
+                </label>
+              )}
+              {isAsset && equityHolding && (
+                <section aria-label="RSU grant details">
+                  <p>
+                    <strong>Company equity holding</strong> ·{" "}
+                    {equityHolding.grants.length} separate RSU grants ·{" "}
+                    {units(
+                      equityHolding.grants.reduce(
+                        (sum, grant) => sum + grant.unitsMicros,
+                        0,
+                      ),
+                    )}{" "}
+                    total units
+                  </p>
+                  <p className="muted">
+                    Share price {money(equityHolding.priceCents)} as of{" "}
+                    {equityHolding.priceDate}. Grant dates and vest schedules
+                    are tracked separately below.
+                  </p>
+                  {equityHolding.grants.map((grant) => {
+                    const upcoming = nextVest(grant, localIsoDate()),
+                      vested = vestedUnitsAt(grant, localIsoDate());
+                    return (
+                      <details key={grant.id} open>
+                        <summary>
+                          {grant.id === "original"
+                            ? "Original grant"
+                            : grant.id === "promotion"
+                              ? "Promotion grant"
+                              : grant.id}{" "}
+                          · {units(grant.unitsMicros)} units
+                        </summary>
+                        <p>
+                          Granted {grant.grantDate} at{" "}
+                          {money(grant.grantPriceCents)} · {units(vested)}{" "}
+                          vested · {units(grant.unitsMicros - vested)} unvested
+                          {upcoming
+                            ? ` · next vest ${units(upcoming.unitsMicros)} on ${upcoming.date}`
+                            : " · fully vested"}
+                        </p>
+                        <div className="sheet-scroll">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Vest date</th>
+                                <th>Units</th>
+                                <th>Status</th>
+                                <th>FMV</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {grant.vestEvents.map((event) => (
+                                <tr key={event.id}>
+                                  <td>{event.date}</td>
+                                  <td>{units(event.unitsMicros)}</td>
+                                  <td>
+                                    {event.date <= localIsoDate()
+                                      ? "Vested"
+                                      : "Scheduled"}
+                                  </td>
+                                  <td>
+                                    {event.actualFmvCents
+                                      ? money(event.actualFmvCents)
+                                      : "Projected"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    );
+                  })}
+                </section>
+              )}
               {isAsset && privateStock && (
                 <>
-                  <p className="muted">The full company value appreciates, but only vested value counts toward Net Worth.</p>
-                  <label>Currently vested (%)<input required inputMode="decimal" value={vestedPercent} onChange={(e)=>setVestedPercent(e.target.value)} /></label>
-                  <label>Remaining vesting starts<input required type="date" value={vestingStartDate} onChange={(e)=>setVestingStartDate(e.target.value)} /></label>
-                  <label>Remaining vesting period (years)<input required type="number" min="0.25" max="100" step="0.25" value={remainingVestingYears} onChange={(e)=>setRemainingVestingYears(e.target.value)} /></label>
-                  <label className="check-row"><input type="checkbox" checked={taxOnVest} onChange={e=>setTaxOnVest(e.target.checked)}/> Sell vested shares to cover ordinary-income tax</label>
-                  <p className="muted">The unvested portion vests evenly every quarter over this period.</p>
+                  <p className="muted">
+                    The full company value appreciates, but only vested value
+                    counts toward Net Worth.
+                  </p>
+                  <label>
+                    Currently vested (%)
+                    <input
+                      required
+                      inputMode="decimal"
+                      value={vestedPercent}
+                      onChange={(e) => setVestedPercent(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Remaining vesting starts
+                    <input
+                      required
+                      type="date"
+                      value={vestingStartDate}
+                      onChange={(e) => setVestingStartDate(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Remaining vesting period (years)
+                    <input
+                      required
+                      type="number"
+                      min="0.25"
+                      max="100"
+                      step="0.25"
+                      value={remainingVestingYears}
+                      onChange={(e) => setRemainingVestingYears(e.target.value)}
+                    />
+                  </label>
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={taxOnVest}
+                      onChange={(e) => setTaxOnVest(e.target.checked)}
+                    />{" "}
+                    Sell vested shares to cover ordinary-income tax
+                  </label>
+                  <p className="muted">
+                    The unvested portion vests evenly every quarter over this
+                    period.
+                  </p>
                 </>
               )}
               {isAsset && home && !state.asset && (
                 <>
-                  <label>Original purchase price (USD)<input required inputMode="decimal" value={purchasePrice} onChange={(e)=>setPurchasePrice(e.target.value)} /></label>
-                  <label>Purchase date<input required type="date" max={today()} value={purchaseDate} onChange={(e)=>setPurchaseDate(e.target.value)} /></label>
-                  <label>Property tax (%)<input required inputMode="decimal" value={propertyTax} onChange={(e)=>setPropertyTax(e.target.value)} /></label>
-                  <label>Homeowners insurance per year (USD)<input required inputMode="decimal" value={insuranceAnnual} onChange={(e)=>setInsuranceAnnual(e.target.value)} /></label>
-                  <label className="check-row"><input type="checkbox" checked={financed} onChange={(e)=>setFinanced(e.target.checked)} /> Financed with a mortgage</label>
-                  {financed && <>
-                    <label>Down payment (%)<input required inputMode="decimal" value={downPayment} onChange={(e)=>setDownPayment(e.target.value)} /></label>
-                    <label>Mortgage interest rate (%)<input required inputMode="decimal" value={loanRate} onChange={(e)=>setLoanRate(e.target.value)} /></label>
-                    <label>Loan term (months)<input required inputMode="numeric" value={term} onChange={(e)=>setTerm(e.target.value)} /></label>
-                    <p className="muted">LifeLook calculates the original principal, standard monthly payment, and current mortgage balance from these terms.</p>
-                  </>}
+                  <label>
+                    Original purchase price (USD)
+                    <input
+                      required
+                      inputMode="decimal"
+                      value={purchasePrice}
+                      onChange={(e) => setPurchasePrice(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Purchase date
+                    <input
+                      required
+                      type="date"
+                      max={today()}
+                      value={purchaseDate}
+                      onChange={(e) => setPurchaseDate(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Property tax (%)
+                    <input
+                      required
+                      inputMode="decimal"
+                      value={propertyTax}
+                      onChange={(e) => setPropertyTax(e.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Homeowners insurance per year (USD)
+                    <input
+                      required
+                      inputMode="decimal"
+                      value={insuranceAnnual}
+                      onChange={(e) => setInsuranceAnnual(e.target.value)}
+                    />
+                  </label>
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={financed}
+                      onChange={(e) => setFinanced(e.target.checked)}
+                    />{" "}
+                    Financed with a mortgage
+                  </label>
+                  {financed && (
+                    <>
+                      <label>
+                        Down payment (%)
+                        <input
+                          required
+                          inputMode="decimal"
+                          value={downPayment}
+                          onChange={(e) => setDownPayment(e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Mortgage interest rate (%)
+                        <input
+                          required
+                          inputMode="decimal"
+                          value={loanRate}
+                          onChange={(e) => setLoanRate(e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Loan term (months)
+                        <input
+                          required
+                          inputMode="numeric"
+                          value={term}
+                          onChange={(e) => setTerm(e.target.value)}
+                        />
+                      </label>
+                      <p className="muted">
+                        LifeLook calculates the original principal, standard
+                        monthly payment, and current mortgage balance from these
+                        terms.
+                      </p>
+                    </>
+                  )}
                 </>
               )}
               {(!isAsset || !advancedGrowth) && (
@@ -1730,14 +2521,58 @@ function FinancialRecordDialog({
               )}
               {isAsset && (
                 <>
-                  <label className="check-row"><input type="checkbox" checked={advancedGrowth} onChange={(e)=>setAdvancedGrowth(e.target.checked)} /> Use an appreciation curve</label>
-                  {advancedGrowth && <>
-                    <p className="muted">The rate changes linearly each year, then remains at the ending rate.</p>
-                    <label>Starting year<input required inputMode="numeric" value={growthStartYear} onChange={(e)=>setGrowthStartYear(e.target.value)} /></label>
-                    <label>Starting appreciation (%)<input required inputMode="decimal" value={growthStartRate} onChange={(e)=>setGrowthStartRate(e.target.value)} /></label>
-                    <label>Ending year<input required inputMode="numeric" value={growthEndYear} onChange={(e)=>setGrowthEndYear(e.target.value)} /></label>
-                    <label>Ending appreciation (%)<input required inputMode="decimal" value={growthEndRate} onChange={(e)=>setGrowthEndRate(e.target.value)} /></label>
-                  </>}
+                  <label className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={advancedGrowth}
+                      onChange={(e) => setAdvancedGrowth(e.target.checked)}
+                    />{" "}
+                    Use an appreciation curve
+                  </label>
+                  {advancedGrowth && (
+                    <>
+                      <p className="muted">
+                        The rate changes linearly each year, then remains at the
+                        ending rate.
+                      </p>
+                      <label>
+                        Starting year
+                        <input
+                          required
+                          inputMode="numeric"
+                          value={growthStartYear}
+                          onChange={(e) => setGrowthStartYear(e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Starting appreciation (%)
+                        <input
+                          required
+                          inputMode="decimal"
+                          value={growthStartRate}
+                          onChange={(e) => setGrowthStartRate(e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Ending year
+                        <input
+                          required
+                          inputMode="numeric"
+                          value={growthEndYear}
+                          onChange={(e) => setGrowthEndYear(e.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Ending appreciation (%)
+                        <input
+                          required
+                          inputMode="decimal"
+                          value={growthEndRate}
+                          onChange={(e) => setGrowthEndRate(e.target.value)}
+                        />
+                      </label>
+                    </>
+                  )}
                 </>
               )}
               {!isAsset && (
@@ -1881,7 +2716,13 @@ function Onboarding({
   const [filingStatus, setFilingStatus] = useState(
     initial.taxProfile?.filingStatus ?? "",
   );
-  const [jointMembers,setJointMembers]=useState<[string,string]>(()=>{const saved=initial.taxProfile?.taxUnit?.memberPersonIds??[];return [saved[0]??initial.people[0]?.id??"",saved[1]??initial.people[1]?.id??""]});
+  const [jointMembers, setJointMembers] = useState<[string, string]>(() => {
+    const saved = initial.taxProfile?.taxUnit?.memberPersonIds ?? [];
+    return [
+      saved[0] ?? initial.people[0]?.id ?? "",
+      saved[1] ?? initial.people[1]?.id ?? "",
+    ];
+  });
   const categoryId = (kind: "income" | "expense") =>
     initial.categories.find((c) => c.kind === kind)?.id ??
     `${kind}-other-${householdId.current}`;
@@ -1940,7 +2781,17 @@ function Onboarding({
         setError("Select a filing status before continuing.");
         return;
       }
-      if(filingStatus==="married-joint"&&(!jointMembers[0]||!jointMembers[1]||jointMembers[0]===jointMembers[1])){setError("Married filing jointly requires two distinct household people.");return;}
+      if (
+        filingStatus === "married-joint" &&
+        (!jointMembers[0] ||
+          !jointMembers[1] ||
+          jointMembers[0] === jointMembers[1])
+      ) {
+        setError(
+          "Married filing jointly requires two distinct household people.",
+        );
+        return;
+      }
     }
     if (step === 3) {
       const invalid = accounts.findIndex(
@@ -2005,7 +2856,16 @@ function Onboarding({
             state: "CA",
             taxYear: 2026,
             thresholdInflationBps: 250,
-            taxUnit:{id:initial.taxProfile?.taxUnit?.id??`${householdId.current}-tax-unit`,filingStatus:filingStatus as TaxProfile["filingStatus"],memberPersonIds:filingStatus==="married-joint"?jointMembers:[jointMembers[0]||people[0]?.id].filter(Boolean)},
+            taxUnit: {
+              id:
+                initial.taxProfile?.taxUnit?.id ??
+                `${householdId.current}-tax-unit`,
+              filingStatus: filingStatus as TaxProfile["filingStatus"],
+              memberPersonIds:
+                filingStatus === "married-joint"
+                  ? jointMembers
+                  : [jointMembers[0] || people[0]?.id].filter(Boolean),
+            },
             revision: initial.taxProfile?.revision ?? 1,
           },
         });
@@ -2128,7 +2988,42 @@ function Onboarding({
                   <option value="head-of-household">Head of household</option>
                 </select>
               </label>
-              {filingStatus==="married-joint"&&<fieldset><legend>Joint tax unit</legend><label>First spouse<select value={jointMembers[0]} onChange={event=>setJointMembers([event.target.value,jointMembers[1]])}>{people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label><label>Second spouse<select value={jointMembers[1]} onChange={event=>setJointMembers([jointMembers[0],event.target.value])}><option value="">Select…</option>{people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label></fieldset>}
+              {filingStatus === "married-joint" && (
+                <fieldset>
+                  <legend>Joint tax unit</legend>
+                  <label>
+                    First spouse
+                    <select
+                      value={jointMembers[0]}
+                      onChange={(event) =>
+                        setJointMembers([event.target.value, jointMembers[1]])
+                      }
+                    >
+                      {people.map((person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Second spouse
+                    <select
+                      value={jointMembers[1]}
+                      onChange={(event) =>
+                        setJointMembers([jointMembers[0], event.target.value])
+                      }
+                    >
+                      <option value="">Select…</option>
+                      {people.map((person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </fieldset>
+              )}
               <p className="muted">
                 Required for tax-dependent projections. California and the 2026
                 rule pack are used.
@@ -3007,12 +3902,15 @@ function Overview({
   bootstrap: Bootstrap;
   projections: ReturnType<typeof ProjectionEngine.calculate> | null;
   navigate: (view: View) => void;
-  onAdd:(el:HTMLElement)=>void;
+  onAdd: (kind: "income" | "expense" | "transfer", el: HTMLElement) => void;
 }) {
-  const currentDate=localIsoDate();
+  const currentDate = localIsoDate();
   const currentNetWorth =
     bootstrap.accounts.reduce((sum, a) => sum + a.balanceCents, 0) +
-    bootstrap.assets.reduce((sum, a) => sum + currentAssetValue(a,currentDate), 0) -
+    bootstrap.assets.reduce(
+      (sum, a) => sum + currentAssetValue(a, currentDate),
+      0,
+    ) -
     bootstrap.liabilities.reduce((sum, a) => sum + a.balanceCents, 0);
   const year = String(new Date().getFullYear());
   const actual = bootstrap.activity.filter(
@@ -3024,8 +3922,32 @@ function Overview({
   const spending = -actual
     .filter((x) => x.kind === "expense")
     .reduce((s, x) => s + x.amountCents, 0);
-  const assets=bootstrap.accounts.filter(a=>a.balanceCents>0).reduce((s,a)=>s+a.balanceCents,0)+bootstrap.assets.reduce((s,a)=>s+currentAssetValue(a,currentDate),0), debt=bootstrap.accounts.filter(a=>a.balanceCents<0).reduce((s,a)=>s-a.balanceCents,0)+bootstrap.liabilities.reduce((s,a)=>s+a.balanceCents,0), compositionTotal=Math.max(1,assets+debt);
-  const recent=[...bootstrap.activity.reduce((map,row)=>map.set(row.entryId,[...(map.get(row.entryId)??[]),row]),new Map<string,ActivityPosting[]>()).values()].sort((a,b)=>b[0].occurredOn.localeCompare(a[0].occurredOn)).slice(0,4);
+  const assets =
+      bootstrap.accounts
+        .filter((a) => a.balanceCents > 0)
+        .reduce((s, a) => s + a.balanceCents, 0) +
+      bootstrap.assets.reduce(
+        (s, a) => s + currentAssetValue(a, currentDate),
+        0,
+      ),
+    debt =
+      bootstrap.accounts
+        .filter((a) => a.balanceCents < 0)
+        .reduce((s, a) => s - a.balanceCents, 0) +
+      bootstrap.liabilities.reduce((s, a) => s + a.balanceCents, 0),
+    compositionTotal = Math.max(1, assets + debt);
+  const recent = [
+    ...bootstrap.activity
+      .reduce(
+        (map, row) =>
+          map.set(row.entryId, [...(map.get(row.entryId) ?? []), row]),
+        new Map<string, ActivityPosting[]>(),
+      )
+      .values(),
+  ]
+    .sort((a, b) => b[0].occurredOn.localeCompare(a[0].occurredOn))
+    .slice(0, 4);
+  const projectedEnd = projections?.at(-1)?.months.at(-1);
   return (
     <div className="content">
       <section className="hero">
@@ -3037,13 +3959,48 @@ function Overview({
             Based on current account, asset, and liability balances.
           </p>
         </div>
-        <div className="hero-chart composition" aria-label={`Financial position: ${money(assets)} assets and ${money(debt)} debt`}>
-          <div className="composition-heading"><strong>Financial position</strong><InfoPopover label="About financial position">This uses current saved balances only. Debt is shown separately and subtracted from net worth.</InfoPopover></div>
-          <div className="composition-bar"><i style={{width:`${assets/compositionTotal*100}%`}}/><i className="debt" style={{width:`${debt/compositionTotal*100}%`}}/></div>
-          <div className="composition-labels"><span><i/>Assets <strong>{money(assets)}</strong></span><span><i className="debt"/>Debt <strong>{money(debt)}</strong></span></div>
+        <div
+          className="hero-chart composition"
+          aria-label={`Financial position: ${money(assets)} assets and ${money(debt)} debt`}
+        >
+          <div className="composition-heading">
+            <strong>Financial position</strong>
+            <InfoPopover label="About financial position">
+              This uses current saved balances only. Debt is shown separately
+              and subtracted from net worth.
+            </InfoPopover>
+          </div>
+          <div className="composition-bar">
+            <i style={{ width: `${(assets / compositionTotal) * 100}%` }} />
+            <i
+              className="debt"
+              style={{ width: `${(debt / compositionTotal) * 100}%` }}
+            />
+          </div>
+          <div className="composition-labels">
+            <span>
+              <i />
+              Assets <strong>{money(assets)}</strong>
+            </span>
+            <span>
+              <i className="debt" />
+              Debt <strong>{money(debt)}</strong>
+            </span>
+          </div>
         </div>
       </section>
-      <div className="section-action"><ActionButton tier="primary" onClick={e=>onAdd(e.currentTarget)}><Plus size={16}/> Add transaction</ActionButton></div>
+      <div className="section-action">
+        <AnchoredMenu
+          primary
+          label="Add transaction"
+          icon={<Plus size={16} />}
+          items={[
+            { label: "Income", onSelect: (el) => onAdd("income", el!) },
+            { label: "Expense", onSelect: (el) => onAdd("expense", el!) },
+            { label: "Transfer", onSelect: (el) => onAdd("transfer", el!) },
+          ]}
+        />
+      </div>
       <div className="metrics">
         <Metric
           title="Income"
@@ -3085,8 +4042,35 @@ function Overview({
               View all <ChevronRight size={14} />
             </button>
           </div>
-          {recent.map(group=>{const row=group[0],transfer=row.kind==="transfer";return <Transaction key={row.entryId} icon={transfer?WalletCards:row.kind==="income"?ArrowDownRight:ArrowUpRight} name={row.description||row.kind} detail={`${row.accountName} · ${row.occurredOn}`} amount={money(transfer?Math.abs(group.find(x=>x.amountCents<0)?.amountCents??0):row.amountCents)} positive={row.kind==="income"}/>})}
-          {!recent.length&&<p className="empty">No transactions have been recorded.</p>}
+          {recent.map((group) => {
+            const row = group[0],
+              transfer = row.kind === "transfer";
+            return (
+              <Transaction
+                key={row.entryId}
+                icon={
+                  transfer
+                    ? WalletCards
+                    : row.kind === "income"
+                      ? ArrowDownRight
+                      : ArrowUpRight
+                }
+                name={row.description || row.kind}
+                detail={`${row.accountName} · ${row.occurredOn}`}
+                amount={money(
+                  transfer
+                    ? Math.abs(
+                        group.find((x) => x.amountCents < 0)?.amountCents ?? 0,
+                      )
+                    : row.amountCents,
+                )}
+                positive={row.kind === "income"}
+              />
+            );
+          })}
+          {!recent.length && (
+            <p className="empty">No transactions have been recorded.</p>
+          )}
         </section>
         <section className="card">
           <div className="card-title">
@@ -3099,10 +4083,25 @@ function Overview({
             </button>
           </div>
           {projections ? (
-            <p>
-              Projected values use your saved tax profile and planning
-              assumptions. Open Plan for the monthly reconciliation.
-            </p>
+            <>
+              <p>
+                <strong>
+                  {money(
+                    (projectedEnd?.netWorthCents ?? currentNetWorth) -
+                      currentNetWorth,
+                  )}
+                </strong>{" "}
+                projected change by{" "}
+                {projectedEnd?.month
+                  ? projectionMonthLabel(projectedEnd.month)
+                  : "the end of the plan"}
+                .
+              </p>
+              <p className="muted">
+                Projected values use your saved tax profile and planning
+                assumptions.
+              </p>
+            </>
           ) : (
             <p>
               Complete your tax profile before LifeLook calculates projections.
@@ -3110,6 +4109,20 @@ function Overview({
           )}
         </section>
       </div>
+      <DetailDisclosure
+        label="View exact financial position"
+        storageKey={`lifelook:ui:v1:${bootstrap.household?.id ?? "local"}:overview-composition`}
+      >
+        <p>
+          Assets: <strong>{money(assets)}</strong>
+        </p>
+        <p>
+          Debt: <strong>{money(debt)}</strong>
+        </p>
+        <p>
+          Net worth: <strong>{money(currentNetWorth)}</strong>
+        </p>
+      </DetailDisclosure>
     </div>
   );
 }
@@ -3321,7 +4334,7 @@ function CsvImportWizard({
     <div className="modal-backdrop">
       <section
         ref={modal}
-        className="card modal import-modal"
+        className="card import-modal side-sheet"
         role="dialog"
         aria-modal="true"
         aria-labelledby="import-title"
@@ -3599,6 +4612,7 @@ function ActivityView({
   accounts,
   repository,
   onEdit,
+  onDelete,
   onImport,
   revealEntryId,
   onAdd,
@@ -3607,16 +4621,17 @@ function ActivityView({
   activity: ActivityPosting[];
   accounts: BootstrapAccount[];
   repository: Repository;
-  onEdit: (entry: ActivityPosting[]) => void;
+  onEdit: (entry: ActivityPosting[], el?: HTMLElement) => void;
+  onDelete: (entry: ActivityPosting[], el?: HTMLElement) => void;
   onImport: (el: HTMLElement) => void;
   revealEntryId: string | null;
-  onAdd:(el:HTMLElement)=>void;
-  preferenceKey:string;
+  onAdd: (kind: "income" | "expense" | "transfer", el: HTMLElement) => void;
+  preferenceKey: string;
 }) {
   const [query, setQuery] = useState("");
   const [account, setAccount] = useState("all");
   const [year, setYear] = useState(String(new Date().getFullYear()));
-  const [filtersOpen,setFiltersOpen]=useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   useEffect(() => {
     if (revealEntryId) {
       setQuery("");
@@ -3660,7 +4675,29 @@ function ActivityView({
   const total = rows
     .filter((x) => x[0].kind !== "transfer")
     .reduce((sum, x) => sum + x[0].amountCents, 0);
-  const filteredIncome=rows.filter(x=>x[0].kind==="income").reduce((s,x)=>s+x[0].amountCents,0),filteredSpending=-rows.filter(x=>x[0].kind==="expense").reduce((s,x)=>s+x[0].amountCents,0);
+  const filteredIncome = rows
+      .filter((x) => x[0].kind === "income")
+      .reduce((s, x) => s + x[0].amountCents, 0),
+    filteredSpending = -rows
+      .filter((x) => x[0].kind === "expense")
+      .reduce((s, x) => s + x[0].amountCents, 0);
+  const filteredTaxes = -rows
+    .filter(
+      (group) =>
+        group[0].kind === "expense" && /tax/i.test(group[0].categoryName ?? ""),
+    )
+    .reduce((sum, group) => sum + group[0].amountCents, 0);
+  const categoryDistribution = [
+    ...rows
+      .filter((group) => group[0].kind === "expense")
+      .reduce((map, group) => {
+        const name = group[0].categoryName || "Uncategorized";
+        return map.set(
+          name,
+          (map.get(name) ?? 0) + Math.abs(group[0].amountCents),
+        );
+      }, new Map<string, number>()),
+  ].sort((a, b) => b[1] - a[1]);
   const years = [...new Set(activity.map((x) => x.occurredOn.slice(0, 4)))]
     .sort()
     .reverse();
@@ -3695,7 +4732,16 @@ function ActivityView({
   return (
     <div className="content">
       <div className="toolbar">
-        <ActionButton tier="primary" onClick={e=>onAdd(e.currentTarget)}><Plus size={16}/> Add transaction</ActionButton>
+        <AnchoredMenu
+          primary
+          label="Add transaction"
+          icon={<Plus size={16} />}
+          items={[
+            { label: "Income", onSelect: (el) => onAdd("income", el!) },
+            { label: "Expense", onSelect: (el) => onAdd("expense", el!) },
+            { label: "Transfer", onSelect: (el) => onAdd("transfer", el!) },
+          ]}
+        />
         <div className="search">
           <Search size={17} />
           <input
@@ -3705,36 +4751,52 @@ function ActivityView({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <ActionButton aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(x=>!x)}>Filters<ChevronDown size={14}/></ActionButton>
-        {filtersOpen&&<div className="filter-panel"><label htmlFor="activity-account">
-          Account
-        </label>
-        <select
-          id="activity-account"
-          value={account}
-          onChange={(e) => setAccount(e.target.value)}
+        <ActionButton
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen((x) => !x)}
         >
-          <option value="all">All accounts</option>
-          {accounts.map((a) => (
-            <option value={a.id} key={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-        <label htmlFor="activity-year">
-          Year
-        </label>
-        <select
-          id="activity-year"
-          value={year}
-          onChange={(e) => setYear(e.target.value)}
-        >
-          <option value="all">All years</option>
-          {years.map((y) => (
-            <option key={y}>{y}</option>
-          ))}
-        </select></div>}
-        <AnchoredMenu label="Actions" items={[{label:"Import CSV",onSelect:(el)=>onImport(el!)},{label:exporting?"Exporting…":"Export CSV",disabled:!rows.length||exporting,onSelect:exportCsv}]}/>
+          Filters
+          <ChevronDown size={14} />
+        </ActionButton>
+        {filtersOpen && (
+          <div className="filter-panel">
+            <label htmlFor="activity-account">Account</label>
+            <select
+              id="activity-account"
+              value={account}
+              onChange={(e) => setAccount(e.target.value)}
+            >
+              <option value="all">All accounts</option>
+              {accounts.map((a) => (
+                <option value={a.id} key={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+            <label htmlFor="activity-year">Year</label>
+            <select
+              id="activity-year"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+            >
+              <option value="all">All years</option>
+              {years.map((y) => (
+                <option key={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        <AnchoredMenu
+          label="Actions"
+          items={[
+            { label: "Import CSV", onSelect: (el) => onImport(el!) },
+            {
+              label: exporting ? "Exporting…" : "Export CSV",
+              disabled: !rows.length || exporting,
+              onSelect: exportCsv,
+            },
+          ]}
+        />
       </div>
       {exportError && (
         <p className="form-error" role="alert">
@@ -3757,12 +4819,20 @@ function ActivityView({
             from = group.find((x) => x.amountCents < 0),
             to = group.find((x) => x.amountCents > 0);
           return (
-            <button
+            <div
               data-search-kind="Activity"
               data-search-id={row.entryId}
               className="transaction transaction-action"
               key={row.entryId}
-              onClick={() => onEdit(group)}
+              role="group"
+              tabIndex={0}
+              onClick={(event) => onEdit(group, event.currentTarget)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onEdit(group, event.currentTarget);
+                }
+              }}
               aria-label={`Edit ${row.description || row.kind}`}
             >
               <span className="transaction-icon">
@@ -3788,7 +4858,26 @@ function ActivityView({
                   ? money(Math.abs(from?.amountCents ?? 0))
                   : money(row.amountCents)}
               </b>
-            </button>
+              <span
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <OverflowMenu
+                  label={`More actions for ${row.description || row.kind}`}
+                  items={[
+                    {
+                      label: "Edit transaction",
+                      onSelect: (el) => onEdit(group, el ?? undefined),
+                    },
+                    {
+                      label: "Delete transaction",
+                      destructive: true,
+                      onSelect: (el) => onDelete(group, el ?? undefined),
+                    },
+                  ]}
+                />
+              </span>
+            </div>
           );
         })}
         {!rows.length && (
@@ -3799,14 +4888,60 @@ function ActivityView({
           </p>
         )}
       </section>
-      <DetailDisclosure label="View breakdown" storageKey={preferenceKey}><div className="breakdown-grid"><Metric title="Income" value={money(filteredIncome)} change="Filtered activity" icon={ArrowDownRight}/><Metric title="Spending" value={money(filteredSpending)} change="Filtered activity" icon={ArrowUpRight} negative/><Metric title="Saved" value={money(filteredIncome-filteredSpending)} change="Income minus spending" icon={PiggyBank}/></div></DetailDisclosure>
+      <DetailDisclosure label="View breakdown" storageKey={preferenceKey}>
+        <div className="breakdown-grid">
+          <Metric
+            title="Income"
+            value={money(filteredIncome)}
+            change="Filtered activity"
+            icon={ArrowDownRight}
+          />
+          <Metric
+            title="Spending"
+            value={money(filteredSpending)}
+            change="Filtered activity"
+            icon={ArrowUpRight}
+            negative
+          />
+          <Metric
+            title="Saved"
+            value={money(filteredIncome - filteredSpending)}
+            change="Income minus spending"
+            icon={PiggyBank}
+          />
+          {filteredTaxes > 0 && (
+            <Metric
+              title="Taxes"
+              value={money(filteredTaxes)}
+              change="Tax-labeled spending"
+              icon={CircleDollarSign}
+              neutral
+            />
+          )}
+        </div>
+        {categoryDistribution.length > 0 && (
+          <div aria-label="Filtered spending by category">
+            <h3>Category distribution</h3>
+            {categoryDistribution.map(([name, value]) => (
+              <p key={name}>
+                <span>{name}</span> <strong>{money(value)}</strong>
+              </p>
+            ))}
+          </div>
+        )}
+      </DetailDisclosure>
     </div>
   );
 }
 
 const horizonLabel = (months: number) =>
   months % 12 === 0 ? `${months / 12}-year` : `${months}-month`;
-const projectionMonthLabel = (month:string) => new Date(`${month}-01T00:00:00Z`).toLocaleString(undefined,{month:"long",year:"numeric",timeZone:"UTC"});
+const projectionMonthLabel = (month: string) =>
+  new Date(`${month}-01T00:00:00Z`).toLocaleString(undefined, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 
 function RecurringDialog({
   state,
@@ -3845,13 +4980,27 @@ function RecurringDialog({
       String((record?.annualGrowthBps ?? 0) / 100),
     ),
     [growthCap, setGrowthCap] = useState(
-      record?.annualGrowthCapCents != null ? String(record.annualGrowthCapCents / 100) : "",
+      record?.annualGrowthCapCents != null
+        ? String(record.annualGrowthCapCents / 100)
+        : "",
     ),
     [taxTreatment, setTaxTreatment] = useState(record?.taxTreatment ?? "none"),
-    [incomeTaxCategory,setIncomeTaxCategory]=useState(record?.incomeTaxCategory??(record?.incomeType==="salary"?"wages":"taxable-nonwage")),
-    [ownerPersonId,setOwnerPersonId]=useState(record?.ownerPersonId??bootstrap.people[0]?.id??""),
-    [annualGrowthMonth,setAnnualGrowthMonth]=useState(record?.annualGrowthMonth??2);
-  const salary=kind==="income"&&available.find(category=>category.id===categoryId)?.name.trim().toLowerCase()==="salary";
+    [incomeTaxCategory, setIncomeTaxCategory] = useState(
+      record?.incomeTaxCategory ??
+        (record?.incomeType === "salary" ? "wages" : "taxable-nonwage"),
+    ),
+    [ownerPersonId, setOwnerPersonId] = useState(
+      record?.ownerPersonId ?? bootstrap.people[0]?.id ?? "",
+    ),
+    [annualGrowthMonth, setAnnualGrowthMonth] = useState(
+      record?.annualGrowthMonth ?? 2,
+    );
+  const salary =
+    kind === "income" &&
+    available
+      .find((category) => category.id === categoryId)
+      ?.name.trim()
+      .toLowerCase() === "salary";
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [confirmDelete, setConfirmDelete] = useState(false);
@@ -3884,8 +5033,15 @@ function RecurringDialog({
         "Enter an annual growth rate within the supported range.",
       );
     if (salary && growthCap && (capCents == null || capCents < cents))
-      return setError("Enter a salary cap equal to or greater than the starting annual salary.");
-    if(kind==="income"&&(salary||incomeTaxCategory==="wages")&&!ownerPersonId)return setError("Select the household person who earns these wages.");
+      return setError(
+        "Enter a salary cap equal to or greater than the starting annual salary.",
+      );
+    if (
+      kind === "income" &&
+      (salary || incomeTaxCategory === "wages") &&
+      !ownerPersonId
+    )
+      return setError("Select the household person who earns these wages.");
     if (
       taxTreatment === "pretax" &&
       (kind !== "expense" ||
@@ -3908,11 +5064,18 @@ function RecurringDialog({
         endDate: endDate || null,
         annualGrowthBps: bps,
         taxTreatment,
-        incomeType:salary?"salary" as const:"ordinary" as const,
-        incomeTaxCategory:salary?"wages" as const:kind==="income"?incomeTaxCategory:undefined,
-        ownerPersonId:kind==="income"&&(salary||incomeTaxCategory==="wages")?ownerPersonId:null,
-        annualGrowthMonth:salary?annualGrowthMonth:null,
-        annualGrowthCapCents:salary?capCents:null,
+        incomeType: salary ? ("salary" as const) : ("ordinary" as const),
+        incomeTaxCategory: salary
+          ? ("wages" as const)
+          : kind === "income"
+            ? incomeTaxCategory
+            : undefined,
+        ownerPersonId:
+          kind === "income" && (salary || incomeTaxCategory === "wages")
+            ? ownerPersonId
+            : null,
+        annualGrowthMonth: salary ? annualGrowthMonth : null,
+        annualGrowthCapCents: salary ? capCents : null,
       };
       if (record)
         await repository.updateRecurring?.({
@@ -3948,7 +5111,7 @@ function RecurringDialog({
   return (
     <div className="modal-backdrop">
       <section
-        className="card modal entry-modal"
+        className="card entry-modal side-sheet"
         role={confirmDelete ? "alertdialog" : "dialog"}
         aria-modal="true"
         aria-labelledby="recurring-title"
@@ -4004,7 +5167,16 @@ function RecurringDialog({
               <select
                 aria-label="Recurring category"
                 value={categoryId}
-                onChange={(e) => {setCategoryId(e.target.value);if(bootstrap.categories.find(category=>category.id===e.target.value)?.name.trim().toLowerCase()==="salary")setFrequency("monthly")}}
+                onChange={(e) => {
+                  setCategoryId(e.target.value);
+                  if (
+                    bootstrap.categories
+                      .find((category) => category.id === e.target.value)
+                      ?.name.trim()
+                      .toLowerCase() === "salary"
+                  )
+                    setFrequency("monthly");
+                }}
               >
                 {available.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -4013,24 +5185,59 @@ function RecurringDialog({
                 ))}
               </select>
             </label>
-            {kind==="income"&&!salary&&<label>Tax category<select value={incomeTaxCategory} onChange={event=>setIncomeTaxCategory(event.target.value as typeof incomeTaxCategory)}><option value="taxable-nonwage">Taxable non-wage income</option><option value="wages">W-2 wages</option><option value="nontaxable">Nontaxable income</option></select></label>}
-            {kind==="income"&&(salary||incomeTaxCategory==="wages")&&<label>Employee / owner<select value={ownerPersonId} onChange={event=>setOwnerPersonId(event.target.value)}><option value="">Select…</option>{bootstrap.people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label>}
-            {!salary&&<label>
-              Account (optional)
-              <select
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-              >
-                <option value="">No specific account</option>
-                {bootstrap.accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
+            {kind === "income" && !salary && (
+              <label>
+                Tax category
+                <select
+                  value={incomeTaxCategory}
+                  onChange={(event) =>
+                    setIncomeTaxCategory(
+                      event.target.value as typeof incomeTaxCategory,
+                    )
+                  }
+                >
+                  <option value="taxable-nonwage">
+                    Taxable non-wage income
                   </option>
-                ))}
-              </select>
-            </label>}
+                  <option value="wages">W-2 wages</option>
+                  <option value="nontaxable">Nontaxable income</option>
+                </select>
+              </label>
+            )}
+            {kind === "income" && (salary || incomeTaxCategory === "wages") && (
+              <label>
+                Employee / owner
+                <select
+                  value={ownerPersonId}
+                  onChange={(event) => setOwnerPersonId(event.target.value)}
+                >
+                  <option value="">Select…</option>
+                  {bootstrap.people.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {!salary && (
+              <label>
+                Account (optional)
+                <select
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                >
+                  <option value="">No specific account</option>
+                  {bootstrap.accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label>
-              {salary?"Annual salary (USD)":"Amount (USD)"}
+              {salary ? "Annual salary (USD)" : "Amount (USD)"}
               <input
                 required
                 inputMode="decimal"
@@ -4038,21 +5245,23 @@ function RecurringDialog({
                 onChange={(e) => setAmount(e.target.value)}
               />
             </label>
-            {!salary&&<label>
-              Frequency
-              <select
-                value={frequency}
-                onChange={(e) =>
-                  setFrequency(e.target.value as typeof frequency)
-                }
-              >
-                <option value="weekly">Weekly</option>
-                <option value="biweekly">Every two weeks</option>
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="annual">Annual</option>
-              </select>
-            </label>}
+            {!salary && (
+              <label>
+                Frequency
+                <select
+                  value={frequency}
+                  onChange={(e) =>
+                    setFrequency(e.target.value as typeof frequency)
+                  }
+                >
+                  <option value="weekly">Weekly</option>
+                  <option value="biweekly">Every two weeks</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="annual">Annual</option>
+                </select>
+              </label>
+            )}
             <label>
               Start date
               <input
@@ -4080,18 +5289,42 @@ function RecurringDialog({
                 onChange={(e) => setGrowth(e.target.value)}
               />
             </label>
-            {salary&&<label>
-              Maximum annual salary (USD, optional)
-              <input
-                aria-label="Maximum annual salary (USD, optional)"
-                inputMode="decimal"
-                value={growthCap}
-                onChange={(e) => setGrowthCap(e.target.value)}
-              />
-              <small>Annual raises stop once the projected salary reaches this ceiling.</small>
-            </label>}
-            {salary&&<label>Annual raise month<select value={annualGrowthMonth} onChange={event=>setAnnualGrowthMonth(Number(event.target.value))}>{Array.from({length:12},(_,index)=><option key={index+1} value={index+1}>{new Date(2026,index,1).toLocaleString(undefined,{month:"long"})}</option>)}</select></label>}
-            {!salary&&<label>
+            {salary && (
+              <label>
+                Maximum annual salary (USD, optional)
+                <input
+                  aria-label="Maximum annual salary (USD, optional)"
+                  inputMode="decimal"
+                  value={growthCap}
+                  onChange={(e) => setGrowthCap(e.target.value)}
+                />
+                <small>
+                  Annual raises stop once the projected salary reaches this
+                  ceiling.
+                </small>
+              </label>
+            )}
+            {salary && (
+              <label>
+                Annual raise month
+                <select
+                  value={annualGrowthMonth}
+                  onChange={(event) =>
+                    setAnnualGrowthMonth(Number(event.target.value))
+                  }
+                >
+                  {Array.from({ length: 12 }, (_, index) => (
+                    <option key={index + 1} value={index + 1}>
+                      {new Date(2026, index, 1).toLocaleString(undefined, {
+                        month: "long",
+                      })}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {!salary && (
+              <label>
                 Tax treatment
                 <select
                   value={taxTreatment}
@@ -4114,7 +5347,8 @@ function RecurringDialog({
                   income-tax wages, but not Social Security or Medicare wages.
                   It requires a retirement account.
                 </small>
-            </label>}
+              </label>
+            )}
             <div className="actions">
               {record && (
                 <button
@@ -4386,127 +5620,1252 @@ type PlanViewProps = {
   onEditRecurring: (entry: RecurringEntry, el: HTMLElement) => void;
   onAddScenario: (el: HTMLElement) => void;
   onEditScenario: (el: HTMLElement) => void;
-  onPlanScenario: (el: HTMLElement) => void;
+  onPlanScenario: (el: HTMLElement, focusedEntry?: "event" | "contribution") => void;
   selectedSeries: string;
-  onSelectSeries: (id:string) => void;
-  range: 5|10|15|20|"max";
-  onRange: (range:5|10|15|20|"max") => void;
+  onSelectSeries: (id: string) => void;
+  range: 5 | 10 | 15 | 20 | "max";
+  onRange: (range: 5 | 10 | 15 | 20 | "max") => void;
+  preferenceKey: string;
 };
 
-type WealthSeries = { id:string; name:string; group:"net-worth"|"account"|"asset"|"private-stock"|"debt"; component?:"vested"|"unvested" };
+type WealthSeries = {
+  id: string;
+  name: string;
+  group: "net-worth" | "account" | "asset" | "private-stock" | "debt";
+  component?: "vested" | "unvested";
+};
 
-function PlanView(props:PlanViewProps) {
-  const {projections,scenarios,selectedScenarioId,onSelectScenario,snapshot,recurring,categories,accounts,onAddRecurring,onEditRecurring,onAddScenario,onEditScenario,onPlanScenario,selectedSeries:selected,onSelectSeries:setSelected,range,onRange:setRange}=props;
-  const [tab,setTab]=useState<"wealth"|"cash-flow"|"contributions"|"setup">("wealth");
-  const [activePoint,setActivePoint]=useState<number|null>(null);
-  const [selectedCashFlowSeries,setSelectedCashFlowSeries]=useState<string[]>(["surplus"]);
-  const [activeCashFlowPoint,setActiveCashFlowPoint]=useState<number|null>(null);
-  const scenario=scenarios.find(item=>item.id===selectedScenarioId)??scenarios[0]!;
-  const privateAssets=snapshot.assets.filter(asset=>asset.privateStock||asset.equityHolding);
-  const ordinaryAssets=snapshot.assets.filter(asset=>!asset.privateStock&&!asset.equityHolding);
-  const series:WealthSeries[]=[
-    {id:"net-worth",name:"Net Worth",group:"net-worth"},
-    ...snapshot.accounts.map(item=>({id:`account:${item.id}`,name:item.name,group:"account" as const})),
-    ...ordinaryAssets.map(item=>({id:`asset:${item.id}`,name:item.name,group:"asset" as const})),
-    ...privateAssets.flatMap(item=>([
-      {id:`private:${item.id}:vested`,name:`${item.name} — Vested`,group:"private-stock" as const,component:"vested" as const},
-      {id:`private:${item.id}:unvested`,name:`${item.name} — Unvested`,group:"private-stock" as const,component:"unvested" as const},
-    ])),
-    ...snapshot.liabilities.map(item=>({id:`debt:${item.id}`,name:item.name,group:"debt" as const})),
+function PlanView(props: PlanViewProps) {
+  const {
+    projections,
+    scenarios,
+    selectedScenarioId,
+    onSelectScenario,
+    snapshot,
+    recurring,
+    categories,
+    accounts,
+    onAddRecurring,
+    onEditRecurring,
+    onAddScenario,
+    onEditScenario,
+    onPlanScenario,
+    selectedSeries: selected,
+    onSelectSeries: setSelected,
+    range,
+    onRange: setRange,
+    preferenceKey,
+  } = props;
+  const [tab, setTab] = useState<
+    "wealth" | "cash-flow" | "contributions" | "setup"
+  >("wealth");
+  const [activePoint, setActivePoint] = useState<number | null>(null);
+  const [selectedCashFlowSeries, setSelectedCashFlowSeries] = useState<
+    string[]
+  >(["surplus"]);
+  const [activeCashFlowPoint, setActiveCashFlowPoint] = useState<number | null>(
+    null,
+  );
+  const scenario =
+    scenarios.find((item) => item.id === selectedScenarioId) ?? scenarios[0]!;
+  const privateAssets = snapshot.assets.filter(
+    (asset) => asset.privateStock || asset.equityHolding,
+  );
+  const ordinaryAssets = snapshot.assets.filter(
+    (asset) => !asset.privateStock && !asset.equityHolding,
+  );
+  const series: WealthSeries[] = [
+    { id: "net-worth", name: "Net Worth", group: "net-worth" },
+    ...snapshot.accounts.map((item) => ({
+      id: `account:${item.id}`,
+      name: item.name,
+      group: "account" as const,
+    })),
+    ...ordinaryAssets.map((item) => ({
+      id: `asset:${item.id}`,
+      name: item.name,
+      group: "asset" as const,
+    })),
+    ...privateAssets.flatMap((item) => [
+      {
+        id: `private:${item.id}:vested`,
+        name: `${item.name} — Vested`,
+        group: "private-stock" as const,
+        component: "vested" as const,
+      },
+      {
+        id: `private:${item.id}:unvested`,
+        name: `${item.name} — Unvested`,
+        group: "private-stock" as const,
+        component: "unvested" as const,
+      },
+    ]),
+    ...snapshot.liabilities.map((item) => ({
+      id: `debt:${item.id}`,
+      name: item.name,
+      group: "debt" as const,
+    })),
   ];
-  useEffect(()=>{if(!series.some(item=>item.id===selected))setSelected("net-worth");},[selected,series.map(item=>item.id).join("|")]);
-  const currentDate=localIsoDate();
-  const currentValue=(item:WealthSeries)=>{
-    if(item.group==="net-worth")return snapshot.accounts.reduce((sum,x)=>sum+x.balanceCents,0)+snapshot.assets.reduce((sum,x)=>sum+currentAssetValue(x,currentDate),0)-snapshot.liabilities.reduce((sum,x)=>sum+x.balanceCents,0);
-    const [,id,component]=item.id.split(":");
-    if(item.group==="account")return snapshot.accounts.find(x=>x.id===id)?.balanceCents??0;
-    if(item.group==="asset")return snapshot.assets.find(x=>x.id===id)?.valueCents??0;
-    if(item.group==="debt")return snapshot.liabilities.find(x=>x.id===id)?.balanceCents??0;
-    const asset=snapshot.assets.find(x=>x.id===id);if(!asset)return 0;const vested=asset.equityHolding?equityVestedValue(asset,currentDate):vestedAssetValue(asset,currentDate),total=asset.equityHolding?asset.equityHolding.grants.reduce((sum,grant)=>sum+valueForUnits(grant.unitsMicros,projectedSharePrice(asset.equityHolding!,currentDate)),0):asset.valueCents;return component==="vested"?vested:total-vested;
+  useEffect(() => {
+    if (!series.some((item) => item.id === selected)) setSelected("net-worth");
+  }, [selected, series.map((item) => item.id).join("|")]);
+  const currentDate = localIsoDate();
+  const currentValue = (item: WealthSeries) => {
+    if (item.group === "net-worth")
+      return (
+        snapshot.accounts.reduce((sum, x) => sum + x.balanceCents, 0) +
+        snapshot.assets.reduce(
+          (sum, x) => sum + currentAssetValue(x, currentDate),
+          0,
+        ) -
+        snapshot.liabilities.reduce((sum, x) => sum + x.balanceCents, 0)
+      );
+    const [, id, component] = item.id.split(":");
+    if (item.group === "account")
+      return snapshot.accounts.find((x) => x.id === id)?.balanceCents ?? 0;
+    if (item.group === "asset")
+      return snapshot.assets.find((x) => x.id === id)?.valueCents ?? 0;
+    if (item.group === "debt")
+      return snapshot.liabilities.find((x) => x.id === id)?.balanceCents ?? 0;
+    const asset = snapshot.assets.find((x) => x.id === id);
+    if (!asset) return 0;
+    const vested = asset.equityHolding
+        ? equityVestedValue(asset, currentDate)
+        : vestedAssetValue(asset, currentDate),
+      total = asset.equityHolding
+        ? asset.equityHolding.grants.reduce(
+            (sum, grant) =>
+              sum +
+              valueForUnits(
+                grant.unitsMicros,
+                projectedSharePrice(asset.equityHolding!, currentDate),
+              ),
+            0,
+          )
+        : asset.valueCents;
+    return component === "vested" ? vested : total - vested;
   };
-  const projectedValue=(item:WealthSeries,month:(typeof projections)[number]["months"][number])=>{
-    if(item.group==="net-worth")return month.netWorthCents??0;
-    const [,id,component]=item.id.split(":");
-    if(item.group==="account")return month.balances?.accounts[id]??0;
-    if(item.group==="asset")return month.balances?.assets[id]??0;
-    if(item.group==="debt")return month.balances?.liabilities[id]??0;
-    const value=month.balances?.privateStock[id];return component==="vested"?(value?.vestedCents??0):(value?.unvestedCents??0);
+  const projectedValue = (
+    item: WealthSeries,
+    month: (typeof projections)[number]["months"][number],
+  ) => {
+    if (item.group === "net-worth") return month.netWorthCents ?? 0;
+    const [, id, component] = item.id.split(":");
+    if (item.group === "account") return month.balances?.accounts[id] ?? 0;
+    if (item.group === "asset") return month.balances?.assets[id] ?? 0;
+    if (item.group === "debt") return month.balances?.liabilities[id] ?? 0;
+    const value = month.balances?.privateStock[id];
+    return component === "vested"
+      ? (value?.vestedCents ?? 0)
+      : (value?.unvestedCents ?? 0);
   };
-  const annualRows=projections.map(year=>({year:year.year,month:[...year.months].reverse().find(item=>item.balances)})).filter(row=>row.month) as {year:number;month:(typeof projections)[number]["months"][number]}[];
-  const visibleRows=range==="max"?annualRows:annualRows.slice(0,range);
-  const activeSeries=series.find(item=>item.id===selected)??series[0];
-  let estimatedWealthStart=currentValue(activeSeries);
-  const estimatedWealthPoints=visibleRows.flatMap(row=>{const months=projections.find(year=>year.year===row.year)?.months??[],ending=projectedValue(activeSeries,row.month),result=months.map((month,index)=>({label:projectionMonthLabel(month.month),value:Math.round(estimatedWealthStart+(ending-estimatedWealthStart)*(index+1)/months.length)}));estimatedWealthStart=ending;return result});
-  const points=[{label:"Current",value:currentValue(activeSeries)},...estimatedWealthPoints];
-  const first=points[0]?.value??0,last=points.at(-1)?.value??first,change=last-first,percent=first===0?null:Math.round(change/Math.abs(first)*1000)/10;
-  const values=points.map(point=>point.value),min=Math.min(...values,0),max=Math.max(...values,0),span=Math.max(1,max-min);
-  const coords=points.map((point,index)=>({x:points.length===1?50:4+index*92/(points.length-1),y:8+(max-point.value)*76/span,...point}));
-  const chartTickYs=[8,27,46,65,84];
-  const wealthValueTicks=chartTickYs.map(y=>({y,value:Math.round(max-(y-8)*span/76)}));
-  const yearTickStep=visibleRows.length>20?5:visibleRows.length>10?2:1;
-  let wealthMonthOffset=0;
-  const wealthYearTicks=visibleRows.map(row=>{wealthMonthOffset+=projections.find(year=>year.year===row.year)?.months.length??0;return {label:String(row.year),x:4+wealthMonthOffset*92/Math.max(1,points.length-1)}}).filter((_,index)=>index%yearTickStep===0||index===visibleRows.length-1);
-  const path=coords.map((point,index)=>`${index?"L":"M"} ${point.x} ${point.y}`).join(" ");
-  const homeCosts=snapshot.assets.filter(asset=>{
-    const housing=asset.housingCosts,mortgage=snapshot.liabilities.some(item=>item.mortgage?.assetId===asset.id);
-    return Boolean(housing&&(mortgage||asset.purchaseDate||asset.purchasePriceCents||housing.propertyTaxRateBps||housing.insuranceMonthlyCents||housing.hoaMonthlyCents));
-  }).map(asset=>{
-    const mortgage=snapshot.liabilities.find(item=>item.mortgage?.assetId===asset.id),housing=asset.housingCosts!;
-    const principalAndInterest=mortgage?.minimumPaymentCents??0,propertyTax=Math.round(californiaAssessedValue(asset,localIsoDate().slice(0,7))*housing.propertyTaxRateBps/120000),insurance=housing.insuranceMonthlyCents,hoa=housing.hoaMonthlyCents;
-    return {id:asset.id,name:asset.name,principalAndInterest,propertyTax,insurance,hoa,total:principalAndInterest+propertyTax+insurance+hoa};
+  const annualRows = projections
+    .map((year) => ({
+      year: year.year,
+      month: [...year.months].reverse().find((item) => item.balances),
+    }))
+    .filter((row) => row.month) as {
+    year: number;
+    month: (typeof projections)[number]["months"][number];
+  }[];
+  const visibleRows = range === "max" ? annualRows : annualRows.slice(0, range);
+  const activeSeries = series.find((item) => item.id === selected) ?? series[0];
+  let estimatedWealthStart = currentValue(activeSeries);
+  const estimatedWealthPoints = visibleRows.flatMap((row) => {
+    const months =
+        projections.find((year) => year.year === row.year)?.months ?? [],
+      ending = projectedValue(activeSeries, row.month),
+      result = months.map((month, index) => ({
+        label: projectionMonthLabel(month.month),
+        value: Math.round(
+          estimatedWealthStart +
+            ((ending - estimatedWealthStart) * (index + 1)) / months.length,
+        ),
+      }));
+    estimatedWealthStart = ending;
+    return result;
   });
-  const selectSeries=(id:string)=>{setSelected(id);setActivePoint(null)};
-  const positiveMonths=projections[0]?.months.filter(month=>month.surplusCents>0)??[],averageMonthlySurplus=positiveMonths.length?positiveMonths.reduce((sum,month)=>sum+month.surplusCents,0)/positiveMonths.length:0,effectiveAssignedBps=effectiveContributionBps(scenario?.contributions??[],averageMonthlySurplus);
-  const cashFlowSeries=[
-    {id:"income",name:"Income",color:"#547ea8",value:(year:(typeof projections)[number])=>year.incomeCents},
-    {id:"spending",name:"Spending",color:"#9a7848",value:(year:(typeof projections)[number])=>year.expenseCents},
-    {id:"cash-taxes",name:"Cash taxes",color:"#a65e58",value:(year:(typeof projections)[number])=>year.cashTaxCents},
-    {id:"rsu-taxes",name:"RSU sell-to-cover",color:"#8669a5",value:(year:(typeof projections)[number])=>year.rsuSellToCoverTaxCents},
-    {id:"surplus",name:"Surplus",color:"#6d9b72",value:(year:(typeof projections)[number])=>year.surplusCents},
+  const points = [
+    { label: "Current", value: currentValue(activeSeries) },
+    ...estimatedWealthPoints,
   ];
-  const visibleCashFlowYears=range==="max"?projections:projections.slice(0,range);
-  const estimatedCashFlowMonths=visibleCashFlowYears.flatMap((year,yearIndex)=>year.months.map((month,monthIndex)=>({month,year,yearIndex,monthIndex,monthsInYear:year.months.length})));
-  const activeCashSeries=cashFlowSeries.filter(item=>selectedCashFlowSeries.includes(item.id));
-  const estimatedCashValue=(item:(typeof cashFlowSeries)[number],point:(typeof estimatedCashFlowMonths)[number])=>{const ending=item.value(point.year),previous=point.yearIndex?item.value(visibleCashFlowYears[point.yearIndex-1]):ending;return Math.round(previous+(ending-previous)*(point.monthIndex+1)/point.monthsInYear)};
-  const cashValues=activeCashSeries.flatMap(item=>estimatedCashFlowMonths.map(point=>estimatedCashValue(item,point))),cashMin=Math.min(...cashValues,0),cashMax=Math.max(...cashValues,0),cashSpan=Math.max(1,cashMax-cashMin);
-  const cashCoords=(item:(typeof cashFlowSeries)[number])=>estimatedCashFlowMonths.map((point,index)=>{const value=estimatedCashValue(item,point);return {x:estimatedCashFlowMonths.length===1?50:4+index*92/(estimatedCashFlowMonths.length-1),y:8+(cashMax-value)*76/cashSpan,label:projectionMonthLabel(point.month.month),value}});
-  const cashValueTicks=chartTickYs.map(y=>({y,value:Math.round(cashMax-(y-8)*cashSpan/76)}));
-  let cashMonthOffset=0;
-  const cashYearTicks=visibleCashFlowYears.map(year=>{cashMonthOffset+=year.months.length;return {label:String(year.year),x:4+(cashMonthOffset-1)*92/Math.max(1,estimatedCashFlowMonths.length-1)}}).filter((_,index)=>index%yearTickStep===0||index===visibleCashFlowYears.length-1);
-  const toggleCashFlowSeries=(id:string)=>{setSelectedCashFlowSeries(current=>current.includes(id)?current.length===1?current:current.filter(item=>item!==id):[...current,id]);setActiveCashFlowPoint(null)};
-  const cell=(item:WealthSeries,value:number,key:string)=><td key={key} className={selected===item.id?"selected":undefined}><button onClick={()=>selectSeries(item.id)} aria-label={`Select ${item.name}, ${money(value)}`} title={money(value)}>{money(value,true)}{item.group==="debt"&&<small> owed</small>}</button></td>;
-  return <div className="content plan-workspace">
-    <div className="plan-toolbar">
-      <div><span className="label assumption">Plan</span><h2>{scenario?.name??"Baseline"}</h2></div>
-      <label>Scenario<select data-search-kind="Scenario" data-search-id={selectedScenarioId} aria-label="Active scenario" value={selectedScenarioId} onChange={event=>onSelectScenario(event.target.value)}>{scenarios.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+  const first = points[0]?.value ?? 0,
+    last = points.at(-1)?.value ?? first,
+    change = last - first,
+    percent =
+      first === 0 ? null : Math.round((change / Math.abs(first)) * 1000) / 10;
+  const values = points.map((point) => point.value),
+    min = Math.min(...values, 0),
+    max = Math.max(...values, 0),
+    span = Math.max(1, max - min);
+  const coords = points.map((point, index) => ({
+    x: points.length === 1 ? 50 : 4 + (index * 92) / (points.length - 1),
+    y: 8 + ((max - point.value) * 76) / span,
+    ...point,
+  }));
+  const chartTickYs = [8, 27, 46, 65, 84];
+  const wealthValueTicks = chartTickYs.map((y) => ({
+    y,
+    value: Math.round(max - ((y - 8) * span) / 76),
+  }));
+  const yearTickStep =
+    visibleRows.length > 20 ? 5 : visibleRows.length > 10 ? 2 : 1;
+  let wealthMonthOffset = 0;
+  const wealthYearTicks = visibleRows
+    .map((row) => {
+      wealthMonthOffset +=
+        projections.find((year) => year.year === row.year)?.months.length ?? 0;
+      return {
+        label: String(row.year),
+        x: 4 + (wealthMonthOffset * 92) / Math.max(1, points.length - 1),
+      };
+    })
+    .filter(
+      (_, index) =>
+        index % yearTickStep === 0 || index === visibleRows.length - 1,
+    );
+  const path = coords
+    .map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`)
+    .join(" ");
+  const homeCosts = snapshot.assets
+    .filter((asset) => {
+      const housing = asset.housingCosts,
+        mortgage = snapshot.liabilities.some(
+          (item) => item.mortgage?.assetId === asset.id,
+        );
+      return Boolean(
+        housing &&
+          (mortgage ||
+            asset.purchaseDate ||
+            asset.purchasePriceCents ||
+            housing.propertyTaxRateBps ||
+            housing.insuranceMonthlyCents ||
+            housing.hoaMonthlyCents),
+      );
+    })
+    .map((asset) => {
+      const mortgage = snapshot.liabilities.find(
+          (item) => item.mortgage?.assetId === asset.id,
+        ),
+        housing = asset.housingCosts!;
+      const principalAndInterest = mortgage?.minimumPaymentCents ?? 0,
+        propertyTax = Math.round(
+          (californiaAssessedValue(asset, localIsoDate().slice(0, 7)) *
+            housing.propertyTaxRateBps) /
+            120000,
+        ),
+        insurance = housing.insuranceMonthlyCents,
+        hoa = housing.hoaMonthlyCents;
+      return {
+        id: asset.id,
+        name: asset.name,
+        principalAndInterest,
+        propertyTax,
+        insurance,
+        hoa,
+        total: principalAndInterest + propertyTax + insurance + hoa,
+      };
+    });
+  const selectSeries = (id: string) => {
+    setSelected(id);
+    setActivePoint(null);
+  };
+  const positiveMonths =
+      projections[0]?.months.filter((month) => month.surplusCents > 0) ?? [],
+    averageMonthlySurplus = positiveMonths.length
+      ? positiveMonths.reduce((sum, month) => sum + month.surplusCents, 0) /
+        positiveMonths.length
+      : 0,
+    effectiveAssignedBps = effectiveContributionBps(
+      scenario?.contributions ?? [],
+      averageMonthlySurplus,
+    );
+  const cashFlowSeries = [
+    {
+      id: "income",
+      name: "Income",
+      color: "#547ea8",
+      value: (year: (typeof projections)[number]) => year.incomeCents,
+    },
+    {
+      id: "spending",
+      name: "Spending",
+      color: "#9a7848",
+      value: (year: (typeof projections)[number]) => year.expenseCents,
+    },
+    {
+      id: "cash-taxes",
+      name: "Cash taxes",
+      color: "#a65e58",
+      value: (year: (typeof projections)[number]) => year.cashTaxCents,
+    },
+    {
+      id: "rsu-taxes",
+      name: "RSU sell-to-cover",
+      color: "#8669a5",
+      value: (year: (typeof projections)[number]) =>
+        year.rsuSellToCoverTaxCents,
+    },
+    {
+      id: "surplus",
+      name: "Surplus",
+      color: "#6d9b72",
+      value: (year: (typeof projections)[number]) => year.surplusCents,
+    },
+  ];
+  const visibleCashFlowYears =
+    range === "max" ? projections : projections.slice(0, range);
+  const estimatedCashFlowMonths = visibleCashFlowYears.flatMap(
+    (year, yearIndex) =>
+      year.months.map((month, monthIndex) => ({
+        month,
+        year,
+        yearIndex,
+        monthIndex,
+        monthsInYear: year.months.length,
+      })),
+  );
+  const activeCashSeries = cashFlowSeries.filter((item) =>
+    selectedCashFlowSeries.includes(item.id),
+  );
+  const estimatedCashValue = (
+    item: (typeof cashFlowSeries)[number],
+    point: (typeof estimatedCashFlowMonths)[number],
+  ) => {
+    const ending = item.value(point.year),
+      previous = point.yearIndex
+        ? item.value(visibleCashFlowYears[point.yearIndex - 1])
+        : ending;
+    return Math.round(
+      previous +
+        ((ending - previous) * (point.monthIndex + 1)) / point.monthsInYear,
+    );
+  };
+  const cashValues = activeCashSeries.flatMap((item) =>
+      estimatedCashFlowMonths.map((point) => estimatedCashValue(item, point)),
+    ),
+    cashMin = Math.min(...cashValues, 0),
+    cashMax = Math.max(...cashValues, 0),
+    cashSpan = Math.max(1, cashMax - cashMin);
+  const cashCoords = (item: (typeof cashFlowSeries)[number]) =>
+    estimatedCashFlowMonths.map((point, index) => {
+      const value = estimatedCashValue(item, point);
+      return {
+        x:
+          estimatedCashFlowMonths.length === 1
+            ? 50
+            : 4 + (index * 92) / (estimatedCashFlowMonths.length - 1),
+        y: 8 + ((cashMax - value) * 76) / cashSpan,
+        label: projectionMonthLabel(point.month.month),
+        value,
+      };
+    });
+  const cashValueTicks = chartTickYs.map((y) => ({
+    y,
+    value: Math.round(cashMax - ((y - 8) * cashSpan) / 76),
+  }));
+  let cashMonthOffset = 0;
+  const cashYearTicks = visibleCashFlowYears
+    .map((year) => {
+      cashMonthOffset += year.months.length;
+      return {
+        label: String(year.year),
+        x:
+          4 +
+          ((cashMonthOffset - 1) * 92) /
+            Math.max(1, estimatedCashFlowMonths.length - 1),
+      };
+    })
+    .filter(
+      (_, index) =>
+        index % yearTickStep === 0 || index === visibleCashFlowYears.length - 1,
+    );
+  const toggleCashFlowSeries = (id: string) => {
+    setSelectedCashFlowSeries((current) =>
+      current.includes(id)
+        ? current.length === 1
+          ? current
+          : current.filter((item) => item !== id)
+        : [...current, id],
+    );
+    setActiveCashFlowPoint(null);
+  };
+  const cell = (item: WealthSeries, value: number, key: string) => (
+    <td key={key} className={selected === item.id ? "selected" : undefined}>
+      <button
+        onClick={() => selectSeries(item.id)}
+        aria-label={`Select ${item.name}, ${money(value)}`}
+        title={money(value)}
+      >
+        {money(value, true)}
+        {item.group === "debt" && <small> owed</small>}
+      </button>
+    </td>
+  );
+  return (
+    <div className="content plan-workspace">
+      <div className="plan-toolbar">
+        <div>
+          <span className="label assumption">Plan</span>
+          <h2>{scenario?.name ?? "Baseline"}</h2>
+        </div>
+        <div className="inline-actions">
+          <label>
+            Scenario
+            <select
+              data-search-kind="Scenario"
+              data-search-id={selectedScenarioId}
+              aria-label="Active scenario"
+              value={selectedScenarioId}
+              onChange={(event) => onSelectScenario(event.target.value)}
+            >
+              {scenarios.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <ActionButton
+            tier="primary"
+            onClick={(e) => onAddScenario(e.currentTarget)}
+          >
+            <Plus size={16} /> New scenario
+          </ActionButton>
+        </div>
+      </div>
+      <div className="plan-tabs" role="tablist" aria-label="Plan sections">
+        {(["wealth", "cash-flow", "contributions", "setup"] as const).map(
+          (item) => (
+            <button
+              key={item}
+              role="tab"
+              aria-selected={tab === item}
+              onClick={() => setTab(item)}
+            >
+              {
+                {
+                  wealth: "Outlook",
+                  "cash-flow": "Cash Flow",
+                  contributions: "Contributions",
+                  setup: "Scenario",
+                }[item]
+              }
+            </button>
+          ),
+        )}
+      </div>
+      <label className="compact-section-select">
+        Plan section
+        <select
+          value={tab}
+          onChange={(e) => setTab(e.target.value as typeof tab)}
+        >
+          <option value="wealth">Outlook</option>
+          <option value="cash-flow">Cash Flow</option>
+          <option value="contributions">Contributions</option>
+          <option value="setup">Scenario</option>
+        </select>
+      </label>
+      {tab === "wealth" && (
+        <>
+          <section
+            className={`wealth-chart card wide series-${activeSeries.group}`}
+            aria-labelledby="wealth-chart-title"
+          >
+            <div className="chart-heading">
+              <div>
+                <span className="label projected">Projected balance</span>
+                <h3 id="wealth-chart-title">{activeSeries.name}</h3>
+              </div>
+              <div className="chart-ranges" aria-label="Projection range">
+                {([5, 10, 15, 20, "max"] as const).map((item) => (
+                  <button
+                    key={item}
+                    aria-pressed={range === item}
+                    onClick={() => setRange(item)}
+                  >
+                    {item === "max" ? "Max" : `${item}Y`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="chart-y-axis" aria-hidden="true">
+              {wealthValueTicks.map((tick) => (
+                <span key={tick.y} style={{ top: `${tick.y}%` }}>
+                  {money(tick.value, true)}
+                </span>
+              ))}
+            </div>
+            <div className="chart-x-axis" aria-hidden="true">
+              {wealthYearTicks.map((tick) => (
+                <span key={tick.label} style={{ left: `${tick.x}%` }}>
+                  <i />
+                  {tick.label}
+                </span>
+              ))}
+            </div>
+            <div className="wealth-summary" aria-live="polite">
+              <strong>{money(first)}</strong>
+              <span>Current</span>
+              <strong>{money(last)}</strong>
+              <span>Ending</span>
+              <strong className={change >= 0 ? "positive" : "negative"}>
+                {change >= 0 ? "+" : ""}
+                {money(change)}{" "}
+                {percent === null
+                  ? "—"
+                  : `(${percent >= 0 ? "+" : ""}${percent}%)`}
+              </strong>
+              <span>Total balance change</span>
+            </div>
+            <div
+              className="chart-canvas"
+              role="slider"
+              tabIndex={0}
+              aria-label={`Explore estimated ${activeSeries.name} by month`}
+              aria-valuemin={0}
+              aria-valuemax={Math.max(0, coords.length - 1)}
+              aria-valuenow={activePoint ?? 0}
+              aria-valuetext={coords[activePoint ?? 0] ? `${coords[activePoint ?? 0].label}, ${money(coords[activePoint ?? 0].value)} estimated` : undefined}
+              onPointerMove={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect(),
+                  ratio = Math.max(
+                    0,
+                    Math.min(
+                      1,
+                      ((event.clientX - rect.left) / rect.width - 0.04) / 0.92,
+                    ),
+                  );
+                setActivePoint(Math.round(ratio * (coords.length - 1)));
+              }}
+              onPointerLeave={() => setActivePoint(null)}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
+                  return;
+                event.preventDefault();
+                setActivePoint((current) =>
+                  Math.max(
+                    0,
+                    Math.min(
+                      coords.length - 1,
+                      (current ?? 0) + (event.key === "ArrowRight" ? 1 : -1),
+                    ),
+                  ),
+                );
+              }}
+            >
+              <svg
+                viewBox="0 0 100 100"
+                role="img"
+                aria-label={`${activeSeries.name} projection from ${money(first)} to ${money(last)}`}
+                preserveAspectRatio="none"
+              >
+                <defs>
+                  <linearGradient
+                    id="wealth-chart-fill"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="0%"
+                      stopColor="var(--series)"
+                      stopOpacity=".18"
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor="var(--series)"
+                      stopOpacity=".015"
+                    />
+                  </linearGradient>
+                </defs>
+                {[8, 27, 46, 65, 84].map((y) => (
+                  <line
+                    key={y}
+                    className="chart-grid"
+                    x1="4"
+                    x2="96"
+                    y1={y}
+                    y2={y}
+                  />
+                ))}
+                <line
+                  className="chart-zero"
+                  x1="4"
+                  x2="96"
+                  y1={8 + (max * 76) / span}
+                  y2={8 + (max * 76) / span}
+                />
+                <path
+                  className="chart-area"
+                  d={`${path} L ${coords.at(-1)?.x ?? 96} 92 L 4 92 Z`}
+                />
+                <path className="chart-line" d={path} />
+              </svg>
+              {activePoint !== null && coords[activePoint] && (
+                <>
+                  <i
+                    className="chart-scrub-line"
+                    style={{ left: `${coords[activePoint].x}%` }}
+                  />
+                  <i
+                    className="chart-scrub-point"
+                    style={{
+                      left: `${coords[activePoint].x}%`,
+                      top: `${coords[activePoint].y}%`,
+                    }}
+                  />
+                  <output
+                    className="chart-tooltip"
+                    style={{
+                      left: `${coords[activePoint].x}%`,
+                      top: `${coords[activePoint].y}%`,
+                    }}
+                  >
+                    {coords[activePoint].label}
+                    <strong>
+                      {money(coords[activePoint].value)} estimated
+                    </strong>
+                  </output>
+                </>
+              )}
+            </div>
+          </section>
+          <DetailDisclosure label="View annual wealth data" storageKey={`${preferenceKey}:annual-wealth`}>
+          <section className="projection-sheet card wide" aria-label="Annual wealth projection">
+            <div className="sheet-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th rowSpan={3} className="year-column">
+                      Year
+                    </th>
+                    <th colSpan={1}>Net Worth</th>
+                    {snapshot.accounts.length > 0 && (
+                      <th colSpan={snapshot.accounts.length}>Accounts</th>
+                    )}
+                    {snapshot.assets.length > 0 && (
+                      <th
+                        colSpan={
+                          ordinaryAssets.length + privateAssets.length * 2
+                        }
+                      >
+                        Assets
+                      </th>
+                    )}
+                    {snapshot.liabilities.length > 0 && (
+                      <th colSpan={snapshot.liabilities.length}>Debts</th>
+                    )}
+                  </tr>
+                  <tr>
+                    <th
+                      rowSpan={2}
+                      className={
+                        selected === "net-worth" ? "selected" : undefined
+                      }
+                    >
+                      <button
+                        aria-pressed={selected === "net-worth"}
+                        onClick={() => selectSeries("net-worth")}
+                      >
+                        Net Worth
+                      </button>
+                    </th>
+                    {snapshot.accounts.map((item) => (
+                      <th
+                        rowSpan={2}
+                        key={item.id}
+                        className={
+                          selected === `account:${item.id}`
+                            ? "selected"
+                            : undefined
+                        }
+                      >
+                        <button
+                          aria-pressed={selected === `account:${item.id}`}
+                          onClick={() => selectSeries(`account:${item.id}`)}
+                        >
+                          {item.name}
+                        </button>
+                      </th>
+                    ))}
+                    {ordinaryAssets.map((item) => (
+                      <th
+                        rowSpan={2}
+                        key={item.id}
+                        className={
+                          selected === `asset:${item.id}`
+                            ? "selected"
+                            : undefined
+                        }
+                      >
+                        <button
+                          aria-pressed={selected === `asset:${item.id}`}
+                          onClick={() => selectSeries(`asset:${item.id}`)}
+                        >
+                          {item.name}
+                        </button>
+                      </th>
+                    ))}
+                    {privateAssets.map((item) => (
+                      <th colSpan={2} key={item.id}>
+                        <button
+                          aria-pressed={
+                            selected === `private:${item.id}:vested`
+                          }
+                          onClick={() =>
+                            selectSeries(`private:${item.id}:vested`)
+                          }
+                        >
+                          {item.name}
+                        </button>
+                      </th>
+                    ))}
+                    {snapshot.liabilities.map((item) => (
+                      <th
+                        rowSpan={2}
+                        key={item.id}
+                        className={
+                          selected === `debt:${item.id}`
+                            ? "selected"
+                            : undefined
+                        }
+                      >
+                        <button
+                          aria-pressed={selected === `debt:${item.id}`}
+                          onClick={() => selectSeries(`debt:${item.id}`)}
+                        >
+                          {item.name}
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    {privateAssets.flatMap((item) => [
+                      <th
+                        key={`${item.id}-v`}
+                        className={
+                          selected === `private:${item.id}:vested`
+                            ? "selected"
+                            : undefined
+                        }
+                      >
+                        <button
+                          aria-pressed={
+                            selected === `private:${item.id}:vested`
+                          }
+                          onClick={() =>
+                            selectSeries(`private:${item.id}:vested`)
+                          }
+                        >
+                          Vested
+                        </button>
+                      </th>,
+                      <th
+                        key={`${item.id}-u`}
+                        className={
+                          selected === `private:${item.id}:unvested`
+                            ? "selected"
+                            : undefined
+                        }
+                      >
+                        <button
+                          aria-pressed={
+                            selected === `private:${item.id}:unvested`
+                          }
+                          onClick={() =>
+                            selectSeries(`private:${item.id}:unvested`)
+                          }
+                        >
+                          Unvested
+                        </button>
+                      </th>,
+                    ])}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th className="year-column" scope="row">
+                      Current
+                    </th>
+                    {series.map((item) =>
+                      cell(item, currentValue(item), `current-${item.id}`),
+                    )}
+                  </tr>
+                  {visibleRows.map((row) => (
+                    <tr key={row.year}>
+                      <th className="year-column" scope="row">
+                        {row.year}
+                      </th>
+                      {series.map((item) =>
+                        cell(
+                          item,
+                          projectedValue(item, row.month),
+                          `${row.year}-${item.id}`,
+                        ),
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          </DetailDisclosure>
+        </>
+      )}
+      {tab === "cash-flow" && (
+        <>
+          <section
+            className="cash-flow-chart card wide"
+            aria-labelledby="cash-flow-chart-title"
+          >
+            <div className="chart-heading">
+              <div>
+                <span className="label projected">
+                  Projected annual cash flow
+                </span>
+                <h3 id="cash-flow-chart-title">
+                  {activeCashSeries.map((item) => item.name).join(", ")}
+                </h3>
+              </div>
+              <div
+                className="chart-ranges"
+                aria-label="Cash flow projection range"
+              >
+                {([5, 10, 15, 20, "max"] as const).map((item) => (
+                  <button
+                    key={item}
+                    aria-pressed={range === item}
+                    onClick={() => setRange(item)}
+                  >
+                    {item === "max" ? "Max" : `${item}Y`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="chart-y-axis" aria-hidden="true">
+              {cashValueTicks.map((tick) => (
+                <span key={tick.y} style={{ top: `${tick.y}%` }}>
+                  {money(tick.value, true)}
+                </span>
+              ))}
+            </div>
+            <div className="chart-x-axis" aria-hidden="true">
+              {cashYearTicks.map((tick) => (
+                <span key={tick.label} style={{ left: `${tick.x}%` }}>
+                  <i />
+                  {tick.label}
+                </span>
+              ))}
+            </div>
+            <div className="cash-flow-legend" aria-live="polite">
+              {activeCashSeries.map((item) => {
+                const firstYear = visibleCashFlowYears[0],
+                  lastYear = visibleCashFlowYears.at(-1);
+                return (
+                  <div key={item.id}>
+                    <i style={{ background: item.color }} />
+                    <span>{item.name}</span>
+                    <strong>
+                      {lastYear ? money(item.value(lastYear)) : "—"}
+                    </strong>
+                    <small>
+                      {firstYear && lastYear
+                        ? `${money(item.value(lastYear) - item.value(firstYear))} annual change`
+                        : "Ending annual value"}
+                    </small>
+                  </div>
+                );
+              })}
+            </div>
+            <div
+              className="chart-canvas"
+              role="slider"
+              tabIndex={0}
+              aria-label="Explore estimated monthly cash flow"
+              aria-valuemin={0}
+              aria-valuemax={Math.max(0, estimatedCashFlowMonths.length - 1)}
+              aria-valuenow={activeCashFlowPoint ?? 0}
+              aria-valuetext={estimatedCashFlowMonths[activeCashFlowPoint ?? 0] ? `${cashCoords(activeCashSeries[0])[activeCashFlowPoint ?? 0]?.label}, ${activeCashSeries.map(item => `${item.name} ${money(cashCoords(item)[activeCashFlowPoint ?? 0]?.value ?? 0)}`).join(", ")}` : undefined}
+              onPointerMove={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect(),
+                  ratio = Math.max(
+                    0,
+                    Math.min(
+                      1,
+                      ((event.clientX - rect.left) / rect.width - 0.04) / 0.92,
+                    ),
+                  );
+                setActiveCashFlowPoint(
+                  Math.round(ratio * (estimatedCashFlowMonths.length - 1)),
+                );
+              }}
+              onPointerLeave={() => setActiveCashFlowPoint(null)}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight")
+                  return;
+                event.preventDefault();
+                setActiveCashFlowPoint((current) =>
+                  Math.max(
+                    0,
+                    Math.min(
+                      estimatedCashFlowMonths.length - 1,
+                      (current ?? 0) + (event.key === "ArrowRight" ? 1 : -1),
+                    ),
+                  ),
+                );
+              }}
+            >
+              <svg
+                viewBox="0 0 100 100"
+                role="img"
+                aria-label={`Cash flow projection for ${activeCashSeries.map((item) => item.name).join(", ")}`}
+                preserveAspectRatio="none"
+              >
+                {[8, 27, 46, 65, 84].map((y) => (
+                  <line
+                    key={y}
+                    className="chart-grid"
+                    x1="4"
+                    x2="96"
+                    y1={y}
+                    y2={y}
+                  />
+                ))}
+                <line
+                  className="chart-zero"
+                  x1="4"
+                  x2="96"
+                  y1={8 + (cashMax * 76) / cashSpan}
+                  y2={8 + (cashMax * 76) / cashSpan}
+                />
+                {activeCashSeries.map((item) => {
+                  const coordinates = cashCoords(item),
+                    path = coordinates
+                      .map(
+                        (point, index) =>
+                          `${index ? "L" : "M"} ${point.x} ${point.y}`,
+                      )
+                      .join(" ");
+                  return (
+                    <g key={item.id} style={{ color: item.color }}>
+                      <path
+                        className="cash-chart-area"
+                        d={`${path} L ${coordinates.at(-1)?.x ?? 96} 92 L 4 92 Z`}
+                      />
+                      <path className="cash-chart-line" d={path} />
+                    </g>
+                  );
+                })}
+              </svg>
+              {activeCashFlowPoint !== null &&
+                estimatedCashFlowMonths[activeCashFlowPoint] && (
+                  <>
+                    <i
+                      className="chart-scrub-line"
+                      style={{
+                        left: `${cashCoords(activeCashSeries[0])[activeCashFlowPoint]?.x ?? 4}%`,
+                      }}
+                    />
+                    {activeCashSeries.map((item) => {
+                      const point = cashCoords(item)[activeCashFlowPoint];
+                      return point ? (
+                        <i
+                          key={item.id}
+                          className="chart-scrub-point"
+                          style={{
+                            left: `${point.x}%`,
+                            top: `${point.y}%`,
+                            borderColor: item.color,
+                          }}
+                        />
+                      ) : null;
+                    })}
+                    <output
+                      className="chart-tooltip cash-scrub-tooltip"
+                      style={{
+                        left: `${cashCoords(activeCashSeries[0])[activeCashFlowPoint]?.x ?? 4}%`,
+                        top: `${Math.min(...activeCashSeries.map((item) => cashCoords(item)[activeCashFlowPoint]?.y ?? 92))}%`,
+                      }}
+                    >
+                      {
+                        cashCoords(activeCashSeries[0])[activeCashFlowPoint]
+                          ?.label
+                      }
+                      {activeCashSeries.map((item) => (
+                        <strong key={item.id}>
+                          <i style={{ background: item.color }} />
+                          {item.name}:{" "}
+                          {money(
+                            cashCoords(item)[activeCashFlowPoint]?.value ?? 0,
+                          )}{" "}
+                          estimated
+                        </strong>
+                      ))}
+                    </output>
+                  </>
+                )}
+            </div>
+          </section>
+          <section className="card wide">
+            <div className="card-title">
+              <div>
+                <span className="label assumption">Inputs</span>
+                <h3>Income and spending</h3>
+              </div>
+              <AnchoredMenu
+                primary
+                label="Add cash flow"
+                icon={<Plus size={16} />}
+                items={[
+                  {
+                    label: "Income",
+                    onSelect: (el) => onAddRecurring("income", el!),
+                  },
+                  {
+                    label: "Expense",
+                    onSelect: (el) => onAddRecurring("expense", el!),
+                  },
+                ]}
+              />
+            </div>
+            <DetailDisclosure
+              label={`View income and expense details (${recurring.length + homeCosts.length})`}
+              storageKey={`${preferenceKey}:cash-flow-inputs`}
+            >
+              {recurring.map((entry) => {
+                const kind = categories.find(
+                  (c) => c.id === entry.categoryId,
+                )?.kind;
+                return (
+                  <button
+                    key={entry.id}
+                    className="transaction transaction-action"
+                    onClick={(e) => onEditRecurring(entry, e.currentTarget)}
+                  >
+                    <div>
+                      <strong>{entry.name}</strong>
+                      <small>
+                        {categories.find((c) => c.id === entry.categoryId)
+                          ?.name ?? "Uncategorized"}{" "}
+                        · {entry.frequency}
+                      </small>
+                    </div>
+                    <b>
+                      {money(
+                        kind === "income"
+                          ? entry.amountCents
+                          : -entry.amountCents,
+                      )}
+                    </b>
+                  </button>
+                );
+              })}
+              {homeCosts.map((home) => (
+                <div className="transaction" key={`home-${home.id}`}>
+                  <div>
+                    <strong>{home.name} housing</strong>
+                    <small>
+                      Automatic monthly expense · P&amp;I{" "}
+                      {money(home.principalAndInterest)} + property tax{" "}
+                      {money(home.propertyTax)} + insurance{" "}
+                      {money(home.insurance)}
+                      {home.hoa ? ` + HOA ${money(home.hoa)}` : ""}
+                    </small>
+                  </div>
+                  <b>{money(-home.total)}</b>
+                </div>
+              ))}
+            </DetailDisclosure>
+          </section>
+          <DetailDisclosure label="View annual cash flow data" storageKey={`${preferenceKey}:annual-cash-flow`}>
+          <section className="card wide">
+            <h3>Annual cash flow</h3>
+            <p className="muted">
+              Select one or more columns to compare them in the chart. Cash
+              taxes reduce projected household cash. RSU sell-to-cover taxes
+              reduce vested shares instead.
+            </p>
+            <div className="year-table cash-flow-table">
+              <div className="year-row table-head">
+                <span>Year</span>
+                {cashFlowSeries.map((item) => (
+                  <button
+                    key={item.id}
+                    aria-pressed={selectedCashFlowSeries.includes(item.id)}
+                    onClick={() => toggleCashFlowSeries(item.id)}
+                  >
+                    <i style={{ background: item.color }} />
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+              {visibleCashFlowYears.map((year) => (
+                <div className="year-row" key={year.year}>
+                  <span>{year.year}</span>
+                  <span>{money(year.incomeCents, true)}</span>
+                  <span>{money(year.expenseCents, true)}</span>
+                  <span>{money(year.cashTaxCents, true)}</span>
+                  <span>{money(year.rsuSellToCoverTaxCents, true)}</span>
+                  <strong>{money(year.surplusCents, true)}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+          </DetailDisclosure>
+          {projections.some((year) => year.taxLedger) && (
+            <DetailDisclosure label="View yearly tax ledger" storageKey={`${preferenceKey}:tax-ledger`}>
+            <section className="card wide">
+              <h3>Yearly tax ledger</h3>
+              {projections.map(
+                (year) =>
+                  year.taxLedger && (
+                    <details key={year.year}>
+                      <summary>
+                        {year.year} · full-year liability{" "}
+                        {money(year.taxLedger.fullYearLiabilityCents)} · future
+                        cash flow {money(year.taxLedger.futureCashFlowCents)}
+                      </summary>
+                      <p>
+                        {year.taxLedger.employees
+                          .map(
+                            (employee) =>
+                              `${snapshot.household.people.find((person) => person.id === employee.personId)?.name ?? employee.personId}: wages ${money(employee.salaryCents)}, RSUs ${money(employee.rsuCents)}, Social Security ${money(employee.socialSecurityCents)}, Medicare ${money(employee.medicareCents)}, SDI ${money(employee.sdiCents)}`,
+                          )
+                          .join(" · ")}
+                      </p>
+                      <p>
+                        Federal: standard{" "}
+                        {money(year.taxLedger.federalStandardCents)} vs itemized{" "}
+                        {money(year.taxLedger.federalItemizedCents)}; taxable{" "}
+                        {money(year.taxLedger.federalTaxableCents)}; tax{" "}
+                        {money(year.taxLedger.federalCents)}. California:
+                        standard {money(year.taxLedger.californiaStandardCents)}{" "}
+                        vs itemized{" "}
+                        {money(year.taxLedger.californiaItemizedCents)}; taxable{" "}
+                        {money(year.taxLedger.californiaTaxableCents)}; tax{" "}
+                        {money(year.taxLedger.californiaCents)}.
+                      </p>
+                      <p>
+                        Additional Medicare{" "}
+                        {money(year.taxLedger.additionalMedicareCents)} · refund
+                        or balance due unknown ·{" "}
+                        {year.taxLedger.projected
+                          ? "projected assumptions included"
+                          : "official rules"}
+                        .{" "}
+                        {year.taxLedger.sources.map((source, index) => (
+                          <span key={`${source.url}-${index}`}>
+                            <a
+                              href={source.url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {source.jurisdiction} source
+                            </a>
+                            {index < year.taxLedger!.sources.length - 1
+                              ? " · "
+                              : ""}
+                          </span>
+                        ))}
+                      </p>
+                    </details>
+                  ),
+              )}
+            </section>
+            </DetailDisclosure>
+          )}
+        </>
+      )}
+      {tab === "contributions" && (
+        <section className="card wide">
+          <div className="card-title">
+            <div>
+              <span className="label assumption">Surplus routing</span>
+              <h3>Contributions</h3>
+            </div>
+            <AnchoredMenu primary label="Add contribution" icon={<Plus size={16}/>} items={[
+              { label: "New contribution", onSelect: (el) => onPlanScenario(el!, "contribution") },
+              { label: "Manage contributions", onSelect: (el) => onPlanScenario(el!) },
+            ]}/>
+          </div>
+          <p>
+            <strong>
+              {effectiveAssignedBps / 100}% of projected surplus assigned
+            </strong>{" "}
+            · {(10000 - effectiveAssignedBps) / 100}% remaining
+          </p>
+          <p className="muted">
+            Fixed monthly amounts are reserved first. Percentage rules divide
+            the remaining Cash Flow surplus.
+          </p>
+          {scenario.contributions.map((rule) => (
+            <div className="transaction" key={rule.id}>
+              <div>
+                <strong>{rule.destinationType} contribution</strong>
+                <small>
+                  {rule.frequency} ·{" "}
+                  {rule.monthlyAmountCents !== undefined
+                    ? `${money(rule.monthlyAmountCents)}/month · about ${averageMonthlySurplus ? Math.min(100, Math.round((rule.monthlyAmountCents * 10000) / averageMonthlySurplus) / 100) : 0}% of projected surplus`
+                    : `${(rule.percentBps ?? 0) / 100}% of remaining surplus`}
+                  {rule.targetBalanceCents !== undefined
+                    ? ` · cap ${money(rule.targetBalanceCents)}`
+                    : ""}
+                </small>
+              </div>
+            </div>
+          ))}
+          {!scenario.contributions.length && (
+            <p className="empty">
+              All positive surplus remains in the default cash account.
+            </p>
+          )}
+        </section>
+      )}
+      {tab === "setup" && (
+        <section className="card wide">
+          <div className="card-title">
+            <div>
+              <span className="label assumption">Scenario configuration</span>
+              <h3>{scenario?.name}</h3>
+            </div>
+            <div className="inline-actions">
+              <ActionButton onClick={(e) => onEditScenario(e.currentTarget)}>
+                Edit scenario
+              </ActionButton>
+              <ActionButton onClick={(e) => onPlanScenario(e.currentTarget)}>
+                Events &amp; withdrawals
+              </ActionButton>
+            </div>
+          </div>
+          <div className="setup-summary">
+            <div>
+              <span>Projection horizon</span>
+              <strong>
+                {scenario ? `${scenario.horizon.months} months` : "—"}
+              </strong>
+            </div>
+            <div>
+              <span>Inflation assumption</span>
+              <strong>
+                {scenario ? `${scenario.assumptions.inflationBps / 100}%` : "—"}
+              </strong>
+            </div>
+            <div>
+              <span>Events</span>
+              <strong>{scenario?.events.length ?? 0}</strong>
+            </div>
+            <div>
+              <span>Contribution rules</span>
+              <strong>{scenario?.contributions.length ?? 0}</strong>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
-    <div className="plan-tabs" role="tablist" aria-label="Plan sections">{(["wealth","cash-flow","contributions","setup"] as const).map(item=><button key={item} role="tab" aria-selected={tab===item} onClick={()=>setTab(item)}>{{wealth:"Outlook","cash-flow":"Cash Flow",contributions:"Contributions",setup:"Scenario"}[item]}</button>)}</div>
-    <label className="compact-section-select">Plan section<select value={tab} onChange={e=>setTab(e.target.value as typeof tab)}><option value="wealth">Outlook</option><option value="cash-flow">Cash Flow</option><option value="contributions">Contributions</option><option value="setup">Scenario</option></select></label>
-    {tab==="wealth"&&<>
-      <section className={`wealth-chart card wide series-${activeSeries.group}`} aria-labelledby="wealth-chart-title">
-        <div className="chart-heading"><div><span className="label projected">Projected balance</span><h3 id="wealth-chart-title">{activeSeries.name}</h3></div><div className="chart-ranges" aria-label="Projection range">{([5,10,15,20,"max"] as const).map(item=><button key={item} aria-pressed={range===item} onClick={()=>setRange(item)}>{item==="max"?"Max":`${item}Y`}</button>)}</div></div>
-        <div className="chart-y-axis" aria-hidden="true">{wealthValueTicks.map(tick=><span key={tick.y} style={{top:`${tick.y}%`}}>{money(tick.value,true)}</span>)}</div>
-        <div className="chart-x-axis" aria-hidden="true">{wealthYearTicks.map(tick=><span key={tick.label} style={{left:`${tick.x}%`}}><i/>{tick.label}</span>)}</div>
-        <div className="wealth-summary" aria-live="polite"><strong>{money(first)}</strong><span>Current</span><strong>{money(last)}</strong><span>Ending</span><strong className={change>=0?"positive":"negative"}>{change>=0?"+":""}{money(change)} {percent===null?"—":`(${percent>=0?"+":""}${percent}%)`}</strong><span>Total balance change</span></div>
-        <div className="chart-canvas" role="slider" tabIndex={0} aria-label={`Explore estimated ${activeSeries.name} by month`} aria-valuemin={0} aria-valuemax={Math.max(0,coords.length-1)} aria-valuenow={activePoint??0} onPointerMove={event=>{const rect=event.currentTarget.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,((event.clientX-rect.left)/rect.width-.04)/.92));setActivePoint(Math.round(ratio*(coords.length-1)))}} onPointerLeave={()=>setActivePoint(null)} onKeyDown={event=>{if(event.key!=="ArrowLeft"&&event.key!=="ArrowRight")return;event.preventDefault();setActivePoint(current=>Math.max(0,Math.min(coords.length-1,(current??0)+(event.key==="ArrowRight"?1:-1))))}}><svg viewBox="0 0 100 100" role="img" aria-label={`${activeSeries.name} projection from ${money(first)} to ${money(last)}`} preserveAspectRatio="none"><defs><linearGradient id="wealth-chart-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--series)" stopOpacity=".18"/><stop offset="100%" stopColor="var(--series)" stopOpacity=".015"/></linearGradient></defs>{[8,27,46,65,84].map(y=><line key={y} className="chart-grid" x1="4" x2="96" y1={y} y2={y}/>)}<line className="chart-zero" x1="4" x2="96" y1={8+max*76/span} y2={8+max*76/span}/><path className="chart-area" d={`${path} L ${coords.at(-1)?.x??96} 92 L 4 92 Z`}/><path className="chart-line" d={path}/></svg>{activePoint!==null&&coords[activePoint]&&<><i className="chart-scrub-line" style={{left:`${coords[activePoint].x}%`}}/><i className="chart-scrub-point" style={{left:`${coords[activePoint].x}%`,top:`${coords[activePoint].y}%`}}/><output className="chart-tooltip" style={{left:`${coords[activePoint].x}%`,top:`${coords[activePoint].y}%`}}>{coords[activePoint].label}<strong>{money(coords[activePoint].value)} estimated</strong></output></>}</div>
-      </section>
-      <section className="projection-sheet card wide" aria-label="Annual wealth projection"><div className="sheet-scroll"><table><thead><tr><th rowSpan={3} className="year-column">Year</th><th colSpan={1}>Net Worth</th>{snapshot.accounts.length>0&&<th colSpan={snapshot.accounts.length}>Accounts</th>}{snapshot.assets.length>0&&<th colSpan={ordinaryAssets.length+privateAssets.length*2}>Assets</th>}{snapshot.liabilities.length>0&&<th colSpan={snapshot.liabilities.length}>Debts</th>}</tr><tr><th rowSpan={2} className={selected==="net-worth"?"selected":undefined}><button aria-pressed={selected==="net-worth"} onClick={()=>selectSeries("net-worth")}>Net Worth</button></th>{snapshot.accounts.map(item=><th rowSpan={2} key={item.id} className={selected===`account:${item.id}`?"selected":undefined}><button aria-pressed={selected===`account:${item.id}`} onClick={()=>selectSeries(`account:${item.id}`)}>{item.name}</button></th>)}{ordinaryAssets.map(item=><th rowSpan={2} key={item.id} className={selected===`asset:${item.id}`?"selected":undefined}><button aria-pressed={selected===`asset:${item.id}`} onClick={()=>selectSeries(`asset:${item.id}`)}>{item.name}</button></th>)}{privateAssets.map(item=><th colSpan={2} key={item.id}><button aria-pressed={selected===`private:${item.id}:vested`} onClick={()=>selectSeries(`private:${item.id}:vested`)}>{item.name}</button></th>)}{snapshot.liabilities.map(item=><th rowSpan={2} key={item.id} className={selected===`debt:${item.id}`?"selected":undefined}><button aria-pressed={selected===`debt:${item.id}`} onClick={()=>selectSeries(`debt:${item.id}`)}>{item.name}</button></th>)}</tr><tr>{privateAssets.flatMap(item=>([<th key={`${item.id}-v`} className={selected===`private:${item.id}:vested`?"selected":undefined}><button aria-pressed={selected===`private:${item.id}:vested`} onClick={()=>selectSeries(`private:${item.id}:vested`)}>Vested</button></th>,<th key={`${item.id}-u`} className={selected===`private:${item.id}:unvested`?"selected":undefined}><button aria-pressed={selected===`private:${item.id}:unvested`} onClick={()=>selectSeries(`private:${item.id}:unvested`)}>Unvested</button></th>]))}</tr></thead><tbody><tr><th className="year-column" scope="row">Current</th>{series.map(item=>cell(item,currentValue(item),`current-${item.id}`))}</tr>{visibleRows.map(row=><tr key={row.year}><th className="year-column" scope="row">{row.year}</th>{series.map(item=>cell(item,projectedValue(item,row.month),`${row.year}-${item.id}`))}</tr>)}</tbody></table></div></section>
-    </>}
-    {tab==="cash-flow"&&<>
-      <section className="cash-flow-chart card wide" aria-labelledby="cash-flow-chart-title">
-        <div className="chart-heading"><div><span className="label projected">Projected annual cash flow</span><h3 id="cash-flow-chart-title">{activeCashSeries.map(item=>item.name).join(", ")}</h3></div><div className="chart-ranges" aria-label="Cash flow projection range">{([5,10,15,20,"max"] as const).map(item=><button key={item} aria-pressed={range===item} onClick={()=>setRange(item)}>{item==="max"?"Max":`${item}Y`}</button>)}</div></div>
-        <div className="chart-y-axis" aria-hidden="true">{cashValueTicks.map(tick=><span key={tick.y} style={{top:`${tick.y}%`}}>{money(tick.value,true)}</span>)}</div>
-        <div className="chart-x-axis" aria-hidden="true">{cashYearTicks.map(tick=><span key={tick.label} style={{left:`${tick.x}%`}}><i/>{tick.label}</span>)}</div>
-        <div className="cash-flow-legend" aria-live="polite">{activeCashSeries.map(item=>{const firstYear=visibleCashFlowYears[0],lastYear=visibleCashFlowYears.at(-1);return <div key={item.id}><i style={{background:item.color}}/><span>{item.name}</span><strong>{lastYear?money(item.value(lastYear)):"—"}</strong><small>{firstYear&&lastYear?`${money(item.value(lastYear)-item.value(firstYear))} annual change`:"Ending annual value"}</small></div>})}</div>
-        <div className="chart-canvas" role="slider" tabIndex={0} aria-label="Explore estimated monthly cash flow" aria-valuemin={0} aria-valuemax={Math.max(0,estimatedCashFlowMonths.length-1)} aria-valuenow={activeCashFlowPoint??0} onPointerMove={event=>{const rect=event.currentTarget.getBoundingClientRect(),ratio=Math.max(0,Math.min(1,((event.clientX-rect.left)/rect.width-.04)/.92));setActiveCashFlowPoint(Math.round(ratio*(estimatedCashFlowMonths.length-1)))}} onPointerLeave={()=>setActiveCashFlowPoint(null)} onKeyDown={event=>{if(event.key!=="ArrowLeft"&&event.key!=="ArrowRight")return;event.preventDefault();setActiveCashFlowPoint(current=>Math.max(0,Math.min(estimatedCashFlowMonths.length-1,(current??0)+(event.key==="ArrowRight"?1:-1))))}}><svg viewBox="0 0 100 100" role="img" aria-label={`Cash flow projection for ${activeCashSeries.map(item=>item.name).join(", ")}`} preserveAspectRatio="none">{[8,27,46,65,84].map(y=><line key={y} className="chart-grid" x1="4" x2="96" y1={y} y2={y}/>)}<line className="chart-zero" x1="4" x2="96" y1={8+cashMax*76/cashSpan} y2={8+cashMax*76/cashSpan}/>{activeCashSeries.map(item=>{const coordinates=cashCoords(item),path=coordinates.map((point,index)=>`${index?"L":"M"} ${point.x} ${point.y}`).join(" ");return <g key={item.id} style={{color:item.color}}><path className="cash-chart-area" d={`${path} L ${coordinates.at(-1)?.x??96} 92 L 4 92 Z`}/><path className="cash-chart-line" d={path}/></g>})}</svg>{activeCashFlowPoint!==null&&estimatedCashFlowMonths[activeCashFlowPoint]&&<><i className="chart-scrub-line" style={{left:`${cashCoords(activeCashSeries[0])[activeCashFlowPoint]?.x??4}%`}}/>{activeCashSeries.map(item=>{const point=cashCoords(item)[activeCashFlowPoint];return point?<i key={item.id} className="chart-scrub-point" style={{left:`${point.x}%`,top:`${point.y}%`,borderColor:item.color}}/>:null})}<output className="chart-tooltip cash-scrub-tooltip" style={{left:`${cashCoords(activeCashSeries[0])[activeCashFlowPoint]?.x??4}%`,top:`${Math.min(...activeCashSeries.map(item=>cashCoords(item)[activeCashFlowPoint]?.y??92))}%`}}>{cashCoords(activeCashSeries[0])[activeCashFlowPoint]?.label}{activeCashSeries.map(item=><strong key={item.id}><i style={{background:item.color}}/>{item.name}: {money(cashCoords(item)[activeCashFlowPoint]?.value??0)} estimated</strong>)}</output></>}</div>
-      </section>
-      <section className="card wide"><div className="card-title"><div><span className="label assumption">Inputs</span><h3>Income and spending</h3></div><div className="inline-actions"><button onClick={e=>onAddRecurring("income",e.currentTarget)}>Add income</button><button onClick={e=>onAddRecurring("expense",e.currentTarget)}>Add expense</button></div></div><details className="cash-flow-inputs"><summary>Show income and expense details <span>{recurring.length+homeCosts.length} items</span></summary>{recurring.map(entry=>{const kind=categories.find(c=>c.id===entry.categoryId)?.kind;return <button key={entry.id} className="transaction transaction-action" onClick={e=>onEditRecurring(entry,e.currentTarget)}><div><strong>{entry.name}</strong><small>{categories.find(c=>c.id===entry.categoryId)?.name??"Uncategorized"} · {entry.frequency}</small></div><b>{money(kind==="income"?entry.amountCents:-entry.amountCents)}</b></button>})}{homeCosts.map(home=><div className="transaction" key={`home-${home.id}`}><div><strong>{home.name} housing</strong><small>Automatic monthly expense · P&amp;I {money(home.principalAndInterest)} + property tax {money(home.propertyTax)} + insurance {money(home.insurance)}{home.hoa?` + HOA ${money(home.hoa)}`:""}</small></div><b>{money(-home.total)}</b></div>)}</details></section>
-      <section className="card wide"><h3>Annual cash flow</h3><p className="muted">Select one or more columns to compare them in the chart. Cash taxes reduce projected household cash. RSU sell-to-cover taxes reduce vested shares instead.</p><div className="year-table cash-flow-table"><div className="year-row table-head"><span>Year</span>{cashFlowSeries.map(item=><button key={item.id} aria-pressed={selectedCashFlowSeries.includes(item.id)} onClick={()=>toggleCashFlowSeries(item.id)}><i style={{background:item.color}}/>{item.name}</button>)}</div>{visibleCashFlowYears.map(year=><div className="year-row" key={year.year}><span>{year.year}</span><span>{money(year.incomeCents,true)}</span><span>{money(year.expenseCents,true)}</span><span>{money(year.cashTaxCents,true)}</span><span>{money(year.rsuSellToCoverTaxCents,true)}</span><strong>{money(year.surplusCents,true)}</strong></div>)}</div></section>
-      {projections.some(year=>year.taxLedger)&&<section className="card wide"><h3>Yearly tax ledger</h3>{projections.map(year=>year.taxLedger&&<details key={year.year}><summary>{year.year} · full-year liability {money(year.taxLedger.fullYearLiabilityCents)} · future cash flow {money(year.taxLedger.futureCashFlowCents)}</summary><p>{year.taxLedger.employees.map(employee=>`${snapshot.household.people.find(person=>person.id===employee.personId)?.name??employee.personId}: wages ${money(employee.salaryCents)}, RSUs ${money(employee.rsuCents)}, Social Security ${money(employee.socialSecurityCents)}, Medicare ${money(employee.medicareCents)}, SDI ${money(employee.sdiCents)}`).join(" · ")}</p><p>Federal: standard {money(year.taxLedger.federalStandardCents)} vs itemized {money(year.taxLedger.federalItemizedCents)}; taxable {money(year.taxLedger.federalTaxableCents)}; tax {money(year.taxLedger.federalCents)}. California: standard {money(year.taxLedger.californiaStandardCents)} vs itemized {money(year.taxLedger.californiaItemizedCents)}; taxable {money(year.taxLedger.californiaTaxableCents)}; tax {money(year.taxLedger.californiaCents)}.</p><p>Additional Medicare {money(year.taxLedger.additionalMedicareCents)} · refund or balance due unknown · {year.taxLedger.projected?"projected assumptions included":"official rules"}. {year.taxLedger.sources.map((source,index)=><span key={`${source.url}-${index}`}><a href={source.url} target="_blank" rel="noreferrer">{source.jurisdiction} source</a>{index<year.taxLedger!.sources.length-1?" · ":""}</span>)}</p></details>)}</section>}
-    </>}
-    {tab==="contributions"&&<section className="card wide"><div className="card-title"><div><span className="label assumption">Surplus routing</span><h3>Contributions</h3></div><button onClick={e=>onPlanScenario(e.currentTarget)}>Edit contributions</button></div><p><strong>{effectiveAssignedBps/100}% of projected surplus assigned</strong> · {(10000-effectiveAssignedBps)/100}% remaining</p><p className="muted">Fixed monthly amounts are reserved first. Percentage rules divide the remaining Cash Flow surplus.</p>{scenario.contributions.map(rule=><div className="transaction" key={rule.id}><div><strong>{rule.destinationType} contribution</strong><small>{rule.frequency} · {rule.monthlyAmountCents!==undefined?`${money(rule.monthlyAmountCents)}/month · about ${averageMonthlySurplus?Math.min(100,Math.round(rule.monthlyAmountCents*10000/averageMonthlySurplus)/100):0}% of projected surplus`:`${(rule.percentBps??0)/100}% of remaining surplus`}{rule.targetBalanceCents!==undefined?` · cap ${money(rule.targetBalanceCents)}`:""}</small></div></div>)}{!scenario.contributions.length&&<p className="empty">All positive surplus remains in the default cash account.</p>}</section>}
-    {tab==="setup"&&<section className="card wide"><div className="card-title"><div><span className="label assumption">Scenario configuration</span><h3>{scenario?.name}</h3></div><div className="inline-actions"><button onClick={e=>onAddScenario(e.currentTarget)}>New scenario</button><button onClick={e=>onEditScenario(e.currentTarget)}>Edit scenario</button><button onClick={e=>onPlanScenario(e.currentTarget)}>Events &amp; withdrawals</button></div></div><div className="setup-summary"><div><span>Projection horizon</span><strong>{scenario?`${scenario.horizon.months} months`:"—"}</strong></div><div><span>Inflation assumption</span><strong>{scenario?`${scenario.assumptions.inflationBps/100}%`:"—"}</strong></div><div><span>Events</span><strong>{scenario?.events.length??0}</strong></div><div><span>Contribution rules</span><strong>{scenario?.contributions.length??0}</strong></div></div></section>}
-  </div>;
+  );
 }
 
 function NetWorth({
@@ -4542,13 +6901,19 @@ function NetWorth({
 }) {
   const assets =
       snapshot.accounts.reduce((s, a) => s + Math.max(0, a.balanceCents), 0) +
-      snapshot.assets.reduce((s, a) => s + currentAssetValue(a,localIsoDate()), 0),
+      snapshot.assets.reduce(
+        (s, a) => s + currentAssetValue(a, localIsoDate()),
+        0,
+      ),
     debt =
       snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0) +
       snapshot.accounts.reduce((s, a) => s + Math.max(0, -a.balanceCents), 0),
     netWorth =
       snapshot.accounts.reduce((s, a) => s + a.balanceCents, 0) +
-      snapshot.assets.reduce((s, a) => s + currentAssetValue(a,localIsoDate()), 0) -
+      snapshot.assets.reduce(
+        (s, a) => s + currentAssetValue(a, localIsoDate()),
+        0,
+      ) -
       snapshot.liabilities.reduce((s, l) => s + l.balanceCents, 0);
   return (
     <div className="content">
@@ -4574,25 +6939,63 @@ function NetWorth({
           icon={Landmark}
         />
       </div>
+      <section
+        className="card wide"
+        aria-label={`Asset allocation. ${money(assets)} in assets. ${money(debt)} in debt excluded from allocation.`}
+      >
+        <div className="card-title">
+          <div>
+            <span className="label actual">Current balance</span>
+            <h3>Asset allocation</h3>
+          </div>
+          <AnchoredMenu
+            primary
+            label="Add holding"
+            icon={<Plus size={16} />}
+            items={[
+              { label: "Account", onSelect: (el) => onAdd(el!) },
+              { label: "Asset", onSelect: (el) => onAddAsset(el!) },
+              { label: "Debt", onSelect: (el) => onAddLiability(el!) },
+            ]}
+          />
+        </div>
+        <p>
+          <strong>{money(assets)}</strong> allocated across accounts and assets.
+          Debt of <strong>{money(debt)}</strong> is shown separately and
+          excluded from allocation proportions.
+        </p>
+      </section>
       <section className="card wide">
         <div className="card-title">
           <div>
             <span className="label actual">Current balance</span>
             <h3>Accounts & assets</h3>
           </div>
-          <div className="actions">
-            <button onClick={(e) => onAddAsset(e.currentTarget)}>
-              <Plus size={14} /> Add asset
-            </button>
-            <button onClick={(e) => onAdd(e.currentTarget)}>
-              <Plus size={14} /> Add account
-            </button>
-          </div>
         </div>
         {snapshot.accounts
           .filter((a) => a.balanceCents >= 0)
           .map((a) => (
-            <div className="account" key={a.id}>
+            <div
+              className="account"
+              key={a.id}
+              role="group"
+              tabIndex={0}
+              data-search-kind="Account"
+              data-search-id={a.id}
+              onClick={(e) => {
+                if (!(e.target as HTMLElement).closest(".anchored-menu"))
+                  onEdit(accounts.find((x) => x.id === a.id)!, e.currentTarget);
+              }}
+              onKeyDown={(e) => {
+                if (
+                  (e.key === "Enter" || e.key === " ") &&
+                  !(e.target as HTMLElement).closest(".anchored-menu")
+                ) {
+                  e.preventDefault();
+                  onEdit(accounts.find((x) => x.id === a.id)!, e.currentTarget);
+                }
+              }}
+            >
               <span className="transaction-icon">
                 <WalletCards size={17} />
               </span>
@@ -4601,33 +7004,51 @@ function NetWorth({
                 <small>{a.kind}</small>
               </div>
               <b>{money(a.balanceCents)}</b>
-              <button
-                data-search-kind="Account"
-                data-search-id={a.id}
-                onClick={(e) =>
-                  onEdit(
-                    accounts.find((x) => x.id === a.id)!,
-                    e.currentTarget,
-                  )
-                }
-              >
-                Edit
-              </button>
-              <button
-                onClick={(e) =>
-                  onReconcile(
-                    accounts.find((x) => x.id === a.id)!,
-                    e.currentTarget,
-                  )
-                }
-              >
-                Reconcile
-              </button>
-              <button className="danger-link" aria-label={`Delete account ${a.name}`} onClick={(e)=>onDelete(accounts.find((x)=>x.id===a.id)!,e.currentTarget)}>Delete</button>
+              <OverflowMenu
+                label={`More actions for ${a.name}`}
+                items={[
+                  {
+                    label: "Edit account",
+                    onSelect: (el) =>
+                      onEdit(accounts.find((x) => x.id === a.id)!, el!),
+                  },
+                  {
+                    label: "Reconcile",
+                    onSelect: (el) =>
+                      onReconcile(accounts.find((x) => x.id === a.id)!, el!),
+                  },
+                  {
+                    label: "Delete account",
+                    danger: true,
+                    onSelect: (el) =>
+                      onDelete(accounts.find((x) => x.id === a.id)!, el!),
+                  },
+                ]}
+              />
             </div>
           ))}
         {assetRecords.map((a) => (
-          <div className="account" key={a.id}>
+          <div
+            className="account"
+            key={a.id}
+            role="group"
+            tabIndex={0}
+            data-search-kind="Asset"
+            data-search-id={a.id}
+            onClick={(e) => {
+              if (!(e.target as HTMLElement).closest(".anchored-menu"))
+                onEditAsset(a, e.currentTarget);
+            }}
+            onKeyDown={(e) => {
+              if (
+                (e.key === "Enter" || e.key === " ") &&
+                !(e.target as HTMLElement).closest(".anchored-menu")
+              ) {
+                e.preventDefault();
+                onEditAsset(a, e.currentTarget);
+              }
+            }}
+          >
             <span className="transaction-icon">
               <Building2 size={17} />
             </span>
@@ -4637,28 +7058,96 @@ function NetWorth({
                 {a.equityHolding
                   ? `Private stock holding · ${a.equityHolding.grants.length} RSU grants`
                   : a.privateStock
-                  ? "Private stock"
-                  : liabilityRecords.find((l) => l.mortgage?.assetId === a.id)
-                  ? `Home · linked to ${liabilityRecords.find((l) => l.mortgage?.assetId === a.id)!.name}`
-                  : "Asset"}
+                    ? "Private stock"
+                    : liabilityRecords.find((l) => l.mortgage?.assetId === a.id)
+                      ? `Home · linked to ${liabilityRecords.find((l) => l.mortgage?.assetId === a.id)!.name}`
+                      : "Asset"}
               </small>
-              {a.privateStock && <small>{money(a.valueCents)} total company value · {money(a.valueCents-vestedAssetValue(a,localIsoDate()))} unvested</small>}
-              {a.equityHolding&&<><small>{units(a.equityHolding.grants.reduce((sum,grant)=>sum+grant.unitsMicros,0))} total units · {units(a.equityHolding.grants.reduce((sum,grant)=>sum+vestedUnitsAt(grant,localIsoDate()),0))} vested · {money(a.valueCents)} total modeled value</small><details><summary>View {a.equityHolding.grants.length} grant schedules</summary>{a.equityHolding.grants.map(grant=>{const vested=vestedUnitsAt(grant,localIsoDate()),upcoming=nextVest(grant,localIsoDate());return <div key={grant.id}><strong>{grant.id==="original"?"Original grant":grant.id==="promotion"?"Promotion grant":grant.id}</strong><small>Granted {grant.grantDate} · {units(grant.unitsMicros)} units at {money(grant.grantPriceCents)} · {units(vested)} vested</small><small>{upcoming?`Next: ${units(upcoming.unitsMicros)} units on ${upcoming.date}`:"Fully vested"}</small></div>})}</details></>}
+              {a.privateStock && (
+                <small>
+                  {money(a.valueCents)} total company value ·{" "}
+                  {money(a.valueCents - vestedAssetValue(a, localIsoDate()))}{" "}
+                  unvested
+                </small>
+              )}
+              {a.equityHolding && (
+                <>
+                  <small>
+                    {units(
+                      a.equityHolding.grants.reduce(
+                        (sum, grant) => sum + grant.unitsMicros,
+                        0,
+                      ),
+                    )}{" "}
+                    total units ·{" "}
+                    {units(
+                      a.equityHolding.grants.reduce(
+                        (sum, grant) =>
+                          sum + vestedUnitsAt(grant, localIsoDate()),
+                        0,
+                      ),
+                    )}{" "}
+                    vested · {money(a.valueCents)} total modeled value
+                  </small>
+                  <details>
+                    <summary>
+                      View {a.equityHolding.grants.length} grant schedules
+                    </summary>
+                    {a.equityHolding.grants.map((grant) => {
+                      const vested = vestedUnitsAt(grant, localIsoDate()),
+                        upcoming = nextVest(grant, localIsoDate());
+                      return (
+                        <div key={grant.id}>
+                          <strong>
+                            {grant.id === "original"
+                              ? "Original grant"
+                              : grant.id === "promotion"
+                                ? "Promotion grant"
+                                : grant.id}
+                          </strong>
+                          <small>
+                            Granted {grant.grantDate} ·{" "}
+                            {units(grant.unitsMicros)} units at{" "}
+                            {money(grant.grantPriceCents)} · {units(vested)}{" "}
+                            vested
+                          </small>
+                          <small>
+                            {upcoming
+                              ? `Next: ${units(upcoming.unitsMicros)} units on ${upcoming.date}`
+                              : "Fully vested"}
+                          </small>
+                        </div>
+                      );
+                    })}
+                  </details>
+                </>
+              )}
               {a.purchasePriceCents != null && a.purchasePriceCents > 0 && (
                 <small>
-                  {money(a.valueCents - a.purchasePriceCents)} ({(((a.valueCents / a.purchasePriceCents) - 1) * 100).toFixed(1)}%) since purchase
+                  {money(a.valueCents - a.purchasePriceCents)} (
+                  {((a.valueCents / a.purchasePriceCents - 1) * 100).toFixed(1)}
+                  %) since purchase
                 </small>
               )}
             </div>
-            <b>{money(a.equityHolding?equityVestedValue(a,localIsoDate()):vestedAssetValue(a,localIsoDate()))}</b>
-            <button
-              data-search-kind="Asset"
-              data-search-id={a.id}
-              onClick={(e) => onEditAsset(a, e.currentTarget)}
-            >
-              Edit
-            </button>
-            <button className="danger-link" aria-label={`Delete asset ${a.name}`} onClick={(e)=>onDeleteAsset(a,e.currentTarget)}>Delete</button>
+            <b>
+              {money(
+                a.equityHolding
+                  ? equityVestedValue(a, localIsoDate())
+                  : vestedAssetValue(a, localIsoDate()),
+              )}
+            </b>
+            <OverflowMenu
+              label={`More actions for ${a.name}`}
+              items={[
+                { label: "Edit asset", onSelect: (el) => onEditAsset(a, el!) },
+                {
+                  label: "Delete asset",
+                  danger: true,
+                  onSelect: (el) => onDeleteAsset(a, el!),
+                },
+              ]}
+            />
           </div>
         ))}
         {!snapshot.accounts.length && !snapshot.assets.length && (
@@ -4671,14 +7160,31 @@ function NetWorth({
             <span className="label actual">Current balance</span>
             <h3>Credit & liabilities</h3>
           </div>
-          <button onClick={(e) => onAddLiability(e.currentTarget)}>
-            <Plus size={14} /> Add debt
-          </button>
         </div>
         {snapshot.accounts
           .filter((a) => a.balanceCents < 0)
           .map((a) => (
-            <div className="account" key={a.id}>
+            <div
+              className="account"
+              key={a.id}
+              role="group"
+              tabIndex={0}
+              data-search-kind="Account"
+              data-search-id={a.id}
+              onClick={(e) => {
+                if (!(e.target as HTMLElement).closest(".anchored-menu"))
+                  onEdit(accounts.find((x) => x.id === a.id)!, e.currentTarget);
+              }}
+              onKeyDown={(e) => {
+                if (
+                  (e.key === "Enter" || e.key === " ") &&
+                  !(e.target as HTMLElement).closest(".anchored-menu")
+                ) {
+                  e.preventDefault();
+                  onEdit(accounts.find((x) => x.id === a.id)!, e.currentTarget);
+                }
+              }}
+            >
               <span className="transaction-icon">
                 <WalletCards size={17} />
               </span>
@@ -4687,33 +7193,51 @@ function NetWorth({
                 <small>Credit balance</small>
               </div>
               <b>{money(-a.balanceCents)}</b>
-              <button
-                data-search-kind="Account"
-                data-search-id={a.id}
-                onClick={(e) =>
-                  onEdit(
-                    accounts.find((x) => x.id === a.id)!,
-                    e.currentTarget,
-                  )
-                }
-              >
-                Edit
-              </button>
-              <button
-                onClick={(e) =>
-                  onReconcile(
-                    accounts.find((x) => x.id === a.id)!,
-                    e.currentTarget,
-                  )
-                }
-              >
-                Reconcile
-              </button>
-              <button className="danger-link" aria-label={`Delete account ${a.name}`} onClick={(e)=>onDelete(accounts.find((x)=>x.id===a.id)!,e.currentTarget)}>Delete</button>
+              <OverflowMenu
+                label={`More actions for ${a.name}`}
+                items={[
+                  {
+                    label: "Edit account",
+                    onSelect: (el) =>
+                      onEdit(accounts.find((x) => x.id === a.id)!, el!),
+                  },
+                  {
+                    label: "Reconcile",
+                    onSelect: (el) =>
+                      onReconcile(accounts.find((x) => x.id === a.id)!, el!),
+                  },
+                  {
+                    label: "Delete account",
+                    danger: true,
+                    onSelect: (el) =>
+                      onDelete(accounts.find((x) => x.id === a.id)!, el!),
+                  },
+                ]}
+              />
             </div>
           ))}
         {liabilityRecords.map((l) => (
-          <div className="account" key={l.id}>
+          <div
+            className="account"
+            key={l.id}
+            role="group"
+            tabIndex={0}
+            data-search-kind="Debt"
+            data-search-id={l.id}
+            onClick={(e) => {
+              if (!(e.target as HTMLElement).closest(".anchored-menu"))
+                onEditLiability(l, e.currentTarget);
+            }}
+            onKeyDown={(e) => {
+              if (
+                (e.key === "Enter" || e.key === " ") &&
+                !(e.target as HTMLElement).closest(".anchored-menu")
+              ) {
+                e.preventDefault();
+                onEditLiability(l, e.currentTarget);
+              }
+            }}
+          >
             <span className="transaction-icon">
               <Building2 size={17} />
             </span>
@@ -4722,14 +7246,20 @@ function NetWorth({
               <small>Liability</small>
             </div>
             <b>{money(l.balanceCents)}</b>
-            <button
-              data-search-kind="Debt"
-              data-search-id={l.id}
-              onClick={(e) => onEditLiability(l, e.currentTarget)}
-            >
-              Edit
-            </button>
-            <button className="danger-link" aria-label={`Delete debt ${l.name}`} onClick={(e)=>onDeleteLiability(l,e.currentTarget)}>Delete</button>
+            <OverflowMenu
+              label={`More actions for ${l.name}`}
+              items={[
+                {
+                  label: "Edit debt",
+                  onSelect: (el) => onEditLiability(l, el!),
+                },
+                {
+                  label: "Delete debt",
+                  danger: true,
+                  onSelect: (el) => onDeleteLiability(l, el!),
+                },
+              ]}
+            />
           </div>
         ))}
         {debt === 0 && (
@@ -4786,15 +7316,46 @@ function SettingsView({
   const dataAlert = useRef<HTMLParagraphElement>(null);
   const restoreCancel = useRef<HTMLButtonElement>(null);
   const resetCancel = useRef<HTMLButtonElement>(null);
+  const confirmationInvoker = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!confirmRestore && !confirmReset) return;
+    const key = (event: globalThis.KeyboardEvent) => {
+      const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]');
+      if (event.key === "Escape") { event.preventDefault(); setConfirmRestore(false); setConfirmReset(false); return; }
+      if (event.key !== "Tab" || !dialog) return;
+      const controls = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex]:not([tabindex="-1"])')];
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("keydown", key); queueMicrotask(() => confirmationInvoker.current?.focus()); };
+  }, [confirmRestore, confirmReset]);
   const [appearanceSaving, setAppearanceSaving] = useState(false);
-  const [settingsSection,setSettingsSection]=useState<"household"|"tax"|"appearance"|"data">("household");
+  const [settingsSection, setSettingsSection] = useState<
+    "household" | "tax" | "appearance" | "data"
+  >("household");
   const [memberSaving, setMemberSaving] = useState(false);
   const [memberResult, setMemberResult] = useState<{
     kind: "error" | "success";
     message: string;
   } | null>(null);
   const memberAlert = useRef<HTMLParagraphElement>(null);
-  const [filingStatus,setFilingStatus]=useState<TaxProfile["filingStatus"]>(bootstrap.taxProfile?.filingStatus??"single"),[jointMembers,setJointMembers]=useState<[string,string]>(()=>{const ids=bootstrap.taxProfile?.taxUnit?.memberPersonIds??[];return [ids[0]??bootstrap.people[0]?.id??"",ids[1]??bootstrap.people[1]?.id??""]}),[taxSaving,setTaxSaving]=useState(false),[taxResult,setTaxResult]=useState<{kind:"error"|"success";message:string}|null>(null);
+  const [filingStatus, setFilingStatus] = useState<TaxProfile["filingStatus"]>(
+      bootstrap.taxProfile?.filingStatus ?? "single",
+    ),
+    [jointMembers, setJointMembers] = useState<[string, string]>(() => {
+      const ids = bootstrap.taxProfile?.taxUnit?.memberPersonIds ?? [];
+      return [
+        ids[0] ?? bootstrap.people[0]?.id ?? "",
+        ids[1] ?? bootstrap.people[1]?.id ?? "",
+      ];
+    }),
+    [taxSaving, setTaxSaving] = useState(false),
+    [taxResult, setTaxResult] = useState<{
+      kind: "error" | "success";
+      message: string;
+    } | null>(null);
   useEffect(() => {
     if (memberResult?.kind === "error") memberAlert.current?.focus();
   }, [memberResult]);
@@ -4808,7 +7369,14 @@ function SettingsView({
       ),
     [bootstrap.people],
   );
-  useEffect(()=>{setFilingStatus(bootstrap.taxProfile?.filingStatus??"single");const ids=bootstrap.taxProfile?.taxUnit?.memberPersonIds??[];setJointMembers([ids[0]??bootstrap.people[0]?.id??"",ids[1]??bootstrap.people[1]?.id??""])},[bootstrap.taxProfile,bootstrap.people]);
+  useEffect(() => {
+    setFilingStatus(bootstrap.taxProfile?.filingStatus ?? "single");
+    const ids = bootstrap.taxProfile?.taxUnit?.memberPersonIds ?? [];
+    setJointMembers([
+      ids[0] ?? bootstrap.people[0]?.id ?? "",
+      ids[1] ?? bootstrap.people[1]?.id ?? "",
+    ]);
+  }, [bootstrap.taxProfile, bootstrap.people]);
   async function createBackup() {
     if (backupBusy || restoreBusy) return;
     setBackupBusy(true);
@@ -4875,7 +7443,10 @@ function SettingsView({
     } catch (error) {
       setDataResult({
         kind: "error",
-        message: errorMessage(error, "Could not reset the profile. Your current data is still available."),
+        message: errorMessage(
+          error,
+          "Could not reset the profile. Your current data is still available.",
+        ),
       });
       queueMicrotask(() => dataAlert.current?.focus());
     } finally {
@@ -4944,234 +7515,433 @@ function SettingsView({
       setMemberSaving(false);
     }
   }
-  async function saveTaxProfile(){
-    setTaxResult(null);if(filingStatus==="married-joint"&&(!jointMembers[0]||!jointMembers[1]||jointMembers[0]===jointMembers[1])){setTaxResult({kind:"error",message:"Married filing jointly requires two distinct household people."});return;}setTaxSaving(true);try{await repository.saveOnboardingStep(8,{taxProfile:{filingStatus,state:"CA",taxYear:2026,thresholdInflationBps:bootstrap.taxProfile?.thresholdInflationBps??250,revision:bootstrap.taxProfile?.revision??1,taxUnit:{id:bootstrap.taxProfile?.taxUnit?.id??`${bootstrap.household?.id??"household"}-tax-unit`,filingStatus,memberPersonIds:filingStatus==="married-joint"?jointMembers:[jointMembers[0]].filter(Boolean)}}});setTaxResult({kind:"success",message:"Joint filing link saved."});onSaved();}catch(error){setTaxResult({kind:"error",message:errorMessage(error,"Could not save the tax profile.")});}finally{setTaxSaving(false);}
+  async function saveTaxProfile() {
+    setTaxResult(null);
+    if (
+      filingStatus === "married-joint" &&
+      (!jointMembers[0] ||
+        !jointMembers[1] ||
+        jointMembers[0] === jointMembers[1])
+    ) {
+      setTaxResult({
+        kind: "error",
+        message:
+          "Married filing jointly requires two distinct household people.",
+      });
+      return;
+    }
+    setTaxSaving(true);
+    try {
+      await repository.saveOnboardingStep(8, {
+        taxProfile: {
+          filingStatus,
+          state: "CA",
+          taxYear: 2026,
+          thresholdInflationBps:
+            bootstrap.taxProfile?.thresholdInflationBps ?? 250,
+          revision: bootstrap.taxProfile?.revision ?? 1,
+          taxUnit: {
+            id:
+              bootstrap.taxProfile?.taxUnit?.id ??
+              `${bootstrap.household?.id ?? "household"}-tax-unit`,
+            filingStatus,
+            memberPersonIds:
+              filingStatus === "married-joint"
+                ? jointMembers
+                : [jointMembers[0]].filter(Boolean),
+          },
+        },
+      });
+      setTaxResult({ kind: "success", message: "Joint filing link saved." });
+      onSaved();
+    } catch (error) {
+      setTaxResult({
+        kind: "error",
+        message: errorMessage(error, "Could not save the tax profile."),
+      });
+    } finally {
+      setTaxSaving(false);
+    }
   }
   return (
     <div className="content settings-workspace">
       <nav className="settings-nav" aria-label="Settings sections">
-        {([['household','Household'],['tax','Tax'],['appearance','Appearance'],['data','Data & Privacy']] as const).map(([id,label])=><button key={id} aria-current={settingsSection===id?"page":undefined} className={settingsSection===id?"active":undefined} onClick={()=>setSettingsSection(id)}>{label}</button>)}
-      </nav>
-      <div className="settings-panel">
-      {settingsSection==="household"&&
-      <section className="card settings-card">
-        <h3>Household members</h3>
-        <p className="muted">
-          People whose income and spending are included in this plan.
-        </p>
-        {people.map((p, i) => (
-          <div className="member-setting" key={p.id}>
-            <input
-              aria-label={`Member ${i + 1} name`}
-              value={p.name}
-              disabled={memberSaving}
-              onChange={(e) =>
-                setPeople(updateAt(people, i, { name: e.target.value }))
-              }
-            />
-            <BirthDateField
-              label={`Member ${i + 1} birth date`}
-              value={p.birthDate ?? ""}
-              disabled={memberSaving}
-              onChange={(birthDate) =>
-                setPeople(updateAt(people, i, { birthDate }))
-              }
-            />
-            {people.length > 1 && (
-              <button
-                onClick={() => setPeople(people.filter((_, x) => x !== i))}
-                disabled={memberSaving}
-              >
-                Remove
-              </button>
-            )}
-          </div>
+        {(
+          [
+            ["household", "Household"],
+            ["tax", "Tax"],
+            ["appearance", "Appearance"],
+            ["data", "Data & Privacy"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            aria-current={settingsSection === id ? "page" : undefined}
+            className={settingsSection === id ? "active" : undefined}
+            onClick={() => setSettingsSection(id)}
+          >
+            {label}
+          </button>
         ))}
-        <div className="form-actions">
-          <button
-            disabled={memberSaving}
-            onClick={() =>
-              setPeople([...people, newPerson(bootstrap.household!.id)])
-            }
-          >
-            <Plus size={14} /> Add person
-          </button>
-          <button
-            className="primary"
-            disabled={memberSaving}
-            onClick={savePeople}
-          >
-            {memberSaving ? "Saving…" : "Save members"}
-          </button>
-        </div>
-        {memberResult?.kind === "error" && (
-          <p ref={memberAlert} tabIndex={-1} role="alert" className="negative">
-            {memberResult.message}
-          </p>
-        )}
-        {memberResult?.kind === "success" && (
-          <p role="status">{memberResult.message}</p>
-        )}
-        {message && <p role="status">{message}</p>}
-      </section>
-      }
-      {settingsSection==="tax"&&
-      <section className="card settings-card" aria-labelledby="tax-profile-title">
-        <h3 id="tax-profile-title">Tax filing</h3>
-        <p className="muted">Choose whose incomes are combined on the household income-tax return. Payroll taxes remain calculated separately for each employee.</p>
-        <label>Filing status<select aria-label="Tax filing status" value={filingStatus} disabled={taxSaving} onChange={event=>setFilingStatus(event.target.value as TaxProfile["filingStatus"])}><option value="single">Single</option><option value="married-joint">Married filing jointly</option><option value="married-separate">Married filing separately</option><option value="head-of-household">Head of household</option></select></label>
-        {filingStatus==="married-joint"&&<fieldset><legend>People filing together</legend><label>Spouse 1<select aria-label="Joint filer 1" value={jointMembers[0]} disabled={taxSaving} onChange={event=>setJointMembers([event.target.value,jointMembers[1]])}>{people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label><span aria-hidden="true"> + </span><label>Spouse 2<select aria-label="Joint filer 2" value={jointMembers[1]} disabled={taxSaving} onChange={event=>setJointMembers([jointMembers[0],event.target.value])}><option value="">Select…</option>{people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label><p role="status"><strong>{people.find(person=>person.id===jointMembers[0])?.name??"First spouse"} + {people.find(person=>person.id===jointMembers[1])?.name??"Second spouse"}</strong> — incomes combined for federal and California income tax.</p></fieldset>}
-        <div><strong>Linked wage income</strong>{bootstrap.recurring.filter(entry=>entry.incomeType==="salary"||entry.incomeTaxCategory==="wages").map(entry=><p key={entry.id}>{bootstrap.people.find(person=>person.id===entry.ownerPersonId)?.name??"Owner required"}: {entry.name} · {money(entry.amountCents)} annually</p>)}</div>
-        <button className="primary" disabled={taxSaving} onClick={saveTaxProfile}>{taxSaving?"Saving…":"Save tax filing"}</button>
-        {taxResult&&<p role={taxResult.kind==="error"?"alert":"status"} className={taxResult.kind==="error"?"negative":undefined}>{taxResult.message}</p>}
-      </section>
-      }
-      {settingsSection==="appearance"&&
-      <section className="card settings-card">
-        <h3>Appearance</h3>
-        <div className="setting">
-          <fieldset>
-            <legend>Theme</legend>
-            {(["system", "light", "dark"] as Theme[]).map((theme) => (
-              <label key={theme}>
+      </nav>
+      <label className="compact-section-select settings-section-select">
+        Settings section
+        <select value={settingsSection} onChange={(event) => setSettingsSection(event.target.value as typeof settingsSection)}>
+          <option value="household">Household</option>
+          <option value="tax">Tax</option>
+          <option value="appearance">Appearance</option>
+          <option value="data">Data &amp; Privacy</option>
+        </select>
+      </label>
+      <div className="settings-panel">
+        {settingsSection === "household" && (
+          <section className="card settings-card">
+            <h3>Household members</h3>
+            <p className="muted">
+              People whose income and spending are included in this plan.
+            </p>
+            {people.map((p, i) => (
+              <div className="member-setting" key={p.id}>
                 <input
-                  type="radio"
-                  name="theme"
-                  checked={settings.theme === theme}
-                  disabled={appearanceSaving}
-                  onChange={() => saveAppearance({ theme })}
+                  aria-label={`Member ${i + 1} name`}
+                  value={p.name}
+                  disabled={memberSaving}
+                  onChange={(e) =>
+                    setPeople(updateAt(people, i, { name: e.target.value }))
+                  }
                 />
-                {theme[0].toUpperCase() + theme.slice(1)}
-              </label>
+                <BirthDateField
+                  label={`Member ${i + 1} birth date`}
+                  value={p.birthDate ?? ""}
+                  disabled={memberSaving}
+                  onChange={(birthDate) =>
+                    setPeople(updateAt(people, i, { birthDate }))
+                  }
+                />
+                {people.length > 1 && (
+                  <OverflowMenu label={`More actions for ${p.name || `member ${i + 1}`}`} items={[{
+                    label: "Remove member",
+                    destructive: true,
+                    disabled: memberSaving,
+                    onSelect: () => setPeople(people.filter((_, x) => x !== i)),
+                  }]}/>
+                )}
+              </div>
             ))}
-          </fieldset>
-        </div>
-        <div className="setting">
-          <div>
-            <strong id="reduced-motion-label">Reduced motion</strong>
-            <p id="reduced-motion-description">Minimize interface animation.</p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={settings.reducedMotion}
-            aria-labelledby="reduced-motion-label"
-            aria-describedby="reduced-motion-description"
-            className={settings.reducedMotion ? "switch on" : "switch"}
-            disabled={appearanceSaving}
-            onClick={() =>
-              saveAppearance({ reducedMotion: !settings.reducedMotion })
-            }
-          >
-            <span />
-          </button>
-        </div>
-      </section>
-      }
-      {settingsSection==="data"&&
-      <section className="card settings-card">
-        <h3>Data & privacy</h3>
-        <div className="setting">
-          <div>
-            <strong>Local database</strong>
-            <p>Your financial data stays on this device.</p>
-          </div>
-          <button disabled={backupBusy || restoreBusy} onClick={createBackup}>
-            {backupBusy ? "Backing up…" : "Back up data"}
-          </button>
-        </div>
-        <div className="setting">
-          <div>
-            <strong>Restore</strong>
-            <p>Replace local data from a LifeLook backup.</p>
-          </div>
-          <button
-            disabled={backupBusy || restoreBusy}
-            onClick={() => {
-              setConfirmRestore(true);
-              queueMicrotask(() => restoreCancel.current?.focus());
-            }}
-          >
-            Choose backup
-          </button>
-        </div>
-        <div className="setting">
-          <div>
-            <strong>Reset profile</strong>
-            <p>Permanently erase this workspace and start onboarding again.</p>
-          </div>
-          <button
-            className="danger"
-            disabled={backupBusy || restoreBusy}
-            onClick={() => {
-              setConfirmReset(true);
-              queueMicrotask(() => resetCancel.current?.focus());
-            }}
-          >
-            Reset profile
-          </button>
-        </div>
-        {dataResult?.kind === "error" && (
-          <p ref={dataAlert} tabIndex={-1} role="alert" className="negative">
-            {dataResult.message}
-          </p>
-        )}
-        {dataResult?.kind === "success" && (
-          <p role="status">{dataResult.message}</p>
-        )}
-      </section>
-      }
-      {confirmRestore && (
-        <div className="modal-backdrop">
-          <section
-            className="card modal"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="restore-title"
-            aria-describedby="restore-warning"
-          >
-            <h2 id="restore-title">Replace all current data?</h2>
-            <p id="restore-warning">
-              Restoring a backup replaces all data in this workspace and cannot
-              be undone.
-            </p>
-            <div className="actions">
-              <button
-                ref={restoreCancel}
-                onClick={() => setConfirmRestore(false)}
+            <div className="form-actions">
+              <ActionButton
+                tier="primary"
+                disabled={memberSaving}
+                onClick={() =>
+                  setPeople([...people, newPerson(bootstrap.household!.id)])
+                }
               >
-                Cancel
-              </button>
-              <button className="primary" onClick={restoreBackup}>
-                Choose backup and restore
-              </button>
+                <Plus size={14} /> Add person
+              </ActionButton>
+              <ActionButton
+                tier="secondary"
+                disabled={memberSaving}
+                onClick={savePeople}
+              >
+                {memberSaving ? "Saving…" : "Save members"}
+              </ActionButton>
             </div>
+            {memberResult?.kind === "error" && (
+              <p
+                ref={memberAlert}
+                tabIndex={-1}
+                role="alert"
+                className="negative"
+              >
+                {memberResult.message}
+              </p>
+            )}
+            {memberResult?.kind === "success" && (
+              <p role="status">{memberResult.message}</p>
+            )}
+            {message && <p role="status">{message}</p>}
           </section>
-        </div>
-      )}
-      {confirmReset && (
-        <div className="modal-backdrop">
+        )}
+        {settingsSection === "tax" && (
           <section
-            className="card modal"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="reset-title"
-            aria-describedby="reset-warning"
+            className="card settings-card"
+            aria-labelledby="tax-profile-title"
           >
-            <h2 id="reset-title">Reset your profile?</h2>
-            <p id="reset-warning">
-              This permanently erases all household, account, activity, and planning data in this workspace. This cannot be undone.
+            <h3 id="tax-profile-title">Tax filing</h3>
+            <p className="muted">
+              Choose whose incomes are combined on the household income-tax
+              return. Payroll taxes remain calculated separately for each
+              employee.
             </p>
-            <div className="actions">
-              <button ref={resetCancel} onClick={() => setConfirmReset(false)}>
-                Cancel
-              </button>
-              <button className="danger" onClick={resetProfile}>
-                Yes, reset profile
+            <label>
+              Filing status
+              <select
+                aria-label="Tax filing status"
+                value={filingStatus}
+                disabled={taxSaving}
+                onChange={(event) =>
+                  setFilingStatus(
+                    event.target.value as TaxProfile["filingStatus"],
+                  )
+                }
+              >
+                <option value="single">Single</option>
+                <option value="married-joint">Married filing jointly</option>
+                <option value="married-separate">
+                  Married filing separately
+                </option>
+                <option value="head-of-household">Head of household</option>
+              </select>
+            </label>
+            {filingStatus === "married-joint" && (
+              <fieldset>
+                <legend>People filing together</legend>
+                <label>
+                  Spouse 1
+                  <select
+                    aria-label="Joint filer 1"
+                    value={jointMembers[0]}
+                    disabled={taxSaving}
+                    onChange={(event) =>
+                      setJointMembers([event.target.value, jointMembers[1]])
+                    }
+                  >
+                    {people.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span aria-hidden="true"> + </span>
+                <label>
+                  Spouse 2
+                  <select
+                    aria-label="Joint filer 2"
+                    value={jointMembers[1]}
+                    disabled={taxSaving}
+                    onChange={(event) =>
+                      setJointMembers([jointMembers[0], event.target.value])
+                    }
+                  >
+                    <option value="">Select…</option>
+                    {people.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p role="status">
+                  <strong>
+                    {people.find((person) => person.id === jointMembers[0])
+                      ?.name ?? "First spouse"}{" "}
+                    +{" "}
+                    {people.find((person) => person.id === jointMembers[1])
+                      ?.name ?? "Second spouse"}
+                  </strong>{" "}
+                  — incomes combined for federal and California income tax.
+                </p>
+              </fieldset>
+            )}
+            <div>
+              <strong>Linked wage income</strong>
+              {bootstrap.recurring
+                .filter(
+                  (entry) =>
+                    entry.incomeType === "salary" ||
+                    entry.incomeTaxCategory === "wages",
+                )
+                .map((entry) => (
+                  <p key={entry.id}>
+                    {bootstrap.people.find(
+                      (person) => person.id === entry.ownerPersonId,
+                    )?.name ?? "Owner required"}
+                    : {entry.name} · {money(entry.amountCents)} annually
+                  </p>
+                ))}
+            </div>
+            <button
+              className="primary"
+              disabled={taxSaving}
+              onClick={saveTaxProfile}
+            >
+              {taxSaving ? "Saving…" : "Save tax filing"}
+            </button>
+            {taxResult && (
+              <p
+                role={taxResult.kind === "error" ? "alert" : "status"}
+                className={taxResult.kind === "error" ? "negative" : undefined}
+              >
+                {taxResult.message}
+              </p>
+            )}
+          </section>
+        )}
+        {settingsSection === "appearance" && (
+          <section className="card settings-card">
+            <h3>Appearance</h3>
+            <div className="setting">
+              <fieldset>
+                <legend>Theme</legend>
+                {(["system", "light", "dark"] as Theme[]).map((theme) => (
+                  <label key={theme}>
+                    <input
+                      type="radio"
+                      name="theme"
+                      checked={settings.theme === theme}
+                      disabled={appearanceSaving}
+                      onChange={() => saveAppearance({ theme })}
+                    />
+                    {theme[0].toUpperCase() + theme.slice(1)}
+                  </label>
+                ))}
+              </fieldset>
+            </div>
+            <div className="setting">
+              <div>
+                <strong id="reduced-motion-label">Reduced motion</strong>
+                <p id="reduced-motion-description">
+                  Minimize interface animation.
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={settings.reducedMotion}
+                aria-labelledby="reduced-motion-label"
+                aria-describedby="reduced-motion-description"
+                className={settings.reducedMotion ? "switch on" : "switch"}
+                disabled={appearanceSaving}
+                onClick={() =>
+                  saveAppearance({ reducedMotion: !settings.reducedMotion })
+                }
+              >
+                <span />
               </button>
             </div>
           </section>
-        </div>
-      )}
+        )}
+        {settingsSection === "data" && (
+          <section className="card settings-card">
+            <h3>Data & privacy</h3>
+            <div className="setting">
+              <div>
+                <strong>Local database</strong>
+                <p>Your financial data stays on this device.</p>
+              </div>
+              <button
+                disabled={backupBusy || restoreBusy}
+                onClick={createBackup}
+              >
+                {backupBusy ? "Backing up…" : "Back up data"}
+              </button>
+            </div>
+            <div className="setting">
+              <div>
+                <strong>Restore</strong>
+                <p>Replace local data from a LifeLook backup.</p>
+              </div>
+              <button
+                disabled={backupBusy || restoreBusy}
+                onClick={(event) => {
+                  confirmationInvoker.current = event.currentTarget;
+                  setConfirmRestore(true);
+                  queueMicrotask(() => restoreCancel.current?.focus());
+                }}
+              >
+                Choose backup
+              </button>
+            </div>
+            <div className="setting">
+              <div>
+                <strong>Reset profile</strong>
+                <p>
+                  Permanently erase this workspace and start onboarding again.
+                </p>
+              </div>
+              <button
+                className="danger"
+                disabled={backupBusy || restoreBusy}
+                onClick={(event) => {
+                  confirmationInvoker.current = event.currentTarget;
+                  setConfirmReset(true);
+                  queueMicrotask(() => resetCancel.current?.focus());
+                }}
+              >
+                Reset profile
+              </button>
+            </div>
+            {dataResult?.kind === "error" && (
+              <p
+                ref={dataAlert}
+                tabIndex={-1}
+                role="alert"
+                className="negative"
+              >
+                {dataResult.message}
+              </p>
+            )}
+            {dataResult?.kind === "success" && (
+              <p role="status">{dataResult.message}</p>
+            )}
+          </section>
+        )}
+        {confirmRestore && (
+          <div className="modal-backdrop">
+            <section
+              className="card modal"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="restore-title"
+              aria-describedby="restore-warning"
+            >
+              <h2 id="restore-title">Replace all current data?</h2>
+              <p id="restore-warning">
+                Restoring a backup replaces all data in this workspace and
+                cannot be undone.
+              </p>
+              <div className="actions">
+                <button
+                  ref={restoreCancel}
+                  onClick={() => setConfirmRestore(false)}
+                >
+                  Cancel
+                </button>
+                <button className="primary" onClick={restoreBackup}>
+                  Choose backup and restore
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
+        {confirmReset && (
+          <div className="modal-backdrop">
+            <section
+              className="card modal"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="reset-title"
+              aria-describedby="reset-warning"
+            >
+              <h2 id="reset-title">Reset your profile?</h2>
+              <p id="reset-warning">
+                This permanently erases all household, account, activity, and
+                planning data in this workspace. This cannot be undone.
+              </p>
+              <div className="actions">
+                <button
+                  ref={resetCancel}
+                  onClick={() => setConfirmReset(false)}
+                >
+                  Cancel
+                </button>
+                <button className="danger" onClick={resetProfile}>
+                  Yes, reset profile
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
       </div>
     </div>
   );

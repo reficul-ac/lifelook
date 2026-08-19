@@ -77,6 +77,7 @@ import {
   GlobalSearch,
   type SearchResult,
 } from "./GlobalSearch";
+import { ActionButton, AnchoredMenu, DetailDisclosure, InfoPopover } from "./ui";
 
 const units=(micros:number)=>new Intl.NumberFormat(undefined,{maximumFractionDigits:6}).format(micros/1_000_000);
 const equityVestedValue=(asset:Pick<Asset,"equityHolding">,date:string)=>asset.equityHolding?.grants.reduce((sum,grant)=>sum+valueForUnits(vestedUnitsAt(grant,date),projectedSharePrice(asset.equityHolding!,date)),0)??0;
@@ -84,14 +85,14 @@ const nextVest=(grant:import("./domain").RsuGrant,date:string)=>grant.vestEvents
 
 type View = "Overview" | "Activity" | "Plan" | "Investment" | "Retirement" | "Net Worth" | "Settings";
 const localIsoDate=()=>{const now=new Date(),offset=now.getTimezoneOffset()*60000;return new Date(now.valueOf()-offset).toISOString().slice(0,10)};
-const nav: [View, typeof LayoutDashboard][] = [
-  ["Overview", LayoutDashboard],
-  ["Activity", Activity],
-  ["Plan", PiggyBank],
-  ["Investment", TrendingUp],
-  ["Retirement", Umbrella],
-  ["Net Worth", Landmark],
-  ["Settings", Settings],
+const nav: [View, typeof LayoutDashboard, string][] = [
+  ["Overview", LayoutDashboard,"Overview"],
+  ["Plan", PiggyBank,"Planning"],
+  ["Investment", TrendingUp,"Planning"],
+  ["Retirement", Umbrella,"Planning"],
+  ["Activity", Activity,"Records"],
+  ["Net Worth", Landmark,"Records"],
+  ["Settings", Settings,"Settings"],
 ];
 const money = (cents: number, compact = false) => {
   const showMillionDecimals = compact && Math.abs(cents) >= 100_000_000;
@@ -464,10 +465,12 @@ function Workspace({
           <span>LifeLook</span>
         </div>
         <nav aria-label="Primary navigation">
-          {nav.map(([name, Icon]) => (
+          {nav.map(([name, Icon,group],index) => (
+            <div className="nav-item" key={name} data-group={group}>
+            {(index===0||nav[index-1][2]!==group)&&<span className="nav-group">{group}</span>}
             <button
-              key={name}
               className={view === name ? "active" : ""}
+              aria-label={name}
               aria-current={view === name ? "page" : undefined}
               onClick={() => setView(name)}
             >
@@ -477,6 +480,7 @@ function Workspace({
                 <i>{new Set(bootstrap.activity.map((x) => x.entryId)).size}</i>
               )}
             </button>
+            </div>
           ))}
         </nav>
         <div className="aside-bottom">
@@ -521,13 +525,14 @@ function Workspace({
             >
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <button
-              ref={addButton}
-              className="add"
-              onClick={() => openDialog({ type: "chooser" }, addButton.current)}
-            >
-              <Plus size={17} /> Add
-            </button>
+            <AnchoredMenu primary label="Add" icon={<Plus size={17}/>} items={[
+              {label:"Income",onSelect:(el)=>openDialog({type:"transaction",kind:"income"},el)},
+              {label:"Expense",onSelect:(el)=>openDialog({type:"transaction",kind:"expense"},el)},
+              {label:"Transfer",onSelect:(el)=>openDialog({type:"transfer"},el)},
+              {label:"Account",onSelect:(el)=>openDialog({type:"account"},el)},
+              {label:"Asset",onSelect:(el)=>openDialog({type:"asset"},el)},
+              {label:"Debt",onSelect:(el)=>openDialog({type:"liability"},el)},
+            ]}/>
           </div>
         </header>
         {view === "Overview" && (
@@ -535,6 +540,7 @@ function Workspace({
             bootstrap={bootstrap}
             projections={projections}
             navigate={setView}
+            onAdd={(el)=>openDialog({type:"transaction",kind:"expense"},el)}
           />
         )}
         {view === "Activity" && (
@@ -545,6 +551,8 @@ function Workspace({
             revealEntryId={
               focusTarget?.kind === "Activity" ? focusTarget.id : null
             }
+            preferenceKey={`lifelook:ui:v1:${bootstrap.household?.id??"local"}:activity-breakdown`}
+            onAdd={(el)=>openDialog({type:"transaction",kind:"expense"},el)}
             onImport={(el) => openDialog({ type: "import" }, el)}
             onEdit={(entry) =>
               openDialog({
@@ -2993,10 +3001,12 @@ function Overview({
   bootstrap,
   projections,
   navigate,
+  onAdd,
 }: {
   bootstrap: Bootstrap;
   projections: ReturnType<typeof ProjectionEngine.calculate> | null;
   navigate: (view: View) => void;
+  onAdd:(el:HTMLElement)=>void;
 }) {
   const currentNetWorth =
     bootstrap.accounts.reduce((sum, a) => sum + a.balanceCents, 0) +
@@ -3012,6 +3022,8 @@ function Overview({
   const spending = -actual
     .filter((x) => x.kind === "expense")
     .reduce((s, x) => s + x.amountCents, 0);
+  const assets=bootstrap.accounts.filter(a=>a.balanceCents>0).reduce((s,a)=>s+a.balanceCents,0)+bootstrap.assets.reduce((s,a)=>s+a.valueCents,0), debt=bootstrap.accounts.filter(a=>a.balanceCents<0).reduce((s,a)=>s-a.balanceCents,0)+bootstrap.liabilities.reduce((s,a)=>s+a.balanceCents,0), compositionTotal=Math.max(1,assets+debt);
+  const recent=[...bootstrap.activity.reduce((map,row)=>map.set(row.entryId,[...(map.get(row.entryId)??[]),row]),new Map<string,ActivityPosting[]>()).values()].sort((a,b)=>b[0].occurredOn.localeCompare(a[0].occurredOn)).slice(0,4);
   return (
     <div className="content">
       <section className="hero">
@@ -3023,13 +3035,13 @@ function Overview({
             Based on current account, asset, and liability balances.
           </p>
         </div>
-        <div className="hero-chart">
-          <p className="muted">
-            Historical net-worth trend unavailable: no dated balance history has
-            been recorded.
-          </p>
+        <div className="hero-chart composition" aria-label={`Financial position: ${money(assets)} assets and ${money(debt)} debt`}>
+          <div className="composition-heading"><strong>Financial position</strong><InfoPopover label="About financial position">This uses current saved balances only. Debt is shown separately and subtracted from net worth.</InfoPopover></div>
+          <div className="composition-bar"><i style={{width:`${assets/compositionTotal*100}%`}}/><i className="debt" style={{width:`${debt/compositionTotal*100}%`}}/></div>
+          <div className="composition-labels"><span><i/>Assets <strong>{money(assets)}</strong></span><span><i className="debt"/>Debt <strong>{money(debt)}</strong></span></div>
         </div>
       </section>
+      <div className="section-action"><ActionButton tier="primary" onClick={e=>onAdd(e.currentTarget)}><Plus size={16}/> Add transaction</ActionButton></div>
       <div className="metrics">
         <Metric
           title="Income"
@@ -3071,7 +3083,8 @@ function Overview({
               View all <ChevronRight size={14} />
             </button>
           </div>
-          <p className="empty">No transactions have been recorded.</p>
+          {recent.map(group=>{const row=group[0],transfer=row.kind==="transfer";return <Transaction key={row.entryId} icon={transfer?WalletCards:row.kind==="income"?ArrowDownRight:ArrowUpRight} name={row.description||row.kind} detail={`${row.accountName} · ${row.occurredOn}`} amount={money(transfer?Math.abs(group.find(x=>x.amountCents<0)?.amountCents??0):row.amountCents)} positive={row.kind==="income"}/>})}
+          {!recent.length&&<p className="empty">No transactions have been recorded.</p>}
         </section>
         <section className="card">
           <div className="card-title">
@@ -3586,6 +3599,8 @@ function ActivityView({
   onEdit,
   onImport,
   revealEntryId,
+  onAdd,
+  preferenceKey,
 }: {
   activity: ActivityPosting[];
   accounts: BootstrapAccount[];
@@ -3593,10 +3608,13 @@ function ActivityView({
   onEdit: (entry: ActivityPosting[]) => void;
   onImport: (el: HTMLElement) => void;
   revealEntryId: string | null;
+  onAdd:(el:HTMLElement)=>void;
+  preferenceKey:string;
 }) {
   const [query, setQuery] = useState("");
   const [account, setAccount] = useState("all");
   const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [filtersOpen,setFiltersOpen]=useState(false);
   useEffect(() => {
     if (revealEntryId) {
       setQuery("");
@@ -3640,6 +3658,7 @@ function ActivityView({
   const total = rows
     .filter((x) => x[0].kind !== "transfer")
     .reduce((sum, x) => sum + x[0].amountCents, 0);
+  const filteredIncome=rows.filter(x=>x[0].kind==="income").reduce((s,x)=>s+x[0].amountCents,0),filteredSpending=-rows.filter(x=>x[0].kind==="expense").reduce((s,x)=>s+x[0].amountCents,0);
   const years = [...new Set(activity.map((x) => x.occurredOn.slice(0, 4)))]
     .sort()
     .reverse();
@@ -3674,6 +3693,7 @@ function ActivityView({
   return (
     <div className="content">
       <div className="toolbar">
+        <ActionButton tier="primary" onClick={e=>onAdd(e.currentTarget)}><Plus size={16}/> Add transaction</ActionButton>
         <div className="search">
           <Search size={17} />
           <input
@@ -3683,7 +3703,8 @@ function ActivityView({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <label className="sr-only" htmlFor="activity-account">
+        <ActionButton aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(x=>!x)}>Filters<ChevronDown size={14}/></ActionButton>
+        {filtersOpen&&<div className="filter-panel"><label htmlFor="activity-account">
           Account
         </label>
         <select
@@ -3698,7 +3719,7 @@ function ActivityView({
             </option>
           ))}
         </select>
-        <label className="sr-only" htmlFor="activity-year">
+        <label htmlFor="activity-year">
           Year
         </label>
         <select
@@ -3710,11 +3731,8 @@ function ActivityView({
           {years.map((y) => (
             <option key={y}>{y}</option>
           ))}
-        </select>
-        <button onClick={(e) => onImport(e.currentTarget)}>Import CSV</button>
-        <button onClick={exportCsv} disabled={!rows.length || exporting}>
-          {exporting ? "Exporting…" : "Export CSV"}
-        </button>
+        </select></div>}
+        <AnchoredMenu label="Actions" items={[{label:"Import CSV",onSelect:(el)=>onImport(el!)},{label:exporting?"Exporting…":"Export CSV",disabled:!rows.length||exporting,onSelect:exportCsv}]}/>
       </div>
       {exportError && (
         <p className="form-error" role="alert">
@@ -3779,6 +3797,7 @@ function ActivityView({
           </p>
         )}
       </section>
+      <DetailDisclosure label="View breakdown" storageKey={preferenceKey}><div className="breakdown-grid"><Metric title="Income" value={money(filteredIncome)} change="Filtered activity" icon={ArrowDownRight}/><Metric title="Spending" value={money(filteredSpending)} change="Filtered activity" icon={ArrowUpRight} negative/><Metric title="Saved" value={money(filteredIncome-filteredSpending)} change="Income minus spending" icon={PiggyBank}/></div></DetailDisclosure>
     </div>
   );
 }
@@ -4459,7 +4478,8 @@ function PlanView(props:PlanViewProps) {
       <div><span className="label assumption">Plan</span><h2>{scenario?.name??"Baseline"}</h2></div>
       <label>Scenario<select data-search-kind="Scenario" data-search-id={selectedScenarioId} aria-label="Active scenario" value={selectedScenarioId} onChange={event=>onSelectScenario(event.target.value)}>{scenarios.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
     </div>
-    <div className="plan-tabs" role="tablist" aria-label="Plan sections">{(["wealth","cash-flow","contributions","setup"] as const).map(item=><button key={item} role="tab" aria-selected={tab===item} onClick={()=>setTab(item)}>{item.replace("-"," ")}</button>)}</div>
+    <div className="plan-tabs" role="tablist" aria-label="Plan sections">{(["wealth","cash-flow","contributions","setup"] as const).map(item=><button key={item} role="tab" aria-selected={tab===item} onClick={()=>setTab(item)}>{{wealth:"Outlook","cash-flow":"Cash Flow",contributions:"Contributions",setup:"Scenario"}[item]}</button>)}</div>
+    <label className="compact-section-select">Plan section<select value={tab} onChange={e=>setTab(e.target.value as typeof tab)}><option value="wealth">Outlook</option><option value="cash-flow">Cash Flow</option><option value="contributions">Contributions</option><option value="setup">Scenario</option></select></label>
     {tab==="wealth"&&<>
       <section className={`wealth-chart card wide series-${activeSeries.group}`} aria-labelledby="wealth-chart-title">
         <div className="chart-heading"><div><span className="label projected">Projected balance</span><h3 id="wealth-chart-title">{activeSeries.name}</h3></div><div className="chart-ranges" aria-label="Projection range">{([5,10,15,20,"max"] as const).map(item=><button key={item} aria-pressed={range===item} onClick={()=>setRange(item)}>{item==="max"?"Max":`${item}Y`}</button>)}</div></div>
@@ -4765,6 +4785,7 @@ function SettingsView({
   const restoreCancel = useRef<HTMLButtonElement>(null);
   const resetCancel = useRef<HTMLButtonElement>(null);
   const [appearanceSaving, setAppearanceSaving] = useState(false);
+  const [settingsSection,setSettingsSection]=useState<"household"|"tax"|"appearance"|"data">("household");
   const [memberSaving, setMemberSaving] = useState(false);
   const [memberResult, setMemberResult] = useState<{
     kind: "error" | "success";
@@ -4925,7 +4946,12 @@ function SettingsView({
     setTaxResult(null);if(filingStatus==="married-joint"&&(!jointMembers[0]||!jointMembers[1]||jointMembers[0]===jointMembers[1])){setTaxResult({kind:"error",message:"Married filing jointly requires two distinct household people."});return;}setTaxSaving(true);try{await repository.saveOnboardingStep(8,{taxProfile:{filingStatus,state:"CA",taxYear:2026,thresholdInflationBps:bootstrap.taxProfile?.thresholdInflationBps??250,revision:bootstrap.taxProfile?.revision??1,taxUnit:{id:bootstrap.taxProfile?.taxUnit?.id??`${bootstrap.household?.id??"household"}-tax-unit`,filingStatus,memberPersonIds:filingStatus==="married-joint"?jointMembers:[jointMembers[0]].filter(Boolean)}}});setTaxResult({kind:"success",message:"Joint filing link saved."});onSaved();}catch(error){setTaxResult({kind:"error",message:errorMessage(error,"Could not save the tax profile.")});}finally{setTaxSaving(false);}
   }
   return (
-    <div className="content">
+    <div className="content settings-workspace">
+      <nav className="settings-nav" aria-label="Settings sections">
+        {([['household','Household'],['tax','Tax'],['appearance','Appearance'],['data','Data & Privacy']] as const).map(([id,label])=><button key={id} aria-current={settingsSection===id?"page":undefined} className={settingsSection===id?"active":undefined} onClick={()=>setSettingsSection(id)}>{label}</button>)}
+      </nav>
+      <div className="settings-panel">
+      {settingsSection==="household"&&
       <section className="card settings-card">
         <h3>Household members</h3>
         <p className="muted">
@@ -4986,6 +5012,8 @@ function SettingsView({
         )}
         {message && <p role="status">{message}</p>}
       </section>
+      }
+      {settingsSection==="tax"&&
       <section className="card settings-card" aria-labelledby="tax-profile-title">
         <h3 id="tax-profile-title">Tax filing</h3>
         <p className="muted">Choose whose incomes are combined on the household income-tax return. Payroll taxes remain calculated separately for each employee.</p>
@@ -4995,6 +5023,8 @@ function SettingsView({
         <button className="primary" disabled={taxSaving} onClick={saveTaxProfile}>{taxSaving?"Saving…":"Save tax filing"}</button>
         {taxResult&&<p role={taxResult.kind==="error"?"alert":"status"} className={taxResult.kind==="error"?"negative":undefined}>{taxResult.message}</p>}
       </section>
+      }
+      {settingsSection==="appearance"&&
       <section className="card settings-card">
         <h3>Appearance</h3>
         <div className="setting">
@@ -5034,6 +5064,8 @@ function SettingsView({
           </button>
         </div>
       </section>
+      }
+      {settingsSection==="data"&&
       <section className="card settings-card">
         <h3>Data & privacy</h3>
         <div className="setting">
@@ -5085,6 +5117,7 @@ function SettingsView({
           <p role="status">{dataResult.message}</p>
         )}
       </section>
+      }
       {confirmRestore && (
         <div className="modal-backdrop">
           <section
@@ -5137,6 +5170,7 @@ function SettingsView({
           </section>
         </div>
       )}
+      </div>
     </div>
   );
 }

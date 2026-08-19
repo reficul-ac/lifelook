@@ -165,6 +165,16 @@ export function RetirementView({
         <label>Spending<select value={plan.spendingMode??"manual"} onChange={e=>update("spendingMode",e.target.value as "manual"|"plan")}><option value="manual">Manual budget</option><option value="plan">Use Plan expenses</option></select></label>
         <label>Scenario<select value={plan.selectedScenarioId} onChange={e=>update("selectedScenarioId",e.target.value)}>{scenarios.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       </section>
+      <section className="card">
+        <details>
+          <summary>Retirement tax assumptions</summary>
+          <p className="muted">Optional annual planning inputs. Dollar amounts grow with scenario inflation.</p>
+          <div className="form-grid">
+            {([['annualQcdCents','Annual QCD target'],['charitableCents','Charitable expenses'],['medicalCents','Medical expenses'],['federalShortLossCents','Federal short-term loss carryforward'],['federalLongLossCents','Federal long-term loss carryforward'],['californiaShortLossCents','California short-term loss carryforward'],['californiaLongLossCents','California long-term loss carryforward']] as const).map(([key,label])=><label key={key}>{label}<input type="number" min="0" step="1" value={(plan.taxAssumptions?.[key]??0)/100} onChange={e=>update("taxAssumptions",{annualQcdCents:0,charitableCents:0,medicalCents:0,federalShortLossCents:0,federalLongLossCents:0,californiaShortLossCents:0,californiaLongLossCents:0,mfsLivedApartAllYear:false,...plan.taxAssumptions,[key]:Math.max(0,Math.round(Number(e.target.value)*100))})}/></label>)}
+            {snapshot.taxProfile?.filingStatus==="married-separate"&&<label><input type="checkbox" checked={plan.taxAssumptions?.mfsLivedApartAllYear??false} onChange={e=>update("taxAssumptions",{annualQcdCents:0,charitableCents:0,medicalCents:0,federalShortLossCents:0,federalLongLossCents:0,californiaShortLossCents:0,californiaLongLossCents:0,...plan.taxAssumptions,mfsLivedApartAllYear:e.target.checked})}/> Lived apart from spouse all year</label>}
+          </div>
+        </details>
+      </section>
       {legacy && (
         <section className="card" role="alert">
           <strong>Legacy retirement portfolio needs review</strong>
@@ -630,57 +640,24 @@ const YearTable = ({
       <thead>
         <tr>
           <th>Year</th>
-          <th>Beginning spendable</th>
-          <th>Employment</th>
-          <th>Rental</th>
-          <th>Scheduled</th>
-          <th>Other</th>
-          <th>RMD</th>
+          <th>Income</th>
           <th>Withdrawals</th>
-          <th>Total gross</th>
-          <th>Source detail</th>
-          <th>Tax/penalty</th>
+          <th>Tax and penalties</th>
           <th>Spending</th>
-          <th>Excess</th>
-          <th>Ending spendable</th>
-          <th>Total assets</th>
-          <th>Debt</th>
-          <th>Net worth</th>
-          <th>Reconciliation</th>
+          <th>Excess / shortfall</th>
+          <th>Ending spendable balance</th>
         </tr>
       </thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.year}>
-            <th>{r.year}</th>
-            <td>{money(r.beginningSpendableCents)}</td>
-            <td>{money(r.employmentIncomeCents)}</td>
-            <td>{money(r.rentalIncomeCents)}</td>
-            <td>{money(r.scheduledIncomeCents)}</td>
-            <td>{money(r.otherIncomeCents)}</td>
-            <td>{money(r.rmdCents)}</td>
-            <td>{money(r.withdrawalsCents)}</td>
+            <th><details><summary>{r.year} {r.taxStatement&&<span className="badge">Estimate</span>}</summary>{r.taxStatement&&<div className="tax-year-detail"><p><strong>{r.taxStatement.projectedFrozen?`Projected from ${r.taxStatement.rulePackYear} rule pack`:`Official ${r.taxStatement.rulePackYear} rule pack`}</strong></p><dl><div><dt>Federal / California / NIIT / penalties</dt><dd>{money(r.taxStatement.federalIncomeTaxCents)} / {money(r.taxStatement.californiaIncomeTaxCents)} / {money(r.taxStatement.niitCents)} / {money(r.taxStatement.penaltiesCents)}</dd></div><div><dt>Effective rate</dt><dd>{(r.taxStatement.effectiveRateBps/100).toFixed(2)}%</dd></div><div><dt>Federal AGI → deduction → taxable</dt><dd>{money(r.taxStatement.federalAgiCents)} → {money(r.taxStatement.federalDeductionCents)} → {money(r.taxStatement.federalTaxableIncomeCents)}</dd></div><div><dt>Taxable Social Security</dt><dd>{money(r.taxStatement.taxableSocialSecurityCents)}</dd></div><div><dt>Capital gains (short / long / California)</dt><dd>{money(r.taxStatement.federalShortGainCents)} / {money(r.taxStatement.federalLongGainCents)} / {money(r.taxStatement.californiaNetGainCents)}</dd></div></dl><p>Limitations: {r.taxStatement.limitations.join('; ')}.</p><ul>{r.taxStatement.sources.map((source,i)=><li key={`${source.url}-${i}`}><a href={source.url} target="_blank" rel="noreferrer">{source.jurisdiction} {source.sourceYear}</a> · {source.status}</li>)}</ul></div>}</details></th>
             <td>{money(r.grossIncomeCents)}</td>
-            <td>
-              {r.incomeSources.length ? (
-                <details>
-                  <summary>{r.incomeSources.length} sources</summary>
-                  <ul>
-                    {r.incomeSources.map((source, index) => (
-                      <li key={`${source.kind}-${source.id}-${index}`}>
-                        {source.name}: {money(source.amountCents)}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              ) : "No income"}
-            </td>
-            <td>{r.taxStatement?<details><summary>{money(r.taxAndPenaltyCents)}</summary><p><strong>{r.taxStatement.projectedFrozen?`Projected/frozen ${r.taxStatement.rulePackYear} nominal rules`:`Official ${r.taxStatement.rulePackYear} rules`}</strong></p><dl><div><dt>Federal AGI</dt><dd>{money(r.taxStatement.federalAgiCents)}</dd></div><div><dt>Federal deduction / taxable</dt><dd>{money(r.taxStatement.federalDeductionCents)} / {money(r.taxStatement.federalTaxableIncomeCents)}</dd></div><div><dt>California AGI / taxable</dt><dd>{money(r.taxStatement.californiaAgiCents)} / {money(r.taxStatement.californiaTaxableIncomeCents)}</dd></div><div><dt>Taxable Social Security</dt><dd>{money(r.taxStatement.taxableSocialSecurityCents)}</dd></div><div><dt>Federal / California / NIIT</dt><dd>{money(r.taxStatement.federalIncomeTaxCents)} / {money(r.taxStatement.californiaIncomeTaxCents)} / {money(r.taxStatement.niitCents)}</dd></div><div><dt>Quarterly safe harbor</dt><dd>{r.taxStatement.quarterlyPaymentsCents.map(money).join(" · ")}</dd></div><div><dt>December true-up</dt><dd>{money(r.taxStatement.yearEndTrueUpCents)}</dd></div></dl><p className="muted">Thresholds after the latest official pack are frozen in nominal dollars. Estimate only; unsupported: {r.taxStatement.unsupported.join(", ")}.</p></details>:money(r.taxAndPenaltyCents)}</td>
+            <td>{money(r.withdrawalsCents)}</td>
+            <td>{money(r.taxAndPenaltyCents)}</td>
             <td>{money(r.spendingCents)}</td>
             <td>{money(r.excessCents)}</td>
             <td>{money(r.endingSpendableCents)}</td>
-            <td>{money(r.totalAssetsCents)}</td><td>{money(r.totalDebtCents)}</td><td>{money(r.netWorthCents)}</td>
-            <td><details><summary>{r.reconciliationDifferenceCents===0?"Balanced":"Review"}</summary><strong>Accounts</strong><ul>{r.accounts.map(a=><li key={a.id}>{a.name}: {money(a.beginningCents)} + {money(a.returnsCents)} returns − {money(a.withdrawalsCents)} withdrawals = {money(a.endingCents)}</li>)}</ul><strong>Properties</strong><ul>{r.properties.map(p=><li key={p.id}>{p.name}: {money(p.grossRentCents)} gross rent; {money(p.netCashFlowCents)} net cash flow; {money(p.endingEquityCents)} equity</li>)}</ul></details></td>
           </tr>
         ))}
       </tbody>

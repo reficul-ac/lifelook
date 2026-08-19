@@ -14,9 +14,9 @@ describe("retirement return tax ledger",()=>{
     const result=calculateRetirementTax({year:2026,filingStatus:"single",income:{shortTermGainsCents:1_000_00},losses:{federalShortCents:10_000_00,californiaShortCents:2_000_00}});
     expect(result.carryforwards.federalShortCents).toBe(6_000_00);expect(result.carryforwards.californiaShortCents).toBe(0);
   });
-  it("uses prior-year safe harbor and reconciles the remainder",()=>{
-    const result=calculateRetirementTax({year:2027,filingStatus:"single",income:{pensionsCents:300_000_00},priorYearTaxCents:30_000_00,priorYearAgiCents:200_000_00});
-    expect(result.quarterlyPaymentsCents.reduce((a,b)=>a+b,0)).toBe(33_000_00);expect(result.yearEndTrueUpCents).toBe(result.totalLiabilityCents-33_000_00);expect(result.projectedFrozen).toBe(true);
+  it("reports annual liability without inventing payment timing",()=>{
+    const result=calculateRetirementTax({year:2027,filingStatus:"single",income:{pensionsCents:300_000_00},thresholdInflationBps:300});
+    expect(result.totalLiabilityCents).toBeGreaterThan(0);expect(result).not.toHaveProperty("quarterlyPaymentsCents");expect(result.projectedFrozen).toBe(true);
   });
 });
 

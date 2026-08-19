@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 20;
+const SCHEMA_VERSION: i64 = 21;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -342,6 +342,7 @@ struct RetirementPlanRecord {
     liquidatable_asset_ids: serde_json::Value,
     early_roth_account_ids: serde_json::Value,
     migration_review: serde_json::Value,
+    tax_assumptions: serde_json::Value,
     revision: i64,
 }
 #[derive(Debug, Deserialize)]
@@ -371,6 +372,8 @@ struct RetirementPlanInput {
     early_roth_account_ids: serde_json::Value,
     #[serde(default)]
     migration_review: serde_json::Value,
+    #[serde(default)]
+    tax_assumptions: serde_json::Value,
     expected_revision: i64,
 }
 fn default_spending_mode() -> String {
@@ -1018,6 +1021,12 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         for (name,sql) in [("spending_mode","ALTER TABLE retirement_plans ADD COLUMN spending_mode TEXT NOT NULL DEFAULT 'manual' CHECK(spending_mode IN ('manual','plan'))"),("liquidatable_asset_ids_json","ALTER TABLE retirement_plans ADD COLUMN liquidatable_asset_ids_json TEXT NOT NULL DEFAULT '[]'"),("early_roth_account_ids_json","ALTER TABLE retirement_plans ADD COLUMN early_roth_account_ids_json TEXT NOT NULL DEFAULT '[]'"),("migration_review_json","ALTER TABLE retirement_plans ADD COLUMN migration_review_json TEXT NOT NULL DEFAULT '[]'")]{if !retirement_columns.iter().any(|x|x==name){transaction.execute(sql,[])?;}}
         transaction.execute_batch("UPDATE retirement_plans SET liquidatable_asset_ids_json=selected_source_ids_json WHERE liquidatable_asset_ids_json='[]';INSERT OR IGNORE INTO schema_migrations(version) VALUES(20);")?;
     }
+    let version: i64 = transaction.query_row("SELECT COALESCE(MAX(version),0) FROM schema_migrations",[],|r| r.get(0))?;
+    if version < 21 {
+        let columns=transaction.prepare("PRAGMA table_info(retirement_plans)")?.query_map([],|r|r.get::<_,String>(1))?.collect::<Result<Vec<_>,_>>()?;
+        if !columns.iter().any(|x|x=="tax_assumptions_json") { transaction.execute("ALTER TABLE retirement_plans ADD COLUMN tax_assumptions_json TEXT NOT NULL DEFAULT '{}'",[])?; }
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(21)",[])?;
+    }
     transaction
         .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
     transaction.commit()?;
@@ -1068,7 +1077,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 revision: 1,
             });
         }
-        retirement_plan=connection.query_row("SELECT household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,spending_mode,liquidatable_asset_ids_json,early_roth_account_ids_json,migration_review_json,revision FROM retirement_plans WHERE household_id=?",[&h.id],|r|Ok(RetirementPlanRecord{household_id:r.get(0)?,selected_scenario_id:r.get(1)?,retirement_year:r.get(2)?,runway_years:r.get(3)?,withdrawal_rate_bps:r.get(4)?,expense_buckets:serde_json::from_str(&r.get::<_,String>(5)?).unwrap_or_else(|_|serde_json::json!([])),selected_source_ids:serde_json::from_str(&r.get::<_,String>(6)?).unwrap_or_else(|_|serde_json::json!([])),portfolio_items:serde_json::from_str(&r.get::<_,String>(7)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_order:serde_json::from_str(&r.get::<_,String>(8)?).unwrap_or_else(|_|serde_json::json!(["taxable","pre-tax","roth"])),retirement_years:serde_json::from_str(&r.get::<_,String>(9)?).unwrap_or_else(|_|serde_json::json!({})),scheduled_income:serde_json::from_str(&r.get::<_,String>(10)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_account_order:serde_json::from_str(&r.get::<_,String>(11)?).unwrap_or_else(|_|serde_json::json!([])),legacy_review_dismissed:r.get(12)?,spending_mode:r.get(13)?,liquidatable_asset_ids:serde_json::from_str(&r.get::<_,String>(14)?).unwrap_or_else(|_|serde_json::json!([])),early_roth_account_ids:serde_json::from_str(&r.get::<_,String>(15)?).unwrap_or_else(|_|serde_json::json!([])),migration_review:serde_json::from_str(&r.get::<_,String>(16)?).unwrap_or_else(|_|serde_json::json!([])),revision:r.get(17)?})).optional()?;
+        retirement_plan=connection.query_row("SELECT household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,spending_mode,liquidatable_asset_ids_json,early_roth_account_ids_json,migration_review_json,tax_assumptions_json,revision FROM retirement_plans WHERE household_id=?",[&h.id],|r|Ok(RetirementPlanRecord{household_id:r.get(0)?,selected_scenario_id:r.get(1)?,retirement_year:r.get(2)?,runway_years:r.get(3)?,withdrawal_rate_bps:r.get(4)?,expense_buckets:serde_json::from_str(&r.get::<_,String>(5)?).unwrap_or_else(|_|serde_json::json!([])),selected_source_ids:serde_json::from_str(&r.get::<_,String>(6)?).unwrap_or_else(|_|serde_json::json!([])),portfolio_items:serde_json::from_str(&r.get::<_,String>(7)?).unwrap_or_else(|_|serde_json::json!(["taxable","pre-tax","roth"])),withdrawal_order:serde_json::from_str(&r.get::<_,String>(8)?).unwrap_or_else(|_|serde_json::json!([])),retirement_years:serde_json::from_str(&r.get::<_,String>(9)?).unwrap_or_else(|_|serde_json::json!({})),scheduled_income:serde_json::from_str(&r.get::<_,String>(10)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_account_order:serde_json::from_str(&r.get::<_,String>(11)?).unwrap_or_else(|_|serde_json::json!([])),legacy_review_dismissed:r.get(12)?,spending_mode:r.get(13)?,liquidatable_asset_ids:serde_json::from_str(&r.get::<_,String>(14)?).unwrap_or_else(|_|serde_json::json!([])),early_roth_account_ids:serde_json::from_str(&r.get::<_,String>(15)?).unwrap_or_else(|_|serde_json::json!([])),migration_review:serde_json::from_str(&r.get::<_,String>(16)?).unwrap_or_else(|_|serde_json::json!([])),tax_assumptions:serde_json::from_str(&r.get::<_,String>(17)?).unwrap_or_else(|_|serde_json::json!({})),revision:r.get(18)?})).optional()?;
         let mut q=connection.prepare("SELECT id,household_id,name,birth_date FROM people WHERE household_id=? ORDER BY rowid")?;
         people = q
             .query_map([&h.id], |r| {
@@ -1522,7 +1531,7 @@ fn store_retirement_plan(
         return Err(AppError::Conflict);
     }
     let next = existing.map_or(1, |r| r + 1);
-    tx.execute("INSERT INTO retirement_plans(household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,spending_mode,liquidatable_asset_ids_json,early_roth_account_ids_json,migration_review_json,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18) ON CONFLICT(household_id) DO UPDATE SET selected_scenario_id=excluded.selected_scenario_id,retirement_year=excluded.retirement_year,expense_buckets_json=excluded.expense_buckets_json,retirement_years_json=excluded.retirement_years_json,scheduled_income_json=excluded.scheduled_income_json,withdrawal_account_order_json=excluded.withdrawal_account_order_json,legacy_review_dismissed=excluded.legacy_review_dismissed,spending_mode=excluded.spending_mode,liquidatable_asset_ids_json=excluded.liquidatable_asset_ids_json,early_roth_account_ids_json=excluded.early_roth_account_ids_json,migration_review_json=excluded.migration_review_json,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,input.selected_scenario_id,input.retirement_year,input.runway_years,input.withdrawal_rate_bps,serde_json::to_string(&input.expense_buckets)?,serde_json::to_string(&input.selected_source_ids)?,serde_json::to_string(&input.portfolio_items)?,serde_json::to_string(&input.withdrawal_order)?,serde_json::to_string(&input.retirement_years)?,serde_json::to_string(&input.scheduled_income)?,serde_json::to_string(&input.withdrawal_account_order)?,input.legacy_review_dismissed,input.spending_mode,serde_json::to_string(&input.liquidatable_asset_ids)?,serde_json::to_string(&input.early_roth_account_ids)?,serde_json::to_string(&input.migration_review)?,next])?;
+    tx.execute("INSERT INTO retirement_plans(household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,spending_mode,liquidatable_asset_ids_json,early_roth_account_ids_json,migration_review_json,tax_assumptions_json,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19) ON CONFLICT(household_id) DO UPDATE SET selected_scenario_id=excluded.selected_scenario_id,retirement_year=excluded.retirement_year,expense_buckets_json=excluded.expense_buckets_json,retirement_years_json=excluded.retirement_years_json,scheduled_income_json=excluded.scheduled_income_json,withdrawal_account_order_json=excluded.withdrawal_account_order_json,legacy_review_dismissed=excluded.legacy_review_dismissed,spending_mode=excluded.spending_mode,liquidatable_asset_ids_json=excluded.liquidatable_asset_ids_json,early_roth_account_ids_json=excluded.early_roth_account_ids_json,migration_review_json=excluded.migration_review_json,tax_assumptions_json=excluded.tax_assumptions_json,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,input.selected_scenario_id,input.retirement_year,input.runway_years,input.withdrawal_rate_bps,serde_json::to_string(&input.expense_buckets)?,serde_json::to_string(&input.selected_source_ids)?,serde_json::to_string(&input.portfolio_items)?,serde_json::to_string(&input.withdrawal_order)?,serde_json::to_string(&input.retirement_years)?,serde_json::to_string(&input.scheduled_income)?,serde_json::to_string(&input.withdrawal_account_order)?,input.legacy_review_dismissed,input.spending_mode,serde_json::to_string(&input.liquidatable_asset_ids)?,serde_json::to_string(&input.early_roth_account_ids)?,serde_json::to_string(&input.migration_review)?,serde_json::to_string(&input.tax_assumptions)?,next])?;
     tx.commit()?;
     Ok(RetirementPlanRecord {
         household_id,
@@ -1542,6 +1551,7 @@ fn store_retirement_plan(
         liquidatable_asset_ids: input.liquidatable_asset_ids,
         early_roth_account_ids: input.early_roth_account_ids,
         migration_review: input.migration_review,
+        tax_assumptions: input.tax_assumptions,
         revision: next,
     })
 }
@@ -4676,6 +4686,7 @@ mod tests {
             liquidatable_asset_ids: serde_json::json!(["a"]),
             early_roth_account_ids: serde_json::json!([]),
             migration_review: serde_json::json!([]),
+            tax_assumptions: serde_json::json!({"annualQcdCents":0}),
             expected_revision,
         };
         let saved = store_retirement_plan(&mut c, make(1)).unwrap();

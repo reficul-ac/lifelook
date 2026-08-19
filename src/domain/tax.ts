@@ -65,9 +65,7 @@ export function projectedTaxRules(year:number,thresholdInflationBps:number):TaxR
   if(year<=2025)return TAX_RULES_2025;
   if(year===2026)return TAX_RULES_2026;
   if(!Number.isInteger(year)||year>2100||thresholdInflationBps<0)throw new RangeError("Invalid projected tax-rule year or inflation rate");
-  // Retirement forecasts deliberately freeze the latest reviewed official pack.
-  // A rule update is a reviewed application release, never an inferred inflation adjustment.
-  const factor=1;
+  const factor=Math.pow(1+thresholdInflationBps/10_000,year-2026);
   const inflate=(items:readonly TaxBracket[])=>items.map(item=>({...item,upToCents:item.upToCents===null?null:roundDollars(item.upToCents*factor)}));
   const statuses=Object.keys(TAX_RULES_2026.federal) as FilingStatus[];
   const federal=Object.fromEntries(statuses.map(status=>[status,{standardDeductionCents:roundHundreds(TAX_RULES_2026.federal[status].standardDeductionCents*factor),brackets:inflate(TAX_RULES_2026.federal[status].brackets)}])) as unknown as TaxRulePack["federal"];

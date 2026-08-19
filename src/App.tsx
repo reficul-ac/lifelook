@@ -959,6 +959,7 @@ function Workspace({
               )
             }
             onEditPlannedProperty={(eventId,el)=>openDialog({type:"scenario-plan",scenario:bootstrap.scenarios.find(s=>s.id===selectedScenario.id),focusedEventId:eventId},el)}
+            onPlanCurrentHome={(kind,el)=>openDialog({type:"scenario-plan",scenario:bootstrap.scenarios.find(s=>s.id===selectedScenario.id),focusedEventType:kind},el)}
             selectedSeries={planSeries}
             onSelectSeries={setPlanSeries}
             range={planRange}
@@ -1217,6 +1218,7 @@ function Workspace({
           refresh={onRefresh}
           focusedEntry={dialog.focusedEntry}
           focusedEventId={dialog.focusedEventId}
+          focusedEventType={dialog.focusedEventType}
         />
       ) : dialog?.type === "import" ? (
         <CsvImportWizard
@@ -1275,6 +1277,7 @@ type DialogState = {
   scenario?: ScenarioRecord;
   focusedEntry?: "event" | "contribution";
   focusedEventId?: string;
+  focusedEventType?: import("./domain").ScenarioEvent["type"];
   invoker?: HTMLElement | null;
 };
 
@@ -5659,6 +5662,7 @@ type PlanViewProps = {
   onEditScenario: (el: HTMLElement) => void;
   onPlanScenario: (el: HTMLElement, focusedEntry?: "event" | "contribution") => void;
   onEditPlannedProperty: (eventId:string,el:HTMLElement) => void;
+  onPlanCurrentHome: (kind:"property-rental-start"|"adu-build",el:HTMLElement) => void;
   selectedSeries: string;
   onSelectSeries: (id: string) => void;
   range: 5 | 10 | 15 | 20 | "max";
@@ -5691,6 +5695,7 @@ function PlanView(props: PlanViewProps) {
     onEditScenario,
     onPlanScenario,
     onEditPlannedProperty,
+    onPlanCurrentHome,
     selectedSeries: selected,
     onSelectSeries: setSelected,
     range,
@@ -5717,6 +5722,11 @@ function PlanView(props: PlanViewProps) {
     (asset) => !asset.privateStock && !asset.equityHolding,
   );
   const plannedProperties=(scenario?.events??[]).filter((event):event is Extract<import("./domain").ScenarioEvent,{type:"asset-purchase"}>=>event.type==="asset-purchase");
+  const currentHomeTransitions=(scenario?.events??[]).filter((event):event is Extract<import("./domain").ScenarioEvent,{type:"property-rental-start"}>=>event.type==="property-rental-start");
+  const currentHomes=snapshot.assets.filter(asset=>asset.housingCosts||snapshot.liabilities.some(liability=>liability.mortgage?.assetId===asset.id));
+  const currentHomeIds=new Set(currentHomes.map(home=>home.id));
+  const currentHomeAduPlans=(scenario?.events??[]).filter((event):event is Extract<import("./domain").ScenarioEvent,{type:"adu-build"}>=>event.type==="adu-build"&&currentHomeIds.has(event.assetId));
+  const currentHomePlanIds=[...new Set([...currentHomeTransitions.map(event=>event.assetId),...currentHomeAduPlans.map(event=>event.assetId)])];
   const selectedProperty=plannedProperties.find(item=>item.assetId===selectedPropertyId)??plannedProperties[0];
   const includedPlannedProperties=plannedProperties.filter(item=>!excludedPropertyIds.has(item.assetId));
   const series: WealthSeries[] = [
@@ -6464,6 +6474,13 @@ function PlanView(props: PlanViewProps) {
             </div>
           </section>
           </DetailDisclosure>
+          {currentHomes.length>0&&<section className="card wide current-home-plans" aria-labelledby="current-home-plans-title">
+            <div className="card-title"><div><span className="label projected">Current homes</span><h3 id="current-home-plans-title">Rental and ADU plans</h3><p className="muted">Change a home you already own without creating another asset.</p></div><div className="current-home-actions"><ActionButton onClick={(event)=>onPlanCurrentHome("property-rental-start",event.currentTarget)}>Convert to rental</ActionButton><ActionButton onClick={(event)=>onPlanCurrentHome("adu-build",event.currentTarget)}>Plan ADU</ActionButton></div></div>
+            {currentHomeTransitions.map(event=><div className="current-home-plan" key={event.id}><div><strong>{event.name}</strong><small>Rental starts {event.date} · {money(event.monthlyRentalIncomeCents)}/month</small></div><label className="property-inclusion-toggle"><input type="checkbox" checked={!excludedPropertyIds.has(event.assetId)} onChange={change=>onToggleProperty(event.assetId,change.target.checked)} /> Include in projection</label><button type="button" className="property-edit-button" onClick={click=>onEditPlannedProperty(event.id,click.currentTarget)}><Pencil size={14} aria-hidden="true"/> Edit</button></div>)}
+            {currentHomeAduPlans.map(event=><div className="current-home-plan" key={event.id}><div><strong>{event.name}</strong><small>ADU build {event.date} · {money(event.costCents)}</small></div><label className="property-inclusion-toggle"><input type="checkbox" checked={!excludedPropertyIds.has(event.assetId)} onChange={change=>onToggleProperty(event.assetId,change.target.checked)} /> Include in projection</label><button type="button" className="property-edit-button" onClick={click=>onEditPlannedProperty(event.id,click.currentTarget)}><Pencil size={14} aria-hidden="true"/> Edit</button></div>)}
+            {!currentHomeTransitions.length&&!currentHomeAduPlans.length&&<p className="empty">No rental conversion or ADU is planned for a current home.</p>}
+            {currentHomePlanIds.filter(assetId=>!excludedPropertyIds.has(assetId)).map(assetId=>{const home=currentHomes.find(item=>item.id===assetId),rows=projections.map(year=>year.properties.find(item=>item.assetId===assetId)).filter((item):item is NonNullable<typeof item>=>Boolean(item));return <div className="current-home-outlook" key={assetId}><h4>{home?.name??"Current home"} outlook</h4><div className="property-table-scroll"><table><thead><tr><th>Year</th><th>Status</th><th>Home value</th><th>Mortgage</th><th>Equity</th><th>Base rent</th><th>ADU rent</th><th>Mortgage P&amp;I</th><th>Operating costs</th><th>ADU build</th><th>Net cash flow</th></tr></thead><tbody>{rows.map(item=>{const operating=item.propertyTaxCents+item.insuranceCents+item.hoaCents+item.maintenanceCents,net=item.rentCents+item.aduIncomeCents-item.principalCents-item.interestCents-operating-item.aduCostCents;return <tr key={item.year}><th>{item.year}</th><td><span className={`property-status-badge ${item.status}`}>{item.status}</span></td><td>{money(item.assetValueCents??0)}{item.aduAddedValueCents>0&&<small className="property-value-added">+{money(item.aduAddedValueCents)} ADU value</small>}</td><td>{money(item.mortgageBalanceCents??0)}</td><td className="property-emphasis">{money(item.equityCents??0)}</td><td>{money(item.rentCents)}</td><td>{money(item.aduIncomeCents)}</td><td>{money(item.principalCents+item.interestCents)}</td><td>{money(operating)}</td><td>{item.aduCostCents?money(item.aduCostCents):"—"}</td><td className={net<0?"property-negative":"property-positive"}>{money(net)}</td></tr>})}</tbody></table></div></div>})}
+          </section>}
           {plannedProperties.length > 0 && selectedProperty && (
             <section
               className="card wide property-tracker"

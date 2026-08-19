@@ -1677,6 +1677,7 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
         "account-contribution",
         "asset-purchase",
         "adu-build",
+        "property-rental-start",
         "asset-sale",
         "debt-origination",
         "debt-payoff",
@@ -1715,6 +1716,7 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
             | "account-contribution" => &["amountCents"],
             "asset-purchase" => &["valueCents", "downPaymentCents", "costsCents"],
             "adu-build" => &["costCents"],
+            "property-rental-start" => &["monthlyRentalIncomeCents"],
             "asset-sale" => &["proceedsCents", "costsCents"],
             "debt-origination" => &["principalCents", "minimumPaymentCents"],
             _ => &[],
@@ -1814,6 +1816,11 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
                     )));
                 }
             }
+        }
+        if kind == "property-rental-start" {
+            let rental_use=json_i64(event,"rentalUseBps").ok_or_else(||AppError::Validation("rentalUseBps is required".into()))?;
+            if !(0..=10000).contains(&rental_use) { return Err(AppError::Validation("rentalUseBps is invalid".into())); }
+            if !event.get("rentalType").and_then(|x|x.as_str()).is_some_and(|x|["long-term","short-term"].contains(&x)){return Err(AppError::Validation("rentalType is invalid".into()));}
         }
         if kind == "asset-sale" {
             if let Some(payoff) = event.get("payoff") {
@@ -2007,9 +2014,9 @@ fn update_scenario(
                     }
                 }
             }
-            if kind == "adu-build" {
+            if kind == "adu-build" || kind == "property-rental-start" {
                 let id=event.get("assetId").and_then(|x|x.as_str()).unwrap_or("");
-                if !created_assets.get(id).is_some_and(|created|*created<date)&&!owns("assets",id)? {return Err(AppError::Validation("ADU build must reference an owned property or a strictly earlier purchase".into()));}
+                if !created_assets.get(id).is_some_and(|created|*created<date)&&!owns("assets",id)? {return Err(AppError::Validation("property event must reference an owned property or a strictly earlier purchase".into()));}
             }
             if kind == "debt-payoff" {
                 let id = event

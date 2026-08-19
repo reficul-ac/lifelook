@@ -22,6 +22,7 @@ import {
   Moon,
   MoreHorizontal,
   PiggyBank,
+  Pencil,
   Plus,
   Search,
   Settings,
@@ -379,6 +380,7 @@ function Workspace({
   const [selectedScenarioId, setSelectedScenarioId] = useState(
     bootstrap.scenarios[0]?.id ?? "",
   );
+  const [excludedPlannedProperties,setExcludedPlannedProperties]=useState<Record<string,string[]>>({});
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [searchInvoker, setSearchInvoker] = useState<HTMLElement | null>(null);
   const [focusTarget, setFocusTarget] = useState<{
@@ -592,25 +594,34 @@ function Workspace({
           (account.kind === "checking" || account.kind === "savings"),
       )?.id,
     };
+  const excludedPropertyIds=new Set(excludedPlannedProperties[selectedScenario.id]??[]);
+  const excludedLiabilityIds=new Set(selectedScenario.events.flatMap(event=>event.type==="asset-purchase"&&excludedPropertyIds.has(event.assetId)&&event.financing?[event.financing.liabilityId]:[]));
+  const projectedScenario:Scenario={...selectedScenario,events:selectedScenario.events.filter(event=>{
+    if(event.type==="asset-purchase")return !excludedPropertyIds.has(event.assetId);
+    if("assetId" in event&&excludedPropertyIds.has(event.assetId))return false;
+    if("liabilityId" in event&&excludedLiabilityIds.has(event.liabilityId))return false;
+    if(event.type==="asset-sale"&&event.payoff&&excludedLiabilityIds.has(event.payoff.liabilityId))return false;
+    return true;
+  })};
   const projections = useMemo(
     () =>
       bootstrap.taxProfile
         ? ProjectionEngine.calculate(
             snapshot,
             {
-              ...selectedScenario,
+              ...projectedScenario,
               horizon: {
                 ...selectedScenario.horizon,
                 months:
                   planRange === "max"
-                    ? selectedScenario.horizon.months
+                    ? projectedScenario.horizon.months
                     : planRange * 12,
               },
             },
             localIsoDate(),
           )
         : null,
-    [snapshot, bootstrap.taxProfile, selectedScenario, planRange],
+    [snapshot, bootstrap.taxProfile, projectedScenario, planRange],
   );
   const investmentTaxContext = useMemo(() => {
     if (!bootstrap.taxProfile?.taxUnit) return undefined;
@@ -618,8 +629,8 @@ function Workspace({
       const annual = ProjectionEngine.calculate(
         snapshot,
         {
-          ...selectedScenario,
-          horizon: { ...selectedScenario.horizon, months: 480 },
+          ...projectedScenario,
+          horizon: { ...projectedScenario.horizon, months: 480 },
         },
         localIsoDate(),
       );
@@ -643,7 +654,7 @@ function Workspace({
         ? {
             filingStatus: bootstrap.taxProfile.filingStatus,
             thresholdInflationBps:
-              selectedScenario.assumptions.thresholdInflationBps,
+              projectedScenario.assumptions.thresholdInflationBps,
             startMonth,
             years,
           }
@@ -651,7 +662,7 @@ function Workspace({
     } catch {
       return undefined;
     }
-  }, [snapshot, bootstrap.taxProfile, selectedScenario]);
+  }, [snapshot, bootstrap.taxProfile, projectedScenario]);
   const projectedPositiveMonths =
       projections?.[0]?.months.filter((month) => month.surplusCents > 0) ?? [],
     projectedMonthlySurplusCents = projectedPositiveMonths.length
@@ -663,9 +674,9 @@ function Workspace({
   const retirementProjections = useMemo(
     () =>
       bootstrap.taxProfile
-        ? ProjectionEngine.calculate(snapshot, selectedScenario, localIsoDate())
+        ? ProjectionEngine.calculate(snapshot, projectedScenario, localIsoDate())
         : [],
-    [snapshot, bootstrap.taxProfile, selectedScenario],
+    [snapshot, bootstrap.taxProfile, projectedScenario],
   );
   const [retirementPlan, setRetirementPlan] =
     useState<RetirementPlanRecord | null>(bootstrap.retirementPlan ?? null);
@@ -899,6 +910,8 @@ function Workspace({
             scenarios={scenarios}
             selectedScenarioId={selectedScenario.id}
             onSelectScenario={setSelectedScenarioId}
+            excludedPropertyIds={excludedPropertyIds}
+            onToggleProperty={(assetId,included)=>setExcludedPlannedProperties(current=>({...current,[selectedScenario.id]:included?(current[selectedScenario.id]??[]).filter(id=>id!==assetId):[...new Set([...(current[selectedScenario.id]??[]),assetId])]}))}
             snapshot={snapshot}
             expanded={expanded}
             setExpanded={setExpanded}
@@ -945,6 +958,7 @@ function Workspace({
                 el,
               )
             }
+            onEditPlannedProperty={(eventId,el)=>openDialog({type:"scenario-plan",scenario:bootstrap.scenarios.find(s=>s.id===selectedScenario.id),focusedEventId:eventId},el)}
             selectedSeries={planSeries}
             onSelectSeries={setPlanSeries}
             range={planRange}
@@ -1031,6 +1045,24 @@ function Workspace({
                   principalCents: principal,
                   annualRateBps: assumptions.mortgageRateBps,
                   minimumPaymentCents: payment,
+                  termMonths: months,
+                },
+                propertyDetails: {
+                  mortgageTermMonths: months,
+                  maintenanceBps: assumptions.maintenanceBps,
+                  monthlyRentalIncomeCents: assumptions.monthlyRentalIncomeCents,
+                  rentalIncomeGrowthBps: assumptions.rentalIncomeGrowthBps,
+                  primaryResidence: assumptions.primaryResidence,
+                  rentalUseBps: assumptions.rentalUseBps,
+                  rentalTaxModelingEnabled: assumptions.factorRentalTaxes,
+                  rentalType: assumptions.rentalType,
+                  propertyTaxBasisCents: assumptions.propertyTaxBasisOverrideCents,
+                  buildingBasisCents: assumptions.buildingBasisOverrideCents,
+                  mfsLivedApartAllYear: assumptions.mfsLivedApartAllYear,
+                  shortTermMaterialParticipation: assumptions.shortTermMaterialParticipation,
+                  longTermRealEstateProfessional: assumptions.longTermRealEstateProfessional,
+                  longTermMaterialParticipation: assumptions.longTermMaterialParticipation,
+                  adu: { planned: options.includeAdu && assumptions.aduPlanned, costCents: assumptions.aduBuildCostCents, homeSquareFeet: assumptions.homeSquareFeet, squareFeet: assumptions.aduSquareFeet, monthlyRentalIncomeCents: assumptions.aduMonthlyRentCents, rentalIncomeGrowthBps: assumptions.rentalIncomeGrowthBps },
                 },
               };
               const events = [...record.events, purchase];
@@ -1047,7 +1079,8 @@ function Workspace({
                   assetId,
                   name: "Build ADU",
                   costCents: assumptions.aduBuildCostCents,
-                  addedValueCents: assumptions.aduBuildCostCents,
+                  homeSquareFeet: assumptions.homeSquareFeet,
+                  aduSquareFeet: assumptions.aduSquareFeet,
                   monthlyRentalIncomeCents: assumptions.aduMonthlyRentCents,
                   rentalIncomeGrowthBps: assumptions.rentalIncomeGrowthBps,
                   fundingAccountId: options.fundingAccountIds[0],
@@ -1183,6 +1216,7 @@ function Workspace({
           close={closeDialog}
           refresh={onRefresh}
           focusedEntry={dialog.focusedEntry}
+          focusedEventId={dialog.focusedEventId}
         />
       ) : dialog?.type === "import" ? (
         <CsvImportWizard
@@ -1240,6 +1274,7 @@ type DialogState = {
   recurring?: RecurringEntry;
   scenario?: ScenarioRecord;
   focusedEntry?: "event" | "contribution";
+  focusedEventId?: string;
   invoker?: HTMLElement | null;
 };
 
@@ -5610,6 +5645,8 @@ type PlanViewProps = {
   scenarios: Scenario[];
   selectedScenarioId: string;
   onSelectScenario: (id: string) => void;
+  excludedPropertyIds: ReadonlySet<string>;
+  onToggleProperty: (assetId:string,included:boolean) => void;
   snapshot: FinancialSnapshot;
   expanded: number | null;
   setExpanded: (x: number | null) => void;
@@ -5621,6 +5658,7 @@ type PlanViewProps = {
   onAddScenario: (el: HTMLElement) => void;
   onEditScenario: (el: HTMLElement) => void;
   onPlanScenario: (el: HTMLElement, focusedEntry?: "event" | "contribution") => void;
+  onEditPlannedProperty: (eventId:string,el:HTMLElement) => void;
   selectedSeries: string;
   onSelectSeries: (id: string) => void;
   range: 5 | 10 | 15 | 20 | "max";
@@ -5641,6 +5679,8 @@ function PlanView(props: PlanViewProps) {
     scenarios,
     selectedScenarioId,
     onSelectScenario,
+    excludedPropertyIds,
+    onToggleProperty,
     snapshot,
     recurring,
     categories,
@@ -5650,6 +5690,7 @@ function PlanView(props: PlanViewProps) {
     onAddScenario,
     onEditScenario,
     onPlanScenario,
+    onEditPlannedProperty,
     selectedSeries: selected,
     onSelectSeries: setSelected,
     range,
@@ -5666,6 +5707,7 @@ function PlanView(props: PlanViewProps) {
   const [activeCashFlowPoint, setActiveCashFlowPoint] = useState<number | null>(
     null,
   );
+  const [selectedPropertyId,setSelectedPropertyId]=useState("");
   const scenario =
     scenarios.find((item) => item.id === selectedScenarioId) ?? scenarios[0]!;
   const privateAssets = snapshot.assets.filter(
@@ -5674,6 +5716,9 @@ function PlanView(props: PlanViewProps) {
   const ordinaryAssets = snapshot.assets.filter(
     (asset) => !asset.privateStock && !asset.equityHolding,
   );
+  const plannedProperties=(scenario?.events??[]).filter((event):event is Extract<import("./domain").ScenarioEvent,{type:"asset-purchase"}>=>event.type==="asset-purchase");
+  const selectedProperty=plannedProperties.find(item=>item.assetId===selectedPropertyId)??plannedProperties[0];
+  const includedPlannedProperties=plannedProperties.filter(item=>!excludedPropertyIds.has(item.assetId));
   const series: WealthSeries[] = [
     { id: "net-worth", name: "Net Worth", group: "net-worth" },
     ...snapshot.accounts.map((item) => ({
@@ -5686,6 +5731,7 @@ function PlanView(props: PlanViewProps) {
       name: item.name,
       group: "asset" as const,
     })),
+    ...includedPlannedProperties.map((item)=>({id:`asset:${item.assetId}`,name:item.name,group:"asset" as const})),
     ...privateAssets.flatMap((item) => [
       {
         id: `private:${item.id}:vested`,
@@ -5705,6 +5751,7 @@ function PlanView(props: PlanViewProps) {
       name: item.name,
       group: "debt" as const,
     })),
+    ...includedPlannedProperties.filter(item=>item.financing).map(item=>({id:`debt:${item.financing!.liabilityId}`,name:item.financing!.name,group:"debt" as const})),
   ];
   useEffect(() => {
     if (!series.some((item) => item.id === selected)) setSelected("net-worth");
@@ -6246,17 +6293,17 @@ function PlanView(props: PlanViewProps) {
                     {snapshot.accounts.length > 0 && (
                       <th colSpan={snapshot.accounts.length}>Accounts</th>
                     )}
-                    {snapshot.assets.length > 0 && (
+                    {snapshot.assets.length + includedPlannedProperties.length > 0 && (
                       <th
                         colSpan={
-                          ordinaryAssets.length + privateAssets.length * 2
+                          ordinaryAssets.length + includedPlannedProperties.length + privateAssets.length * 2
                         }
                       >
                         Assets
                       </th>
                     )}
-                    {snapshot.liabilities.length > 0 && (
-                      <th colSpan={snapshot.liabilities.length}>Debts</th>
+                    {snapshot.liabilities.length + includedPlannedProperties.filter(item=>item.financing).length > 0 && (
+                      <th colSpan={snapshot.liabilities.length + includedPlannedProperties.filter(item=>item.financing).length}>Debts</th>
                     )}
                   </tr>
                   <tr>
@@ -6309,6 +6356,9 @@ function PlanView(props: PlanViewProps) {
                         </button>
                       </th>
                     ))}
+                    {includedPlannedProperties.map((item) => (
+                      <th rowSpan={2} key={item.assetId} className={selected===`asset:${item.assetId}`?"selected":undefined}><button aria-pressed={selected===`asset:${item.assetId}`} onClick={()=>selectSeries(`asset:${item.assetId}`)}>{item.name}</button></th>
+                    ))}
                     {privateAssets.map((item) => (
                       <th colSpan={2} key={item.id}>
                         <button
@@ -6341,6 +6391,7 @@ function PlanView(props: PlanViewProps) {
                         </button>
                       </th>
                     ))}
+                    {includedPlannedProperties.filter(item=>item.financing).map(item=><th rowSpan={2} key={item.financing!.liabilityId} className={selected===`debt:${item.financing!.liabilityId}`?"selected":undefined}><button aria-pressed={selected===`debt:${item.financing!.liabilityId}`} onClick={()=>selectSeries(`debt:${item.financing!.liabilityId}`)}>{item.financing!.name}</button></th>)}
                   </tr>
                   <tr>
                     {privateAssets.flatMap((item) => [
@@ -6413,6 +6464,151 @@ function PlanView(props: PlanViewProps) {
             </div>
           </section>
           </DetailDisclosure>
+          {plannedProperties.length > 0 && selectedProperty && (
+            <section
+              className="card wide property-tracker"
+              aria-labelledby="property-tracker-title"
+            >
+              <div className="property-tracker-heading">
+                <div>
+                  <span className="label projected">Planned property</span>
+                  <h3 id="property-tracker-title">Property outlook</h3>
+                  <p>Annual ownership, cash flow, and tax estimates.</p>
+                </div>
+                <div className="property-tracker-controls">
+                  <label className="property-selector">
+                    Property
+                    <select
+                      value={selectedProperty.assetId}
+                      onChange={(event) => setSelectedPropertyId(event.target.value)}
+                    >
+                      {plannedProperties.map((item) => (
+                        <option key={item.assetId} value={item.assetId}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="property-inclusion-toggle">
+                    <input
+                      type="checkbox"
+                      checked={!excludedPropertyIds.has(selectedProperty.assetId)}
+                      onChange={(event) =>
+                        onToggleProperty(selectedProperty.assetId,event.target.checked)
+                      }
+                    />
+                    Include in projection
+                  </label>
+                  <button
+                    type="button"
+                    className="property-edit-button"
+                    onClick={(event) =>
+                      onEditPlannedProperty(selectedProperty.id,event.currentTarget)
+                    }
+                  >
+                    <Pencil size={14} aria-hidden="true" />
+                    Edit property
+                  </button>
+                </div>
+              </div>
+              {!excludedPropertyIds.has(selectedProperty.assetId) && !selectedProperty.propertyDetails?.rentalTaxModelingEnabled && (
+                <p className="property-tax-notice">
+                  Rental tax modeling is not included. Owner housing costs and
+                  property cash flow are still projected.
+                </p>
+              )}
+              {excludedPropertyIds.has(selectedProperty.assetId) ? (
+                <div className="property-excluded-state">
+                  <span className="property-status-badge">Excluded</span>
+                  <strong>{selectedProperty.name} is not included in this comparison.</strong>
+                  <p>Turn it back on to restore its purchase, mortgage, ADU, income, costs, and linked events.</p>
+                </div>
+              ) : <div className="property-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th rowSpan={2} className="property-year">Year</th>
+                      <th rowSpan={2} className="property-status">Status</th>
+                      <th colSpan={3}>Position</th>
+                      <th colSpan={3}>Annual cash flow</th>
+                      <th rowSpan={2}>Net cash flow</th>
+                      <th colSpan={2}>Rental tax</th>
+                    </tr>
+                    <tr>
+                      <th>Home value</th>
+                      <th>Mortgage</th>
+                      <th>Equity</th>
+                      <th>Rent</th>
+                      <th>Mortgage P&amp;I</th>
+                      <th>Operating costs</th>
+                      <th>Taxable result</th>
+                      <th>Est. effect</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projections
+                      .map((year) =>
+                        year.properties.find(
+                          (item) => item.assetId === selectedProperty.assetId,
+                        ),
+                      )
+                      .filter(
+                        (item): item is NonNullable<typeof item> => Boolean(item),
+                      )
+                      .map((item) => {
+                        const operating =
+                            item.propertyTaxCents +
+                            item.insuranceCents +
+                            item.hoaCents +
+                            item.maintenanceCents,
+                          net =
+                            item.rentCents +
+                            item.aduIncomeCents -
+                            item.principalCents -
+                            item.interestCents -
+                            operating -
+                            item.aduCostCents;
+                        return (
+                          <tr key={item.year}>
+                            <th className="property-year" scope="row">{item.year}</th>
+                            <td className="property-status">
+                              <span className={`property-status-badge ${item.status}`}>
+                                {item.status}
+                              </span>
+                              {item.aduCostCents > 0 && (
+                                <span className="property-event-badge">ADU build</span>
+                              )}
+                              {item.executionShortfallCents > 0 && (
+                                <small>{money(item.executionShortfallCents)} short</small>
+                              )}
+                            </td>
+                            <td>
+                              {item.assetValueCents == null ? "—" : money(item.assetValueCents)}
+                              {item.aduAddedValueCents > 0 && (
+                                <small className="property-value-added">+{money(item.aduAddedValueCents)} ADU value</small>
+                              )}
+                            </td>
+                            <td>{item.mortgageBalanceCents == null ? "—" : money(item.mortgageBalanceCents)}</td>
+                            <td className="property-emphasis">{item.equityCents == null ? "—" : money(item.equityCents)}</td>
+                            <td>{money(item.rentCents + item.aduIncomeCents)}</td>
+                            <td>{money(item.principalCents + item.interestCents)}</td>
+                            <td>{money(operating)}</td>
+                            <td className={net < 0 ? "property-negative" : "property-positive"}>
+                              {money(net)}
+                              {item.aduCostCents > 0 && (
+                                <small className="property-build-cost">Includes {money(item.aduCostCents)} build</small>
+                              )}
+                            </td>
+                            <td>{item.rentalTaxModelingEnabled ? money(item.taxableRentalCents) : "—"}</td>
+                            <td>{item.rentalTaxModelingEnabled ? money(item.estimatedTaxEffectCents) : "—"}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>}
+            </section>
+          )}
         </>
       )}
       {tab === "cash-flow" && (

@@ -57,6 +57,22 @@ describe("Carriggs joint-income projection",()=>{
 });
 
 describe("ProjectionEngine",()=>{
+  it("projects a funded planned property as an asset, mortgage, rent, costs, and tracker record",()=>{
+    const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:5_000_00}]};
+    const purchase={id:"buy-home",date:"2025-01-01",type:"asset-purchase" as const,assetId:"future-home",name:"Future home",valueCents:10_000_00,annualGrowthBps:0,fundingAccountId:"a",fundingSources:[{accountId:"a"}],downPaymentCents:2_000_00,costsCents:500_00,housingCosts:{propertyTaxRateBps:120,insuranceMonthlyCents:10_00,insuranceAnnualGrowthBps:0,hoaMonthlyCents:5_00,hoaAnnualGrowthBps:0},financing:{liabilityId:"future-mortgage",name:"Future mortgage",principalCents:8_000_00,annualRateBps:0,minimumPaymentCents:100_00,termMonths:120},propertyDetails:{maintenanceBps:120,monthlyRentalIncomeCents:200_00,rentalIncomeGrowthBps:0,primaryResidence:false,rentalUseBps:10000,rentalTaxModelingEnabled:true}};
+    const month=calculate(financial,{...scenario,events:[purchase],horizon:{start:"2025-01",months:1}})[0].months[0],property=month.properties[0];
+    expect(property.status).toBe("active");expect(property.purchaseCashCents).toBe(2_500_00);expect(property.assetValueCents).toBe(10_000_00);expect(property.mortgageBalanceCents).toBe(7_900_00);expect(property.rentCents).toBe(200_00);expect(property.principalCents).toBe(100_00);expect(property.maintenanceCents).toBe(10_00);expect(month.balances!.assets["future-home"]).toBe(10_000_00);expect(month.balances!.liabilities["future-mortgage"]).toBe(7_900_00);
+  });
+  it("keeps an unfunded planned property unexecuted and reports its shortfall",()=>{
+    const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:100_00}]},purchase={id:"buy-home",date:"2025-01-01",type:"asset-purchase" as const,assetId:"future-home",name:"Future home",valueCents:10_000_00,annualGrowthBps:0,fundingAccountId:"a",downPaymentCents:2_000_00,costsCents:500_00};
+    const month=calculate(financial,{...scenario,events:[purchase],horizon:{start:"2025-01",months:1}})[0].months[0],property=month.properties[0];
+    expect(property.status).toBe("unfunded");expect(property.executionShortfallCents).toBe(2_400_00);expect(property.assetValueCents).toBeNull();expect(month.balances!.assets["future-home"]).toBeUndefined();expect(month.warnings[0].code).toBe("event-unfunded");
+  });
+  it("values an ADU from the home's projected pre-build value per square foot",()=>{
+    const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:100_000_00}]},purchase={id:"buy-home",date:"2025-01-01",type:"asset-purchase" as const,assetId:"future-home",name:"Future home",valueCents:100_000_00,annualGrowthBps:0,fundingAccountId:"a",downPaymentCents:20_000_00,costsCents:1_000_00,propertyDetails:{adu:{planned:true,costCents:10_000_00,homeSquareFeet:2000,squareFeet:500}}},adu={id:"build-adu",date:"2025-02-01",type:"adu-build" as const,assetId:"future-home",name:"Build ADU",costCents:10_000_00,homeSquareFeet:2000,aduSquareFeet:500,fundingAccountId:"a"};
+    const result=calculate(financial,{...scenario,events:[purchase,adu],horizon:{start:"2025-01",months:2}}),february=result[0].months[1].properties[0],annual=result[0].properties[0];
+    expect(february.aduCostCents).toBe(10_000_00);expect(february.aduAddedValueCents).toBe(25_000_00);expect(february.assetValueCents).toBe(125_000_00);expect(february.equityCents).toBe(125_000_00);expect(annual.aduAddedValueCents).toBe(25_000_00);
+  });
   it("combines fixed amounts and remaining-surplus percentages for the displayed assignment",()=>{
     expect(effectiveContributionBps([{id:"fixed",destinationType:"account",destinationId:"a",monthlyAmountCents:1250_00,frequency:"monthly"}],7090_00)).toBe(1763);
     expect(effectiveContributionBps([{id:"fixed",destinationType:"account",destinationId:"a",monthlyAmountCents:2500,frequency:"monthly"},{id:"percent",destinationType:"account",destinationId:"b",percentBps:5000,frequency:"monthly"}],10000)).toBe(6250);

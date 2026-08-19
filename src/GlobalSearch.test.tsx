@@ -113,7 +113,7 @@ describe("global search", () => {
     });
     opener.focus();
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
-    let input = screen.getByRole("textbox", { name: "Search workspace" });
+    let input = screen.getByRole("combobox", { name: "Search workspace" });
     expect(input).toHaveFocus();
     fireEvent.change(input, { target: { value: "house" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -124,12 +124,11 @@ describe("global search", () => {
       expect(
         screen
           .getByText("Lake House")
-          .closest(".account")
-          ?.querySelector("button"),
+          .closest(".account"),
       ).toHaveFocus(),
     );
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
-    input = screen.getByRole("textbox", { name: "Search workspace" });
+    input = screen.getByRole("combobox", { name: "Search workspace" });
     fireEvent.change(input, { target: { value: "future" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(
@@ -141,7 +140,7 @@ describe("global search", () => {
     );
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
     fireEvent.keyDown(
-      screen.getByRole("textbox", { name: "Search workspace" }),
+      screen.getByRole("combobox", { name: "Search workspace" }),
       {
         key: "Escape",
       },
@@ -158,19 +157,19 @@ describe("global search", () => {
       target: { value: "nothing" },
     });
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
-    let input = screen.getByRole("textbox", { name: "Search workspace" });
+    let input = screen.getByRole("combobox", { name: "Search workspace" });
     fireEvent.change(input, { target: { value: "transfer" } });
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "ArrowUp" });
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Edit Transfer" }),
+        screen.getByRole("group", { name: "Edit Transfer" }),
       ).toHaveFocus(),
     );
     expect(screen.getByLabelText("Search activity")).toHaveValue("");
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
-    input = screen.getByRole("textbox", { name: "Search workspace" });
+    input = screen.getByRole("combobox", { name: "Search workspace" });
     fireEvent.change(input, { target: { value: "zzzz" } });
     expect(screen.getByText("No results found.")).toBeInTheDocument();
   });

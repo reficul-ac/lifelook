@@ -41,7 +41,7 @@ async function saveDialog() {
 
 async function openAdd(kind) {
   await $("aria/Add").click();
-  await $(`aria/${kind}`).click();
+  await $(`//div[@role="menu"]//button[@role="menuitem" and normalize-space()="${kind}"]`).click();
 }
 
 async function addTransaction(kind, { date, amount, account, description }) {
@@ -159,11 +159,11 @@ describe("LifeLook native acceptance", () => {
     const add = await $("aria/Add");
     assert.equal(await add.isEnabled(), true);
     await add.click();
-    assert.equal(await $("aria/What would you like to add?").isDisplayed(), true);
+    assert.equal(await $('[role="menu"][aria-label="Add"]').isDisplayed(), true);
     for (const mode of ["Income", "Expense", "Transfer", "Account"]) {
       assert.equal(await $(`aria/${mode}`).isEnabled(), true);
     }
-    await $("aria/Cancel").click();
+    await browser.keys("Escape");
     await browser.saveScreenshot(artifact("01-light-920x650.png"));
 
     await openAdd("Account");

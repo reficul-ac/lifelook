@@ -1,31 +1,675 @@
-import {useEffect,useMemo,useRef,useState} from "react";
-import {calculateRetirementOutlook,defaultRetirementPlan,type AnnualProjection,type FinancialSnapshot,type RetirementExpenseBucket,type RetirementIncome,type RetirementPlanRecord,type RetirementStressPreset,type Scenario} from "./domain";
-import type {Bootstrap,Repository} from "./repository";
-const money=(n:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(n/100);
-const uid=()=>globalThis.crypto?.randomUUID?.()??`ret-${Date.now()}-${Math.random()}`;
-export function RetirementView({initial,repository,bootstrap,snapshot,scenarios,projections,onPlanChange}:{initial?:RetirementPlanRecord|null;repository:Repository;bootstrap:Bootstrap;snapshot:FinancialSnapshot;scenarios:Scenario[];projections:readonly AnnualProjection[];onPlanChange?:(p:RetirementPlanRecord)=>void}){
- const loaded={...defaultRetirementPlan(),...initial,householdId:initial?.householdId??bootstrap.household?.id??"local",selectedScenarioId:initial?.selectedScenarioId||scenarios[0]?.id||""} as RetirementPlanRecord;
- const [plan,setPlan]=useState<RetirementPlanRecord>(()=>({...loaded,retirementYears:loaded.retirementYears??Object.fromEntries(bootstrap.people.map(p=>[p.id,loaded.retirementYear])),scheduledIncome:loaded.scheduledIncome??[],withdrawalAccountOrder:loaded.withdrawalAccountOrder??[...snapshot.accounts].sort((a,b)=>({checking:0,savings:0,investment:1,retirement:2,credit:3}[a.kind]-{checking:0,savings:0,investment:1,retirement:2,credit:3}[b.kind])).map(a=>a.id)}));
- const [section,setSection]=useState<"outlook"|"income"|"withdrawal"|"stress">("outlook"),[preset,setPreset]=useState<RetirementStressPreset>("baseline"),[save,setSave]=useState("idle");const revision=useRef(plan.revision),first=useRef(true);
- const scenario=scenarios.find(s=>s.id===plan.selectedScenarioId)??scenarios[0],result=useMemo(()=>scenario?calculateRetirementOutlook({plan,accounts:snapshot.accounts,assets:snapshot.assets,liabilities:snapshot.liabilities,scenario,projections,currentYear:new Date().getFullYear(),people:bootstrap.people,recurring:snapshot.recurring,preset}):null,[plan,snapshot,scenario,projections,bootstrap.people,preset]);
- useEffect(()=>{onPlanChange?.(plan);if(first.current){first.current=false;return}if(!repository.updateRetirementPlan)return;setSave("saving");repository.updateRetirementPlan({...plan,expectedRevision:revision.current}).then(x=>{revision.current=x.revision;setSave("saved")}).catch(()=>setSave("error"))},[plan]);
- const update=<K extends keyof RetirementPlanRecord>(key:K,value:RetirementPlanRecord[K])=>setPlan(p=>({...p,[key]:value}));
- if(!scenario||!result)return <div className="content"><section className="card"><h2>Create a Plan scenario first</h2></section></div>;
- const row=result.years[0],legacy=plan.portfolioItems.length&&!plan.legacyReviewDismissed;
- return <div className="content retirement-view">
-  <section className="card retirement-header"><div><p className="eyebrow">Uses the active Plan scenario</p><h2>Retirement outlook</h2><p>{scenario.name} · activity included through December 31 of each selected retirement year</p></div><span className={`save-state ${save}`}>{save==="saving"?"Saving…":save==="saved"?"Saved":save==="error"?"Save failed":""}</span>{bootstrap.people.map(person=><label key={person.id}>{person.name} retires<select value={plan.retirementYears?.[person.id]??plan.retirementYear} onChange={e=>update("retirementYears",{...plan.retirementYears,[person.id]:+e.target.value})}>{Array.from({length:61},(_,i)=>new Date().getFullYear()+i).map(y=><option key={y}>{y}</option>)}</select></label>)}</section>
-  {legacy&&<section className="card" role="alert"><strong>Legacy retirement portfolio needs review</strong><p>These items were preserved but are not projected. Add dated, funded purchases to Plan or dismiss this notice.</p><button onClick={()=>update("legacyReviewDismissed",true)}>Dismiss legacy items</button></section>}
-  {result.warnings.map(w=><p className="card muted" role="status" key={w}>{w}</p>)}
-  <div className="subtabs" role="tablist" aria-label="Retirement sections">{([['outlook','Outlook'],['income','Income & Spending'],['withdrawal','Withdrawal Strategy'],['stress','Stress Test']] as const).map(([id,label])=><button key={id} role="tab" aria-selected={section===id} onClick={()=>setSection(id)}>{label}</button>)}</div>
-  {section==="outlook"&&<><section className="retirement-cards"><Metric label="Portfolio at cutoff" value={snapshot.accounts.reduce((s,a)=>s+a.balanceCents,0)}/><Metric label="Annual gross income" value={row.grossIncomeCents}/><Metric label="Taxes & penalties" value={row.taxAndPenaltyCents}/><Metric label="After-tax income" value={row.afterTaxIncomeCents}/><Metric label="Spending" value={row.spendingCents}/><Metric label={row.excessCents>=0?"Excess":"Shortfall"} value={Math.abs(row.excessCents)} bad={row.excessCents<0}/><Metric label="Ending balance" value={result.endingBalanceCents}/><article className={`card ${result.ready?"":"metric-bad"}`}><small>Readiness</small><strong>{result.ready?"On track":`Depletes ${result.firstDepletionYear}`}</strong></article></section><BalanceChart rows={result.years}/></>}
-  {section==="income"&&<><Editor title="Retirement budget"><button onClick={()=>update("expenseBuckets",[...plan.expenseBuckets,{id:uid(),name:"New expense",mode:"monthly",monthlyCents:0}])}>Add expense</button>{plan.expenseBuckets.map(b=><Bucket key={b.id} bucket={b} change={next=>update("expenseBuckets",plan.expenseBuckets.map(x=>x.id===b.id?next:x))} remove={()=>update("expenseBuckets",plan.expenseBuckets.filter(x=>x.id!==b.id))}/>)}</Editor><Editor title="Scheduled retirement income"><button onClick={()=>update("scheduledIncome",[...(plan.scheduledIncome??[]),{id:uid(),name:"Social Security",ownerPersonId:bootstrap.people[0]?.id??"",startYear:new Date().getFullYear(),annualAmountCents:0,annualGrowthBps:200,taxableBps:8500}])}>Add income</button>{(plan.scheduledIncome??[]).map(x=><Income key={x.id} value={x} people={bootstrap.people} change={next=>update("scheduledIncome",plan.scheduledIncome?.map(y=>y.id===x.id?next:y))}/>)}</Editor></>}
-  {section==="withdrawal"&&<Editor title="Account withdrawal order"><p className="muted">Only actual Plan accounts are used. Move accounts to set the order.</p>{(plan.withdrawalAccountOrder??[]).map((id,i)=>{const a=snapshot.accounts.find(x=>x.id===id);return a&&<div className="bucket-row" key={id}><strong>{i+1}. {a.name}</strong><span>{a.subtype??"Metadata required"}</span><button disabled={!i} onClick={()=>{const n=[...(plan.withdrawalAccountOrder??[])];[n[i-1],n[i]]=[n[i],n[i-1]];update("withdrawalAccountOrder",n)}}>Move up</button></div>})}<p className="muted">Models the 59½ rule, employer-plan age-55 separation exception, Roth basis/five-year treatment, and RMDs using rule pack 2026.1. Special exceptions are not modeled.</p></Editor>}
-  {section==="stress"&&<><section className="card"><h2>Deterministic sensitivity</h2><select aria-label="Stress preset" value={preset} onChange={e=>setPreset(e.target.value as RetirementStressPreset)}><option value="baseline">Baseline</option><option value="lower-returns">Returns −2 points</option><option value="higher-inflation">Inflation +1 point</option><option value="higher-spending">Spending +10%</option><option value="longevity">Lifetime +10 years</option><option value="combined">Combined stress</option></select><p><strong>{result.ready?"Passes":"Does not pass"}</strong> · Ending balance {money(result.endingBalanceCents)}{result.firstDepletionYear?` · First depletion ${result.firstDepletionYear}`:""}</p></section><YearTable rows={result.years}/></>}
- </div>
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  calculateRetirementOutlook,
+  defaultRetirementPlan,
+  type AnnualProjection,
+  type FinancialSnapshot,
+  type RetirementExpenseBucket,
+  type RetirementIncome,
+  type RetirementPlanRecord,
+  type RetirementStressPreset,
+  type Scenario,
+} from "./domain";
+import type { Bootstrap, Repository } from "./repository";
+import { AnchoredMenu, DetailDisclosure, OverflowMenu } from "./ui";
+const money = (n: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(n / 100);
+const uid = () =>
+  globalThis.crypto?.randomUUID?.() ?? `ret-${Date.now()}-${Math.random()}`;
+export function RetirementView({
+  initial,
+  repository,
+  bootstrap,
+  snapshot,
+  scenarios,
+  projections,
+  onPlanChange,
+}: {
+  initial?: RetirementPlanRecord | null;
+  repository: Repository;
+  bootstrap: Bootstrap;
+  snapshot: FinancialSnapshot;
+  scenarios: Scenario[];
+  projections: readonly AnnualProjection[];
+  onPlanChange?: (p: RetirementPlanRecord) => void;
+}) {
+  const loaded = {
+    ...defaultRetirementPlan(),
+    ...initial,
+    householdId: initial?.householdId ?? bootstrap.household?.id ?? "local",
+    selectedScenarioId: initial?.selectedScenarioId || scenarios[0]?.id || "",
+  } as RetirementPlanRecord;
+  const [plan, setPlan] = useState<RetirementPlanRecord>(() => ({
+    ...loaded,
+    retirementYears:
+      loaded.retirementYears ??
+      Object.fromEntries(
+        bootstrap.people.map((p) => [p.id, loaded.retirementYear]),
+      ),
+    scheduledIncome: loaded.scheduledIncome ?? [],
+    withdrawalAccountOrder:
+      loaded.withdrawalAccountOrder ??
+      [...snapshot.accounts]
+        .sort(
+          (a, b) =>
+            ({
+              checking: 0,
+              savings: 0,
+              investment: 1,
+              retirement: 2,
+              credit: 3,
+            })[a.kind] -
+            {
+              checking: 0,
+              savings: 0,
+              investment: 1,
+              retirement: 2,
+              credit: 3,
+            }[b.kind],
+        )
+        .map((a) => a.id),
+  }));
+  const [section, setSection] = useState<
+      "outlook" | "income" | "withdrawal" | "stress"
+    >("outlook"),
+    [preset, setPreset] = useState<RetirementStressPreset>("baseline"),
+    [save, setSave] = useState("idle");
+  const revision = useRef(plan.revision),
+    first = useRef(true);
+  const scenario =
+      scenarios.find((s) => s.id === plan.selectedScenarioId) ?? scenarios[0],
+    result = useMemo(
+      () =>
+        scenario
+          ? calculateRetirementOutlook({
+              plan,
+              accounts: snapshot.accounts,
+              assets: snapshot.assets,
+              liabilities: snapshot.liabilities,
+              scenario,
+              projections,
+              currentYear: new Date().getFullYear(),
+              people: bootstrap.people,
+              recurring: snapshot.recurring,
+              preset,
+            })
+          : null,
+      [plan, snapshot, scenario, projections, bootstrap.people, preset],
+    );
+  useEffect(() => {
+    onPlanChange?.(plan);
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (!repository.updateRetirementPlan) return;
+    setSave("saving");
+    repository
+      .updateRetirementPlan({ ...plan, expectedRevision: revision.current })
+      .then((x) => {
+        revision.current = x.revision;
+        setSave("saved");
+      })
+      .catch(() => setSave("error"));
+  }, [plan]);
+  const update = <K extends keyof RetirementPlanRecord>(
+    key: K,
+    value: RetirementPlanRecord[K],
+  ) => setPlan((p) => ({ ...p, [key]: value }));
+  if (!scenario || !result)
+    return (
+      <div className="content">
+        <section className="card">
+          <h2>Create a Plan scenario first</h2>
+        </section>
+      </div>
+    );
+  const row = result.years[0],
+    legacy = plan.portfolioItems.length && !plan.legacyReviewDismissed;
+  return (
+    <div className="content retirement-view">
+      <section className="card retirement-header">
+        <div>
+          <p className="eyebrow">Uses the active Plan scenario</p>
+          <h2>Retirement outlook</h2>
+          <p>
+            {scenario.name} · activity included through December 31 of each
+            selected retirement year
+          </p>
+        </div>
+        <span className={`save-state ${save}`}>
+          {save === "saving"
+            ? "Saving…"
+            : save === "saved"
+              ? "Saved"
+              : save === "error"
+                ? "Save failed"
+                : ""}
+        </span>
+        {bootstrap.people.map((person) => (
+          <label key={person.id}>
+            {person.name} retires
+            <select
+              value={plan.retirementYears?.[person.id] ?? plan.retirementYear}
+              onChange={(e) =>
+                update("retirementYears", {
+                  ...plan.retirementYears,
+                  [person.id]: +e.target.value,
+                })
+              }
+            >
+              {Array.from(
+                { length: 61 },
+                (_, i) => new Date().getFullYear() + i,
+              ).map((y) => (
+                <option key={y}>{y}</option>
+              ))}
+            </select>
+          </label>
+        ))}
+      </section>
+      {legacy && (
+        <section className="card" role="alert">
+          <strong>Legacy retirement portfolio needs review</strong>
+          <p>
+            These items were preserved but are not projected. Add dated, funded
+            purchases to Plan or dismiss this notice.
+          </p>
+          <button onClick={() => update("legacyReviewDismissed", true)}>
+            Dismiss legacy items
+          </button>
+        </section>
+      )}
+      {result.warnings.map((w) => (
+        <p className="card muted" role="status" key={w}>
+          {w}
+        </p>
+      ))}
+      <select
+        className="compact-section-select"
+        aria-label="Retirement section"
+        value={section}
+        onChange={(e) => setSection(e.target.value as typeof section)}
+      >
+        <option value="outlook">Outlook</option>
+        <option value="income">Income &amp; Spending</option>
+        <option value="withdrawal">Withdrawal Strategy</option>
+        <option value="stress">Stress Test</option>
+      </select>
+      <div className="subtabs" role="tablist" aria-label="Retirement sections">
+        {(
+          [
+            ["outlook", "Outlook"],
+            ["income", "Income & Spending"],
+            ["withdrawal", "Withdrawal Strategy"],
+            ["stress", "Stress Test"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={section === id}
+            onClick={() => setSection(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {section === "outlook" && (
+        <>
+          <section
+            className={`card retirement-readiness ${result.ready ? "" : "metric-bad"}`}
+          >
+            <p className="eyebrow">Retirement readiness</p>
+            <h2>
+              {result.ready
+                ? "Your portfolio lasts through the plan"
+                : "Your portfolio runs out"}
+            </h2>
+            <strong>
+              {result.ready
+                ? `${money(result.endingBalanceCents)} remains`
+                : `Depletion begins in ${result.firstDepletionYear}`}
+            </strong>
+          </section>
+          <BalanceChart rows={result.years} />
+          <section className="retirement-cards">
+            <Metric
+              label="Portfolio at cutoff"
+              value={snapshot.accounts.reduce((s, a) => s + a.balanceCents, 0)}
+            />
+            <Metric label="After-tax income" value={row.afterTaxIncomeCents} />
+            <Metric label="Spending" value={row.spendingCents} />
+            <Metric
+              label={row.excessCents >= 0 ? "Excess" : "Shortfall"}
+              value={Math.abs(row.excessCents)}
+              bad={row.excessCents < 0}
+            />
+          </section>
+          <DetailDisclosure
+            label="View funding sources"
+            householdId={plan.householdId}
+            preferenceKey="retirement:funding"
+          >
+            <ul>
+              {snapshot.accounts.map((a) => (
+                <li key={a.id}>
+                  {a.name}: {money(a.balanceCents)}
+                </li>
+              ))}
+            </ul>
+          </DetailDisclosure>
+          <DetailDisclosure
+            label="View exact yearly data"
+            householdId={plan.householdId}
+            preferenceKey="retirement:years"
+          >
+            <YearTable rows={result.years} />
+          </DetailDisclosure>
+        </>
+      )}
+      {section === "income" && (
+        <>
+          <AnchoredMenu
+            label="Add retirement item"
+            primary
+            items={[
+              {
+                label: "Expense",
+                onSelect: () =>
+                  update("expenseBuckets", [
+                    ...plan.expenseBuckets,
+                    {
+                      id: uid(),
+                      name: "New expense",
+                      mode: "monthly",
+                      monthlyCents: 0,
+                    },
+                  ]),
+              },
+              {
+                label: "Income",
+                onSelect: () =>
+                  update("scheduledIncome", [
+                    ...(plan.scheduledIncome ?? []),
+                    {
+                      id: uid(),
+                      name: "Social Security",
+                      ownerPersonId: bootstrap.people[0]?.id ?? "",
+                      startYear: new Date().getFullYear(),
+                      annualAmountCents: 0,
+                      annualGrowthBps: 200,
+                      taxableBps: 8500,
+                    },
+                  ]),
+              },
+            ]}
+          />
+          <Editor title="Retirement budget">
+            {plan.expenseBuckets.map((b) => (
+              <Bucket
+                key={b.id}
+                bucket={b}
+                change={(next) =>
+                  update(
+                    "expenseBuckets",
+                    plan.expenseBuckets.map((x) => (x.id === b.id ? next : x)),
+                  )
+                }
+                remove={() =>
+                  update(
+                    "expenseBuckets",
+                    plan.expenseBuckets.filter((x) => x.id !== b.id),
+                  )
+                }
+              />
+            ))}
+          </Editor>
+          <Editor title="Scheduled retirement income">
+            {(plan.scheduledIncome ?? []).map((x) => (
+              <Income
+                key={x.id}
+                value={x}
+                people={bootstrap.people}
+                change={(next) =>
+                  update(
+                    "scheduledIncome",
+                    plan.scheduledIncome?.map((y) =>
+                      y.id === x.id ? next : y,
+                    ),
+                  )
+                }
+              />
+            ))}
+          </Editor>
+        </>
+      )}
+      {section === "withdrawal" && (
+        <Editor title="Account withdrawal order">
+          <p className="muted">
+            Only actual Plan accounts are used. Move accounts to set the order.
+          </p>
+          {(plan.withdrawalAccountOrder ?? []).map((id, i) => {
+            const a = snapshot.accounts.find((x) => x.id === id);
+            return (
+              a && (
+                <div className="bucket-row" key={id}>
+                  <strong>
+                    {i + 1}. {a.name}
+                  </strong>
+                  <span>{a.subtype ?? "Metadata required"}</span>
+                  <OverflowMenu label={`More actions for ${a.name}`} items={[{
+                    label: "Move up",
+                    disabled: !i,
+                    onSelect: () => {
+                      const n = [...(plan.withdrawalAccountOrder ?? [])];
+                      [n[i - 1], n[i]] = [n[i], n[i - 1]];
+                      update("withdrawalAccountOrder", n);
+                    },
+                  }]}/>
+                </div>
+              )
+            );
+          })}
+          <p className="muted">
+            Models the 59½ rule, employer-plan age-55 separation exception, Roth
+            basis/five-year treatment, and RMDs using rule pack 2026.1. Special
+            exceptions are not modeled.
+          </p>
+        </Editor>
+      )}
+      {section === "stress" && (
+        <>
+          <section className="card">
+            <h2>Deterministic sensitivity</h2>
+            <select
+              aria-label="Stress preset"
+              value={preset}
+              onChange={(e) =>
+                setPreset(e.target.value as RetirementStressPreset)
+              }
+            >
+              <option value="baseline">Baseline</option>
+              <option value="lower-returns">Returns −2 points</option>
+              <option value="higher-inflation">Inflation +1 point</option>
+              <option value="higher-spending">Spending +10%</option>
+              <option value="longevity">Lifetime +10 years</option>
+              <option value="combined">Combined stress</option>
+            </select>
+            <p>
+              <strong>{result.ready ? "Passes" : "Does not pass"}</strong> ·
+              Ending balance {money(result.endingBalanceCents)}
+              {result.firstDepletionYear
+                ? ` · First depletion ${result.firstDepletionYear}`
+                : ""}
+            </p>
+          </section>
+          <YearTable rows={result.years} />
+        </>
+      )}
+    </div>
+  );
 }
-const Metric=({label,value,bad}:{label:string;value:number;bad?:boolean})=><article className={`card ${bad?"metric-bad":""}`}><small>{label}</small><strong>{money(value)}</strong></article>;
-const Editor=({title,children}:{title:string;children:React.ReactNode})=><details className="card" open><summary><h2>{title}</h2></summary>{children}</details>;
-function Bucket({bucket,change,remove}:{bucket:RetirementExpenseBucket;change:(b:RetirementExpenseBucket)=>void;remove:()=>void}){return <div className="bucket-row"><input aria-label="Bucket name" value={bucket.name} onChange={e=>change({...bucket,name:e.target.value})}/><select value={bucket.mode} onChange={e=>change(e.target.value==="monthly"?{id:bucket.id,name:bucket.name,mode:"monthly",monthlyCents:0}:{id:bucket.id,name:bucket.name,mode:"annual",annualCents:0})}><option value="monthly">Monthly</option><option value="annual">Annual</option></select><input type="number" value={(bucket.mode==="monthly"?bucket.monthlyCents:bucket.mode==="annual"?bucket.annualCents:0)/100} onChange={e=>change(bucket.mode==="monthly"?{...bucket,monthlyCents:+e.target.value*100}:bucket.mode==="annual"?{...bucket,annualCents:+e.target.value*100}:bucket)}/><button onClick={remove}>Remove</button></div>}
-function Income({value,people,change}:{value:RetirementIncome;people:Bootstrap["people"];change:(x:RetirementIncome)=>void}){return <div className="portfolio-editor"><input aria-label="Income name" value={value.name} onChange={e=>change({...value,name:e.target.value})}/><select aria-label="Income owner" value={value.ownerPersonId} onChange={e=>change({...value,ownerPersonId:e.target.value})}>{people.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><label>Start year<input type="number" value={value.startYear} onChange={e=>change({...value,startYear:+e.target.value})}/></label><label>Annual amount<input type="number" value={value.annualAmountCents/100} onChange={e=>change({...value,annualAmountCents:+e.target.value*100})}/></label><label>Growth %<input type="number" value={value.annualGrowthBps/100} onChange={e=>change({...value,annualGrowthBps:+e.target.value*100})}/></label><label>Taxable %<input type="number" value={value.taxableBps/100} onChange={e=>change({...value,taxableBps:+e.target.value*100})}/></label></div>}
-const BalanceChart=({rows}:{rows:{year:number;endingBalanceCents:number}[]})=>{const max=Math.max(1,...rows.map(r=>r.endingBalanceCents));return <section className="card"><h2>Balance & runway</h2><div className="allocation-bar" style={{height:18}}><i style={{width:`${Math.max(0,rows.at(-1)!.endingBalanceCents/max*100)}%`}}/></div><p>{rows[0]?.year}–{rows.at(-1)?.year}: {money(rows.at(-1)?.endingBalanceCents??0)}</p></section>};
-const YearTable=({rows}:{rows:ReturnType<typeof calculateRetirementOutlook>["years"]})=><section className="card table-scroll"><table><thead><tr><th>Year</th><th>Gross</th><th>Tax/penalty</th><th>Spending</th><th>Excess</th><th>Ending</th></tr></thead><tbody>{rows.map(r=><tr key={r.year}><th>{r.year}</th><td>{money(r.grossIncomeCents)}</td><td>{money(r.taxAndPenaltyCents)}</td><td>{money(r.spendingCents)}</td><td>{money(r.excessCents)}</td><td>{money(r.endingBalanceCents)}</td></tr>)}</tbody></table></section>;
+const Metric = ({
+  label,
+  value,
+  bad,
+}: {
+  label: string;
+  value: number;
+  bad?: boolean;
+}) => (
+  <article className={`card ${bad ? "metric-bad" : ""}`}>
+    <small>{label}</small>
+    <strong>{money(value)}</strong>
+  </article>
+);
+const Editor = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <details className="card" open>
+    <summary>
+      <h2>{title}</h2>
+    </summary>
+    {children}
+  </details>
+);
+function Bucket({
+  bucket,
+  change,
+  remove,
+}: {
+  bucket: RetirementExpenseBucket;
+  change: (b: RetirementExpenseBucket) => void;
+  remove: () => void;
+}) {
+  return (
+    <div className="bucket-row">
+      <input
+        aria-label="Bucket name"
+        value={bucket.name}
+        onChange={(e) => change({ ...bucket, name: e.target.value })}
+      />
+      <select
+        value={bucket.mode}
+        onChange={(e) =>
+          change(
+            e.target.value === "monthly"
+              ? {
+                  id: bucket.id,
+                  name: bucket.name,
+                  mode: "monthly",
+                  monthlyCents: 0,
+                }
+              : {
+                  id: bucket.id,
+                  name: bucket.name,
+                  mode: "annual",
+                  annualCents: 0,
+                },
+          )
+        }
+      >
+        <option value="monthly">Monthly</option>
+        <option value="annual">Annual</option>
+      </select>
+      <input
+        aria-label={`${bucket.name} amount`}
+        type="number"
+        value={
+          (bucket.mode === "monthly"
+            ? bucket.monthlyCents
+            : bucket.mode === "annual"
+              ? bucket.annualCents
+              : 0) / 100
+        }
+        onChange={(e) =>
+          change(
+            bucket.mode === "monthly"
+              ? { ...bucket, monthlyCents: +e.target.value * 100 }
+              : bucket.mode === "annual"
+                ? { ...bucket, annualCents: +e.target.value * 100 }
+                : bucket,
+          )
+        }
+      />
+      <OverflowMenu
+        label={`More options for ${bucket.name}`}
+        items={[{ label: "Remove", danger: true, onSelect: remove }]}
+      />
+    </div>
+  );
+}
+function Income({
+  value,
+  people,
+  change,
+}: {
+  value: RetirementIncome;
+  people: Bootstrap["people"];
+  change: (x: RetirementIncome) => void;
+}) {
+  return (
+    <div className="portfolio-editor">
+      <input
+        aria-label="Income name"
+        value={value.name}
+        onChange={(e) => change({ ...value, name: e.target.value })}
+      />
+      <select
+        aria-label="Income owner"
+        value={value.ownerPersonId}
+        onChange={(e) => change({ ...value, ownerPersonId: e.target.value })}
+      >
+        {people.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      <label>
+        Start year
+        <input
+          type="number"
+          value={value.startYear}
+          onChange={(e) => change({ ...value, startYear: +e.target.value })}
+        />
+      </label>
+      <label>
+        Annual amount
+        <input
+          type="number"
+          value={value.annualAmountCents / 100}
+          onChange={(e) =>
+            change({ ...value, annualAmountCents: +e.target.value * 100 })
+          }
+        />
+      </label>
+      <label>
+        Growth %
+        <input
+          type="number"
+          value={value.annualGrowthBps / 100}
+          onChange={(e) =>
+            change({ ...value, annualGrowthBps: +e.target.value * 100 })
+          }
+        />
+      </label>
+      <label>
+        Taxable %
+        <input
+          type="number"
+          value={value.taxableBps / 100}
+          onChange={(e) =>
+            change({ ...value, taxableBps: +e.target.value * 100 })
+          }
+        />
+      </label>
+    </div>
+  );
+}
+const BalanceChart = ({
+  rows,
+}: {
+  rows: { year: number; endingBalanceCents: number }[];
+}) => {
+  const [active, setActive] = useState(0);
+  const max = Math.max(
+      1,
+      ...rows.map((r) => Math.max(0, r.endingBalanceCents)),
+    ),
+    w = 720,
+    h = 220,
+    points = rows
+      .map(
+        (r, i) =>
+          `${(i / Math.max(1, rows.length - 1)) * w},${h - (Math.max(0, r.endingBalanceCents) / max) * (h - 20)}`,
+      )
+      .join(" "),
+    depletion = rows.find((r) => r.endingBalanceCents <= 0);
+  return (
+    <section className="card">
+      <h2>Portfolio runway</h2>
+      <div role="slider" tabIndex={0} aria-label="Explore yearly portfolio balance" aria-valuemin={0} aria-valuemax={Math.max(0, rows.length - 1)} aria-valuenow={active} aria-valuetext={rows[active] ? `${rows[active].year}, ${money(rows[active].endingBalanceCents)}` : undefined} onPointerMove={event => { const rect=event.currentTarget.getBoundingClientRect(); setActive(Math.max(0,Math.min(rows.length-1,Math.round((event.clientX-rect.left)/Math.max(1,rect.width)*(rows.length-1))))); }} onKeyDown={event => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); setActive(value => Math.max(0, Math.min(rows.length - 1, value + (event.key === "ArrowRight" ? 1 : -1)))); } }}>
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        role="img"
+        aria-label={`Year-by-year portfolio balance${depletion ? `; depletion begins in ${depletion.year}` : "; no depletion in the projection"}`}
+      >
+        <line x1="0" y1={h} x2={w} y2={h} stroke="currentColor" />
+        <polyline
+          points={points}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="4"
+        />
+        {depletion && (
+          <>
+            <line
+              x1={(rows.indexOf(depletion) / Math.max(1, rows.length - 1)) * w}
+              y1="0"
+              x2={(rows.indexOf(depletion) / Math.max(1, rows.length - 1)) * w}
+              y2={h}
+              stroke="currentColor"
+              strokeDasharray="7 5"
+            />
+            <text
+              x={
+                (rows.indexOf(depletion) / Math.max(1, rows.length - 1)) * w + 5
+              }
+              y="18"
+            >
+              Depleted {depletion.year}
+            </text>
+          </>
+        )}
+      </svg>
+      {rows[active] && <output className="chart-tooltip retirement-chart-tooltip">{rows[active].year}<strong>{money(rows[active].endingBalanceCents)}</strong></output>}
+      </div>
+      <p>
+        {rows[0]?.year}–{rows.at(-1)?.year}:{" "}
+        {money(rows.at(-1)?.endingBalanceCents ?? 0)}
+      </p>
+    </section>
+  );
+};
+const YearTable = ({
+  rows,
+}: {
+  rows: ReturnType<typeof calculateRetirementOutlook>["years"];
+}) => (
+  <section className="card table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Year</th>
+          <th>Gross</th>
+          <th>Tax/penalty</th>
+          <th>Spending</th>
+          <th>Excess</th>
+          <th>Ending</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.year}>
+            <th>{r.year}</th>
+            <td>{money(r.grossIncomeCents)}</td>
+            <td>{money(r.taxAndPenaltyCents)}</td>
+            <td>{money(r.spendingCents)}</td>
+            <td>{money(r.excessCents)}</td>
+            <td>{money(r.endingBalanceCents)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+);

@@ -18,6 +18,7 @@ const labels: Record<Kind, string> = {
   "account-contribution": "Account contribution",
   "asset-purchase": "Asset purchase",
   "adu-build": "ADU build",
+  "property-rental-start": "Convert home to rental",
   "asset-sale": "Asset sale",
   "debt-origination": "Debt origination",
   "debt-payoff": "Debt payoff",
@@ -115,6 +116,7 @@ export function ScenarioPlanningDialog({
   projectedMonthlySurplusCents = 0,
   focusedEntry,
   focusedEventId,
+  focusedEventType,
   close,
   refresh,
 }: {
@@ -124,6 +126,7 @@ export function ScenarioPlanningDialog({
   projectedMonthlySurplusCents?: number;
   focusedEntry?: "event" | "contribution";
   focusedEventId?: string;
+  focusedEventType?: ScenarioEvent["type"];
   close: () => void;
   refresh: () => Promise<void>;
 }) {
@@ -149,7 +152,7 @@ export function ScenarioPlanningDialog({
     [editing, setEditing] = useState<ScenarioEvent | null | undefined>(
       focusedEventId
         ? record.events.find((event) => event.id === focusedEventId)
-        : focusedEntry === "event"
+        : focusedEntry === "event" || focusedEventType
           ? null
           : undefined,
     ),
@@ -319,6 +322,7 @@ export function ScenarioPlanningDialog({
         {editing !== undefined ? (
           <EventEditor
             value={editing}
+            initialKind={focusedEventType}
             events={events}
             bootstrap={bootstrap}
             horizonMonths={record.horizonMonths}
@@ -798,6 +802,7 @@ function moveRule<T extends { priority: number }>(
 
 function EventEditor({
   value,
+  initialKind,
   events,
   bootstrap,
   horizonMonths,
@@ -805,13 +810,14 @@ function EventEditor({
   commit,
 }: {
   value: ScenarioEvent | null;
+  initialKind?:ScenarioEvent["type"];
   events: ScenarioEvent[];
   bootstrap: Bootstrap;
   horizonMonths: number;
   cancel: () => void;
   commit: (event: ScenarioEvent) => void;
 }) {
-  const [kind, setKind] = useState<Kind>(value?.type ?? "one-time-income"),
+  const [kind, setKind] = useState<Kind>(value?.type ?? initialKind ?? "one-time-income"),
     [date, setDate] = useState(
       value?.date ?? new Date().toISOString().slice(0, 10),
     ),
@@ -1000,6 +1006,8 @@ function EventEditor({
           rentalIncomeGrowthBps: r("rentalIncomeGrowthBps"),
           fundingAccountId: f("fundingAccountId"),
         };
+      else if(kind==="property-rental-start")
+        event={...base,type:kind,assetId:f("assetId"),name:f("name").trim(),monthlyRentalIncomeCents:nonnegativeMoney("monthlyRentalIncomeCents"),rentalIncomeGrowthBps:optionalRate("rentalIncomeGrowthBps"),rentalUseBps:optionalRate("rentalUseBps",10000),rentalTaxModelingEnabled:checked("rentalTaxModelingEnabled"),rentalType:(f("rentalType")||"long-term") as "long-term"|"short-term",mfsLivedApartAllYear:checked("mfsLivedApartAllYear"),shortTermMaterialParticipation:checked("shortTermMaterialParticipation"),longTermRealEstateProfessional:checked("longTermRealEstateProfessional"),longTermMaterialParticipation:checked("longTermMaterialParticipation"),propertyTaxBasisCents:nullableMoney("propertyTaxBasisCents"),buildingBasisCents:nullableMoney("buildingBasisCents")};
       else
         event = {
           ...base,
@@ -1213,6 +1221,21 @@ function EventEditor({
               onChange={(e) => set("rentalIncomeGrowthBps", e.target.value)}
             />
           </label>
+        </>
+      )}
+      {kind === "property-rental-start" && (
+        <>
+          <label>Name<input required value={f("name")} onChange={(e)=>set("name",e.target.value)} /></label>
+          <label>Current home<select required value={f("assetId")} onChange={(e)=>set("assetId",e.target.value)}><option value="">Choose property</option>{bootstrap.assets.filter(asset=>asset.housingCosts||bootstrap.liabilities.some(liability=>liability.mortgage?.assetId===asset.id)).map(asset=><option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
+          {money("monthlyRentalIncomeCents","Monthly rental income (USD)")}
+          {percent("rentalIncomeGrowthBps","Annual rent growth (%)")}
+          {percent("rentalUseBps","Rental-use allocation (%)")}
+          <label className="check"><input type="checkbox" checked={f("rentalTaxModelingEnabled")==="true"} onChange={(e)=>set("rentalTaxModelingEnabled",String(e.target.checked))} /> Include rental income taxes, deductions, and depreciation</label>
+          <label>Rental type<select value={f("rentalType")||"long-term"} onChange={(e)=>set("rentalType",e.target.value)}><option value="long-term">Long-term rental</option><option value="short-term">Short-term rental</option></select></label>
+          {money("propertyTaxBasisCents","Property-tax basis override (optional)",true)}
+          {money("buildingBasisCents","Depreciable building basis override (optional)",true)}
+          {bootstrap.taxProfile?.filingStatus==="married-separate"&&<label className="check"><input type="checkbox" checked={f("mfsLivedApartAllYear")==="true"} onChange={(e)=>set("mfsLivedApartAllYear",String(e.target.checked))} /> Lived apart from spouse all year</label>}
+          {f("rentalType")==="short-term"?<label className="check"><input type="checkbox" checked={f("shortTermMaterialParticipation")==="true"} onChange={(e)=>set("shortTermMaterialParticipation",String(e.target.checked))} /> Materially participate</label>:<><label className="check"><input type="checkbox" checked={f("longTermRealEstateProfessional")==="true"} onChange={(e)=>set("longTermRealEstateProfessional",String(e.target.checked))} /> Qualify as a real-estate professional</label><label className="check"><input type="checkbox" checked={f("longTermMaterialParticipation")==="true"} onChange={(e)=>set("longTermMaterialParticipation",String(e.target.checked))} /> Materially participate</label></>}
         </>
       )}
       {kind === "asset-sale" && (

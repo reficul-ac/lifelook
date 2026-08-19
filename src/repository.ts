@@ -17,10 +17,10 @@ export interface RecurringEntry { id:string; householdId:string; categoryId:stri
 export interface RecurringInput { id:string;categoryId:string;accountId?:string|null;name:string;amountCents:number;frequency:RecurringFrequency;incomeType?:"ordinary"|"salary";incomeTaxCategory?:import("./domain/types").IncomeTaxCategory;ownerPersonId?:string|null;startDate:string;endDate?:string|null;annualGrowthBps:number;annualGrowthMonth?:number|null;annualGrowthCapCents?:number|null;taxTreatment?:"none"|"pretax" }
 export interface AppreciationCurve { startYear:number;startRateBps:number;endYear:number;endRateBps:number }
 export interface PrivateStockVesting { vestedBps:number;vestingStartDate:string;remainingVestingQuarters:number;taxOnVest?:boolean }
-export interface Asset { id:string; householdId:string; name:string; valueCents:number; annualGrowthBps:number; appreciationCurve?:AppreciationCurve|null; privateStock?:PrivateStockVesting|null; equityHolding?:import("./domain/types").EquityHolding|null; housingCosts?:import("./domain/types").HousingCosts; purchasePriceCents?:number|null; purchaseDate?:string|null; revision:number }
+export interface Asset { id:string; householdId:string; name:string; valueCents:number; annualGrowthBps:number; appreciationCurve?:AppreciationCurve|null; privateStock?:PrivateStockVesting|null; equityHolding?:import("./domain/types").EquityHolding|null; housingCosts?:import("./domain/types").HousingCosts; purchasePriceCents?:number|null; purchaseDate?:string|null; taxableCostBasisCents?:number|null; rentalTaxBasisCents?:number|null; rentalBuildingBasisCents?:number|null; revision:number }
 export interface MortgageTerms { originalPrincipalCents:number; termMonths:number; startDate:string; paymentOverrideCents?:number|null; assetId?:string|null }
 export interface Liability { id:string; householdId:string; name:string; balanceCents:number; annualRateBps:number; minimumPaymentCents:number; mortgage?:MortgageTerms|null; revision:number }
-export interface AssetInput { id:string;name:string;valueCents:number;annualGrowthBps:number;appreciationCurve?:AppreciationCurve|null;privateStock?:PrivateStockVesting|null;equityHolding?:import("./domain/types").EquityHolding|null;housingCosts?:import("./domain/types").HousingCosts }
+export interface AssetInput { id:string;name:string;valueCents:number;annualGrowthBps:number;appreciationCurve?:AppreciationCurve|null;privateStock?:PrivateStockVesting|null;equityHolding?:import("./domain/types").EquityHolding|null;housingCosts?:import("./domain/types").HousingCosts;taxableCostBasisCents?:number|null;rentalTaxBasisCents?:number|null;rentalBuildingBasisCents?:number|null }
 export interface LiabilityInput { id:string;name:string;balanceCents:number;annualRateBps:number;minimumPaymentCents:number;mortgage?:MortgageTerms|null }
 export interface HomeInput { assetId:string;liabilityId?:string|null;name:string;purchasePriceCents:number;currentValueCents:number;annualGrowthBps:number;appreciationCurve?:AppreciationCurve|null;purchaseDate:string;propertyTaxRateBps:number;insuranceAnnualCents:number;financed:boolean;downPaymentBps?:number;termMonths?:number;annualRateBps?:number;asOfDate:string }
 export interface OnboardingStepPayload {
@@ -47,7 +47,7 @@ export type BootstrapInput = Pick<WorkspaceSnapshot,"onboardingStep"|"onboarding
 export interface TransactionInput { id:string; occurredOn:string; accountId:string; categoryId:string; amountCents:number; description:string; note?:string|null }
 export interface UpdateTransactionInput extends Omit<TransactionInput,"id"> { id:string; expectedRevision:number }
 export interface TransferInput { id:string;occurredOn:string;fromAccountId:string;toAccountId:string;amountCents:number;expectedRevision?:number }
-export interface AccountInput { id:string;name:string;kind:AccountKind;openingBalanceCents:number;annualReturnBps:number }
+export interface AccountInput { id:string;name:string;kind:AccountKind;openingBalanceCents:number;annualReturnBps:number;ownerPersonId?:string|null;subtype?:import("./domain/types").AccountSubtype|null;taxableCostBasisCents?:number|null;rothContributionBasisCents?:number|null;rothOpeningYear?:number|null }
 export type CsvDateFormat="iso"|"us";
 export type CsvAmountLayout="signed"|"debitCredit";
 export interface CsvMapping { accountId:string; dateColumn:string; descriptionColumn:string; noteColumn?:string|null; amountLayout:CsvAmountLayout; amountColumn?:string|null; debitColumn?:string|null; creditColumn?:string|null; inflowPositive:boolean; dateFormat:CsvDateFormat }
@@ -71,7 +71,7 @@ export interface Repository {
   updateTransfer?(input:TransferInput&{expectedRevision:number}):Promise<void>;
   deleteTransaction?(input:{id:string;expectedRevision:number}):Promise<void>;
   createAccount?(input:AccountInput):Promise<void>;
-  updateAccount?(input:{id:string;name:string;kind:AccountKind;annualReturnBps:number;expectedRevision:number}):Promise<void>;
+  updateAccount?(input:{id:string;name:string;kind:AccountKind;annualReturnBps:number;ownerPersonId?:string|null;subtype?:import("./domain/types").AccountSubtype|null;taxableCostBasisCents?:number|null;rothContributionBasisCents?:number|null;rothOpeningYear?:number|null;expectedRevision:number}):Promise<void>;
   reconcileAccount?(input:{id:string;occurredOn:string;targetBalanceCents:number;expectedBalanceCents:number}):Promise<void>;
   accountDeletionImpact?(accountId:string):Promise<AccountDeletionImpact>;
   deleteAccount?(input:{id:string;expectedRevision:number}):Promise<void>;

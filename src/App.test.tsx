@@ -641,7 +641,6 @@ describe("LifeLook shell", () => {
       />,
     );
     fireEvent.click(await screen.findByRole("button", { name: /Retirement/ }));
-    fireEvent.click(screen.getByRole("tab", { name: "Income & Spending" }));
     chooseMenu("Add retirement item", "Income");
     fireEvent.click(screen.getByRole("button", { name: /Overview/ }));
     await waitFor(() =>

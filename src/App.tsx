@@ -1343,7 +1343,7 @@ function EntryDialog({
     ),
     [annualReturn, setAnnualReturn] = useState(
       String((state.account?.annualReturnBps ?? 0) / 100),
-    );
+    ),[ownerPersonId,setOwnerPersonId]=useState(state.account?.ownerPersonId??""),[accountSubtype,setAccountSubtype]=useState(state.account?.subtype??(state.account?.kind==="retirement"?"traditional-ira":state.account?.kind==="investment"?"taxable-brokerage":"cash")),[taxableBasis,setTaxableBasis]=useState(state.account?.taxableCostBasisCents==null?"":String(state.account.taxableCostBasisCents/100)),[rothBasis,setRothBasis]=useState(state.account?.rothContributionBasisCents==null?"":String(state.account.rothContributionBasisCents/100)),[rothOpeningYear,setRothOpeningYear]=useState(state.account?.rothOpeningYear==null?"":String(state.account.rothOpeningYear));
   const categories = bootstrap.categories.filter((c) => c.kind === kind);
   useEffect(() => {
     if (!categories.some((c) => c.id === categoryId))
@@ -1464,6 +1464,7 @@ function EntryDialog({
             name: name.trim(),
             kind: accountKind,
             annualReturnBps,
+            ownerPersonId:ownerPersonId||null,subtype:accountSubtype as import("./domain/types").AccountSubtype,taxableCostBasisCents:taxableBasis?parseMoney(taxableBasis):null,rothContributionBasisCents:rothBasis?parseMoney(rothBasis):null,rothOpeningYear:rothOpeningYear?+rothOpeningYear:null,
             expectedRevision: state.account.revision,
           });
         else {
@@ -1477,6 +1478,7 @@ function EntryDialog({
             openingBalanceCents:
               accountKind === "credit" ? Math.abs(opening) : opening,
             annualReturnBps,
+            ownerPersonId:ownerPersonId||null,subtype:accountSubtype as import("./domain/types").AccountSubtype,taxableCostBasisCents:taxableBasis?parseMoney(taxableBasis):null,rothContributionBasisCents:rothBasis?parseMoney(rothBasis):null,rothOpeningYear:rothOpeningYear?+rothOpeningYear:null,
           });
         }
       } else if (state.type === "reconcile") {
@@ -1827,6 +1829,10 @@ function EntryDialog({
                       onChange={(e) => setAnnualReturn(e.target.value)}
                     />
                   </label>
+                  <label>Owner<select value={ownerPersonId} onChange={e=>setOwnerPersonId(e.target.value)}><option value="">Select owner</option>{bootstrap.people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+                  <label>Tax subtype<select value={accountSubtype} onChange={e=>setAccountSubtype(e.target.value as typeof accountSubtype)}><option value="cash">Cash</option><option value="taxable-brokerage">Taxable brokerage</option><option value="traditional-ira">Traditional IRA</option><option value="employer-pre-tax">Employer pre-tax</option><option value="roth-ira">Roth IRA</option><option value="employer-roth">Employer Roth</option></select></label>
+                  {accountSubtype==="taxable-brokerage"&&<label>Taxable cost basis (USD)<input inputMode="decimal" value={taxableBasis} onChange={e=>setTaxableBasis(e.target.value)}/></label>}
+                  {(accountSubtype==="roth-ira"||accountSubtype==="employer-roth")&&<><label>Roth contribution basis (USD)<input inputMode="decimal" value={rothBasis} onChange={e=>setRothBasis(e.target.value)}/></label><label>Roth opening year<input type="number" min="1900" max="2500" value={rothOpeningYear} onChange={e=>setRothOpeningYear(e.target.value)}/></label></>}
                 </>
               )}
               {isReconcile && (

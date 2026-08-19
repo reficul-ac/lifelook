@@ -9,7 +9,9 @@ export interface TaxProfile { filingStatus: FilingStatus; state: "CA"; taxYear: 
 export interface AppSettings { theme: "system" | "light" | "dark"; currency: "USD"; reducedMotion: boolean }
 export type AccountKind = "checking" | "savings" | "investment" | "retirement" | "credit";
 export type AccountSubtype = "cash" | "taxable-brokerage" | "traditional-ira" | "employer-pre-tax" | "roth-ira" | "employer-roth";
-export interface Account { id: string; name: string; kind: AccountKind; balanceCents: Cents; annualReturnBps: BasisPoints; liquid: boolean; ownerPersonId?:string|null; subtype?:AccountSubtype; taxableCostBasisCents?:Cents|null; rothContributionBasisCents?:Cents|null; rothOpeningYear?:number|null }
+export interface TaxLotRecord { id:string; holdingId?:string|null; acquiredOn:string|null; marketValueCents:Cents; federalBasisCents:Cents; californiaBasisCents:Cents }
+export interface RothConversionLot { id:string; convertedOn:string; taxablePrincipalCents:Cents; nontaxablePrincipalCents:Cents; remainingCents:Cents }
+export interface Account { id: string; name: string; kind: AccountKind; balanceCents: Cents; annualReturnBps: BasisPoints; liquid: boolean; ownerPersonId?:string|null; subtype?:AccountSubtype; taxableCostBasisCents?:Cents|null; taxLots?:readonly TaxLotRecord[]; rothContributionBasisCents?:Cents|null; rothConversionLots?:readonly RothConversionLot[]; rothEarningsCents?:Cents|null; rothOpeningYear?:number|null; employerPlanSeparationDate?:string|null }
 export interface Category { id: string; name: string; kind: "income" | "expense" | "transfer"; archived: boolean }
 export interface Transaction { id: string; date: string; amountCents: Cents; accountId: string; categoryId: string; transferAccountId?: string; note?: string }
 export type RecurringFrequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "annual";
@@ -23,7 +25,7 @@ export interface PrivateStockVesting { vestedBps:BasisPoints; vestingStartDate:s
 export interface RsuVestEvent { id:string; date:string; unitsMicros:number; actualFmvCents?:Cents|null }
 export interface RsuGrant { id:string; ownerPersonId:string; grantDate:string; grantPriceCents:Cents; unitsMicros:number; vestEvents:readonly RsuVestEvent[]; reviewRequired?:boolean }
 export interface EquityHolding { priceCents:Cents; priceDate:string; appreciationCurve?:AppreciationCurve|null; sellToCover:boolean; grants:readonly RsuGrant[] }
-export interface Asset { id: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; appreciationCurve?:AppreciationCurve|null; privateStock?:PrivateStockVesting|null; equityHolding?:EquityHolding|null; housingCosts?: HousingCosts; housingStartDate?: string; purchasePriceCents?: Cents | null; purchaseDate?: string | null }
+export interface Asset { id: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; appreciationCurve?:AppreciationCurve|null; privateStock?:PrivateStockVesting|null; equityHolding?:EquityHolding|null; housingCosts?: HousingCosts; housingStartDate?: string; purchasePriceCents?: Cents | null; purchaseDate?: string | null; taxableCostBasisCents?:Cents|null; taxLots?:readonly TaxLotRecord[]; rentalTaxBasisCents?:Cents|null; rentalLandBasisCents?:Cents|null; rentalBuildingBasisCents?:Cents|null; rentalPlacedInServiceDate?:string|null; accumulatedFederalDepreciationCents?:Cents|null; accumulatedCaliforniaDepreciationCents?:Cents|null; federalPassiveLossCarryforwardCents?:Cents|null; californiaPassiveLossCarryforwardCents?:Cents|null }
 export interface MortgageTerms { originalPrincipalCents: Cents; termMonths: number; startDate: string; paymentOverrideCents?: Cents; assetId?: string | null }
 export interface Liability { id: string; name: string; balanceCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; mortgage?: MortgageTerms }
 export interface GrowthAssumption { inflationBps: BasisPoints; thresholdInflationBps: BasisPoints }

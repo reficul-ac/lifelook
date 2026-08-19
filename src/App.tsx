@@ -1112,7 +1112,7 @@ function Workspace({
             repository={repository}
             bootstrap={bootstrap}
             snapshot={snapshot}
-            scenarios={scenarios}
+            scenarios={[projectedScenario]}
             projections={retirementProjections}
             onPlanChange={setRetirementPlan}
           />

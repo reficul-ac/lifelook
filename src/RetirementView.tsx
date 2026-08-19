@@ -239,13 +239,13 @@ export function RetirementView({
           <BalanceChart rows={result.years} />
           <section className="retirement-cards">
             <Metric
-              label="Portfolio at cutoff"
-              value={snapshot.accounts.reduce((s, a) => s + a.balanceCents, 0)}
+              label={`Projected net worth · Dec 31, ${result.cutoffYear}`}
+              value={result.cutoffBalanceCents}
             />
-            <Metric label="After-tax income" value={row.afterTaxIncomeCents} />
-            <Metric label="Spending" value={row.spendingCents} />
+            <Metric label={`After-tax income · ${row.year}`} value={row.afterTaxIncomeCents} />
+            <Metric label={`Spending · ${row.year}`} value={row.spendingCents} />
             <Metric
-              label={row.excessCents >= 0 ? "Excess" : "Shortfall"}
+              label={`${row.excessCents >= 0 ? "Excess" : "Shortfall"} · ${row.year}`}
               value={Math.abs(row.excessCents)}
               bad={row.excessCents < 0}
             />
@@ -255,10 +255,16 @@ export function RetirementView({
             householdId={plan.householdId}
             preferenceKey="retirement:funding"
           >
+            <p className="muted">The complete balance-sheet handoff from the active Plan on December 31, {result.cutoffYear}: accounts plus property and other assets, less remaining debt.</p>
+            <dl>
+              <div><dt>Accounts</dt><dd>{money(result.cutoffAccountBalanceCents)}</dd></div>
+              <div><dt>Property and other assets</dt><dd>{money(result.cutoffAssetValueCents)}</dd></div>
+              <div><dt>Mortgages and other debt</dt><dd>−{money(result.cutoffLiabilityBalanceCents)}</dd></div>
+            </dl>
             <ul>
-              {snapshot.accounts.map((a) => (
-                <li key={a.id}>
-                  {a.name}: {money(a.balanceCents)}
+              {result.portfolioParts.map((part) => (
+                <li key={`${part.kind}-${part.id}`}>
+                  {part.name} ({part.kind}): {money(part.valueCents)}
                 </li>
               ))}
             </ul>
@@ -380,6 +386,30 @@ export function RetirementView({
             basis/five-year treatment, and RMDs using rule pack 2026.1. Special
             exceptions are not modeled.
           </p>
+          <h3>Other assets available for retirement withdrawals</h3>
+          <p className="muted">
+            Select stock or other non-property assets that may be liquidated after
+            the listed accounts are exhausted. Property is never sold automatically.
+          </p>
+          <div className="source-grid">
+            {snapshot.assets.filter((asset) => result.portfolioParts.some((part) => part.kind === "asset" && part.id === asset.id)).map((asset) => (
+              <label className="check-row" key={asset.id}>
+                <input
+                  type="checkbox"
+                  checked={plan.selectedSourceIds.includes(asset.id)}
+                  onChange={(e) =>
+                    update(
+                      "selectedSourceIds",
+                      e.target.checked
+                        ? [...new Set([...plan.selectedSourceIds, asset.id])]
+                        : plan.selectedSourceIds.filter((id) => id !== asset.id),
+                    )
+                  }
+                />
+                {asset.name}
+              </label>
+            ))}
+          </div>
         </Editor>
       )}
       {section === "stress" && (
@@ -651,7 +681,14 @@ const YearTable = ({
       <thead>
         <tr>
           <th>Year</th>
-          <th>Gross</th>
+          <th>Employment</th>
+          <th>Rental</th>
+          <th>Scheduled</th>
+          <th>Other</th>
+          <th>RMD</th>
+          <th>Withdrawals</th>
+          <th>Total gross</th>
+          <th>Source detail</th>
           <th>Tax/penalty</th>
           <th>Spending</th>
           <th>Excess</th>
@@ -662,7 +699,27 @@ const YearTable = ({
         {rows.map((r) => (
           <tr key={r.year}>
             <th>{r.year}</th>
+            <td>{money(r.employmentIncomeCents)}</td>
+            <td>{money(r.rentalIncomeCents)}</td>
+            <td>{money(r.scheduledIncomeCents)}</td>
+            <td>{money(r.otherIncomeCents)}</td>
+            <td>{money(r.rmdCents)}</td>
+            <td>{money(r.withdrawalsCents)}</td>
             <td>{money(r.grossIncomeCents)}</td>
+            <td>
+              {r.incomeSources.length ? (
+                <details>
+                  <summary>{r.incomeSources.length} sources</summary>
+                  <ul>
+                    {r.incomeSources.map((source, index) => (
+                      <li key={`${source.kind}-${source.id}-${index}`}>
+                        {source.name}: {money(source.amountCents)}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : "No income"}
+            </td>
             <td>{money(r.taxAndPenaltyCents)}</td>
             <td>{money(r.spendingCents)}</td>
             <td>{money(r.excessCents)}</td>

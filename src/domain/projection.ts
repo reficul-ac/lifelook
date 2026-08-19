@@ -48,7 +48,7 @@ function contributionDates(anchor:Date,frequency:import("./types").RecurringFreq
   return dates;
 }
 function withPartialGrowth(cents:number,bps:number,date:Date){const days=new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,0)).getUTCDate()-date.getUTCDate();return grow(cents,bps,days/(new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,0)).getUTCDate()) );}
-function occurrences(entry: RecurringEntry, month: string) {
+export function occurrences(entry: RecurringEntry, month: string) {
   const start = isoDate(entry.startDate), end = entry.endDate ? isoDate(entry.endDate) : undefined;
   if (end && end < start) throw new RangeError("Recurring end date must be on or after its start date");
   const first = new Date(`${month}-01T00:00:00Z`), after = addMonths(first, 1);
@@ -66,7 +66,7 @@ function occurrences(entry: RecurringEntry, month: string) {
   }
   return count;
 }
-function recurringAmount(entry:RecurringEntry,annualOrOccurrenceCents:number,month:string,growthBps:number,growthMonths:number,count:number){
+export function recurringAmount(entry:RecurringEntry,annualOrOccurrenceCents:number,month:string,growthBps:number,growthMonths:number,count:number){
   const salaryRaiseMonth=entry.annualGrowthMonth??new Date(`${entry.startDate}T00:00:00Z`).getUTCMonth()+1,currentYear=Number(month.slice(0,4)),currentMonth=Number(month.slice(5,7)),startYear=Number(entry.startDate.slice(0,4)),raises=entry.incomeType==="salary"?Math.max(0,currentYear-startYear-(currentMonth<salaryRaiseMonth?1:0)):0;
   const uncapped=entry.incomeType==="salary"?Math.round(annualOrOccurrenceCents*Math.pow(1+growthBps/10_000,raises)):grow(annualOrOccurrenceCents,growthBps,growthMonths);
   const grown=entry.incomeType==="salary"&&entry.annualGrowthCapCents!=null?Math.min(uncapped,entry.annualGrowthCapCents):uncapped;

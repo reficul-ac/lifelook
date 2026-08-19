@@ -10,7 +10,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 19;
+const SCHEMA_VERSION: i64 = 20;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -179,6 +179,11 @@ struct Account {
     balance_cents: i64,
     annual_return_bps: i64,
     liquid: bool,
+    owner_person_id: Option<String>,
+    subtype: Option<String>,
+    taxable_cost_basis_cents: Option<i64>,
+    roth_contribution_basis_cents: Option<i64>,
+    roth_opening_year: Option<i64>,
     revision: i64,
 }
 #[derive(Debug, Serialize, Deserialize)]
@@ -246,6 +251,9 @@ struct Asset {
     housing_costs: serde_json::Value,
     purchase_price_cents: Option<i64>,
     purchase_date: Option<String>,
+    taxable_cost_basis_cents: Option<i64>,
+    rental_tax_basis_cents: Option<i64>,
+    rental_building_basis_cents: Option<i64>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -303,16 +311,71 @@ struct ScenarioRecord {
 }
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct InvestmentComparisonRecord { household_id:String, assumptions:serde_json::Value, revision:i64 }
+struct InvestmentComparisonRecord {
+    household_id: String,
+    assumptions: serde_json::Value,
+    revision: i64,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct InvestmentComparisonInput { assumptions:serde_json::Value, expected_revision:i64 }
+struct InvestmentComparisonInput {
+    assumptions: serde_json::Value,
+    expected_revision: i64,
+}
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct RetirementPlanRecord { household_id:String, selected_scenario_id:String, retirement_year:i64, runway_years:i64, withdrawal_rate_bps:i64, expense_buckets:serde_json::Value, selected_source_ids:serde_json::Value, portfolio_items:serde_json::Value, withdrawal_order:serde_json::Value, retirement_years:serde_json::Value, scheduled_income:serde_json::Value, withdrawal_account_order:serde_json::Value, legacy_review_dismissed:bool, revision:i64 }
+struct RetirementPlanRecord {
+    household_id: String,
+    selected_scenario_id: String,
+    retirement_year: i64,
+    runway_years: i64,
+    withdrawal_rate_bps: i64,
+    expense_buckets: serde_json::Value,
+    selected_source_ids: serde_json::Value,
+    portfolio_items: serde_json::Value,
+    withdrawal_order: serde_json::Value,
+    retirement_years: serde_json::Value,
+    scheduled_income: serde_json::Value,
+    withdrawal_account_order: serde_json::Value,
+    legacy_review_dismissed: bool,
+    spending_mode: String,
+    liquidatable_asset_ids: serde_json::Value,
+    early_roth_account_ids: serde_json::Value,
+    migration_review: serde_json::Value,
+    revision: i64,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RetirementPlanInput { selected_scenario_id:String, retirement_year:i64, runway_years:i64, withdrawal_rate_bps:i64, expense_buckets:serde_json::Value, selected_source_ids:serde_json::Value, portfolio_items:serde_json::Value, withdrawal_order:serde_json::Value, #[serde(default)] retirement_years:serde_json::Value, #[serde(default)] scheduled_income:serde_json::Value, #[serde(default)] withdrawal_account_order:serde_json::Value, #[serde(default)] legacy_review_dismissed:bool, expected_revision:i64 }
+struct RetirementPlanInput {
+    selected_scenario_id: String,
+    retirement_year: i64,
+    runway_years: i64,
+    withdrawal_rate_bps: i64,
+    expense_buckets: serde_json::Value,
+    selected_source_ids: serde_json::Value,
+    portfolio_items: serde_json::Value,
+    withdrawal_order: serde_json::Value,
+    #[serde(default)]
+    retirement_years: serde_json::Value,
+    #[serde(default)]
+    scheduled_income: serde_json::Value,
+    #[serde(default)]
+    withdrawal_account_order: serde_json::Value,
+    #[serde(default)]
+    legacy_review_dismissed: bool,
+    #[serde(default = "default_spending_mode")]
+    spending_mode: String,
+    #[serde(default)]
+    liquidatable_asset_ids: serde_json::Value,
+    #[serde(default)]
+    early_roth_account_ids: serde_json::Value,
+    #[serde(default)]
+    migration_review: serde_json::Value,
+    expected_revision: i64,
+}
+fn default_spending_mode() -> String {
+    "manual".into()
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RecurringInput {
@@ -427,6 +490,16 @@ struct AccountInput {
     kind: String,
     opening_balance_cents: i64,
     annual_return_bps: i64,
+    #[serde(default)]
+    owner_person_id: Option<String>,
+    #[serde(default)]
+    subtype: Option<String>,
+    #[serde(default)]
+    taxable_cost_basis_cents: Option<i64>,
+    #[serde(default)]
+    roth_contribution_basis_cents: Option<i64>,
+    #[serde(default)]
+    roth_opening_year: Option<i64>,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -435,6 +508,16 @@ struct UpdateAccountInput {
     name: String,
     kind: String,
     annual_return_bps: i64,
+    #[serde(default)]
+    owner_person_id: Option<String>,
+    #[serde(default)]
+    subtype: Option<String>,
+    #[serde(default)]
+    taxable_cost_basis_cents: Option<i64>,
+    #[serde(default)]
+    roth_contribution_basis_cents: Option<i64>,
+    #[serde(default)]
+    roth_opening_year: Option<i64>,
     expected_revision: i64,
 }
 #[derive(Debug, Deserialize)]
@@ -466,6 +549,12 @@ struct AssetInput {
     equity_holding: Option<serde_json::Value>,
     #[serde(default)]
     housing_costs: Option<serde_json::Value>,
+    #[serde(default)]
+    taxable_cost_basis_cents: Option<i64>,
+    #[serde(default)]
+    rental_tax_basis_cents: Option<i64>,
+    #[serde(default)]
+    rental_building_basis_cents: Option<i64>,
     expected_revision: Option<i64>,
 }
 #[derive(Debug, Deserialize)]
@@ -866,22 +955,68 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         }
         transaction.execute("INSERT INTO schema_migrations(version) VALUES(16)", [])?;
     }
-    let version: i64 = transaction.query_row("SELECT COALESCE(MAX(version),0) FROM schema_migrations",[],|r|r.get(0))?;
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
     if version < 17 {
         transaction.execute_batch("CREATE TABLE IF NOT EXISTS investment_comparisons(household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE RESTRICT,assumptions_json TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);INSERT INTO schema_migrations(version) VALUES(17);")?;
     }
-    let version: i64 = transaction.query_row("SELECT COALESCE(MAX(version),0) FROM schema_migrations",[],|r|r.get(0))?;
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
     if version < 18 {
         transaction.execute_batch("CREATE TABLE IF NOT EXISTS retirement_plans(household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE RESTRICT,selected_scenario_id TEXT NOT NULL DEFAULT '',retirement_year INTEGER NOT NULL,runway_years INTEGER NOT NULL DEFAULT 50,withdrawal_rate_bps INTEGER NOT NULL DEFAULT 300,expense_buckets_json TEXT NOT NULL DEFAULT '[]',selected_source_ids_json TEXT NOT NULL DEFAULT '[]',portfolio_items_json TEXT NOT NULL DEFAULT '[]',withdrawal_order_json TEXT NOT NULL DEFAULT '[\"taxable\",\"pre-tax\",\"roth\"]',revision INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);INSERT INTO schema_migrations(version) VALUES(18);")?;
     }
-    let version: i64 = transaction.query_row("SELECT COALESCE(MAX(version),0) FROM schema_migrations",[],|r|r.get(0))?;
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
     if version < 19 {
-        let columns=transaction.prepare("PRAGMA table_info(retirement_plans)")?.query_map([],|r|r.get::<_,String>(1))?.collect::<Result<Vec<_>,_>>()?;
-        if !columns.iter().any(|x|x=="retirement_years_json"){transaction.execute("ALTER TABLE retirement_plans ADD COLUMN retirement_years_json TEXT NOT NULL DEFAULT '{}'",[])?;}
-        if !columns.iter().any(|x|x=="scheduled_income_json"){transaction.execute("ALTER TABLE retirement_plans ADD COLUMN scheduled_income_json TEXT NOT NULL DEFAULT '[]'",[])?;}
-        if !columns.iter().any(|x|x=="withdrawal_account_order_json"){transaction.execute("ALTER TABLE retirement_plans ADD COLUMN withdrawal_account_order_json TEXT NOT NULL DEFAULT '[]'",[])?;}
-        if !columns.iter().any(|x|x=="legacy_review_dismissed"){transaction.execute("ALTER TABLE retirement_plans ADD COLUMN legacy_review_dismissed INTEGER NOT NULL DEFAULT 0",[])?;}
-        transaction.execute("INSERT INTO schema_migrations(version) VALUES(19)",[])?;
+        let columns = transaction
+            .prepare("PRAGMA table_info(retirement_plans)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        if !columns.iter().any(|x| x == "retirement_years_json") {
+            transaction.execute("ALTER TABLE retirement_plans ADD COLUMN retirement_years_json TEXT NOT NULL DEFAULT '{}'",[])?;
+        }
+        if !columns.iter().any(|x| x == "scheduled_income_json") {
+            transaction.execute("ALTER TABLE retirement_plans ADD COLUMN scheduled_income_json TEXT NOT NULL DEFAULT '[]'",[])?;
+        }
+        if !columns.iter().any(|x| x == "withdrawal_account_order_json") {
+            transaction.execute("ALTER TABLE retirement_plans ADD COLUMN withdrawal_account_order_json TEXT NOT NULL DEFAULT '[]'",[])?;
+        }
+        if !columns.iter().any(|x| x == "legacy_review_dismissed") {
+            transaction.execute("ALTER TABLE retirement_plans ADD COLUMN legacy_review_dismissed INTEGER NOT NULL DEFAULT 0",[])?;
+        }
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(19)", [])?;
+    }
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 20 {
+        let account_columns = transaction
+            .prepare("PRAGMA table_info(accounts)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (name,sql) in [("owner_person_id","ALTER TABLE accounts ADD COLUMN owner_person_id TEXT REFERENCES people(id) ON DELETE RESTRICT"),("subtype","ALTER TABLE accounts ADD COLUMN subtype TEXT CHECK(subtype IN ('cash','taxable-brokerage','traditional-ira','employer-pre-tax','roth-ira','employer-roth'))"),("taxable_cost_basis_cents","ALTER TABLE accounts ADD COLUMN taxable_cost_basis_cents INTEGER CHECK(taxable_cost_basis_cents>=0)"),("roth_contribution_basis_cents","ALTER TABLE accounts ADD COLUMN roth_contribution_basis_cents INTEGER CHECK(roth_contribution_basis_cents>=0)"),("roth_opening_year","ALTER TABLE accounts ADD COLUMN roth_opening_year INTEGER CHECK(roth_opening_year BETWEEN 1900 AND 2500)")]{if !account_columns.iter().any(|x|x==name){transaction.execute(sql,[])?;}}
+        let asset_columns = transaction
+            .prepare("PRAGMA table_info(assets)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (name,sql) in [("taxable_cost_basis_cents","ALTER TABLE assets ADD COLUMN taxable_cost_basis_cents INTEGER CHECK(taxable_cost_basis_cents>=0)"),("rental_tax_basis_cents","ALTER TABLE assets ADD COLUMN rental_tax_basis_cents INTEGER CHECK(rental_tax_basis_cents>=0)"),("rental_building_basis_cents","ALTER TABLE assets ADD COLUMN rental_building_basis_cents INTEGER CHECK(rental_building_basis_cents>=0)")]{if !asset_columns.iter().any(|x|x==name){transaction.execute(sql,[])?;}}
+        let retirement_columns = transaction
+            .prepare("PRAGMA table_info(retirement_plans)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (name,sql) in [("spending_mode","ALTER TABLE retirement_plans ADD COLUMN spending_mode TEXT NOT NULL DEFAULT 'manual' CHECK(spending_mode IN ('manual','plan'))"),("liquidatable_asset_ids_json","ALTER TABLE retirement_plans ADD COLUMN liquidatable_asset_ids_json TEXT NOT NULL DEFAULT '[]'"),("early_roth_account_ids_json","ALTER TABLE retirement_plans ADD COLUMN early_roth_account_ids_json TEXT NOT NULL DEFAULT '[]'"),("migration_review_json","ALTER TABLE retirement_plans ADD COLUMN migration_review_json TEXT NOT NULL DEFAULT '[]'")]{if !retirement_columns.iter().any(|x|x==name){transaction.execute(sql,[])?;}}
+        transaction.execute_batch("UPDATE retirement_plans SET liquidatable_asset_ids_json=selected_source_ids_json WHERE liquidatable_asset_ids_json='[]';INSERT OR IGNORE INTO schema_migrations(version) VALUES(20);")?;
     }
     transaction
         .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
@@ -926,8 +1061,14 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
     let mut retirement_plan = None;
     if let Some(h) = &household {
         investment_comparison=connection.query_row("SELECT household_id,assumptions_json,revision FROM investment_comparisons WHERE household_id=?",[&h.id],|r|{let raw:String=r.get(1)?;Ok(InvestmentComparisonRecord{household_id:r.get(0)?,assumptions:serde_json::from_str(&raw).unwrap_or_else(|_|default_investment_assumptions()),revision:r.get(2)?})}).optional()?;
-        if investment_comparison.is_none(){investment_comparison=Some(InvestmentComparisonRecord{household_id:h.id.clone(),assumptions:default_investment_assumptions(),revision:1});}
-        retirement_plan=connection.query_row("SELECT household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,revision FROM retirement_plans WHERE household_id=?",[&h.id],|r|Ok(RetirementPlanRecord{household_id:r.get(0)?,selected_scenario_id:r.get(1)?,retirement_year:r.get(2)?,runway_years:r.get(3)?,withdrawal_rate_bps:r.get(4)?,expense_buckets:serde_json::from_str(&r.get::<_,String>(5)?).unwrap_or_else(|_|serde_json::json!([])),selected_source_ids:serde_json::from_str(&r.get::<_,String>(6)?).unwrap_or_else(|_|serde_json::json!([])),portfolio_items:serde_json::from_str(&r.get::<_,String>(7)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_order:serde_json::from_str(&r.get::<_,String>(8)?).unwrap_or_else(|_|serde_json::json!(["taxable","pre-tax","roth"])),retirement_years:serde_json::from_str(&r.get::<_,String>(9)?).unwrap_or_else(|_|serde_json::json!({})),scheduled_income:serde_json::from_str(&r.get::<_,String>(10)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_account_order:serde_json::from_str(&r.get::<_,String>(11)?).unwrap_or_else(|_|serde_json::json!([])),legacy_review_dismissed:r.get(12)?,revision:r.get(13)?})).optional()?;
+        if investment_comparison.is_none() {
+            investment_comparison = Some(InvestmentComparisonRecord {
+                household_id: h.id.clone(),
+                assumptions: default_investment_assumptions(),
+                revision: 1,
+            });
+        }
+        retirement_plan=connection.query_row("SELECT household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,spending_mode,liquidatable_asset_ids_json,early_roth_account_ids_json,migration_review_json,revision FROM retirement_plans WHERE household_id=?",[&h.id],|r|Ok(RetirementPlanRecord{household_id:r.get(0)?,selected_scenario_id:r.get(1)?,retirement_year:r.get(2)?,runway_years:r.get(3)?,withdrawal_rate_bps:r.get(4)?,expense_buckets:serde_json::from_str(&r.get::<_,String>(5)?).unwrap_or_else(|_|serde_json::json!([])),selected_source_ids:serde_json::from_str(&r.get::<_,String>(6)?).unwrap_or_else(|_|serde_json::json!([])),portfolio_items:serde_json::from_str(&r.get::<_,String>(7)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_order:serde_json::from_str(&r.get::<_,String>(8)?).unwrap_or_else(|_|serde_json::json!(["taxable","pre-tax","roth"])),retirement_years:serde_json::from_str(&r.get::<_,String>(9)?).unwrap_or_else(|_|serde_json::json!({})),scheduled_income:serde_json::from_str(&r.get::<_,String>(10)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_account_order:serde_json::from_str(&r.get::<_,String>(11)?).unwrap_or_else(|_|serde_json::json!([])),legacy_review_dismissed:r.get(12)?,spending_mode:r.get(13)?,liquidatable_asset_ids:serde_json::from_str(&r.get::<_,String>(14)?).unwrap_or_else(|_|serde_json::json!([])),early_roth_account_ids:serde_json::from_str(&r.get::<_,String>(15)?).unwrap_or_else(|_|serde_json::json!([])),migration_review:serde_json::from_str(&r.get::<_,String>(16)?).unwrap_or_else(|_|serde_json::json!([])),revision:r.get(17)?})).optional()?;
         let mut q=connection.prepare("SELECT id,household_id,name,birth_date FROM people WHERE household_id=? ORDER BY rowid")?;
         people = q
             .query_map([&h.id], |r| {
@@ -960,7 +1101,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
             )
             .optional()?
             .unwrap_or(settings);
-        let mut q=connection.prepare("SELECT a.id,a.household_id,a.name,a.kind,a.opening_balance_cents,b.balance_cents,a.annual_return_bps,a.liquid,a.revision FROM accounts a JOIN account_balances b ON b.id=a.id WHERE a.household_id=? ORDER BY a.rowid")?;
+        let mut q=connection.prepare("SELECT a.id,a.household_id,a.name,a.kind,a.opening_balance_cents,b.balance_cents,a.annual_return_bps,a.liquid,a.revision,a.owner_person_id,a.subtype,a.taxable_cost_basis_cents,a.roth_contribution_basis_cents,a.roth_opening_year FROM accounts a JOIN account_balances b ON b.id=a.id WHERE a.household_id=? ORDER BY a.rowid")?;
         accounts = q
             .query_map([&h.id], |r| {
                 Ok(Account {
@@ -973,6 +1114,11 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                     annual_return_bps: r.get(6)?,
                     liquid: r.get::<_, i64>(7)? != 0,
                     revision: r.get(8)?,
+                    owner_person_id: r.get(9)?,
+                    subtype: r.get(10)?,
+                    taxable_cost_basis_cents: r.get(11)?,
+                    roth_contribution_basis_cents: r.get(12)?,
+                    roth_opening_year: r.get(13)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -1035,7 +1181,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision,housing_costs_json,appreciation_curve_json,private_stock_json,equity_holding_json FROM assets WHERE household_id=? ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision,housing_costs_json,appreciation_curve_json,private_stock_json,equity_holding_json,taxable_cost_basis_cents,rental_tax_basis_cents,rental_building_basis_cents FROM assets WHERE household_id=? ORDER BY name")?;
         assets = q
             .query_map([&h.id], |r| {
                 let housing: serde_json::Value =
@@ -1063,6 +1209,9 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                         .get("purchaseDate")
                         .and_then(|value| value.as_str())
                         .map(str::to_owned),
+                    taxable_cost_basis_cents: r.get(10)?,
+                    rental_tax_basis_cents: r.get(11)?,
+                    rental_building_basis_cents: r.get(12)?,
                     housing_costs: housing,
                 })
             })?
@@ -1163,43 +1312,239 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
     })
 }
 
-fn default_investment_assumptions()->serde_json::Value{serde_json::json!({"fireWithdrawalRateBps":300,"retirementIncomeMode":"current","annualRetirementIncomeCents":0,"primaryResidence":false,"rentalUseBps":0,"homePriceCents":50000000,"homeSquareFeet":1500,"aduPlanned":false,"aduSquareFeet":500,"aduBuildYear":5,"aduBuildCostCents":15000000,"aduMonthlyRentCents":200000,"downPaymentBps":2000,"mortgageRateBps":650,"mortgageTermYears":30,"monthlyRentCents":250000,"stockReturnBps":700,"homeAppreciationBps":300,"horizonYears":30,"purchaseCostBps":300,"sellingCostBps":600,"rentGrowthBps":300,"propertyTaxBps":110,"annualInsuranceCents":200000,"insuranceGrowthBps":300,"monthlyHoaCents":0,"hoaGrowthBps":300,"maintenanceBps":100,"monthlyRentalIncomeCents":0,"rentalIncomeGrowthBps":300,"factorRentalTaxes":false,"propertyTaxBasisOverrideCents":null,"buildingBasisOverrideCents":null,"mfsLivedApartAllYear":false,"rentalType":"long-term","shortTermMaterialParticipation":false,"longTermRealEstateProfessional":false,"longTermMaterialParticipation":false})}
+fn default_investment_assumptions() -> serde_json::Value {
+    serde_json::json!({"fireWithdrawalRateBps":300,"retirementIncomeMode":"current","annualRetirementIncomeCents":0,"primaryResidence":false,"rentalUseBps":0,"homePriceCents":50000000,"homeSquareFeet":1500,"aduPlanned":false,"aduSquareFeet":500,"aduBuildYear":5,"aduBuildCostCents":15000000,"aduMonthlyRentCents":200000,"downPaymentBps":2000,"mortgageRateBps":650,"mortgageTermYears":30,"monthlyRentCents":250000,"stockReturnBps":700,"homeAppreciationBps":300,"horizonYears":30,"purchaseCostBps":300,"sellingCostBps":600,"rentGrowthBps":300,"propertyTaxBps":110,"annualInsuranceCents":200000,"insuranceGrowthBps":300,"monthlyHoaCents":0,"hoaGrowthBps":300,"maintenanceBps":100,"monthlyRentalIncomeCents":0,"rentalIncomeGrowthBps":300,"factorRentalTaxes":false,"propertyTaxBasisOverrideCents":null,"buildingBasisOverrideCents":null,"mfsLivedApartAllYear":false,"rentalType":"long-term","shortTermMaterialParticipation":false,"longTermRealEstateProfessional":false,"longTermMaterialParticipation":false})
+}
 
-fn valid_investment_assumptions(value:&serde_json::Value)->bool{
-    let integer=|key:&str,min:i64,max:i64|value.get(key).and_then(|v|v.as_i64()).is_some_and(|n|(min..=max).contains(&n));
-    integer("fireWithdrawalRateBps",1,10000) && integer("annualRetirementIncomeCents",0,MAX_MONEY_CENTS)
-      && value.get("retirementIncomeMode").and_then(|v|v.as_str()).is_some_and(|v|matches!(v,"current"|"desired"))
-      && value.get("primaryResidence").and_then(|v|v.as_bool()).is_some()
-      && value.get("aduPlanned").and_then(|v|v.as_bool()).is_some()
-      && integer("homeSquareFeet",1,1000000) && integer("aduSquareFeet",0,1000000)
-      && integer("aduBuildYear",1,50)
-      && ["aduBuildCostCents","aduMonthlyRentCents"].iter().all(|k|integer(k,0,MAX_MONEY_CENTS))
-      && (!value.get("aduPlanned").and_then(|v|v.as_bool()).unwrap_or(false) || (value.get("aduSquareFeet").and_then(|v|v.as_i64()).unwrap_or(0)>0 && value.get("aduBuildYear").and_then(|v|v.as_i64()).unwrap_or(51)<=value.get("horizonYears").and_then(|v|v.as_i64()).unwrap_or(0)))
-      && integer("rentalUseBps",0,9900)
-      && if value.get("primaryResidence").and_then(|v|v.as_bool()).unwrap_or(false) && (value.get("monthlyRentalIncomeCents").and_then(|v|v.as_i64()).unwrap_or(0)>0 || (value.get("aduPlanned").and_then(|v|v.as_bool()).unwrap_or(false) && value.get("aduMonthlyRentCents").and_then(|v|v.as_i64()).unwrap_or(0)>0)) { integer("rentalUseBps",100,9900) } else { integer("rentalUseBps",0,0) }
-      && ["homePriceCents","monthlyRentCents","annualInsuranceCents","monthlyHoaCents","monthlyRentalIncomeCents"].iter().all(|k|integer(k,0,MAX_MONEY_CENTS))
-      && integer("homePriceCents",1,MAX_MONEY_CENTS) && integer("downPaymentBps",0,9999)
-      && ["mortgageRateBps","stockReturnBps","homeAppreciationBps","purchaseCostBps","sellingCostBps","rentGrowthBps","propertyTaxBps","insuranceGrowthBps","hoaGrowthBps","maintenanceBps","rentalIncomeGrowthBps"].iter().all(|k|integer(k,0,10000))
-      && integer("mortgageTermYears",1,50)&&integer("horizonYears",1,50)
-      && ["factorRentalTaxes","mfsLivedApartAllYear","shortTermMaterialParticipation","longTermRealEstateProfessional","longTermMaterialParticipation"].iter().all(|k|value.get(k).and_then(|v|v.as_bool()).is_some())
-      && value.get("rentalType").and_then(|v|v.as_str()).is_some_and(|v|matches!(v,"long-term"|"short-term"))
-      && ["propertyTaxBasisOverrideCents","buildingBasisOverrideCents"].iter().all(|k|value.get(k).is_some_and(|v|v.is_null()||v.as_i64().is_some_and(|n|(0..=MAX_MONEY_CENTS).contains(&n))))
-      && value.get("buildingBasisOverrideCents").and_then(|v|v.as_i64()).unwrap_or(0)<=value.get("propertyTaxBasisOverrideCents").and_then(|v|v.as_i64()).unwrap_or(MAX_MONEY_CENTS)
+fn valid_investment_assumptions(value: &serde_json::Value) -> bool {
+    let integer = |key: &str, min: i64, max: i64| {
+        value
+            .get(key)
+            .and_then(|v| v.as_i64())
+            .is_some_and(|n| (min..=max).contains(&n))
+    };
+    integer("fireWithdrawalRateBps", 1, 10000)
+        && integer("annualRetirementIncomeCents", 0, MAX_MONEY_CENTS)
+        && value
+            .get("retirementIncomeMode")
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| matches!(v, "current" | "desired"))
+        && value
+            .get("primaryResidence")
+            .and_then(|v| v.as_bool())
+            .is_some()
+        && value.get("aduPlanned").and_then(|v| v.as_bool()).is_some()
+        && integer("homeSquareFeet", 1, 1000000)
+        && integer("aduSquareFeet", 0, 1000000)
+        && integer("aduBuildYear", 1, 50)
+        && ["aduBuildCostCents", "aduMonthlyRentCents"]
+            .iter()
+            .all(|k| integer(k, 0, MAX_MONEY_CENTS))
+        && (!value
+            .get("aduPlanned")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+            || (value
+                .get("aduSquareFeet")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0)
+                > 0
+                && value
+                    .get("aduBuildYear")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(51)
+                    <= value
+                        .get("horizonYears")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0)))
+        && integer("rentalUseBps", 0, 9900)
+        && if value
+            .get("primaryResidence")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+            && (value
+                .get("monthlyRentalIncomeCents")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0)
+                > 0
+                || (value
+                    .get("aduPlanned")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                    && value
+                        .get("aduMonthlyRentCents")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0)
+                        > 0))
+        {
+            integer("rentalUseBps", 100, 9900)
+        } else {
+            integer("rentalUseBps", 0, 0)
+        }
+        && [
+            "homePriceCents",
+            "monthlyRentCents",
+            "annualInsuranceCents",
+            "monthlyHoaCents",
+            "monthlyRentalIncomeCents",
+        ]
+        .iter()
+        .all(|k| integer(k, 0, MAX_MONEY_CENTS))
+        && integer("homePriceCents", 1, MAX_MONEY_CENTS)
+        && integer("downPaymentBps", 0, 9999)
+        && [
+            "mortgageRateBps",
+            "stockReturnBps",
+            "homeAppreciationBps",
+            "purchaseCostBps",
+            "sellingCostBps",
+            "rentGrowthBps",
+            "propertyTaxBps",
+            "insuranceGrowthBps",
+            "hoaGrowthBps",
+            "maintenanceBps",
+            "rentalIncomeGrowthBps",
+        ]
+        .iter()
+        .all(|k| integer(k, 0, 10000))
+        && integer("mortgageTermYears", 1, 50)
+        && integer("horizonYears", 1, 50)
+        && [
+            "factorRentalTaxes",
+            "mfsLivedApartAllYear",
+            "shortTermMaterialParticipation",
+            "longTermRealEstateProfessional",
+            "longTermMaterialParticipation",
+        ]
+        .iter()
+        .all(|k| value.get(k).and_then(|v| v.as_bool()).is_some())
+        && value
+            .get("rentalType")
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| matches!(v, "long-term" | "short-term"))
+        && [
+            "propertyTaxBasisOverrideCents",
+            "buildingBasisOverrideCents",
+        ]
+        .iter()
+        .all(|k| {
+            value.get(k).is_some_and(|v| {
+                v.is_null()
+                    || v.as_i64()
+                        .is_some_and(|n| (0..=MAX_MONEY_CENTS).contains(&n))
+            })
+        })
+        && value
+            .get("buildingBasisOverrideCents")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0)
+            <= value
+                .get("propertyTaxBasisOverrideCents")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(MAX_MONEY_CENTS)
 }
 
 #[tauri::command]
-fn update_investment_comparison(input:InvestmentComparisonInput,database:tauri::State<Database>)->Result<InvestmentComparisonRecord,AppError>{
-    if !valid_investment_assumptions(&input.assumptions){return Err(AppError::Validation("investment assumptions are invalid".into()))}
-    with_db(&database,|db|store_investment_comparison(db,input))
+fn update_investment_comparison(
+    input: InvestmentComparisonInput,
+    database: tauri::State<Database>,
+) -> Result<InvestmentComparisonRecord, AppError> {
+    if !valid_investment_assumptions(&input.assumptions) {
+        return Err(AppError::Validation(
+            "investment assumptions are invalid".into(),
+        ));
+    }
+    with_db(&database, |db| store_investment_comparison(db, input))
 }
-fn store_investment_comparison(db:&mut Connection,input:InvestmentComparisonInput)->Result<InvestmentComparisonRecord,AppError>{let tx=db.transaction()?;let household_id:String=tx.query_row("SELECT id FROM households LIMIT 1",[],|r|r.get(0))?;let existing:Option<i64>=tx.query_row("SELECT revision FROM investment_comparisons WHERE household_id=?",[&household_id],|r|r.get(0)).optional()?;if existing.unwrap_or(1)!=input.expected_revision{return Err(AppError::Conflict)}let next=existing.map_or(1,|r|r+1);tx.execute("INSERT INTO investment_comparisons(household_id,assumptions_json,revision) VALUES(?1,?2,?3) ON CONFLICT(household_id) DO UPDATE SET assumptions_json=excluded.assumptions_json,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,serde_json::to_string(&input.assumptions)?,next])?;tx.commit()?;Ok(InvestmentComparisonRecord{household_id,assumptions:input.assumptions,revision:next})}
+fn store_investment_comparison(
+    db: &mut Connection,
+    input: InvestmentComparisonInput,
+) -> Result<InvestmentComparisonRecord, AppError> {
+    let tx = db.transaction()?;
+    let household_id: String =
+        tx.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
+    let existing: Option<i64> = tx
+        .query_row(
+            "SELECT revision FROM investment_comparisons WHERE household_id=?",
+            [&household_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if existing.unwrap_or(1) != input.expected_revision {
+        return Err(AppError::Conflict);
+    }
+    let next = existing.map_or(1, |r| r + 1);
+    tx.execute("INSERT INTO investment_comparisons(household_id,assumptions_json,revision) VALUES(?1,?2,?3) ON CONFLICT(household_id) DO UPDATE SET assumptions_json=excluded.assumptions_json,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,serde_json::to_string(&input.assumptions)?,next])?;
+    tx.commit()?;
+    Ok(InvestmentComparisonRecord {
+        household_id,
+        assumptions: input.assumptions,
+        revision: next,
+    })
+}
 
 #[tauri::command]
-fn update_retirement_plan(input:RetirementPlanInput,database:tauri::State<Database>)->Result<RetirementPlanRecord,AppError>{
- if input.runway_years!=50||!(1..=10_000).contains(&input.withdrawal_rate_bps)||!input.expense_buckets.is_array()||!input.selected_source_ids.is_array()||!input.portfolio_items.is_array()||!input.withdrawal_order.is_array(){return Err(AppError::Validation("retirement plan is invalid".into()))}
- with_db(&database,|db|store_retirement_plan(db,input))
+fn update_retirement_plan(
+    input: RetirementPlanInput,
+    database: tauri::State<Database>,
+) -> Result<RetirementPlanRecord, AppError> {
+    if input.runway_years != 50
+        || !(1..=10_000).contains(&input.withdrawal_rate_bps)
+        || !input.expense_buckets.is_array()
+        || !input.selected_source_ids.is_array()
+        || !input.portfolio_items.is_array()
+        || !input.withdrawal_order.is_array()
+    {
+        return Err(AppError::Validation("retirement plan is invalid".into()));
+    }
+    with_db(&database, |db| store_retirement_plan(db, input))
 }
-fn store_retirement_plan(db:&mut Connection,input:RetirementPlanInput)->Result<RetirementPlanRecord,AppError>{let tx=db.transaction()?;let household_id:String=tx.query_row("SELECT id FROM households LIMIT 1",[],|r|r.get(0))?;let existing:Option<i64>=tx.query_row("SELECT revision FROM retirement_plans WHERE household_id=?",[&household_id],|r|r.get(0)).optional()?;if existing.unwrap_or(1)!=input.expected_revision{return Err(AppError::Conflict)}let next=existing.map_or(1,|r|r+1);tx.execute("INSERT INTO retirement_plans(household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14) ON CONFLICT(household_id) DO UPDATE SET selected_scenario_id=excluded.selected_scenario_id,retirement_year=excluded.retirement_year,expense_buckets_json=excluded.expense_buckets_json,retirement_years_json=excluded.retirement_years_json,scheduled_income_json=excluded.scheduled_income_json,withdrawal_account_order_json=excluded.withdrawal_account_order_json,legacy_review_dismissed=excluded.legacy_review_dismissed,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,input.selected_scenario_id,input.retirement_year,input.runway_years,input.withdrawal_rate_bps,serde_json::to_string(&input.expense_buckets)?,serde_json::to_string(&input.selected_source_ids)?,serde_json::to_string(&input.portfolio_items)?,serde_json::to_string(&input.withdrawal_order)?,serde_json::to_string(&input.retirement_years)?,serde_json::to_string(&input.scheduled_income)?,serde_json::to_string(&input.withdrawal_account_order)?,input.legacy_review_dismissed,next])?;tx.commit()?;Ok(RetirementPlanRecord{household_id,selected_scenario_id:input.selected_scenario_id,retirement_year:input.retirement_year,runway_years:input.runway_years,withdrawal_rate_bps:input.withdrawal_rate_bps,expense_buckets:input.expense_buckets,selected_source_ids:input.selected_source_ids,portfolio_items:input.portfolio_items,withdrawal_order:input.withdrawal_order,retirement_years:input.retirement_years,scheduled_income:input.scheduled_income,withdrawal_account_order:input.withdrawal_account_order,legacy_review_dismissed:input.legacy_review_dismissed,revision:next})}
+fn store_retirement_plan(
+    db: &mut Connection,
+    input: RetirementPlanInput,
+) -> Result<RetirementPlanRecord, AppError> {
+    if !matches!(input.spending_mode.as_str(), "manual" | "plan") {
+        return Err(AppError::Validation(
+            "spending mode must be manual or plan".into(),
+        ));
+    }
+    let tx = db.transaction()?;
+    let household_id: String =
+        tx.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
+    let existing: Option<i64> = tx
+        .query_row(
+            "SELECT revision FROM retirement_plans WHERE household_id=?",
+            [&household_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if existing.unwrap_or(1) != input.expected_revision {
+        return Err(AppError::Conflict);
+    }
+    let next = existing.map_or(1, |r| r + 1);
+    tx.execute("INSERT INTO retirement_plans(household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,spending_mode,liquidatable_asset_ids_json,early_roth_account_ids_json,migration_review_json,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18) ON CONFLICT(household_id) DO UPDATE SET selected_scenario_id=excluded.selected_scenario_id,retirement_year=excluded.retirement_year,expense_buckets_json=excluded.expense_buckets_json,retirement_years_json=excluded.retirement_years_json,scheduled_income_json=excluded.scheduled_income_json,withdrawal_account_order_json=excluded.withdrawal_account_order_json,legacy_review_dismissed=excluded.legacy_review_dismissed,spending_mode=excluded.spending_mode,liquidatable_asset_ids_json=excluded.liquidatable_asset_ids_json,early_roth_account_ids_json=excluded.early_roth_account_ids_json,migration_review_json=excluded.migration_review_json,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,input.selected_scenario_id,input.retirement_year,input.runway_years,input.withdrawal_rate_bps,serde_json::to_string(&input.expense_buckets)?,serde_json::to_string(&input.selected_source_ids)?,serde_json::to_string(&input.portfolio_items)?,serde_json::to_string(&input.withdrawal_order)?,serde_json::to_string(&input.retirement_years)?,serde_json::to_string(&input.scheduled_income)?,serde_json::to_string(&input.withdrawal_account_order)?,input.legacy_review_dismissed,input.spending_mode,serde_json::to_string(&input.liquidatable_asset_ids)?,serde_json::to_string(&input.early_roth_account_ids)?,serde_json::to_string(&input.migration_review)?,next])?;
+    tx.commit()?;
+    Ok(RetirementPlanRecord {
+        household_id,
+        selected_scenario_id: input.selected_scenario_id,
+        retirement_year: input.retirement_year,
+        runway_years: input.runway_years,
+        withdrawal_rate_bps: input.withdrawal_rate_bps,
+        expense_buckets: input.expense_buckets,
+        selected_source_ids: input.selected_source_ids,
+        portfolio_items: input.portfolio_items,
+        withdrawal_order: input.withdrawal_order,
+        retirement_years: input.retirement_years,
+        scheduled_income: input.scheduled_income,
+        withdrawal_account_order: input.withdrawal_account_order,
+        legacy_review_dismissed: input.legacy_review_dismissed,
+        spending_mode: input.spending_mode,
+        liquidatable_asset_ids: input.liquidatable_asset_ids,
+        early_roth_account_ids: input.early_roth_account_ids,
+        migration_review: input.migration_review,
+        revision: next,
+    })
+}
 
 #[tauri::command]
 fn get_bootstrap(database: tauri::State<Database>) -> Result<WorkspaceSnapshot, AppError> {
@@ -1774,35 +2119,59 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
                 }
                 if let Some(term) = json_i64(financing, "termMonths") {
                     if !(1..=600).contains(&term) {
-                        return Err(AppError::Validation("financing termMonths is invalid".into()));
+                        return Err(AppError::Validation(
+                            "financing termMonths is invalid".into(),
+                        ));
                     }
                 }
             }
             if let Some(details) = event.get("propertyDetails") {
                 if !details.is_object() {
-                    return Err(AppError::Validation("propertyDetails must be an object".into()));
+                    return Err(AppError::Validation(
+                        "propertyDetails must be an object".into(),
+                    ));
                 }
                 for key in ["maintenanceBps", "rentalIncomeGrowthBps", "rentalUseBps"] {
                     if let Some(rate) = json_i64(details, key) {
-                        if !(-10000..=100000).contains(&rate) || key == "rentalUseBps" && rate > 10000 {
-                            return Err(AppError::Validation(format!("propertyDetails {key} is invalid")));
+                        if !(-10000..=100000).contains(&rate)
+                            || key == "rentalUseBps" && rate > 10000
+                        {
+                            return Err(AppError::Validation(format!(
+                                "propertyDetails {key} is invalid"
+                            )));
                         }
                     }
                 }
                 if let Some(term) = json_i64(details, "mortgageTermMonths") {
                     if !(1..=600).contains(&term) {
-                        return Err(AppError::Validation("propertyDetails mortgageTermMonths is invalid".into()));
+                        return Err(AppError::Validation(
+                            "propertyDetails mortgageTermMonths is invalid".into(),
+                        ));
                     }
                 }
                 if let Some(kind) = details.get("rentalType") {
-                    if !kind.as_str().is_some_and(|x| ["long-term", "short-term"].contains(&x)) {
-                        return Err(AppError::Validation("propertyDetails rentalType is invalid".into()));
+                    if !kind
+                        .as_str()
+                        .is_some_and(|x| ["long-term", "short-term"].contains(&x))
+                    {
+                        return Err(AppError::Validation(
+                            "propertyDetails rentalType is invalid".into(),
+                        ));
                     }
                 }
-                for key in ["monthlyRentalIncomeCents", "propertyTaxBasisCents", "buildingBasisCents"] {
+                for key in [
+                    "monthlyRentalIncomeCents",
+                    "propertyTaxBasisCents",
+                    "buildingBasisCents",
+                ] {
                     if let Some(value) = details.get(key).filter(|x| !x.is_null()) {
-                        if value.as_i64().is_none_or(|x| !(0..=MAX_MONEY_CENTS).contains(&x)) {
-                            return Err(AppError::Validation(format!("propertyDetails {key} is invalid")));
+                        if value
+                            .as_i64()
+                            .is_none_or(|x| !(0..=MAX_MONEY_CENTS).contains(&x))
+                        {
+                            return Err(AppError::Validation(format!(
+                                "propertyDetails {key} is invalid"
+                            )));
                         }
                     }
                 }
@@ -1818,9 +2187,18 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
             }
         }
         if kind == "property-rental-start" {
-            let rental_use=json_i64(event,"rentalUseBps").ok_or_else(||AppError::Validation("rentalUseBps is required".into()))?;
-            if !(0..=10000).contains(&rental_use) { return Err(AppError::Validation("rentalUseBps is invalid".into())); }
-            if !event.get("rentalType").and_then(|x|x.as_str()).is_some_and(|x|["long-term","short-term"].contains(&x)){return Err(AppError::Validation("rentalType is invalid".into()));}
+            let rental_use = json_i64(event, "rentalUseBps")
+                .ok_or_else(|| AppError::Validation("rentalUseBps is required".into()))?;
+            if !(0..=10000).contains(&rental_use) {
+                return Err(AppError::Validation("rentalUseBps is invalid".into()));
+            }
+            if !event
+                .get("rentalType")
+                .and_then(|x| x.as_str())
+                .is_some_and(|x| ["long-term", "short-term"].contains(&x))
+            {
+                return Err(AppError::Validation("rentalType is invalid".into()));
+            }
         }
         if kind == "asset-sale" {
             if let Some(payoff) = event.get("payoff") {
@@ -2015,8 +2393,14 @@ fn update_scenario(
                 }
             }
             if kind == "adu-build" || kind == "property-rental-start" {
-                let id=event.get("assetId").and_then(|x|x.as_str()).unwrap_or("");
-                if !created_assets.get(id).is_some_and(|created|*created<date)&&!owns("assets",id)? {return Err(AppError::Validation("property event must reference an owned property or a strictly earlier purchase".into()));}
+                let id = event.get("assetId").and_then(|x| x.as_str()).unwrap_or("");
+                if !created_assets
+                    .get(id)
+                    .is_some_and(|created| *created < date)
+                    && !owns("assets", id)?
+                {
+                    return Err(AppError::Validation("property event must reference an owned property or a strictly earlier purchase".into()));
+                }
             }
             if kind == "debt-payoff" {
                 let id = event
@@ -2520,6 +2904,40 @@ fn stored_balance(kind: &str, value: i64) -> Result<i64, AppError> {
         value
     })
 }
+fn validate_account_tax_metadata(
+    subtype: Option<&str>,
+    taxable: Option<i64>,
+    roth: Option<i64>,
+    opening: Option<i64>,
+) -> Result<(), AppError> {
+    if let Some(value) = subtype {
+        if !matches!(
+            value,
+            "cash"
+                | "taxable-brokerage"
+                | "traditional-ira"
+                | "employer-pre-tax"
+                | "roth-ira"
+                | "employer-roth"
+        ) {
+            return Err(AppError::Validation(
+                "choose a valid account subtype".into(),
+            ));
+        }
+    }
+    for (value, label) in [
+        (taxable, "taxable cost basis"),
+        (roth, "Roth contribution basis"),
+    ] {
+        if let Some(value) = value {
+            validate_nonnegative_money(value, label)?
+        }
+    }
+    if opening.is_some_and(|year| !(1900..=2500).contains(&year)) {
+        return Err(AppError::Validation("Roth opening year is invalid".into()));
+    }
+    Ok(())
+}
 #[tauri::command]
 fn create_account(input: AccountInput, database: tauri::State<Database>) -> Result<(), AppError> {
     with_db(&database, |db| {
@@ -2530,7 +2948,13 @@ fn create_account(input: AccountInput, database: tauri::State<Database>) -> Resu
         let liquid = account_properties(&input.kind)?;
         validate_rate(input.annual_return_bps, -10_000, "annual return")?;
         let balance = stored_balance(&input.kind, input.opening_balance_cents)?;
-        db.execute("INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,annual_return_bps,liquid) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![input.id,hid,input.name.trim(),input.kind,balance,input.annual_return_bps,liquid])?;
+        validate_account_tax_metadata(
+            input.subtype.as_deref(),
+            input.taxable_cost_basis_cents,
+            input.roth_contribution_basis_cents,
+            input.roth_opening_year,
+        )?;
+        db.execute("INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,annual_return_bps,liquid,owner_person_id,subtype,taxable_cost_basis_cents,roth_contribution_basis_cents,roth_opening_year) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",params![input.id,hid,input.name.trim(),input.kind,balance,input.annual_return_bps,liquid,input.owner_person_id,input.subtype,input.taxable_cost_basis_cents,input.roth_contribution_basis_cents,input.roth_opening_year])?;
         Ok(())
     })
 }
@@ -2546,7 +2970,13 @@ fn update_account(
         let hid = active_household(db)?;
         let liquid = account_properties(&input.kind)?;
         validate_rate(input.annual_return_bps, -10_000, "annual return")?;
-        let changed=db.execute("UPDATE accounts SET name=?1,kind=?2,annual_return_bps=?3,liquid=?4,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=?5 AND household_id=?6 AND revision=?7",params![input.name.trim(),input.kind,input.annual_return_bps,liquid,input.id,hid,input.expected_revision])?;
+        validate_account_tax_metadata(
+            input.subtype.as_deref(),
+            input.taxable_cost_basis_cents,
+            input.roth_contribution_basis_cents,
+            input.roth_opening_year,
+        )?;
+        let changed=db.execute("UPDATE accounts SET name=?1,kind=?2,annual_return_bps=?3,liquid=?4,owner_person_id=?5,subtype=?6,taxable_cost_basis_cents=?7,roth_contribution_basis_cents=?8,roth_opening_year=?9,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=?10 AND household_id=?11 AND revision=?12",params![input.name.trim(),input.kind,input.annual_return_bps,liquid,input.owner_person_id,input.subtype,input.taxable_cost_basis_cents,input.roth_contribution_basis_cents,input.roth_opening_year,input.id,hid,input.expected_revision])?;
         if changed == 0 {
             return Err(AppError::Conflict);
         }
@@ -2752,6 +3182,22 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
     }
     validate_nonnegative_money(input.value_cents, "asset value")?;
     validate_rate(input.annual_growth_bps, -10_000, "annual growth")?;
+    for (value, label) in [
+        (input.taxable_cost_basis_cents, "taxable cost basis"),
+        (input.rental_tax_basis_cents, "rental tax basis"),
+        (input.rental_building_basis_cents, "rental building basis"),
+    ] {
+        if let Some(value) = value {
+            validate_nonnegative_money(value, label)?
+        }
+    }
+    if input.rental_building_basis_cents.unwrap_or(0)
+        > input.rental_tax_basis_cents.unwrap_or(MAX_MONEY_CENTS)
+    {
+        return Err(AppError::Validation(
+            "rental building basis cannot exceed tax basis".into(),
+        ));
+    }
     let curve_json = validate_appreciation_curve(input.appreciation_curve.as_ref())?;
     let private_stock_json = validate_private_stock(input.private_stock.as_ref())?;
     let equity_holding_json = input
@@ -2781,12 +3227,12 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
     let housing_json = serde_json::to_string(&housing)?;
     let hid = active_household(db)?;
     if update {
-        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,appreciation_curve_json=?5,private_stock_json=?6,equity_holding_json=?7,revision=revision+1 WHERE id=?8 AND household_id=?9 AND revision=?10",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,equity_holding_json,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
+        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,appreciation_curve_json=?5,private_stock_json=?6,equity_holding_json=?7,taxable_cost_basis_cents=?8,rental_tax_basis_cents=?9,rental_building_basis_cents=?10,revision=revision+1 WHERE id=?11 AND household_id=?12 AND revision=?13",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,equity_holding_json,input.taxable_cost_basis_cents,input.rental_tax_basis_cents,input.rental_building_basis_cents,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
         if changed == 0 {
             return Err(AppError::Conflict);
         }
     } else {
-        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json,private_stock_json,equity_holding_json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,equity_holding_json])?;
+        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json,private_stock_json,equity_holding_json,taxable_cost_basis_cents,rental_tax_basis_cents,rental_building_basis_cents) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,equity_holding_json,input.taxable_cost_basis_cents,input.rental_tax_basis_cents,input.rental_building_basis_cents])?;
     }
     Ok(())
 }
@@ -4167,27 +4613,87 @@ mod tests {
     }
     #[test]
     fn investment_defaults_round_trip_and_enforce_revisions() {
-        let mut c=seeded();
-        let initial=bootstrap(&c).unwrap().investment_comparison.unwrap();
-        assert_eq!(initial.assumptions["homePriceCents"],50_000_000);
-        let mut changed=initial.assumptions.clone();changed["homePriceCents"]=serde_json::json!(60_000_000);
-        let saved=store_investment_comparison(&mut c,InvestmentComparisonInput{assumptions:changed.clone(),expected_revision:1}).unwrap();
-        assert_eq!(saved.revision,1);assert_eq!(bootstrap(&c).unwrap().investment_comparison.unwrap().assumptions,changed);
-        let updated=store_investment_comparison(&mut c,InvestmentComparisonInput{assumptions:default_investment_assumptions(),expected_revision:1}).unwrap();
-        assert_eq!(updated.revision,2);
-        assert!(matches!(store_investment_comparison(&mut c,InvestmentComparisonInput{assumptions:default_investment_assumptions(),expected_revision:1}),Err(AppError::Conflict)));
+        let mut c = seeded();
+        let initial = bootstrap(&c).unwrap().investment_comparison.unwrap();
+        assert_eq!(initial.assumptions["homePriceCents"], 50_000_000);
+        let mut changed = initial.assumptions.clone();
+        changed["homePriceCents"] = serde_json::json!(60_000_000);
+        let saved = store_investment_comparison(
+            &mut c,
+            InvestmentComparisonInput {
+                assumptions: changed.clone(),
+                expected_revision: 1,
+            },
+        )
+        .unwrap();
+        assert_eq!(saved.revision, 1);
+        assert_eq!(
+            bootstrap(&c)
+                .unwrap()
+                .investment_comparison
+                .unwrap()
+                .assumptions,
+            changed
+        );
+        let updated = store_investment_comparison(
+            &mut c,
+            InvestmentComparisonInput {
+                assumptions: default_investment_assumptions(),
+                expected_revision: 1,
+            },
+        )
+        .unwrap();
+        assert_eq!(updated.revision, 2);
+        assert!(matches!(
+            store_investment_comparison(
+                &mut c,
+                InvestmentComparisonInput {
+                    assumptions: default_investment_assumptions(),
+                    expected_revision: 1
+                }
+            ),
+            Err(AppError::Conflict)
+        ));
     }
     #[test]
     fn retirement_plan_round_trips_and_enforces_revisions() {
-        let mut c=seeded();
+        let mut c = seeded();
         assert!(bootstrap(&c).unwrap().retirement_plan.is_none());
-        let make=|expected_revision|RetirementPlanInput{selected_scenario_id:"base".into(),retirement_year:2040,runway_years:50,withdrawal_rate_bps:300,expense_buckets:serde_json::json!([{"id":"housing","name":"Housing","mode":"annual","annualCents":2400000}]),selected_source_ids:serde_json::json!(["a"]),portfolio_items:serde_json::json!([]),withdrawal_order:serde_json::json!(["taxable","pre-tax","roth"]),retirement_years:serde_json::json!({}),scheduled_income:serde_json::json!([]),withdrawal_account_order:serde_json::json!([]),legacy_review_dismissed:false,expected_revision};
-        let saved=store_retirement_plan(&mut c,make(1)).unwrap();
-        assert_eq!(saved.revision,1);
-        assert_eq!(bootstrap(&c).unwrap().retirement_plan.unwrap().retirement_year,2040);
-        let updated=store_retirement_plan(&mut c,make(1)).unwrap();
-        assert_eq!(updated.revision,2);
-        assert!(matches!(store_retirement_plan(&mut c,make(1)),Err(AppError::Conflict)));
+        let make = |expected_revision| RetirementPlanInput {
+            selected_scenario_id: "base".into(),
+            retirement_year: 2040,
+            runway_years: 50,
+            withdrawal_rate_bps: 300,
+            expense_buckets: serde_json::json!([{"id":"housing","name":"Housing","mode":"annual","annualCents":2400000}]),
+            selected_source_ids: serde_json::json!(["a"]),
+            portfolio_items: serde_json::json!([]),
+            withdrawal_order: serde_json::json!(["taxable", "pre-tax", "roth"]),
+            retirement_years: serde_json::json!({}),
+            scheduled_income: serde_json::json!([]),
+            withdrawal_account_order: serde_json::json!([]),
+            legacy_review_dismissed: false,
+            spending_mode: "manual".into(),
+            liquidatable_asset_ids: serde_json::json!(["a"]),
+            early_roth_account_ids: serde_json::json!([]),
+            migration_review: serde_json::json!([]),
+            expected_revision,
+        };
+        let saved = store_retirement_plan(&mut c, make(1)).unwrap();
+        assert_eq!(saved.revision, 1);
+        assert_eq!(
+            bootstrap(&c)
+                .unwrap()
+                .retirement_plan
+                .unwrap()
+                .retirement_year,
+            2040
+        );
+        let updated = store_retirement_plan(&mut c, make(1)).unwrap();
+        assert_eq!(updated.revision, 2);
+        assert!(matches!(
+            store_retirement_plan(&mut c, make(1)),
+            Err(AppError::Conflict)
+        ));
     }
     #[test]
     fn version_15_adds_the_optional_salary_growth_cap() {
@@ -4739,6 +5245,9 @@ mod tests {
             }),
             equity_holding: None,
             housing_costs: None,
+            taxable_cost_basis_cents: None,
+            rental_tax_basis_cents: None,
+            rental_building_basis_cents: None,
             expected_revision: None,
         };
         save_asset(&c, &asset, false).unwrap();
@@ -4850,6 +5359,9 @@ mod tests {
             private_stock: None,
             equity_holding: None,
             housing_costs: None,
+            taxable_cost_basis_cents: None,
+            rental_tax_basis_cents: None,
+            rental_building_basis_cents: None,
             expected_revision: None,
         };
         assert!(matches!(
@@ -4865,6 +5377,9 @@ mod tests {
             private_stock: None,
             equity_holding: None,
             housing_costs: None,
+            taxable_cost_basis_cents: None,
+            rental_tax_basis_cents: None,
+            rental_building_basis_cents: None,
             expected_revision: None,
         };
         save_asset(&c, &valid_asset, false).unwrap();

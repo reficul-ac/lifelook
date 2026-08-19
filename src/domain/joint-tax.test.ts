@@ -21,7 +21,7 @@ describe("joint 2026 payroll tax",()=>{
 
 describe("versioned rules and deductions",()=>{
   it("uses the official corrected California 2025 schedule",()=>expect(TAX_RULES_2025.california["married-joint"].brackets.slice(0,3).map(x=>x.upToCents)).toEqual([22_158_00,52_528_00,82_904_00]));
-  it("inflates indexed future thresholds but holds Additional Medicare fixed",()=>{const future=projectedTaxRules(2030,300);expect(future.federal.single.standardDeductionCents).toBeGreaterThan(16_100_00);expect(future.additionalMedicareThresholdCents["married-joint"]).toBe(250_000_00);expect(future.sources.every(x=>x.status==="projected")).toBe(true)});
+  it("freezes future thresholds until a reviewed rule pack ships",()=>{const future=projectedTaxRules(2030,300);expect(future.federal.single.standardDeductionCents).toBe(16_100_00);expect(future.additionalMedicareThresholdCents["married-joint"]).toBe(250_000_00);expect(future.sources.every(x=>x.status==="projected")).toBe(true)});
   it("selects itemized deductions independently and excludes state tax from California",()=>{const ledger=estimateHouseholdTax({year:2026,status:"married-joint",thresholdInflationBps:250,employees:[{personId:"a",salaryCents:200_000_00,rsuCents:0},{personId:"b",salaryCents:100_000_00,rsuCents:0}],deductions:{mortgageInterestCents:30_000_00,propertyTaxCents:20_000_00,stateIncomeTaxCents:20_000_00}});expect(ledger.federalDeductionCents).toBe(70_000_00);expect(ledger.californiaDeductionCents).toBe(50_000_00)});
 });
 

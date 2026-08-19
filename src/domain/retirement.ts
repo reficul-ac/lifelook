@@ -1,4 +1,5 @@
-import type { Account, AnnualProjection, Asset, BasisPoints, Cents, Liability, Scenario } from "./types";
+import type { Account, AnnualProjection, Asset, BasisPoints, Cents, FilingStatus, Liability, Scenario } from "./types";
+import type { RetirementTaxResult } from "./retirementTax";
 import { occurrences, recurringAmount, vestedAssetValue, vestedEquityValue } from "./projection";
 
 export type RetirementTaxClass = "taxable" | "pre-tax" | "roth";
@@ -18,23 +19,27 @@ export interface RetirementPlanRecord {
   householdId:string; selectedScenarioId:string; retirementYear:number; runwayYears:50; withdrawalRateBps:BasisPoints;
   expenseBuckets:RetirementExpenseBucket[]; selectedSourceIds:string[]; portfolioItems:RetirementPortfolioItem[]; withdrawalOrder:RetirementTaxClass[]; revision:number;
   retirementYears?:Record<string,number>; scheduledIncome?:RetirementIncome[]; withdrawalAccountOrder?:string[]; legacyReviewDismissed?:boolean;
+  spendingMode?:"manual"|"plan"; liquidatableAssetIds?:string[]; earlyRothAccountIds?:string[]; migrationReview?:string[];
 }
-export interface RetirementIncome { id:string; name:string; ownerPersonId:string; startYear:number; annualAmountCents:Cents; annualGrowthBps:BasisPoints; taxableBps:BasisPoints }
+export type RetirementIncomeClassification="social-security"|"ordinary"|"nontaxable"|"unclassified";
+export interface RetirementIncome { id:string; name:string; ownerPersonId:string; startYear:number; annualAmountCents:Cents; annualGrowthBps:BasisPoints; taxableBps?:BasisPoints; classification?:RetirementIncomeClassification }
 export type RetirementStressPreset="baseline"|"lower-returns"|"higher-inflation"|"higher-spending"|"longevity"|"combined";
 export type RetirementIncomeSourceKind="employment"|"rental"|"scheduled"|"other"|"rmd"|"withdrawal";
 export interface RetirementIncomeSource { id:string; name:string; kind:RetirementIncomeSourceKind; amountCents:Cents }
-export interface RetirementOutlookYear { year:number; grossIncomeCents:Cents; employmentIncomeCents:Cents; rentalIncomeCents:Cents; scheduledIncomeCents:Cents; otherIncomeCents:Cents; taxAndPenaltyCents:Cents; afterTaxIncomeCents:Cents; spendingCents:Cents; excessCents:Cents; withdrawalsCents:Cents; endingBalanceCents:Cents; rmdCents:Cents; incomeSources:RetirementIncomeSource[] }
+export interface RetirementAccountYear { id:string; name:string; beginningCents:Cents; returnsCents:Cents; withdrawalsCents:Cents; realizedGainsCents:Cents; rmdCents:Cents; endingCents:Cents }
+export interface RetirementPropertyYear { id:string; name:string; grossRentCents:Cents; operatingExpenseCents:Cents; debtServiceCents:Cents; netCashFlowCents:Cents; endingValueCents:Cents; endingMortgageCents:Cents; endingEquityCents:Cents }
+export interface RetirementOutlookYear { year:number; beginningSpendableCents:Cents; endingSpendableCents:Cents; grossIncomeCents:Cents; employmentIncomeCents:Cents; rentalIncomeCents:Cents; scheduledIncomeCents:Cents; otherIncomeCents:Cents; taxAndPenaltyCents:Cents; afterTaxIncomeCents:Cents; spendingCents:Cents; excessCents:Cents; withdrawalsCents:Cents; endingBalanceCents:Cents; totalAssetsCents:Cents; totalDebtCents:Cents; netWorthCents:Cents; rmdCents:Cents; incomeSources:RetirementIncomeSource[]; accounts:RetirementAccountYear[]; properties:RetirementPropertyYear[]; reconciliationDifferenceCents:Cents; taxStatement?:RetirementTaxResult }
 export interface RetirementPortfolioPart { id:string; name:string; kind:"account"|"property"|"asset"|"liability"; valueCents:Cents }
-export interface RetirementOutlook { years:RetirementOutlookYear[]; cutoffYear:number; firstRetirementYear:number; cutoffBalanceCents:Cents; cutoffAccountBalanceCents:Cents; cutoffAssetValueCents:Cents; cutoffLiabilityBalanceCents:Cents; portfolioParts:RetirementPortfolioPart[]; firstDepletionYear?:number; endingBalanceCents:Cents; ready:boolean; warnings:string[]; preset:RetirementStressPreset }
+export interface RetirementOutlook { years:RetirementOutlookYear[]; cutoffYear:number; firstRetirementYear:number; cutoffBalanceCents:Cents; cutoffAccountBalanceCents:Cents; cutoffAssetValueCents:Cents; cutoffLiabilityBalanceCents:Cents; portfolioParts:RetirementPortfolioPart[]; firstDepletionYear?:number; endingBalanceCents:Cents; ready:boolean|null; complete:boolean; missingData:string[]; warnings:string[]; preset:"baseline" }
 export const defaultRetirementPlan = (year=new Date().getFullYear()):Omit<RetirementPlanRecord,"householdId"> => ({
   selectedScenarioId:"", retirementYear:year, runwayYears:50, withdrawalRateBps:300,
-  expenseBuckets:[], selectedSourceIds:[], portfolioItems:[], withdrawalOrder:["taxable","pre-tax","roth"], revision:1,
+  expenseBuckets:[], selectedSourceIds:[], portfolioItems:[], withdrawalOrder:["taxable","pre-tax","roth"], spendingMode:"manual", liquidatableAssetIds:[], earlyRothAccountIds:[], revision:1,
 });
 export const annualBucketAmount=(bucket:RetirementExpenseBucket,spendableCents:number)=>bucket.mode==="monthly"?bucket.monthlyCents*12:bucket.mode==="annual"?bucket.annualCents:Math.round(spendableCents*bucket.percentBps/10_000);
 
 export interface RetirementReadinessYear { year:number; projectedCapitalCents:Cents; requiredFundingCents:Cents; fundingGapCents:Cents; spendableIncomeCents:Cents; plannedSpendingCents:Cents; leftoverCents:Cents; endingBalanceCents:Cents; portfolioFunded:boolean; portfolioPurchased:boolean; runwayPasses:boolean; firstFailureYear?:number }
 export interface RetirementResult { years:RetirementReadinessYear[]; selected:RetirementReadinessYear; earliestReadyYear?:number; acquisitionYear?:number; selectedYearAffordable:boolean }
-export interface RetirementCalculationInput { plan:RetirementPlanRecord; accounts:readonly Account[]; assets:readonly Asset[]; liabilities:readonly Liability[]; scenario:Scenario; projections:readonly AnnualProjection[]; currentYear:number; asOfDate?:string }
+export interface RetirementCalculationInput { plan:RetirementPlanRecord; accounts:readonly Account[]; assets:readonly Asset[]; liabilities:readonly Liability[]; scenario:Scenario; projections:readonly AnnualProjection[]; currentYear:number; asOfDate?:string; filingStatus?:FilingStatus }
 
 const mortgagePayment=(principal:number,bps:number,years:number)=>{const r=bps/10_000/12,n=years*12;return r?principal*r*Math.pow(1+r,n)/(Math.pow(1+r,n)-1):principal/n};
 const taxOnWithdrawal=(amount:number,kind:RetirementTaxClass,basisRatio:number)=>kind==="roth"?0:kind==="pre-tax"?amount*.25:amount*(1-basisRatio)*.20;
@@ -123,7 +128,7 @@ const accountTaxClass=(account:Account):RetirementTaxClass=>account.subtype==="t
 const ageAtEnd=(birthDate:string|null|undefined,year:number)=>birthDate?year-Number(birthDate.slice(0,4)):100;
 /** Versioned, deterministic retirement rules. 2026 pack; special-case exceptions are intentionally not inferred. */
 export const RETIREMENT_RULE_PACK={version:"2026.1",rmdStartAge:73,earlyWithdrawalAge:59.5,earlyPenaltyBps:1000,employerSeparationAge:55,rothFiveYearRule:5} as const;
-export function calculateRetirementOutlook(input:RetirementCalculationInput&{people?:readonly {id:string;birthDate?:string|null}[];recurring?:readonly import("./types").RecurringEntry[];preset?:RetirementStressPreset}):RetirementOutlook{
+function calculateLegacyRetirementOutlook(input:RetirementCalculationInput&{people?:readonly {id:string;birthDate?:string|null}[];recurring?:readonly import("./types").RecurringEntry[];preset?:RetirementStressPreset}):RetirementOutlook{
   const personRetirementYears=Object.values(input.plan.retirementYears??{}),cutoffYear=personRetirementYears.length?Math.min(...personRetirementYears):input.plan.retirementYear;
   const preset=input.preset??"baseline",firstRetirement=cutoffYear+1,years=preset==="longevity"||preset==="combined"?60:50;
   const inflationBps=input.scenario.assumptions.inflationBps+(preset==="higher-inflation"||preset==="combined"?100:0),spendFactor=preset==="higher-spending"||preset==="combined"?1.1:1,returnDelta=preset==="lower-returns"||preset==="combined"?-200:0;
@@ -139,7 +144,7 @@ export function calculateRetirementOutlook(input:RetirementCalculationInput&{peo
   const otherLiabilities=input.liabilities.filter(x=>!propertyLiabilityIds.has(x.id)).map(x=>({id:x.id,name:x.name,balance:Math.max(0,cutoff?.liabilities?.[x.id]??liabilityAt(input,cutoffYear,x.id)),annualRateBps:x.annualRateBps,monthlyPayment:x.minimumPaymentCents}));
   const portfolioParts:RetirementPortfolioPart[]=[...input.accounts.map(a=>({id:a.id,name:a.name,kind:"account" as const,valueCents:balances.get(a.id)??0})),...properties.map(x=>({id:x.id,name:x.name,kind:"property" as const,valueCents:x.value-x.mortgage})),...otherAssets.map(x=>({id:x.id,name:x.name,kind:"asset" as const,valueCents:x.value})),...otherLiabilities.map(x=>({id:x.id,name:x.name,kind:"liability" as const,valueCents:-x.balance}))];
   const cutoffAccountBalanceCents=[...balances.values()].reduce((s,x)=>s+x,0),cutoffAssetValueCents=properties.reduce((s,x)=>s+x.value,0)+otherAssets.reduce((s,x)=>s+x.value,0),cutoffLiabilityBalanceCents=properties.reduce((s,x)=>s+x.mortgage,0)+otherLiabilities.reduce((s,x)=>s+x.balance,0),cutoffBalanceCents=cutoffAccountBalanceCents+cutoffAssetValueCents-cutoffLiabilityBalanceCents;
-  const rows:RetirementOutlookYear[]=[];let firstDepletionYear:number|undefined;
+  const rows:any[]=[];let firstDepletionYear:number|undefined;
   for(let offset=0;offset<years;offset++){
     const year=firstRetirement+offset,inflation=Math.pow(1+inflationBps/10000,offset);
     const incomeSources:RetirementIncomeSource[]=properties.filter(x=>x.monthlyRent>0).map(x=>({id:x.id,name:x.name,kind:"rental",amountCents:x.monthlyRent*12}));
@@ -158,7 +163,7 @@ export function calculateRetirementOutlook(input:RetirementCalculationInput&{peo
       const kind=employment?"employment":"other";incomeSources.push({id:entry.id,name:entry.name,kind,amountCents:amount});gross+=amount;tax+=Math.round(amount*.25);if(employment)employmentIncomeCents+=amount;else otherIncomeCents+=amount;
     }
     for(const event of input.scenario.events)if(event.type==="one-time-income"&&Number(event.date.slice(0,4))===year){const employment=event.incomeTaxCategory==="wages";if(employment&&(!event.ownerPersonId||year>(input.plan.retirementYears?.[event.ownerPersonId]??cutoffYear)))continue;const kind=employment?"employment":"other";incomeSources.push({id:event.id,name:"Plan one-time income",kind,amountCents:event.amountCents});gross+=event.amountCents;if(event.incomeTaxCategory!=="nontaxable")tax+=Math.round(event.amountCents*.25);if(employment)employmentIncomeCents+=event.amountCents;else otherIncomeCents+=event.amountCents}
-    for(const income of input.plan.scheduledIncome??[])if(year>=income.startYear){const amount=Math.round(income.annualAmountCents*Math.pow(1+income.annualGrowthBps/10000,year-income.startYear));gross+=amount;scheduledIncomeCents+=amount;incomeSources.push({id:income.id,name:income.name,kind:"scheduled",amountCents:amount});tax+=Math.round(amount*income.taxableBps/10000*.25)}
+    for(const income of input.plan.scheduledIncome??[])if(year>=income.startYear){const amount=Math.round(income.annualAmountCents*Math.pow(1+income.annualGrowthBps/10000,year-income.startYear));gross+=amount;scheduledIncomeCents+=amount;incomeSources.push({id:income.id,name:income.name,kind:"scheduled",amountCents:amount});tax+=Math.round(amount*(income.taxableBps??0)/10000*.25)}
     // RMDs are retained as cash when they exceed spending needs.
     for(const account of input.accounts.filter(a=>accountTaxClass(a)==="pre-tax"))if(ageAtEnd(input.people?.find(p=>p.id===account.ownerPersonId)?.birthDate,year)>=RETIREMENT_RULE_PACK.rmdStartAge){const amount=Math.min(balances.get(account.id)??0,Math.round((balances.get(account.id)??0)/Math.max(2,27.4-offset)));balances.set(account.id,(balances.get(account.id)??0)-amount);gross+=amount;rmd+=amount;incomeSources.push({id:account.id,name:`${account.name} RMD`,kind:"rmd",amountCents:amount});tax+=Math.round(amount*.25)}
     let afterTax=gross-tax;
@@ -174,5 +179,7 @@ export function calculateRetirementOutlook(input:RetirementCalculationInput&{peo
     for(const liability of otherLiabilities)for(let month=0;month<12&&liability.balance>0;month++){const interest=Math.round(liability.balance*liability.annualRateBps/120_000),paid=Math.min(liability.balance+interest,liability.monthlyPayment),principal=Math.max(0,paid-interest);liability.balance=Math.max(0,liability.balance-principal)}
     const ending=[...balances.values()].reduce((s,x)=>s+x,0)+properties.reduce((s,x)=>s+x.value-x.mortgage,0)+otherAssets.reduce((s,x)=>s+x.value,0)-otherLiabilities.reduce((s,x)=>s+x.balance,0);if(need>0&&firstDepletionYear===undefined)firstDepletionYear=year;rows.push({year,grossIncomeCents:gross+withdrawals,employmentIncomeCents,rentalIncomeCents,scheduledIncomeCents,otherIncomeCents,taxAndPenaltyCents:tax,afterTaxIncomeCents:afterTax,spendingCents:spending,excessCents:afterTax-spending,withdrawalsCents:withdrawals,endingBalanceCents:ending,rmdCents:rmd,incomeSources});
   }
-  return {years:rows,cutoffYear,firstRetirementYear:firstRetirement,cutoffBalanceCents,cutoffAccountBalanceCents,cutoffAssetValueCents,cutoffLiabilityBalanceCents,portfolioParts,firstDepletionYear,endingBalanceCents:rows.at(-1)?.endingBalanceCents??0,ready:firstDepletionYear===undefined,warnings,preset};
+  return {years:rows as RetirementOutlookYear[],cutoffYear,firstRetirementYear:firstRetirement,cutoffBalanceCents,cutoffAccountBalanceCents,cutoffAssetValueCents,cutoffLiabilityBalanceCents,portfolioParts,firstDepletionYear,endingBalanceCents:rows.at(-1)?.endingBalanceCents??0,ready:firstDepletionYear===undefined,complete:true,missingData:[],warnings,preset:"baseline"};
 }
+void calculateLegacyRetirementOutlook;
+export { calculateRetirementOutlook, ageOnDate, rmdStartAge, uniformLifetimeFactor } from "./retirementOutlook";

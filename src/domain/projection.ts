@@ -77,7 +77,8 @@ export function recurringAmount(entry:RecurringEntry,annualOrOccurrenceCents:num
 
 export const ProjectionEngine = {
   calculate(snapshot: FinancialSnapshot, scenario: Scenario, asOfDate: string): readonly AnnualProjection[] {
-    if (scenario.horizon.months < 1 || scenario.horizon.months > 480) throw new RangeError("Projection horizon must be between 1 and 480 months");
+    const maxMonths=(scenario as Scenario&{retirementExtension?:boolean}).retirementExtension?1200:480;
+    if (scenario.horizon.months < 1 || scenario.horizon.months > maxMonths) throw new RangeError("Projection horizon must be between 1 and 480 months");
     const asOf = isoDate(asOfDate), asOfMonth = monthKey(asOf);
     const start = new Date(`${asOfMonth}-01T00:00:00Z`);
     const accounts = new Map(snapshot.accounts.map(a => [a.id, { ...a, balance: a.balanceCents }]));

@@ -136,6 +136,8 @@ const baseCutoff = (): RetirementCutoff => ({
     liabilityId: "mortgage",
     mortgageCents: 80_000,
     monthlyGrossRentCents: 1_500,
+    monthlyAduRentCents: 300,
+    rentalUseBps: 10_000,
     projectedDepreciationCents: 0,
     source: "current",
   }],
@@ -176,6 +178,106 @@ it("carries the property liability linkage across the retirement cutoff boundary
     liabilityId: "mortgage",
     mortgageCents: 80_000,
   }));
+});
+
+it("resolves only the latest owned planned purchase after a sale and repurchase without mutating the Plan", () => {
+  const value = fixture();
+  value.snapshot.accounts = value.snapshot.accounts.map((account) =>
+    account.id === "cash" ? { ...account, balanceCents: 1_000_000 } : account);
+  value.snapshot.assets = value.snapshot.assets.filter((asset) => asset.id !== "home");
+  value.snapshot.liabilities = value.snapshot.liabilities.filter((liability) => liability.id !== "mortgage");
+  value.scenario.events = [
+    {
+      id: "old-purchase",
+      date: "2026-01-01",
+      type: "asset-purchase",
+      assetId: "planned-home",
+      name: "Old planned home",
+      valueCents: 100_000,
+      annualGrowthBps: 0,
+      fundingAccountId: "cash",
+      downPaymentCents: 50_000,
+      costsCents: 0,
+      financing: { liabilityId: "old-loan", name: "Old loan", principalCents: 50_000, annualRateBps: 0, minimumPaymentCents: 0 },
+    },
+    {
+      id: "old-adu",
+      date: "2026-02-01",
+      type: "adu-build",
+      assetId: "planned-home",
+      name: "Old ADU",
+      costCents: 0,
+      homeSquareFeet: 1_000,
+      aduSquareFeet: 100,
+      fundingAccountId: "cash",
+      monthlyRentalIncomeCents: 100,
+      rentalIncomeGrowthBps: 0,
+    },
+    {
+      id: "old-sale",
+      date: "2026-03-01",
+      type: "asset-sale",
+      assetId: "planned-home",
+      proceedsCents: 100_000,
+      costsCents: 0,
+      destinationAccountId: "cash",
+      payoff: { liabilityId: "old-loan", mode: "full" },
+    },
+    {
+      id: "new-purchase",
+      date: "2026-04-01",
+      type: "asset-purchase",
+      assetId: "planned-home",
+      name: "New planned home",
+      valueCents: 200_000,
+      annualGrowthBps: 0,
+      fundingAccountId: "cash",
+      downPaymentCents: 120_000,
+      costsCents: 0,
+      financing: { liabilityId: "new-loan", name: "New loan", principalCents: 80_000, annualRateBps: 0, minimumPaymentCents: 0 },
+      propertyDetails: {
+        primaryResidence: false,
+        rentalUseBps: 10_000,
+        rentalTaxModelingEnabled: true,
+        buildingBasisCents: 33_000,
+        homeSaleAssumptions: saleAssumptions({ sellingCostBps: 0 }),
+      },
+    },
+  ];
+  const before = JSON.stringify(value.scenario);
+
+  const cutoff = buildRetirementCutoff({
+    snapshot: value.snapshot,
+    scenario: value.scenario,
+    retirementMonth: "2026-07",
+    asOfDate: "2026-01-15",
+  });
+
+  expect(cutoff.properties).toEqual([expect.objectContaining({
+    assetId: "planned-home",
+    name: "New planned home",
+    valueCents: 200_000,
+    liabilityId: "new-loan",
+    mortgageCents: 80_000,
+    rentalUseBps: 10_000,
+    projectedDepreciationCents: 300,
+    source: "planned",
+  })]);
+  expect(cutoff.liabilities).toEqual(expect.objectContaining({ "old-loan": 0, "new-loan": 80_000 }));
+
+  const sellHomes = calculateRetirementSnapshot({
+    cutoff,
+    snapshot: value.snapshot,
+    scenario: value.scenario,
+    withdrawalRateBps: 300,
+  }).sellHomes;
+
+  expect(sellHomes.available).toBe(true);
+  if (!sellHomes.available) throw new Error("Expected sell-homes result");
+  expect(sellHomes.grossHomeEquityCents).toBe(120_000);
+  expect(sellHomes.incrementalSaleTaxCents).toBe(33);
+  expect(sellHomes.netHomeProceedsCents).toBe(119_967);
+  expect(JSON.stringify(value.scenario)).toBe(before);
 });
 
 describe("calculateRetirementSnapshot balance sheet and keep-homes scenario", () => {
@@ -347,7 +449,7 @@ describe("calculateRetirementSnapshot sell-homes scenario", () => {
       assets: { "personal-loss": 70_000_00, "rental-gain": 120_000_00 },
       liabilities: {},
       properties: [
-        { assetId: "personal-loss", name: "Personal loss", valueCents: 70_000_00, mortgageCents: 0, monthlyGrossRentCents: 0, projectedDepreciationCents: 0, source: "current" },
+        { assetId: "personal-loss", name: "Personal loss", valueCents: 70_000_00, mortgageCents: 0, monthlyGrossRentCents: 0, rentalUseBps: 0, projectedDepreciationCents: 0, source: "current" },
         { assetId: "rental-gain", name: "Rental gain", valueCents: 120_000_00, mortgageCents: 0, monthlyGrossRentCents: 1, projectedDepreciationCents: 0, source: "current" },
       ],
       taxLedger: completeTaxLedger({
@@ -413,6 +515,44 @@ describe("calculateRetirementSnapshot sell-homes scenario", () => {
     expect(sellHomes.available).toBe(true);
     if (!sellHomes.available) throw new Error("Expected sell-homes result");
     expect(sellHomes.incrementalSaleTaxCents).toBe(0);
+  });
+
+  it("keeps a non-primary planned home personal when rental use and evidence are zero", () => {
+    const value = fixture();
+    value.snapshot.assets = value.snapshot.assets.filter((asset) => asset.id !== "home");
+    value.snapshot.liabilities = value.snapshot.liabilities.filter((liability) => liability.id !== "mortgage");
+    value.scenario.events = [{
+      id: "buy-second-home",
+      date: "2020-01-01",
+      type: "asset-purchase",
+      assetId: "home",
+      name: "Home",
+      valueCents: 190_000,
+      annualGrowthBps: 0,
+      fundingAccountId: "cash",
+      downPaymentCents: 190_000,
+      costsCents: 0,
+      propertyDetails: {
+        primaryResidence: false,
+        rentalUseBps: 0,
+        homeSaleAssumptions: saleAssumptions(),
+      },
+    }];
+    value.cutoff = {
+      ...value.cutoff,
+      liabilities: { card: 5_000 },
+      properties: [{
+        ...value.cutoff.properties[0],
+        source: "planned",
+        liabilityId: undefined,
+        mortgageCents: 0,
+        monthlyGrossRentCents: 0,
+        monthlyAduRentCents: 0,
+        rentalUseBps: 0,
+      }],
+    };
+
+    expect(calculate(value).sellHomes).toEqual(expect.objectContaining({ available: true }));
   });
 
   it.each(["current-land-basis", "planned-depreciation"] as const)(
@@ -548,6 +688,58 @@ describe("calculateRetirementSnapshot sell-homes scenario", () => {
       expect(sellHomes.liquidNetWorthCents).toBe(10_701_356);
     });
   });
+
+  describe.each(["current-partial", "planned-partial", "adu-partial"] as const)(
+    "mixed use from %s evidence",
+    (evidence) => {
+      it("returns a structured limitation before tax calculation", () => {
+        const value = fixture();
+        const property = value.cutoff.properties[0];
+        value.cutoff = {
+          ...value.cutoff,
+          properties: [{
+            ...property,
+            source: evidence === "planned-partial" ? "planned" : "current",
+            rentalUseBps: evidence === "adu-partial" ? undefined : 2_500,
+            monthlyAduRentCents: evidence === "adu-partial" ? 300 : 0,
+          }],
+          taxLedger: completeTaxLedger({ federalTaxableCents: -1 }),
+        };
+        if (evidence === "planned-partial") {
+          value.snapshot.assets = value.snapshot.assets.filter((asset) => asset.id !== "home");
+          value.snapshot.liabilities = value.snapshot.liabilities.filter((liability) => liability.id !== "mortgage");
+          value.scenario.events = [{
+            id: "buy-home",
+            date: "2020-01-01",
+            type: "asset-purchase",
+            assetId: "home",
+            name: "Home",
+            valueCents: 190_000,
+            annualGrowthBps: 0,
+            fundingAccountId: "cash",
+            downPaymentCents: 110_000,
+            costsCents: 0,
+            financing: { liabilityId: "mortgage", name: "Mortgage", principalCents: 80_000, annualRateBps: 0, minimumPaymentCents: 0 },
+            propertyDetails: {
+              primaryResidence: true,
+              rentalUseBps: 2_500,
+              homeSaleAssumptions: saleAssumptions(),
+            },
+          }];
+        }
+
+        expect(calculate(value).sellHomes).toEqual({
+          available: false,
+          issues: [{
+            assetId: "home",
+            assetName: "Home",
+            field: "rentalUse",
+            message: "Review rental use for Home; mixed-use sale tax is not supported.",
+          }],
+        });
+      });
+    },
+  );
 });
 
 const issueMessages: Record<RetirementMissingData["field"], string> = {
@@ -558,6 +750,7 @@ const issueMessages: Record<RetirementMissingData["field"], string> = {
   primaryResidenceEligibility: "Confirm primary residence eligibility for Home.",
   federalDepreciation: "Add federal depreciation for Home.",
   californiaDepreciation: "Add California depreciation for Home.",
+  rentalUse: "Review rental use for Home; mixed-use sale tax is not supported.",
 };
 
 const missingCases: readonly {
@@ -632,7 +825,7 @@ describe("calculateRetirementSnapshot unavailable sell-homes result", () => {
 
     expect(calculate(value).sellHomes).toEqual({
       available: false,
-      issues: (Object.keys(issueMessages) as RetirementMissingData["field"][]).map((field) => ({
+      issues: missingCases.map(({ field }) => ({
         assetId: "home",
         assetName: "Home",
         field,
@@ -661,9 +854,63 @@ describe("calculateRetirementSnapshot unavailable sell-homes result", () => {
 });
 
 describe("calculateRetirementSnapshot validation", () => {
-  it.each([-1, 10_001, 300.5])("rejects an invalid withdrawal rate of %s basis points", (withdrawalRateBps) => {
+  it.each([-1, 0, 10_001, 300.5])("rejects an invalid withdrawal rate of %s basis points", (withdrawalRateBps) => {
     expect(() => calculate(fixture(), withdrawalRateBps)).toThrow(
-      "withdrawalRateBps must be an integer from 0 to 10000",
+      "withdrawalRateBps must be an integer from 1 to 10000",
+    );
+  });
+
+  it("accepts a one-basis-point withdrawal rate", () => {
+    const result = calculate(fixture(), 1);
+
+    expect(result.withdrawalRateBps).toBe(1);
+    expect(result.keepHomes.withdrawalIncomeCents).toBe(7);
+    expect(result.sellHomes).toEqual(expect.objectContaining({
+      available: true,
+      annualPreTaxIncomeCents: 18,
+    }));
+  });
+
+  it("rejects duplicate property rows", () => {
+    const value = fixture();
+    value.cutoff = {
+      ...value.cutoff,
+      properties: [...value.cutoff.properties, { ...value.cutoff.properties[0] }],
+    };
+
+    expect(() => calculate(value)).toThrow(
+      "Retirement cutoff properties must contain one row for asset home",
+    );
+  });
+
+  it("rejects a property row whose asset is missing from cutoff assets", () => {
+    const value = fixture();
+    const { home: _home, ...assets } = value.cutoff.assets;
+    value.cutoff = { ...value.cutoff, assets };
+
+    expect(() => calculate(value)).toThrow(
+      "Retirement cutoff property home is missing from cutoff assets",
+    );
+  });
+
+  it("rejects an owned home asset whose property row is missing", () => {
+    const value = fixture();
+    value.cutoff = { ...value.cutoff, properties: [] };
+
+    expect(() => calculate(value)).toThrow(
+      "Retirement cutoff is missing a property row for home",
+    );
+  });
+
+  it("rejects a property value that disagrees with cutoff assets", () => {
+    const value = fixture();
+    value.cutoff = {
+      ...value.cutoff,
+      properties: [{ ...value.cutoff.properties[0], valueCents: 199_999 }],
+    };
+
+    expect(() => calculate(value)).toThrow(
+      "Retirement cutoff property home value must match cutoff assets",
     );
   });
 });

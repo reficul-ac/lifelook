@@ -322,6 +322,10 @@ function Workspace({
   onRestore: (value: BootstrapInput) => void;
 }) {
   const [view, setView] = useState<View>("Overview");
+  const [retirementMounted, setRetirementMounted] = useState(false);
+  useEffect(() => {
+    if (view === "Retirement") setRetirementMounted(true);
+  }, [view]);
   const [settings, setSettings] = useState(bootstrap.settings);
   useEffect(() => setSettings(bootstrap.settings), [bootstrap.settings]);
   const systemDark = () =>
@@ -1099,15 +1103,21 @@ function Workspace({
             }}
           />
         </div>
-        {view === "Retirement" && (
-          <RetirementView
-            initial={retirementSettings}
-            repository={repository}
-            bootstrap={bootstrap}
-            snapshot={snapshot}
-            scenario={projectedScenario}
-            onSettingsChange={setRetirementSettings}
-          />
+        {retirementMounted && (
+          <div
+            className="retirement-tab"
+            hidden={view !== "Retirement"}
+            aria-hidden={view !== "Retirement" || undefined}
+          >
+            <RetirementView
+              initial={retirementSettings}
+              repository={repository}
+              bootstrap={bootstrap}
+              snapshot={snapshot}
+              scenario={projectedScenario}
+              onSettingsChange={setRetirementSettings}
+            />
+          </div>
         )}
         {view === "Net Worth" && (
           <NetWorth

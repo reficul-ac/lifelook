@@ -14,6 +14,7 @@ import type { Bootstrap, Repository } from "./repository";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type SaveValues = Omit<RetirementSettingsInput, "expectedRevision">;
+type SettingsDraft = { retirementMonth: string; withdrawalRate: string };
 
 export interface RetirementViewProps {
   initial?: RetirementSettingsRecord | null;
@@ -37,6 +38,21 @@ const rate = (basisPoints: number) =>
 const clampBasisPoints = (value: number) =>
   Math.min(10_000, Math.max(1, Number.isFinite(value) ? Math.round(value) : 1));
 
+const validRetirementMonth = (value: string) =>
+  /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+
+const parseWithdrawalRate = (value: string) => {
+  if (!value.trim()) return null;
+  const percentage = Number(value);
+  const basisPoints = Math.round(percentage * 100);
+  return Number.isFinite(percentage) &&
+    percentage >= 0.01 &&
+    percentage <= 100 &&
+    Math.abs(percentage * 100 - basisPoints) < 1e-8
+    ? clampBasisPoints(basisPoints)
+    : null;
+};
+
 const localIsoDate = () => {
   const now = new Date();
   return new Date(now.valueOf() - now.getTimezoneOffset() * 60_000)
@@ -50,6 +66,10 @@ export function RetirementView(props: RetirementViewProps) {
     ...defaultRetirementSettings(),
     ...normalizeRetirementSettings(initial),
   }));
+  const [draft, setDraft] = useState<SettingsDraft>(() => ({
+    retirementMonth: settings.retirementMonth,
+    withdrawalRate: String(settings.withdrawalRateBps / 100),
+  }));
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const revision = useRef(initial?.revision ?? settings.revision);
   const saving = useRef(false);
@@ -59,9 +79,11 @@ export function RetirementView(props: RetirementViewProps) {
   const repositoryRef = useRef(repository);
   const onSettingsChangeRef = useRef(onSettingsChange);
   const settingsRef = useRef(settings);
+  const draftRef = useRef(draft);
   repositoryRef.current = repository;
   onSettingsChangeRef.current = onSettingsChange;
   settingsRef.current = settings;
+  draftRef.current = draft;
 
   useEffect(() => {
     mounted.current = true;
@@ -113,6 +135,19 @@ export function RetirementView(props: RetirementViewProps) {
     });
   };
 
+  const updateDraft = (next: Partial<SettingsDraft>) => {
+    const updated = { ...draftRef.current, ...next };
+    draftRef.current = updated;
+    setDraft(updated);
+    const withdrawalRateBps = parseWithdrawalRate(updated.withdrawalRate);
+    if (validRetirementMonth(updated.retirementMonth) && withdrawalRateBps !== null) {
+      updateSettings({
+        retirementMonth: updated.retirementMonth,
+        withdrawalRateBps,
+      });
+    }
+  };
+
   const calculation = useMemo<
     { result: RetirementSnapshotResult; error: null } |
     { result: null; error: string }
@@ -162,8 +197,8 @@ export function RetirementView(props: RetirementViewProps) {
           <input
             aria-label="Retirement month"
             type="month"
-            value={settings.retirementMonth}
-            onChange={(event) => updateSettings({ retirementMonth: event.target.value })}
+            value={draft.retirementMonth}
+            onChange={(event) => updateDraft({ retirementMonth: event.target.value })}
           />
         </label>
         <label>
@@ -174,11 +209,9 @@ export function RetirementView(props: RetirementViewProps) {
               type="number"
               min="0.01"
               max="100"
-              step="0.1"
-              value={settings.withdrawalRateBps / 100}
-              onChange={(event) => updateSettings({
-                withdrawalRateBps: clampBasisPoints(Number(event.target.value) * 100),
-              })}
+              step="0.01"
+              value={draft.withdrawalRate}
+              onChange={(event) => updateDraft({ withdrawalRate: event.target.value })}
             />
             <span aria-hidden="true">%</span>
           </span>
@@ -232,10 +265,10 @@ function RetirementStory({
 
   return (
     <article className={`card retirement-story retirement-story-${kind}`}>
-      <header>
+      <div className="retirement-story-heading">
         <p className="eyebrow">{kind === "keep" ? "Keep" : "Sell"}</p>
         <h2>{kind === "keep" ? "If you keep your homes" : "If you sell all homes"}</h2>
-      </header>
+      </div>
       <div className="retirement-story-metrics">
         <div>
           <span>{kind === "keep" ? "Net worth at retirement" : "Liquid net worth"}</span>

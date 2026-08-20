@@ -608,7 +608,7 @@ describe("LifeLook shell", () => {
     );
   });
 
-  it("persists the retirement month even when navigating away immediately", async () => {
+  it("serializes retirement edits across navigation without losing drafts or revisions", async () => {
     const data = await testRepository.bootstrap(),
       scenario = {
         id: "base",
@@ -622,11 +622,14 @@ describe("LifeLook shell", () => {
         contributions: [],
         withdrawals: [],
       },
-      updateRetirementPlan = vi.fn(async (input) => ({
-        householdId: "test",
-        ...input,
-        revision: input.expectedRevision + 1,
-      }));
+      saveResolvers: Array<
+        (record: import("./repository").RetirementSettingsRecord) => void
+      > = [],
+      updateRetirementPlan = vi.fn(
+        () => new Promise<import("./repository").RetirementSettingsRecord>(
+          (resolve) => saveResolvers.push(resolve),
+        ),
+      );
     render(
       <App
         repository={{
@@ -641,30 +644,55 @@ describe("LifeLook shell", () => {
       />,
     );
     fireEvent.click(await screen.findByRole("button", { name: /Retirement/ }));
-    fireEvent.change(screen.getByLabelText("Retirement month"), {
+    const retirementMonth = screen.getByLabelText("Retirement month");
+    fireEvent.change(retirementMonth, {
       target: { value: "2042-09" },
     });
+    expect(screen.getByText("Saving…")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Overview/ }));
-    await waitFor(() =>
-      expect(updateRetirementPlan).toHaveBeenCalledWith({
-        retirementMonth: "2042-09",
-        withdrawalRateBps: 300,
-        expectedRevision: 1,
-      }),
-    );
+    expect(retirementMonth.closest("[hidden]")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Baseline" }),
+    ).not.toBeInTheDocument();
+    expect(updateRetirementPlan).toHaveBeenCalledTimes(1);
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+      retirementMonth: "2042-09",
+      withdrawalRateBps: 300,
+      expectedRevision: 1,
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /Retirement/ }));
+    expect(screen.getByLabelText("Retirement month")).toBe(retirementMonth);
+    expect(retirementMonth).toHaveValue("2042-09");
+    expect(screen.getByText("Saving…")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
-      target: { value: "4" },
+      target: { value: "3.5" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Overview/ }));
-    await waitFor(() =>
-      expect(updateRetirementPlan).toHaveBeenLastCalledWith({
-        retirementMonth: "2042-09",
-        withdrawalRateBps: 400,
-        expectedRevision: 2,
-      }),
-    );
+    expect(updateRetirementPlan).toHaveBeenCalledTimes(1);
+
+    saveResolvers[0]({
+      householdId: "test",
+      retirementMonth: "2042-09",
+      withdrawalRateBps: 300,
+      revision: 2,
+    });
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(2));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+      retirementMonth: "2042-09",
+      withdrawalRateBps: 350,
+      expectedRevision: 2,
+    });
+    expect(screen.getByLabelText("Retirement month")).toHaveValue("2042-09");
+    expect(screen.getByLabelText("Withdrawal rate")).toHaveValue(3.5);
+    expect(screen.getByText("Saving…")).toBeInTheDocument();
+
+    saveResolvers[1]({
+      householdId: "test",
+      retirementMonth: "2042-09",
+      withdrawalRateBps: 350,
+      revision: 3,
+    });
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
   });
 
   it("recovers from a startup failure without reloading", async () => {

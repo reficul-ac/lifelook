@@ -144,7 +144,9 @@ describe("RetirementView settings and autosave", () => {
 
     const nextJanuary = `${new Date().getUTCFullYear() + 1}-01`;
     expect(screen.getByLabelText("Retirement month")).toHaveValue(nextJanuary);
+    expect(screen.getByLabelText("Retirement month")).toBeValid();
     expect(screen.getByLabelText("Withdrawal rate")).toHaveValue(3);
+    expect(screen.getByLabelText("Withdrawal rate")).toBeValid();
     expect(screen.getByRole("heading", { name: "Build the ADU" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(updateRetirementPlan).not.toHaveBeenCalled();
@@ -221,6 +223,7 @@ describe("RetirementView settings and autosave", () => {
     fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
       target: { value: "3.5" },
     });
+    expect(screen.getByLabelText("Withdrawal rate")).toBeValid();
     expect(updateRetirementPlan).toHaveBeenCalledTimes(1);
     finishFirst?.({
       ...initial,
@@ -249,7 +252,7 @@ describe("RetirementView settings and autosave", () => {
     });
   });
 
-  it("clamps persisted basis points and retries a failed save", async () => {
+  it("persists the valid basis-point boundaries and retries a failed save", async () => {
     const updateRetirementPlan = vi
       .fn()
       .mockRejectedValueOnce(new Error("conflict"))
@@ -266,7 +269,7 @@ describe("RetirementView settings and autosave", () => {
       />,
     );
     fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
-      target: { value: "0" },
+      target: { value: "0.01" },
     });
 
     const retry = await screen.findByRole("button", { name: "Save failed — retry" });
@@ -285,13 +288,69 @@ describe("RetirementView settings and autosave", () => {
     expect(await screen.findByText("Saved")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
-      target: { value: "101" },
+      target: { value: "100" },
     });
     await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(3));
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2042-01",
       withdrawalRateBps: 10_000,
       expectedRevision: 2,
+    });
+  });
+
+  it("keeps blank and invalid partial drafts out of calculation and persistence", async () => {
+    const updateRetirementPlan = vi.fn().mockResolvedValue({
+      ...initial,
+      retirementMonth: "2042-09",
+      withdrawalRateBps: 350,
+      revision: 2,
+    });
+
+    render(
+      <RetirementView
+        initial={initial}
+        repository={repository(updateRetirementPlan)}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+    const initialCutoffCalls = vi.mocked(buildRetirementCutoff).mock.calls.length;
+    const initialSnapshotCalls = vi.mocked(calculateRetirementSnapshot).mock.calls.length;
+
+    fireEvent.change(screen.getByLabelText("Retirement month"), {
+      target: { value: "" },
+    });
+    fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
+      target: { value: "" },
+    });
+    expect(screen.getByLabelText("Retirement month")).toHaveValue("");
+    expect(screen.getByLabelText("Withdrawal rate")).toHaveValue(null);
+    expect(updateRetirementPlan).not.toHaveBeenCalled();
+    expect(buildRetirementCutoff).toHaveBeenCalledTimes(initialCutoffCalls);
+    expect(calculateRetirementSnapshot).toHaveBeenCalledTimes(initialSnapshotCalls);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
+      target: { value: "3.555" },
+    });
+    expect(screen.getByLabelText("Withdrawal rate")).toBeInvalid();
+    expect(updateRetirementPlan).not.toHaveBeenCalled();
+    expect(calculateRetirementSnapshot).toHaveBeenCalledTimes(initialSnapshotCalls);
+
+    fireEvent.change(screen.getByLabelText("Retirement month"), {
+      target: { value: "2042-09" },
+    });
+    expect(updateRetirementPlan).not.toHaveBeenCalled();
+    expect(buildRetirementCutoff).toHaveBeenCalledTimes(initialCutoffCalls);
+    fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
+      target: { value: "3.5" },
+    });
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(1));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+      retirementMonth: "2042-09",
+      withdrawalRateBps: 350,
+      expectedRevision: 1,
     });
   });
 });
@@ -313,6 +372,7 @@ describe("RetirementView snapshot stories", () => {
     expect(screen.getByText("Net worth at retirement")).toBeInTheDocument();
     expect(screen.getAllByText("Estimated annual pre-tax income")).toHaveLength(2);
     const sellStory = screen.getByRole("heading", { name: "If you sell all homes" }).closest("article")!;
+    expect(sellStory.querySelector("header")).toBeNull();
     expect(within(sellStory).getAllByText("Liquid net worth")).toHaveLength(2);
     expect(
       screen.getByText("Pre-tax estimate. Rental income is gross revenue."),

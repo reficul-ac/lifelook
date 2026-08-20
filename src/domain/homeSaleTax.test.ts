@@ -10,6 +10,7 @@ const baseline = {
 const homeSale = (overrides: Partial<HomeSaleTaxItem> = {}): HomeSaleTaxItem => ({
   id: "home",
   name: "Home",
+  use: "rental",
   acquiredOn: "2020-01-01",
   disposedOn: "2026-01-02",
   salePriceCents: 400_000_00,
@@ -79,6 +80,7 @@ describe.each([
   it("caps the exclusion at the filing-status limit", () => {
     const result = calculate([
       homeSale({
+        use: "personal",
         salePriceCents: 700_000_00,
         federalBasisCents: 100_000_00,
         californiaBasisCents: 100_000_00,
@@ -97,6 +99,7 @@ describe.each([
 it("applies the primary-residence exclusion only to positive non-recapture gain", () => {
   const result = calculate([
     homeSale({
+      use: "personal",
       salePriceCents: 400_000_00,
       federalBasisCents: 200_000_00,
       californiaBasisCents: 200_000_00,
@@ -160,7 +163,7 @@ describe.each([
   });
 });
 
-it("taxes rental depreciation as long-term gain brought up to the 25% recapture rate", () => {
+it("taxes rental depreciation at applicable ordinary rates below the 25% cap", () => {
   const result = calculate([
     homeSale({
       salePriceCents: 110_000_00,
@@ -179,15 +182,37 @@ it("taxes rental depreciation as long-term gain brought up to the 25% recapture 
 
   expect(result.federalLongTermGainCents).toBe(20_000_00);
   expect(result.unrecaptured1250GainCents).toBe(10_000_00);
-  expect(result.federalIncomeTaxCents).toBe(4_000_00);
+  expect(result.federalIncomeTaxCents).toBe(2_700_00);
   expect(result.californiaIncomeTaxCents).toBe(286_44);
-  expect(result.totalIncrementalTaxCents).toBe(4_286_44);
+  expect(result.totalIncrementalTaxCents).toBe(2_986_44);
+});
+
+it("caps rental depreciation tax at 25% when the applicable ordinary rate is higher", () => {
+  const result = calculate([
+    homeSale({
+      salePriceCents: 110_000_00,
+      federalBasisCents: 100_000_00,
+      californiaBasisCents: 100_000_00,
+      accumulatedFederalDepreciationCents: 10_000_00,
+      accumulatedCaliforniaDepreciationCents: 10_000_00,
+    }),
+  ], {
+    baseline: {
+      federalTaxableCents: 300_000_00,
+      californiaTaxableCents: 0,
+      modifiedAgiCents: 0,
+    },
+  });
+
+  expect(result.unrecaptured1250GainCents).toBe(10_000_00);
+  expect(result.federalIncomeTaxCents).toBe(4_000_00);
 });
 
 it("taxes simultaneous homes against one household long-term-gain stack", () => {
   const primaryHomeSale = homeSale({
     id: "primary",
     name: "Primary home",
+    use: "personal",
     salePriceCents: 356_000_00,
     federalBasisCents: 100_000_00,
     californiaBasisCents: 100_000_00,
@@ -218,6 +243,34 @@ it("taxes simultaneous homes against one household long-term-gain stack", () => 
   expect(result.totalIncrementalTaxCents).toBe(
     result.federalIncomeTaxCents + result.californiaIncomeTaxCents + result.niitCents,
   );
+});
+
+it("shares one filing-status exclusion cap across simultaneous eligible homes", () => {
+  const result = calculate([
+    homeSale({
+      id: "first",
+      name: "First eligible home",
+      use: "personal",
+      salePriceCents: 400_000_00,
+      federalBasisCents: 100_000_00,
+      californiaBasisCents: 100_000_00,
+      primaryResidenceExclusionEligible: true,
+    }),
+    homeSale({
+      id: "second",
+      name: "Second eligible home",
+      use: "personal",
+      salePriceCents: 400_000_00,
+      federalBasisCents: 100_000_00,
+      californiaBasisCents: 100_000_00,
+      primaryResidenceExclusionEligible: true,
+    }),
+  ], { filingStatus: "married-joint" });
+
+  expect(result.sales.map((sale) => sale.exclusionCents)).toEqual([300_000_00, 200_000_00]);
+  expect(result.sales.map((sale) => sale.federalGainCents)).toEqual([0, 100_000_00]);
+  expect(result.federalLongTermGainCents).toBe(100_000_00);
+  expect(result.californiaGainCents).toBe(100_000_00);
 });
 
 it("calculates the California delta from its own basis and ordinary brackets", () => {
@@ -254,6 +307,8 @@ describe.each([
   it(name, () => {
     const result = calculate([
       homeSale({
+        acquiredOn: "2030-01-01",
+        disposedOn: "2035-01-02",
         salePriceCents: 100_000_00 + gainCents,
         federalBasisCents: 100_000_00,
         californiaBasisCents: 100_000_00,
@@ -275,6 +330,7 @@ describe.each([
 it("ignores a personal-residence loss instead of creating a tax benefit", () => {
   const result = calculate([
     homeSale({
+      use: "personal",
       salePriceCents: 100_000_00,
       federalBasisCents: 150_000_00,
       californiaBasisCents: 150_000_00,
@@ -287,6 +343,65 @@ it("ignores a personal-residence loss instead of creating a tax benefit", () => 
     californiaGainCents: 0,
   }));
   expect(result.federalShortTermGainCents).toBe(0);
+  expect(result.federalLongTermGainCents).toBe(0);
+  expect(result.californiaGainCents).toBe(0);
+  expect(result.totalIncrementalTaxCents).toBe(0);
+});
+
+it("does not deduct a personal-residence loss when the home is exclusion-ineligible", () => {
+  const result = calculate([
+    homeSale({
+      id: "personal-loss",
+      name: "Ineligible personal home",
+      use: "personal",
+      salePriceCents: 70_000_00,
+      federalBasisCents: 100_000_00,
+      californiaBasisCents: 100_000_00,
+      primaryResidenceExclusionEligible: false,
+    }),
+    homeSale({
+      id: "rental-gain",
+      name: "Rental gain",
+      use: "rental",
+      salePriceCents: 120_000_00,
+      federalBasisCents: 100_000_00,
+      californiaBasisCents: 100_000_00,
+    }),
+  ], {
+    baseline: {
+      federalTaxableCents: 100_000_00,
+      californiaTaxableCents: 100_000_00,
+      modifiedAgiCents: 100_000_00,
+    },
+  });
+
+  expect(result.sales[0]).toEqual(expect.objectContaining({ federalGainCents: 0, californiaGainCents: 0 }));
+  expect(result.federalLongTermGainCents).toBe(20_000_00);
+  expect(result.totalIncrementalTaxCents).toBe(4_860_00);
+});
+
+it("allows an exclusion-eligible rental loss to offset simultaneous property gain", () => {
+  const result = calculate([
+    homeSale({
+      id: "eligible-rental-loss",
+      name: "Eligible rental loss",
+      use: "rental",
+      salePriceCents: 70_000_00,
+      federalBasisCents: 100_000_00,
+      californiaBasisCents: 100_000_00,
+      primaryResidenceExclusionEligible: true,
+    }),
+    homeSale({
+      id: "rental-gain",
+      name: "Rental gain",
+      use: "rental",
+      salePriceCents: 120_000_00,
+      federalBasisCents: 100_000_00,
+      californiaBasisCents: 100_000_00,
+    }),
+  ]);
+
+  expect(result.sales[0]).toEqual(expect.objectContaining({ federalGainCents: -30_000_00, californiaGainCents: -30_000_00 }));
   expect(result.federalLongTermGainCents).toBe(0);
   expect(result.californiaGainCents).toBe(0);
   expect(result.totalIncrementalTaxCents).toBe(0);
@@ -338,5 +453,71 @@ it("returns a zero incremental liability when there are no home sales", () => {
     californiaIncomeTaxCents: 0,
     niitCents: 0,
     totalIncrementalTaxCents: 0,
+  });
+});
+
+describe.each([
+  { name: "noncanonical acquisition date", override: { acquiredOn: "2020-1-01" } },
+  { name: "invalid disposal date", override: { disposedOn: "not-a-date" } },
+  { name: "impossible disposal date", override: { disposedOn: "2026-02-29" } },
+  { name: "disposal before acquisition", override: { acquiredOn: "2026-02-01", disposedOn: "2026-01-31" } },
+])("date validation", ({ name, override }) => {
+  it(`rejects ${name}`, () => {
+    expect(() => calculate([homeSale(override)])).toThrow(RangeError);
+  });
+});
+
+it("rejects a disposal year that does not match the calculation year", () => {
+  expect(() => calculate([homeSale({ disposedOn: "2025-12-31" })])).toThrow(/disposedOn.*year/i);
+});
+
+describe.each([
+  { name: "negative sale price", run: () => calculate([homeSale({ salePriceCents: -1 })]), field: "salePriceCents" },
+  { name: "fractional selling cost", run: () => calculate([homeSale({ sellingCostCents: 1.5 })]), field: "sellingCostCents" },
+  { name: "unsafe federal basis", run: () => calculate([homeSale({ federalBasisCents: Number.MAX_SAFE_INTEGER + 1 })]), field: "federalBasisCents" },
+  { name: "negative California basis", run: () => calculate([homeSale({ californiaBasisCents: -1 })]), field: "californiaBasisCents" },
+  { name: "fractional federal depreciation", run: () => calculate([homeSale({ accumulatedFederalDepreciationCents: 1.5 })]), field: "accumulatedFederalDepreciationCents" },
+  { name: "unsafe California depreciation", run: () => calculate([homeSale({ accumulatedCaliforniaDepreciationCents: Number.MAX_SAFE_INTEGER + 1 })]), field: "accumulatedCaliforniaDepreciationCents" },
+  {
+    name: "negative federal baseline",
+    run: () => calculate([], { baseline: { ...baseline, federalTaxableCents: -1 } }),
+    field: "baseline.federalTaxableCents",
+  },
+  {
+    name: "fractional California baseline",
+    run: () => calculate([], { baseline: { ...baseline, californiaTaxableCents: 1.5 } }),
+    field: "baseline.californiaTaxableCents",
+  },
+  {
+    name: "unsafe modified AGI baseline",
+    run: () => calculate([], { baseline: { ...baseline, modifiedAgiCents: Number.MAX_SAFE_INTEGER + 1 } }),
+    field: "baseline.modifiedAgiCents",
+  },
+])("cent validation", ({ name, run, field }) => {
+  it(`rejects ${name}`, () => {
+    expect(run).toThrow(RangeError);
+    expect(run).toThrow(new RegExp(`${field}.*non-negative safe integer`, "i"));
+  });
+});
+
+describe.each([
+  {
+    name: "selling costs above sale price",
+    sale: homeSale({ salePriceCents: 100_000_00, sellingCostCents: 100_000_01 }),
+    message: /sellingCostCents.*salePriceCents/i,
+  },
+  {
+    name: "federal depreciation above basis",
+    sale: homeSale({ federalBasisCents: 10_000_00, accumulatedFederalDepreciationCents: 10_000_01 }),
+    message: /accumulatedFederalDepreciationCents.*federalBasisCents/i,
+  },
+  {
+    name: "California depreciation above basis",
+    sale: homeSale({ californiaBasisCents: 10_000_00, accumulatedCaliforniaDepreciationCents: 10_000_01 }),
+    message: /accumulatedCaliforniaDepreciationCents.*californiaBasisCents/i,
+  },
+])("cross-field validation", ({ name, sale, message }) => {
+  it(`rejects ${name}`, () => {
+    expect(() => calculate([sale])).toThrow(message);
   });
 });

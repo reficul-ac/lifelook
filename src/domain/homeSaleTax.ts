@@ -4,6 +4,7 @@ import type { BasisPoints, Cents, FilingStatus, TaxLedger } from "./types";
 export interface HomeSaleTaxItem {
   id: string;
   name: string;
+  use: "personal" | "rental";
   acquiredOn: string;
   disposedOn: string;
   salePriceCents: Cents;
@@ -41,10 +42,62 @@ export interface HomeSaleTaxResult {
   totalIncrementalTaxCents: Cents;
 }
 
+const assertCents = (name: string, value: number) => {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(`${name} must be a non-negative safe integer number of cents`);
+  }
+};
+
+const parseDate = (name: string, value: string) => {
+  if (typeof value !== "string") throw new TypeError(`${name} must be a canonical YYYY-MM-DD calendar date`);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) throw new RangeError(`${name} must be a canonical YYYY-MM-DD calendar date`);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  if (year < 1 || daysInMonth === undefined || day < 1 || day > daysInMonth) {
+    throw new RangeError(`${name} must be a canonical YYYY-MM-DD calendar date`);
+  }
+  return { year, month, day, key: year * 10_000 + month * 100 + day };
+};
+
+const validateInput = (input: HomeSaleTaxInput) => {
+  assertCents("baseline.federalTaxableCents", input.baseline.federalTaxableCents);
+  assertCents("baseline.californiaTaxableCents", input.baseline.californiaTaxableCents);
+  assertCents("baseline.modifiedAgiCents", input.baseline.modifiedAgiCents);
+
+  for (const sale of input.sales) {
+    assertCents("salePriceCents", sale.salePriceCents);
+    assertCents("sellingCostCents", sale.sellingCostCents);
+    assertCents("federalBasisCents", sale.federalBasisCents);
+    assertCents("californiaBasisCents", sale.californiaBasisCents);
+    assertCents("accumulatedFederalDepreciationCents", sale.accumulatedFederalDepreciationCents);
+    assertCents("accumulatedCaliforniaDepreciationCents", sale.accumulatedCaliforniaDepreciationCents);
+    if (sale.sellingCostCents > sale.salePriceCents) {
+      throw new RangeError("sellingCostCents cannot exceed salePriceCents");
+    }
+    if (sale.accumulatedFederalDepreciationCents > sale.federalBasisCents) {
+      throw new RangeError("accumulatedFederalDepreciationCents cannot exceed federalBasisCents");
+    }
+    if (sale.accumulatedCaliforniaDepreciationCents > sale.californiaBasisCents) {
+      throw new RangeError("accumulatedCaliforniaDepreciationCents cannot exceed californiaBasisCents");
+    }
+    const acquired = parseDate("acquiredOn", sale.acquiredOn);
+    const disposed = parseDate("disposedOn", sale.disposedOn);
+    if (disposed.key < acquired.key) throw new RangeError("disposedOn cannot be before acquiredOn");
+    if (disposed.year !== input.year) {
+      throw new RangeError(`disposedOn year ${disposed.year} must match calculation year ${input.year}`);
+    }
+  }
+};
+
 const isShortTerm = (acquiredOn: string, disposedOn: string) => {
-  const anniversary = new Date(`${acquiredOn}T00:00:00Z`);
-  anniversary.setUTCFullYear(anniversary.getUTCFullYear() + 1);
-  return Date.parse(`${disposedOn}T00:00:00Z`) <= anniversary.getTime();
+  const acquired = parseDate("acquiredOn", acquiredOn);
+  const disposed = parseDate("disposedOn", disposedOn);
+  const anniversaryKey = (acquired.year + 1) * 10_000 + acquired.month * 100 + acquired.day;
+  return disposed.key <= anniversaryKey;
 };
 
 const netByHoldingPeriod = (short: number, long: number) => {
@@ -61,8 +114,11 @@ const netByHoldingPeriod = (short: number, long: number) => {
 };
 
 export function calculateIncrementalHomeSaleTax(input: HomeSaleTaxInput): HomeSaleTaxResult {
+  validateInput(input);
   const pack = projectedTaxRules(input.year, input.thresholdInflationBps);
   const exclusionLimitCents = input.filingStatus === "married-joint" ? 500_000_00 : 250_000_00;
+  let remainingFederalExclusionCents = exclusionLimitCents;
+  let remainingCaliforniaExclusionCents = exclusionLimitCents;
   let federalShort = 0;
   let federalLong = 0;
   let federalRecapture = 0;
@@ -85,17 +141,21 @@ export function calculateIncrementalHomeSaleTax(input: HomeSaleTaxInput): HomeSa
       Math.max(0, californiaRawGain),
     );
     const exclusionCents = sale.primaryResidenceExclusionEligible
-      ? Math.min(exclusionLimitCents, Math.max(0, federalRawGain - federalRecaptureForSale))
+      ? Math.min(remainingFederalExclusionCents, Math.max(0, federalRawGain - federalRecaptureForSale))
       : 0;
     const californiaExclusionCents = sale.primaryResidenceExclusionEligible
-      ? Math.min(exclusionLimitCents, Math.max(0, californiaRawGain - californiaRecaptureForSale))
+      ? Math.min(remainingCaliforniaExclusionCents, Math.max(0, californiaRawGain - californiaRecaptureForSale))
       : 0;
-    const federalGainCents = sale.primaryResidenceExclusionEligible
-      ? Math.max(0, federalRawGain - exclusionCents)
-      : federalRawGain;
-    const californiaGainCents = sale.primaryResidenceExclusionEligible
-      ? Math.max(0, californiaRawGain - californiaExclusionCents)
-      : californiaRawGain;
+    remainingFederalExclusionCents -= exclusionCents;
+    remainingCaliforniaExclusionCents -= californiaExclusionCents;
+    const federalGainAfterExclusion = federalRawGain - exclusionCents;
+    const californiaGainAfterExclusion = californiaRawGain - californiaExclusionCents;
+    const federalGainCents = sale.use === "personal"
+      ? Math.max(0, federalGainAfterExclusion)
+      : federalGainAfterExclusion;
+    const californiaGainCents = sale.use === "personal"
+      ? Math.max(0, californiaGainAfterExclusion)
+      : californiaGainAfterExclusion;
     const shortTerm = isShortTerm(sale.acquiredOn, sale.disposedOn);
 
     if (shortTerm) federalShort += federalGainCents;
@@ -119,22 +179,25 @@ export function calculateIncrementalHomeSaleTax(input: HomeSaleTaxInput): HomeSa
     federalOrdinaryAfterSales,
     pack.federal[input.filingStatus].brackets,
   ) - progressiveTax(federalBase, pack.federal[input.filingStatus].brackets);
-  const capitalGainBrackets = pack.federalLongTermCapitalGains[input.filingStatus];
-  const federalPreferentialDelta = progressiveTax(
-    federalOrdinaryAfterSales + federalLongTermGainCents,
-    capitalGainBrackets,
-  ) - progressiveTax(federalOrdinaryAfterSales, capitalGainBrackets);
-  const preferentialRecaptureTax = progressiveTax(
-    federalOrdinaryAfterSales + unrecaptured1250GainCents,
-    capitalGainBrackets,
-  ) - progressiveTax(federalOrdinaryAfterSales, capitalGainBrackets);
+  const federalAfterRecapture = federalOrdinaryAfterSales + unrecaptured1250GainCents;
+  const recaptureOrdinaryDelta = progressiveTax(
+    federalAfterRecapture,
+    pack.federal[input.filingStatus].brackets,
+  ) - progressiveTax(federalOrdinaryAfterSales, pack.federal[input.filingStatus].brackets);
   const recaptureTaxAtMaximumRate = Math.round(
     unrecaptured1250GainCents * pack.unrecapturedSection1250MaxRateBps / 10_000,
   );
+  const federalRecaptureTax = Math.min(recaptureOrdinaryDelta, recaptureTaxAtMaximumRate);
+  const federalPreferentialGainCents = federalLongTermGainCents - unrecaptured1250GainCents;
+  const capitalGainBrackets = pack.federalLongTermCapitalGains[input.filingStatus];
+  const federalPreferentialDelta = progressiveTax(
+    federalAfterRecapture + federalPreferentialGainCents,
+    capitalGainBrackets,
+  ) - progressiveTax(federalAfterRecapture, capitalGainBrackets);
   const federalIncomeTaxCents = Math.round(
     federalOrdinaryDelta
       + federalPreferentialDelta
-      + Math.max(0, recaptureTaxAtMaximumRate - preferentialRecaptureTax),
+      + federalRecaptureTax,
   );
   const californiaBase = Math.max(0, input.baseline.californiaTaxableCents);
   const californiaIncomeTaxCents = Math.round(

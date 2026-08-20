@@ -2251,14 +2251,22 @@ function FinancialRecordDialog({
           close();
           return;
         }
-        let acquisitionData = {};
+        const acquisitionData: Pick<
+          AssetInput,
+          "purchasePriceCents" | "purchaseDate"
+        > = {};
         if (home && state.asset) {
-          const purchasePriceCents = parseMoney(purchasePrice);
-          if (!purchasePriceCents || purchasePriceCents < 0)
-            throw { message: "Enter the home's tax basis." };
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate))
-            throw { message: "Enter the home's purchase date." };
-          acquisitionData = { purchasePriceCents, purchaseDate };
+          if (state.asset.purchasePriceCents == null) {
+            const purchasePriceCents = parseMoney(purchasePrice);
+            if (!purchasePriceCents || purchasePriceCents < 0)
+              throw { message: "Enter the home's tax basis." };
+            acquisitionData.purchasePriceCents = purchasePriceCents;
+          }
+          if (state.asset.purchaseDate == null) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate))
+              throw { message: "Enter the home's purchase date." };
+            acquisitionData.purchaseDate = purchaseDate;
+          }
         }
         const input = {
           id: state.asset?.id ?? crypto.randomUUID(),

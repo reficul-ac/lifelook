@@ -3287,6 +3287,17 @@ fn validate_home_sale_assumptions(
     Ok(Some(serde_json::to_string(assumptions)?))
 }
 
+fn validate_asset_purchase_date(value: &str) -> Result<(), AppError> {
+    let parsed = chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
+        .map_err(|_| AppError::Validation("purchase date must use YYYY-MM-DD".into()))?;
+    if parsed.format("%Y-%m-%d").to_string() != value {
+        return Err(AppError::Validation(
+            "purchase date must use YYYY-MM-DD".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), AppError> {
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("asset name is required".into()));
@@ -3316,11 +3327,46 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
         .as_ref()
         .map(serde_json::to_string)
         .transpose()?;
+    let hid = active_household(db)?;
+    let existing_housing = if update {
+        let expected_revision = input.expected_revision.ok_or(AppError::Conflict)?;
+        let raw = db
+            .query_row(
+                "SELECT housing_costs_json FROM assets WHERE id=?1 AND household_id=?2 AND revision=?3",
+                params![input.id, hid, expected_revision],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .ok_or(AppError::Conflict)?;
+        Some(serde_json::from_str::<serde_json::Value>(&raw)?)
+    } else {
+        None
+    };
+    let existing_purchase_price = existing_housing
+        .as_ref()
+        .and_then(|housing| housing.get("purchasePriceCents"))
+        .filter(|value| !value.is_null())
+        .cloned();
+    let existing_purchase_date = existing_housing
+        .as_ref()
+        .and_then(|housing| housing.get("purchaseDate"))
+        .filter(|value| !value.is_null())
+        .cloned();
+    if input.purchase_price_cents.is_some() && existing_purchase_price.is_some() {
+        return Err(AppError::Validation(
+            "purchase price is already recorded and cannot be replaced".into(),
+        ));
+    }
+    if input.purchase_date.is_some() && existing_purchase_date.is_some() {
+        return Err(AppError::Validation(
+            "purchase date is already recorded and cannot be replaced".into(),
+        ));
+    }
     if let Some(purchase_price_cents) = input.purchase_price_cents {
         validate_nonnegative_money(purchase_price_cents, "purchase price")?;
     }
     if let Some(purchase_date) = input.purchase_date.as_deref() {
-        validate_date(purchase_date)?;
+        validate_asset_purchase_date(purchase_date)?;
     }
     let home_sale_assumptions_json = validate_home_sale_assumptions(
         input.home_sale_assumptions.as_ref(),
@@ -3348,20 +3394,25 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
     let housing_object = housing
         .as_object_mut()
         .ok_or_else(|| AppError::Validation("housing costs must be a JSON object".into()))?;
-    if let Some(purchase_price_cents) = input.purchase_price_cents {
+    housing_object.remove("purchasePriceCents");
+    housing_object.remove("purchaseDate");
+    if let Some(purchase_price) = existing_purchase_price {
+        housing_object.insert("purchasePriceCents".into(), purchase_price);
+    } else if let Some(purchase_price_cents) = input.purchase_price_cents {
         housing_object.insert(
             "purchasePriceCents".into(),
             serde_json::Value::from(purchase_price_cents),
         );
     }
-    if let Some(purchase_date) = input.purchase_date.as_ref() {
+    if let Some(purchase_date) = existing_purchase_date {
+        housing_object.insert("purchaseDate".into(), purchase_date);
+    } else if let Some(purchase_date) = input.purchase_date.as_ref() {
         housing_object.insert(
             "purchaseDate".into(),
             serde_json::Value::from(purchase_date.clone()),
         );
     }
     let housing_json = serde_json::to_string(&housing)?;
-    let hid = active_household(db)?;
     if update {
         let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,appreciation_curve_json=?5,private_stock_json=?6,equity_holding_json=?7,taxable_cost_basis_cents=?8,rental_tax_basis_cents=?9,rental_building_basis_cents=?10,home_sale_assumptions_json=?11,revision=revision+1 WHERE id=?12 AND household_id=?13 AND revision=?14",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,equity_holding_json,input.taxable_cost_basis_cents,input.rental_tax_basis_cents,input.rental_building_basis_cents,home_sale_assumptions_json,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
         if changed == 0 {
@@ -5575,6 +5626,102 @@ mod tests {
         assert_eq!(updated_home.purchase_price_cents, Some(42_000_000));
         assert_eq!(updated_home.purchase_date.as_deref(), Some("2020-01-15"));
 
+        let plain_asset =
+            |id: &str, purchase_price_cents: Option<i64>, purchase_date: Option<&str>| AssetInput {
+                id: id.into(),
+                name: id.into(),
+                value_cents: 1_000,
+                annual_growth_bps: 0,
+                appreciation_curve: None,
+                private_stock: None,
+                equity_holding: None,
+                housing_costs: None,
+                purchase_price_cents,
+                purchase_date: purchase_date.map(str::to_owned),
+                home_sale_assumptions: None,
+                taxable_cost_basis_cents: None,
+                rental_tax_basis_cents: None,
+                rental_building_basis_cents: None,
+                expected_revision: None,
+            };
+        assert!(matches!(
+            save_asset(
+                &c,
+                &AssetInput {
+                    expected_revision: Some(2),
+                    purchase_price_cents: Some(43_000_000),
+                    ..plain_asset("home", None, None)
+                },
+                true,
+            ),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            save_asset(
+                &c,
+                &AssetInput {
+                    expected_revision: Some(2),
+                    purchase_date: Some("2021-01-15".into()),
+                    ..plain_asset("home", None, None)
+                },
+                true,
+            ),
+            Err(AppError::Validation(_))
+        ));
+        let preserved_home = bootstrap(&c)
+            .unwrap()
+            .assets
+            .into_iter()
+            .find(|item| item.id == "home")
+            .unwrap();
+        assert_eq!(preserved_home.purchase_price_cents, Some(42_000_000));
+        assert_eq!(preserved_home.purchase_date.as_deref(), Some("2020-01-15"));
+
+        save_asset(&c, &plain_asset("price-only", Some(10_000), None), false).unwrap();
+        save_asset(
+            &c,
+            &AssetInput {
+                expected_revision: Some(1),
+                purchase_date: Some("2020-01-15".into()),
+                ..plain_asset("price-only", None, None)
+            },
+            true,
+        )
+        .unwrap();
+        let price_only = bootstrap(&c)
+            .unwrap()
+            .assets
+            .into_iter()
+            .find(|item| item.id == "price-only")
+            .unwrap();
+        assert_eq!(price_only.purchase_price_cents, Some(10_000));
+        assert_eq!(price_only.purchase_date.as_deref(), Some("2020-01-15"));
+
+        save_asset(
+            &c,
+            &plain_asset("date-only", None, Some("2020-01-15")),
+            false,
+        )
+        .unwrap();
+        save_asset(
+            &c,
+            &AssetInput {
+                expected_revision: Some(1),
+                purchase_price_cents: Some(10_000),
+                ..plain_asset("date-only", None, None)
+            },
+            true,
+        )
+        .unwrap();
+        let date_only = bootstrap(&c)
+            .unwrap()
+            .assets
+            .into_iter()
+            .find(|item| item.id == "date-only")
+            .unwrap();
+        assert_eq!(date_only.purchase_price_cents, Some(10_000));
+        assert_eq!(date_only.purchase_date.as_deref(), Some("2020-01-15"));
+
         for (id, assumptions, rental_tax_basis_cents) in [
             (
                 "selling-cost-over-range",
@@ -5656,6 +5803,34 @@ mod tests {
             ),
             Err(AppError::Validation(_))
         ));
+        assert!(matches!(
+            save_asset(
+                &c,
+                &plain_asset(
+                    "noncanonical-purchase-date",
+                    Some(1_000),
+                    Some("2020-1-015"),
+                ),
+                false,
+            ),
+            Err(AppError::Validation(_))
+        ));
+        delete_asset_from(
+            &mut c,
+            &DeleteInput {
+                id: "price-only".into(),
+                expected_revision: 2,
+            },
+        )
+        .unwrap();
+        delete_asset_from(
+            &mut c,
+            &DeleteInput {
+                id: "date-only".into(),
+                expected_revision: 2,
+            },
+        )
+        .unwrap();
         delete_asset_from(
             &mut c,
             &DeleteInput {

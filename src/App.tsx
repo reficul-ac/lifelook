@@ -72,10 +72,7 @@ import {
 import { ScenarioPlanningDialog } from "./ScenarioPlanningDialog";
 import { InvestmentView } from "./InvestmentView";
 import { RetirementView } from "./RetirementView";
-import {
-  defaultRetirementPlan,
-  type RetirementSettingsRecord,
-} from "./domain";
+import { type RetirementSettingsRecord } from "./domain";
 import {
   buildSearchIndex,
   GlobalSearch,
@@ -674,29 +671,12 @@ function Workspace({
           0,
         ) / projectedPositiveMonths.length
       : 0;
-  const retirementProjections = useMemo(
-    () =>
-      bootstrap.taxProfile
-        ? ProjectionEngine.calculate(snapshot, projectedScenario, localIsoDate())
-        : [],
-    [snapshot, bootstrap.taxProfile, projectedScenario],
-  );
   const [retirementSettings, setRetirementSettings] =
     useState<RetirementSettingsRecord | null>(bootstrap.retirementPlan ?? null);
   useEffect(
     () => setRetirementSettings(bootstrap.retirementPlan ?? null),
     [bootstrap.retirementPlan],
   );
-  const legacyRetirementPlan = retirementSettings
-    ? {
-        ...defaultRetirementPlan(
-          Number(retirementSettings.retirementMonth.slice(0, 4)),
-        ),
-        householdId: retirementSettings.householdId,
-        withdrawalRateBps: retirementSettings.withdrawalRateBps,
-        revision: retirementSettings.revision,
-      }
-    : null;
   return (
     <div
       className={dark ? "app dark" : "app"}
@@ -1121,20 +1101,12 @@ function Workspace({
         </div>
         {view === "Retirement" && (
           <RetirementView
-            initial={legacyRetirementPlan}
+            initial={retirementSettings}
             repository={repository}
             bootstrap={bootstrap}
             snapshot={snapshot}
-            scenarios={[projectedScenario]}
-            projections={retirementProjections}
-            onPlanChange={(plan) =>
-              setRetirementSettings((settings) => ({
-                householdId: settings?.householdId ?? bootstrap.household?.id ?? "",
-                retirementMonth: `${plan.retirementYear}-01`,
-                withdrawalRateBps: plan.withdrawalRateBps,
-                revision: plan.revision,
-              }))
-            }
+            scenario={projectedScenario}
+            onSettingsChange={setRetirementSettings}
           />
         )}
         {view === "Net Worth" && (

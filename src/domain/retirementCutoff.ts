@@ -12,6 +12,7 @@ export interface RetirementCutoffProperty {
   assetId: string;
   name: string;
   valueCents: Cents;
+  liabilityId?: string;
   mortgageCents: Cents;
   monthlyGrossRentCents: Cents;
   projectedDepreciationCents: Cents;
@@ -69,6 +70,7 @@ export function buildRetirementCutoff(input:RetirementCutoffInput):RetirementCut
       assetId,
       name:property?.name??current?.name??planned!.name,
       valueCents:balanceRow.balances!.assets[assetId],
+      liabilityId,
       mortgageCents:property?.mortgageBalanceCents??(liabilityId?balanceRow.balances!.liabilities[liabilityId]??0:0),
       monthlyGrossRentCents:(property?.rentCents??0)+(property?.aduIncomeCents??0),
       projectedDepreciationCents:projectedMonths.flatMap(month=>month.properties).filter(row=>row.assetId===assetId).reduce((sum,row)=>sum+row.depreciationCents,0),

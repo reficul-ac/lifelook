@@ -608,7 +608,7 @@ describe("LifeLook shell", () => {
     );
   });
 
-  it("persists a retirement income item even when navigating away immediately", async () => {
+  it("persists the retirement month even when navigating away immediately", async () => {
     const data = await testRepository.bootstrap(),
       scenario = {
         id: "base",
@@ -641,16 +641,29 @@ describe("LifeLook shell", () => {
       />,
     );
     fireEvent.click(await screen.findByRole("button", { name: /Retirement/ }));
-    chooseMenu("Add retirement item", "Income");
+    fireEvent.change(screen.getByLabelText("Retirement month"), {
+      target: { value: "2042-09" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /Overview/ }));
     await waitFor(() =>
-      expect(updateRetirementPlan).toHaveBeenCalledWith(
-        expect.objectContaining({
-          scheduledIncome: expect.arrayContaining([
-            expect.objectContaining({ name: "Social Security" }),
-          ]),
-        }),
-      ),
+      expect(updateRetirementPlan).toHaveBeenCalledWith({
+        retirementMonth: "2042-09",
+        withdrawalRateBps: 300,
+        expectedRevision: 1,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Retirement/ }));
+    fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
+      target: { value: "4" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Overview/ }));
+    await waitFor(() =>
+      expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+        retirementMonth: "2042-09",
+        withdrawalRateBps: 400,
+        expectedRevision: 2,
+      }),
     );
   });
 

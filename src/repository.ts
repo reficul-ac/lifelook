@@ -34,11 +34,8 @@ export interface OnboardingStepPayload {
 }
 export interface ScenarioRecord { id:string; householdId:string; name:string; isBaseline:boolean; assumptions:{inflationBps:number;thresholdInflationBps:number}; horizonMonths:number; revision:number; events:import("./domain/types").ScenarioEvent[]; defaultContributionAccountId?:string|null; contributions:import("./domain/types").ContributionRule[]; withdrawals:import("./domain/types").WithdrawalRule[] }
 export type InvestmentComparisonRecord=import("./domain/investment").InvestmentComparisonRecord;
-export type RetirementPlanRecord=import("./domain/retirement").RetirementPlanRecord;
 export type RetirementSettingsRecord=import("./domain/retirementSettings").RetirementSettingsRecord;
 export type RetirementSettingsInput=import("./domain/retirementSettings").RetirementSettingsInput;
-type LegacyRetirementPlanInput=Omit<RetirementPlanRecord,"revision"|"householdId">&{expectedRevision:number};
-type UpdateRetirementPlanInput=RetirementSettingsInput|LegacyRetirementPlanInput;
 export interface WorkspaceSnapshot {
   onboardingStep:number; onboardingComplete:boolean;
   household?:{id:string;name:string;state:string}; people:BootstrapPerson[];
@@ -93,7 +90,7 @@ export interface Repository {
   updateScenario?(input:{id:string;name:string;assumptions:ScenarioRecord["assumptions"];horizonMonths:number;events:ScenarioRecord["events"];defaultContributionAccountId?:string|null;contributions:import("./domain/types").ContributionRule[];withdrawals:import("./domain/types").WithdrawalRule[];expectedRevision:number}):Promise<void>;
   deleteScenario?(input:{id:string;expectedRevision:number}):Promise<void>;
   updateInvestmentComparison?(input:{assumptions:import("./domain/investment").InvestmentAssumptions;expectedRevision:number}):Promise<InvestmentComparisonRecord>;
-  updateRetirementPlan?(input:UpdateRetirementPlanInput):Promise<RetirementSettingsRecord>;
+  updateRetirementPlan?(input:RetirementSettingsInput):Promise<RetirementSettingsRecord>;
   selectCsvSource?():Promise<string|null>;
   inspectCsv?(path:string):Promise<CsvInspection>;
   previewCsv?(path:string,fileHash:string,mapping:CsvMapping):Promise<CsvPreview>;
@@ -142,11 +139,7 @@ export const tauriRepository:Repository = {
   updateScenario:(input)=>invoke("update_scenario",{input}),
   deleteScenario:(input)=>invoke("delete_scenario",{input}),
   updateInvestmentComparison:(input)=>invoke("update_investment_comparison",{input}),
-  updateRetirementPlan:(input)=>invoke("update_retirement_plan",{input:{
-    retirementMonth:"retirementMonth" in input?input.retirementMonth:`${input.retirementYear}-01`,
-    withdrawalRateBps:input.withdrawalRateBps,
-    expectedRevision:input.expectedRevision,
-  }}),
+  updateRetirementPlan:(input)=>invoke("update_retirement_plan",{input}),
   selectCsvSource:async()=>{const selected=await open({multiple:false,directory:false,filters:[{name:"CSV files",extensions:["csv"]}]});return typeof selected==="string"?selected:null},
   inspectCsv:(path)=>invoke("inspect_csv",{path}),
   previewCsv:(path,fileHash,mapping)=>invoke("preview_csv",{path,fileHash,mapping}),

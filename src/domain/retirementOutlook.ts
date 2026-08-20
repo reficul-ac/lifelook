@@ -1,5 +1,5 @@
 import type { Account, AnnualProjection, Asset, RecurringEntry } from "./types";
-import type { RetirementCalculationInput, RetirementOutlook, RetirementOutlookYear, RetirementPropertyYear } from "./retirement";
+import { defaultRetirementTaxAssumptions, type RetirementCalculationInput, type RetirementOutlook, type RetirementOutlookYear, type RetirementPropertyYear } from "./retirement";
 import { occurrences, recurringAmount } from "./projection";
 import { calculateRetirementTax, type LossCarryforwards } from "./retirementTax";
 
@@ -44,7 +44,9 @@ export function calculateRetirementOutlook(input:RetirementCalculationInput&{peo
   const order=[...(input.plan.withdrawalAccountOrder??[]),...input.accounts.map(a=>a.id)].filter((id,i,a)=>a.indexOf(id)===i),liquidIds=new Set(input.plan.liquidatableAssetIds??input.plan.selectedSourceIds),earlyRoth=new Set(input.plan.earlyRothAccountIds??[]);
   const portfolioParts=[...input.accounts.map(a=>({id:a.id,name:a.name,kind:"account" as const,valueCents:balances.get(a.id)??0})),...properties.map(p=>({id:p.id,name:p.name,kind:"property" as const,valueCents:p.value-p.mortgage})),...assets.map(a=>({id:a.id,name:a.name,kind:"asset" as const,valueCents:a.value})),...otherDebts.map(d=>({id:d.id,name:d.name,kind:"liability" as const,valueCents:-d.balance}))];
   const cutoffAccountBalanceCents=[...balances.values()].reduce((s,n)=>s+n,0),cutoffAssetValueCents=properties.reduce((s,p)=>s+p.value,0)+assets.reduce((s,a)=>s+a.value,0),cutoffLiabilityBalanceCents=properties.reduce((s,p)=>s+p.mortgage,0)+otherDebts.reduce((s,d)=>s+d.balance,0),cutoffBalanceCents=cutoffAccountBalanceCents+cutoffAssetValueCents-cutoffLiabilityBalanceCents;
-  const assumptions=input.plan.taxAssumptions??{annualQcdCents:0,charitableCents:0,medicalCents:0,federalShortLossCents:0,federalLongLossCents:0,californiaShortLossCents:0,californiaLongLossCents:0,mfsLivedApartAllYear:false};
+  // Older persisted plans used `{}` for this field. Merge defaults so those
+  // records cannot feed undefined cents into the strict tax calculator.
+  const assumptions={...defaultRetirementTaxAssumptions(),...input.plan.taxAssumptions};
   const rows:RetirementOutlookYear[]=[];let firstDepletionYear:number|undefined,losses:LossCarryforwards={federalShortCents:assumptions.federalShortLossCents,federalLongCents:assumptions.federalLongLossCents,californiaShortCents:assumptions.californiaShortLossCents,californiaLongCents:assumptions.californiaLongLossCents};
   for(let offset=0;offset<50;offset++){
     const year=firstRetirementYear+offset,beginningSpendableCents=[...balances.values()].reduce((s,n)=>s+n,0)+assets.filter(a=>liquidIds.has(a.id)).reduce((s,a)=>s+a.value,0),accountStart=new Map(balances),returns=new Map<string,number>(),withdrawn=new Map<string,number>(),gains=new Map<string,number>(),rmds=new Map<string,number>();

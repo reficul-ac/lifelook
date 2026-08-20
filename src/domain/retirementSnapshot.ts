@@ -1,5 +1,6 @@
 import { calculateIncrementalHomeSaleTax, type HomeSaleTaxItem } from "./homeSaleTax";
 import {
+  isCurrentPropertyAsset,
   latestOwnedPlannedPurchase,
   type PlannedPropertyPurchase,
   type RetirementCutoff,
@@ -77,16 +78,6 @@ const addIssue = (
 const hasOwn = (values: Readonly<Record<string, Cents>>, id: string) =>
   Object.prototype.hasOwnProperty.call(values, id);
 
-const isCurrentPropertyAsset = (input: RetirementSnapshotInput, assetId: string) => {
-  const asset = input.snapshot.assets.find((item) => item.id === assetId);
-  return Boolean(asset && (
-    asset.housingCosts ||
-    asset.purchaseDate ||
-    asset.purchasePriceCents != null ||
-    input.snapshot.liabilities.some((liability) => liability.mortgage?.assetId === assetId)
-  ));
-};
-
 const validatePropertyRows = (input: RetirementSnapshotInput) => {
   const counts = new Map<string, number>();
   for (const property of input.cutoff.properties) {
@@ -106,7 +97,12 @@ const validatePropertyRows = (input: RetirementSnapshotInput) => {
   const plannedAssetIds = new Set(input.scenario.events.flatMap((event) =>
     event.type === "asset-purchase" ? [event.assetId] : []));
   const expectedPropertyIds = new Set([
-    ...Object.keys(input.cutoff.assets).filter((assetId) => isCurrentPropertyAsset(input, assetId)),
+    ...Object.keys(input.cutoff.assets).filter((assetId) => isCurrentPropertyAsset(
+      input.snapshot,
+      input.scenario,
+      assetId,
+      `${input.cutoff.retirementMonth}-01`,
+    )),
     ...[...plannedAssetIds].filter((assetId) =>
       hasOwn(input.cutoff.assets, assetId) &&
       latestOwnedPlannedPurchase(input.scenario, assetId, `${input.cutoff.retirementMonth}-01`) != null),

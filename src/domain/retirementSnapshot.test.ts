@@ -306,6 +306,19 @@ describe("calculateRetirementSnapshot balance sheet and keep-homes scenario", ()
     });
   });
 
+  it("keeps an ordinary purchased asset in net worth without requiring a property row", () => {
+    const value = fixture();
+    value.snapshot.assets = value.snapshot.assets.map((asset) => asset.id === "car"
+      ? { ...asset, purchaseDate: "2024-01-01", purchasePriceCents: 12_000 }
+      : asset);
+
+    const result = calculate(value);
+
+    expect(result.netWorthCents).toBe(185_000);
+    expect(result.keepHomes.homeEquityCents).toBe(120_000);
+    expect(result.sellHomes.available).toBe(true);
+  });
+
   it("sums multiple homes while leaving non-mortgage debt in the withdrawal base", () => {
     const value = fixture();
     value.snapshot.assets = [...value.snapshot.assets, {

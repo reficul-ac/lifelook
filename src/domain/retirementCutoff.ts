@@ -20,6 +20,34 @@ export function latestOwnedPlannedPurchase(
   return owned;
 }
 
+export function isCurrentPropertyAsset(
+  snapshot: FinancialSnapshot,
+  scenario: Scenario,
+  assetId: string,
+  beforeDateExclusive: string,
+): boolean {
+  const asset = snapshot.assets.find((item) => item.id === assetId);
+  if (!asset) return false;
+  const propertyEvent = scenario.events.some((event) =>
+    event.date < beforeDateExclusive &&
+    "assetId" in event &&
+    event.assetId === assetId &&
+    (event.type === "property-rental-start" || event.type === "adu-build"));
+  return Boolean(
+    asset.housingCosts ||
+    asset.housingStartDate != null ||
+    asset.homeSaleAssumptions != null ||
+    asset.rentalTaxBasisCents != null ||
+    asset.rentalLandBasisCents != null ||
+    asset.rentalBuildingBasisCents != null ||
+    asset.rentalPlacedInServiceDate != null ||
+    asset.federalPassiveLossCarryforwardCents != null ||
+    asset.californiaPassiveLossCarryforwardCents != null ||
+    snapshot.liabilities.some((liability) => liability.mortgage?.assetId === assetId) ||
+    propertyEvent
+  );
+}
+
 export interface RetirementCutoffInput {
   snapshot: FinancialSnapshot;
   scenario: Scenario;
@@ -81,7 +109,7 @@ export function buildRetirementCutoff(input:RetirementCutoffInput):RetirementCut
   const projectedMonths=projections.flatMap(year=>year.months).filter(month=>month.month<=balanceMonth);
   const currentAssetIds=new Set(input.snapshot.assets.map(asset=>asset.id));
   const ownedAssetIds=new Set(Object.keys(balanceRow.balances.assets));
-  const currentProperties=input.snapshot.assets.filter(asset=>asset.housingCosts||asset.purchaseDate||asset.purchasePriceCents!=null||input.snapshot.liabilities.some(liability=>liability.mortgage?.assetId===asset.id));
+  const currentProperties=input.snapshot.assets.filter(asset=>isCurrentPropertyAsset(input.snapshot,input.scenario,asset.id,`${input.retirementMonth}-01`));
   const plannedPropertyIds=[...new Set(input.scenario.events.flatMap(event=>event.type==="asset-purchase"?[event.assetId]:[]))];
   const latestPlannedProperties=plannedPropertyIds.flatMap(assetId=>{
     const purchase=latestOwnedPlannedPurchase(input.scenario,assetId,`${input.retirementMonth}-01`);

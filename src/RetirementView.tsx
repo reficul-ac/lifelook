@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildRetirementCutoff,
   calculateRetirementSnapshot,
-  defaultRetirementSettings,
   normalizeRetirementSettings,
   type FinancialSnapshot,
   type RetirementSnapshotResult,
@@ -17,6 +16,7 @@ type SaveValues = Omit<RetirementSettingsInput, "expectedRevision">;
 type SettingsDraft = { retirementMonth: string; withdrawalRate: string };
 
 export interface RetirementViewProps {
+  active?: boolean;
   initial?: RetirementSettingsRecord | null;
   repository: Repository;
   bootstrap: Bootstrap;
@@ -53,6 +53,38 @@ const parseWithdrawalRate = (value: string) => {
     : null;
 };
 
+const settingsFromRecord = (value?: RetirementSettingsRecord | null) => {
+  const normalized = normalizeRetirementSettings(value);
+  return {
+    ...normalized,
+    withdrawalRateBps: clampBasisPoints(normalized.withdrawalRateBps),
+  };
+};
+
+const draftFromSettings = (
+  settings: ReturnType<typeof settingsFromRecord>,
+): SettingsDraft => ({
+  retirementMonth: settings.retirementMonth,
+  withdrawalRate: String(settings.withdrawalRateBps / 100),
+});
+
+const saveValuesFromDraft = (draft: SettingsDraft): SaveValues | null => {
+  const withdrawalRateBps = parseWithdrawalRate(draft.withdrawalRate);
+  return validRetirementMonth(draft.retirementMonth) && withdrawalRateBps !== null
+    ? { retirementMonth: draft.retirementMonth, withdrawalRateBps }
+    : null;
+};
+
+const recordFingerprint = (value?: RetirementSettingsRecord | null) =>
+  value
+    ? JSON.stringify([
+        value.householdId,
+        value.retirementMonth,
+        value.withdrawalRateBps,
+        value.revision,
+      ])
+    : "null";
+
 const localIsoDate = () => {
   const now = new Date();
   return new Date(now.valueOf() - now.getTimezoneOffset() * 60_000)
@@ -61,20 +93,34 @@ const localIsoDate = () => {
 };
 
 export function RetirementView(props: RetirementViewProps) {
-  const { initial, repository, snapshot, scenario, onSettingsChange } = props;
-  const [settings, setSettings] = useState(() => ({
-    ...defaultRetirementSettings(),
-    ...normalizeRetirementSettings(initial),
-  }));
-  const [draft, setDraft] = useState<SettingsDraft>(() => ({
-    retirementMonth: settings.retirementMonth,
-    withdrawalRate: String(settings.withdrawalRateBps / 100),
-  }));
+  const {
+    active = true,
+    initial,
+    repository,
+    bootstrap,
+    snapshot,
+    scenario,
+    onSettingsChange,
+  } = props;
+  const initialRecord = initial ?? bootstrap.retirementPlan ?? null;
+  const [settings, setSettings] = useState(() =>
+    settingsFromRecord(initialRecord),
+  );
+  const [draft, setDraft] = useState<SettingsDraft>(() =>
+    draftFromSettings(settings),
+  );
   const [saveState, setSaveState] = useState<SaveState>("idle");
-  const revision = useRef(initial?.revision ?? settings.revision);
+  const revision = useRef(initialRecord?.revision ?? settings.revision);
   const saving = useRef(false);
   const pending = useRef<SaveValues | null>(null);
   const failed = useRef<SaveValues | null>(null);
+  const generation = useRef(0);
+  const ownSaveFingerprints = useRef(new Set<string>());
+  const seenInitialFingerprint = useRef(recordFingerprint(initial));
+  const seenBootstrapFingerprint = useRef(
+    recordFingerprint(bootstrap.retirementPlan),
+  );
+  const authoritativeFingerprint = useRef(recordFingerprint(initialRecord));
   const mounted = useRef(false);
   const repositoryRef = useRef(repository);
   const onSettingsChangeRef = useRef(onSettingsChange);
@@ -92,6 +138,49 @@ export function RetirementView(props: RetirementViewProps) {
     };
   }, []);
 
+  useEffect(() => {
+    const nextInitialFingerprint = recordFingerprint(initial);
+    const nextBootstrapFingerprint = recordFingerprint(bootstrap.retirementPlan);
+    const bootstrapChanged =
+      nextBootstrapFingerprint !== seenBootstrapFingerprint.current;
+    const initialChanged =
+      nextInitialFingerprint !== seenInitialFingerprint.current;
+    seenBootstrapFingerprint.current = nextBootstrapFingerprint;
+    seenInitialFingerprint.current = nextInitialFingerprint;
+
+    let replacement: RetirementSettingsRecord | null | undefined;
+    let replacementFingerprint: string;
+    if (bootstrapChanged) {
+      replacement = bootstrap.retirementPlan;
+      replacementFingerprint = nextBootstrapFingerprint;
+    } else if (!initialChanged) {
+      return;
+    } else if (ownSaveFingerprints.current.delete(nextInitialFingerprint)) {
+      authoritativeFingerprint.current = nextInitialFingerprint;
+      return;
+    } else if (nextInitialFingerprint === authoritativeFingerprint.current) {
+      return;
+    } else {
+      replacement = initial;
+      replacementFingerprint = nextInitialFingerprint;
+    }
+
+    const nextSettings = settingsFromRecord(replacement);
+    const nextDraft = draftFromSettings(nextSettings);
+    generation.current += 1;
+    saving.current = false;
+    pending.current = null;
+    failed.current = null;
+    revision.current = replacement?.revision ?? nextSettings.revision;
+    settingsRef.current = nextSettings;
+    draftRef.current = nextDraft;
+    authoritativeFingerprint.current = replacementFingerprint;
+    ownSaveFingerprints.current.clear();
+    setSettings(nextSettings);
+    setDraft(nextDraft);
+    setSaveState("idle");
+  }, [bootstrap.retirementPlan, initial]);
+
   const queueSave = useCallback((values: SaveValues) => {
     const updateRetirementPlan = repositoryRef.current.updateRetirementPlan;
     if (!updateRetirementPlan) return;
@@ -99,10 +188,11 @@ export function RetirementView(props: RetirementViewProps) {
     failed.current = null;
     if (saving.current) return;
 
+    const saveGeneration = generation.current;
     saving.current = true;
     if (mounted.current) setSaveState("saving");
     void (async () => {
-      while (pending.current) {
+      while (generation.current === saveGeneration && pending.current) {
         const next = pending.current;
         pending.current = null;
         try {
@@ -110,18 +200,33 @@ export function RetirementView(props: RetirementViewProps) {
             ...next,
             expectedRevision: revision.current,
           });
+          if (generation.current !== saveGeneration) return;
           revision.current = saved.revision;
-          onSettingsChangeRef.current?.(saved);
+          const notifySettingsChange = onSettingsChangeRef.current;
+          if (notifySettingsChange) {
+            ownSaveFingerprints.current.add(recordFingerprint(saved));
+            if (ownSaveFingerprints.current.size > 20) {
+              const oldest = ownSaveFingerprints.current.values().next().value;
+              if (oldest !== undefined) ownSaveFingerprints.current.delete(oldest);
+            }
+            notifySettingsChange(saved);
+          }
         } catch {
-          failed.current = pending.current ?? next;
+          if (generation.current !== saveGeneration) return;
+          failed.current = saveValuesFromDraft(draftRef.current);
           pending.current = null;
           saving.current = false;
-          if (mounted.current) setSaveState("error");
+          if (mounted.current) {
+            setSaveState(failed.current === null ? "idle" : "error");
+          }
           return;
         }
       }
+      if (generation.current !== saveGeneration) return;
       saving.current = false;
-      if (mounted.current) setSaveState("saved");
+      if (mounted.current) {
+        setSaveState(saveValuesFromDraft(draftRef.current) ? "saved" : "idle");
+      }
     })();
   }, []);
 
@@ -139,19 +244,22 @@ export function RetirementView(props: RetirementViewProps) {
     const updated = { ...draftRef.current, ...next };
     draftRef.current = updated;
     setDraft(updated);
-    const withdrawalRateBps = parseWithdrawalRate(updated.withdrawalRate);
-    if (validRetirementMonth(updated.retirementMonth) && withdrawalRateBps !== null) {
-      updateSettings({
-        retirementMonth: updated.retirementMonth,
-        withdrawalRateBps,
-      });
+    const values = saveValuesFromDraft(updated);
+    if (values === null) {
+      pending.current = null;
+      failed.current = null;
+      if (mounted.current) setSaveState("idle");
+      return;
     }
+    updateSettings(values);
   };
 
   const calculation = useMemo<
     { result: RetirementSnapshotResult; error: null } |
-    { result: null; error: string }
+    { result: null; error: string } |
+    null
   >(() => {
+    if (!active) return null;
     try {
       const cutoff = buildRetirementCutoff({
         snapshot,
@@ -177,12 +285,23 @@ export function RetirementView(props: RetirementViewProps) {
             : "The retirement snapshot could not be calculated.",
       };
     }
-  }, [scenario, settings.retirementMonth, settings.withdrawalRateBps, snapshot]);
+  }, [
+    active,
+    scenario,
+    settings.retirementMonth,
+    settings.withdrawalRateBps,
+    snapshot,
+  ]);
 
-  const retry = () => queueSave(failed.current ?? {
-    retirementMonth: settingsRef.current.retirementMonth,
-    withdrawalRateBps: clampBasisPoints(settingsRef.current.withdrawalRateBps),
-  });
+  const retry = () => {
+    const values = saveValuesFromDraft(draftRef.current);
+    if (values === null) {
+      failed.current = null;
+      setSaveState("idle");
+      return;
+    }
+    queueSave(values);
+  };
 
   return (
     <div className="content retirement-view">
@@ -229,7 +348,7 @@ export function RetirementView(props: RetirementViewProps) {
         </span>
       </section>
 
-      {calculation.result === null ? (
+      {calculation === null ? null : calculation.result === null ? (
         <section className="card retirement-unavailable" role="alert">
           <h3>Retirement snapshot unavailable</h3>
           <p>{calculation.error}</p>

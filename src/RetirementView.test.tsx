@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -184,6 +184,62 @@ describe("RetirementView settings and autosave", () => {
     expect(await screen.findByText("Saved")).toBeInTheDocument();
   });
 
+  it("does not recalculate while inactive and uses the latest Plan on activation", () => {
+    const { rerender } = render(
+      <RetirementView
+        active
+        initial={initial}
+        repository={repository()}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+    expect(buildRetirementCutoff).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <RetirementView
+        active={false}
+        initial={initial}
+        repository={repository()}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+    vi.mocked(buildRetirementCutoff).mockClear();
+    vi.mocked(calculateRetirementSnapshot).mockClear();
+    const latestScenario = { ...activeScenario, name: "Latest active Plan" };
+    rerender(
+      <RetirementView
+        active={false}
+        initial={initial}
+        repository={repository()}
+        bootstrap={bootstrap}
+        snapshot={{ ...snapshot, assets: [...snapshot.assets] }}
+        scenario={latestScenario}
+      />,
+    );
+    expect(buildRetirementCutoff).not.toHaveBeenCalled();
+    expect(calculateRetirementSnapshot).not.toHaveBeenCalled();
+
+    rerender(
+      <RetirementView
+        active
+        initial={initial}
+        repository={repository()}
+        bootstrap={bootstrap}
+        snapshot={{ ...snapshot, assets: [...snapshot.assets] }}
+        scenario={latestScenario}
+      />,
+    );
+    expect(buildRetirementCutoff).toHaveBeenCalledTimes(1);
+    expect(buildRetirementCutoff).toHaveBeenLastCalledWith(
+      expect.objectContaining({ scenario: latestScenario }),
+    );
+    expect(calculateRetirementSnapshot).toHaveBeenCalledTimes(1);
+  });
+
   it("serializes autosaves with the latest revision and reports the saved record", async () => {
     let finishFirst: ((record: RetirementSettingsRecord) => void) | undefined;
     const updateRetirementPlan = vi
@@ -250,6 +306,122 @@ describe("RetirementView settings and autosave", () => {
       withdrawalRateBps: 350,
       revision: 3,
     });
+  });
+
+  it("resets to an authoritative replacement and ignores an older save generation", async () => {
+    let finishOldSave: ((record: RetirementSettingsRecord) => void) | undefined;
+    const restored: RetirementSettingsRecord = {
+      householdId: "household",
+      retirementMonth: "2050-06",
+      withdrawalRateBps: 425,
+      revision: 11,
+    };
+    const updateRetirementPlan = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise<RetirementSettingsRecord>((resolve) => { finishOldSave = resolve; }),
+      )
+      .mockResolvedValueOnce({ ...restored, withdrawalRateBps: 450, revision: 12 });
+    const onSettingsChange = vi.fn();
+    const view = (
+      record: RetirementSettingsRecord,
+      value: Bootstrap,
+    ) => (
+      <RetirementView
+        active
+        initial={record}
+        repository={repository(updateRetirementPlan)}
+        bootstrap={value}
+        snapshot={snapshot}
+        scenario={activeScenario}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+    const { rerender } = render(view(initial, bootstrap));
+    fireEvent.change(screen.getByLabelText("Retirement month"), {
+      target: { value: "2042-09" },
+    });
+    expect(updateRetirementPlan).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Saving…")).toBeInTheDocument();
+
+    rerender(view(restored, { ...bootstrap, retirementPlan: restored }));
+    expect(screen.getByLabelText("Retirement month")).toHaveValue("2050-06");
+    expect(screen.getByLabelText("Withdrawal rate")).toHaveValue(4.25);
+    expect(screen.queryByText("Saving…")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
+      target: { value: "4.5" },
+    });
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(2));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+      retirementMonth: "2050-06",
+      withdrawalRateBps: 450,
+      expectedRevision: 11,
+    });
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(onSettingsChange).toHaveBeenCalledTimes(1);
+    expect(onSettingsChange).toHaveBeenLastCalledWith({
+      ...restored,
+      withdrawalRateBps: 450,
+      revision: 12,
+    });
+
+    await act(async () => {
+      finishOldSave?.({ ...initial, retirementMonth: "2042-09", revision: 2 });
+      await Promise.resolve();
+    });
+    expect(onSettingsChange).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Retirement month")).toHaveValue("2050-06");
+    expect(screen.getByLabelText("Withdrawal rate")).toHaveValue(4.5);
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+  });
+
+  it("clears a failed save when authoritative settings replace the draft", async () => {
+    const restored: RetirementSettingsRecord = {
+      householdId: "household",
+      retirementMonth: "2050-06",
+      withdrawalRateBps: 425,
+      revision: 11,
+    };
+    const updateRetirementPlan = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("conflict"))
+      .mockResolvedValueOnce({ ...restored, retirementMonth: "2051-07", revision: 12 });
+    const view = (record: RetirementSettingsRecord, value: Bootstrap) => (
+      <RetirementView
+        active
+        initial={record}
+        repository={repository(updateRetirementPlan)}
+        bootstrap={value}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />
+    );
+    const { rerender } = render(view(initial, bootstrap));
+    fireEvent.change(screen.getByLabelText("Retirement month"), {
+      target: { value: "2042-09" },
+    });
+    expect(
+      await screen.findByRole("button", { name: "Save failed — retry" }),
+    ).toBeInTheDocument();
+
+    rerender(view(restored, { ...bootstrap, retirementPlan: restored }));
+    expect(
+      screen.queryByRole("button", { name: "Save failed — retry" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Retirement month")).toHaveValue("2050-06");
+    expect(screen.getByLabelText("Withdrawal rate")).toHaveValue(4.25);
+
+    fireEvent.change(screen.getByLabelText("Retirement month"), {
+      target: { value: "2051-07" },
+    });
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(2));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+      retirementMonth: "2051-07",
+      withdrawalRateBps: 425,
+      expectedRevision: 11,
+    });
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
   });
 
   it("persists the valid basis-point boundaries and retries a failed save", async () => {
@@ -352,6 +524,57 @@ describe("RetirementView settings and autosave", () => {
       withdrawalRateBps: 350,
       expectedRevision: 1,
     });
+  });
+
+  it("removes retry for an invalid visible draft and saves only once it is complete", async () => {
+    const updateRetirementPlan = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("conflict"))
+      .mockResolvedValueOnce({
+        ...initial,
+        retirementMonth: "2043-03",
+        withdrawalRateBps: 350,
+        revision: 2,
+      });
+
+    render(
+      <RetirementView
+        active
+        initial={initial}
+        repository={repository(updateRetirementPlan)}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Retirement month"), {
+      target: { value: "2042-09" },
+    });
+    expect(
+      await screen.findByRole("button", { name: "Save failed — retry" }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
+      target: { value: "" },
+    });
+    expect(
+      screen.queryByRole("button", { name: "Save failed — retry" }),
+    ).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Retirement month"), {
+      target: { value: "2043-03" },
+    });
+    expect(updateRetirementPlan).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
+      target: { value: "3.5" },
+    });
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(2));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+      retirementMonth: "2043-03",
+      withdrawalRateBps: 350,
+      expectedRevision: 1,
+    });
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
   });
 });
 

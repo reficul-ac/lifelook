@@ -7,6 +7,7 @@ import {
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import * as domain from "./domain";
 import { testRepository } from "./repository";
 import { defaultInvestmentAssumptions } from "./domain/investment";
 function chooseMenu(trigger: string | RegExp, item: string | RegExp) {
@@ -693,6 +694,62 @@ describe("LifeLook shell", () => {
       revision: 3,
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();
+  });
+
+  it("defers retirement calculation updates while its persistent tab is inactive", async () => {
+    const data = await testRepository.bootstrap();
+    const scenario = {
+      id: "base",
+      householdId: "test",
+      name: "Baseline",
+      isBaseline: true,
+      assumptions: { inflationBps: 250, thresholdInflationBps: 250 },
+      horizonMonths: 120,
+      revision: 1,
+      events: [],
+      contributions: [],
+      withdrawals: [],
+    };
+    const restoredScenario = {
+      ...scenario,
+      name: "Restored baseline",
+      revision: 2,
+    };
+    const restored = { ...data, scenarios: [restoredScenario] };
+    const buildCutoff = vi.spyOn(domain, "buildRetirementCutoff");
+    const calculateSnapshot = vi.spyOn(domain, "calculateRetirementSnapshot");
+    render(
+      <App
+        repository={{
+          ...testRepository,
+          bootstrap: async () => ({ ...data, scenarios: [scenario] }),
+          selectRestoreSource: vi.fn().mockResolvedValue("/tmp/retirement.lifelook"),
+          restoreDatabase: vi.fn().mockResolvedValue(restored),
+        }}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Retirement/ }));
+    expect(buildCutoff).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
+    buildCutoff.mockClear();
+    calculateSnapshot.mockClear();
+    selectSettingsData();
+    fireEvent.click(screen.getByRole("button", { name: "Choose backup" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Choose backup and restore" }),
+    );
+    await screen.findByText("Restored baseline");
+    expect(buildCutoff).not.toHaveBeenCalled();
+    expect(calculateSnapshot).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Retirement/ }));
+    expect(
+      await screen.findByRole("heading", { name: "Restored baseline" }),
+    ).toBeInTheDocument();
+    expect(buildCutoff).toHaveBeenCalledTimes(1);
+    buildCutoff.mockRestore();
+    calculateSnapshot.mockRestore();
   });
 
   it("recovers from a startup failure without reloading", async () => {

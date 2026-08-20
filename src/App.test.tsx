@@ -1316,6 +1316,98 @@ describe("LifeLook shell", () => {
       ),
     );
   });
+  it("omits an existing tax basis while repairing only a missing purchase date", async () => {
+    const data = await testRepository.bootstrap(),
+      home = {
+        id: "home-with-basis",
+        householdId: "test",
+        name: "Home with basis",
+        valueCents: 65000000,
+        annualGrowthBps: 300,
+        housingCosts: {
+          propertyTaxRateBps: 0,
+          insuranceMonthlyCents: 0,
+          insuranceAnnualGrowthBps: 0,
+          hoaMonthlyCents: 0,
+          hoaAnnualGrowthBps: 0,
+        },
+        purchasePriceCents: 50000000,
+        purchaseDate: null,
+        revision: 1,
+      },
+      updateAsset = vi.fn();
+    render(
+      <App
+        repository={{
+          ...testRepository,
+          updateAsset,
+          bootstrap: async () => ({ ...data, assets: [home] }),
+        }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /Net Worth/ }));
+    fireEvent.click(
+      screen.getByText(home.name).closest<HTMLElement>(".account")!,
+    );
+    fireEvent.click(screen.getByText("Sale and tax details"));
+    expect(screen.queryByLabelText("Tax basis")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Purchase date"), {
+      target: { value: "2020-01-15" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(updateAsset).toHaveBeenCalled());
+    const payload = updateAsset.mock.calls[0][0];
+    expect(payload).toEqual(
+      expect.objectContaining({ purchaseDate: "2020-01-15" }),
+    );
+    expect(payload).not.toHaveProperty("purchasePriceCents");
+  });
+  it("omits an existing purchase date while repairing only a missing tax basis", async () => {
+    const data = await testRepository.bootstrap(),
+      home = {
+        id: "home-with-date",
+        householdId: "test",
+        name: "Home with date",
+        valueCents: 65000000,
+        annualGrowthBps: 300,
+        housingCosts: {
+          propertyTaxRateBps: 0,
+          insuranceMonthlyCents: 0,
+          insuranceAnnualGrowthBps: 0,
+          hoaMonthlyCents: 0,
+          hoaAnnualGrowthBps: 0,
+        },
+        purchasePriceCents: null,
+        purchaseDate: "2020-01-15",
+        revision: 1,
+      },
+      updateAsset = vi.fn();
+    render(
+      <App
+        repository={{
+          ...testRepository,
+          updateAsset,
+          bootstrap: async () => ({ ...data, assets: [home] }),
+        }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /Net Worth/ }));
+    fireEvent.click(
+      screen.getByText(home.name).closest<HTMLElement>(".account")!,
+    );
+    fireEvent.click(screen.getByText("Sale and tax details"));
+    expect(screen.queryByLabelText("Purchase date")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Tax basis"), {
+      target: { value: "500000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(updateAsset).toHaveBeenCalled());
+    const payload = updateAsset.mock.calls[0][0];
+    expect(payload).toEqual(
+      expect.objectContaining({ purchasePriceCents: 50000000 }),
+    );
+    expect(payload).not.toHaveProperty("purchaseDate");
+  });
   it("blocks saving a home with negative accumulated depreciation", async () => {
     const data = await testRepository.bootstrap(),
       home = {

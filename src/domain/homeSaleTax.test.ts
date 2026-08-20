@@ -208,6 +208,45 @@ it("caps rental depreciation tax at 25% when the applicable ordinary rate is hig
   expect(result.federalIncomeTaxCents).toBe(4_000_00);
 });
 
+it("uses net short-term loss against recapture before other long-term gain", () => {
+  const result = calculate([
+    homeSale({
+      id: "long-gain",
+      name: "Rental long-term gain",
+      salePriceCents: 110_000_00,
+      federalBasisCents: 100_000_00,
+      californiaBasisCents: 100_000_00,
+      accumulatedFederalDepreciationCents: 10_000_00,
+      accumulatedCaliforniaDepreciationCents: 10_000_00,
+    }),
+    homeSale({
+      id: "short-loss",
+      name: "Rental short-term loss",
+      acquiredOn: "2025-07-01",
+      disposedOn: "2026-01-02",
+      salePriceCents: 95_000_00,
+      federalBasisCents: 100_000_00,
+      californiaBasisCents: 100_000_00,
+    }),
+  ], {
+    baseline: {
+      federalTaxableCents: 40_000_00,
+      californiaTaxableCents: 0,
+      modifiedAgiCents: 0,
+    },
+  });
+
+  expect(result.federalShortTermGainCents).toBe(0);
+  expect(result.federalLongTermGainCents).toBe(15_000_00);
+  expect(result.unrecaptured1250GainCents).toBe(5_000_00);
+  expect(result.federalLongTermGainCents - result.unrecaptured1250GainCents).toBe(10_000_00);
+  expect(result.federalIncomeTaxCents).toBe(1_432_50);
+  expect(result.californiaGainCents).toBe(15_000_00);
+  expect(result.californiaIncomeTaxCents).toBe(186_44);
+  expect(result.niitCents).toBe(0);
+  expect(result.totalIncrementalTaxCents).toBe(1_618_94);
+});
+
 it("taxes simultaneous homes against one household long-term-gain stack", () => {
   const primaryHomeSale = homeSale({
     id: "primary",

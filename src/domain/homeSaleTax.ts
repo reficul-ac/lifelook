@@ -101,8 +101,10 @@ const isShortTerm = (acquiredOn: string, disposedOn: string) => {
 };
 
 const netByHoldingPeriod = (short: number, long: number) => {
+  let shortLossAppliedToLong = 0;
   if (short < 0 && long > 0) {
     const offset = Math.min(-short, long);
+    shortLossAppliedToLong = offset;
     short += offset;
     long -= offset;
   } else if (long < 0 && short > 0) {
@@ -110,7 +112,7 @@ const netByHoldingPeriod = (short: number, long: number) => {
     long += offset;
     short -= offset;
   }
-  return { short: Math.max(0, short), long: Math.max(0, long) };
+  return { short: Math.max(0, short), long: Math.max(0, long), shortLossAppliedToLong };
 };
 
 export function calculateIncrementalHomeSaleTax(input: HomeSaleTaxInput): HomeSaleTaxResult {
@@ -171,7 +173,10 @@ export function calculateIncrementalHomeSaleTax(input: HomeSaleTaxInput): HomeSa
   const netFederal = netByHoldingPeriod(federalShort, federalLong);
   const federalShortTermGainCents = Math.round(netFederal.short);
   const federalLongTermGainCents = Math.round(netFederal.long);
-  const unrecaptured1250GainCents = Math.round(Math.min(federalRecapture, federalLongTermGainCents));
+  const unrecaptured1250GainCents = Math.round(Math.min(
+    Math.max(0, federalRecapture - netFederal.shortLossAppliedToLong),
+    federalLongTermGainCents,
+  ));
   const californiaGainCents = Math.round(Math.max(0, californiaGain));
   const federalBase = Math.max(0, input.baseline.federalTaxableCents);
   const federalOrdinaryAfterSales = federalBase + federalShortTermGainCents;

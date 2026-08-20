@@ -3,6 +3,7 @@ import {
   calculateRetirementOutlook,
   ProjectionEngine,
   defaultRetirementPlan,
+  defaultRetirementTaxAssumptions,
   type AnnualProjection,
   type FinancialSnapshot,
   type RetirementExpenseBucket,
@@ -40,6 +41,10 @@ export function RetirementView({
   const loaded = {
     ...defaultRetirementPlan(),
     ...initial,
+    taxAssumptions: {
+      ...defaultRetirementTaxAssumptions(),
+      ...initial?.taxAssumptions,
+    },
     householdId: initial?.householdId ?? bootstrap.household?.id ?? "local",
     selectedScenarioId: initial?.selectedScenarioId || scenarios[0]?.id || "",
   } as RetirementPlanRecord;

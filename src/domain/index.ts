@@ -1,6 +1,7 @@
 export * from "./types";
 export * from "./investment";
 export * from "./tax";
+export * from "./homeSaleTax";
 export * from "./retirementTax";
 export * from "./equity";
 export * from "./projection";

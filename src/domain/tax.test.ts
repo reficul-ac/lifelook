@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateHouseholdTax, estimateTax, TAX_RULES_2025, TAX_RULES_2026 } from "./tax";
+import { estimateHouseholdTax, estimateTax, progressiveTax, TAX_RULES_2025, TAX_RULES_2026 } from "./tax";
 import type { FilingStatus, TaxBracket, TaxRulePack } from "./types";
 
 const input = (
@@ -31,6 +31,13 @@ const reference = (gross: number, status: FilingStatus, pack: TaxRulePack, deduc
     californiaCents: referenceProgressive(californiaTaxable, pack.california[status].brackets),
   };
 };
+
+it("rounds every progressive bracket slice to integer cents", () => {
+  expect(progressiveTax(4, [
+    { upToCents: 3, rateBps: 3_333 },
+    { upToCents: null, rateBps: 5_000 },
+  ])).toBe(2);
+});
 
 describe.each([TAX_RULES_2025, TAX_RULES_2026])("$year tax truth boundaries", (pack) => {
   for (const status of ["single", "married-joint", "married-separate", "head-of-household"] as const) {

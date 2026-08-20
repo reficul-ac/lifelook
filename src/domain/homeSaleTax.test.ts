@@ -208,6 +208,30 @@ it("caps rental depreciation tax at 25% when the applicable ordinary rate is hig
   expect(result.federalIncomeTaxCents).toBe(4_000_00);
 });
 
+it("caps each projected ordinary bracket slice separately when recapture straddles 25%", () => {
+  const result = calculate([
+    homeSale({
+      acquiredOn: "2030-01-01",
+      disposedOn: "2035-01-02",
+      salePriceCents: 110_000_00,
+      federalBasisCents: 100_000_00,
+      californiaBasisCents: 100_000_00,
+      accumulatedFederalDepreciationCents: 10_000_00,
+      accumulatedCaliforniaDepreciationCents: 10_000_00,
+    }),
+  ], {
+    year: 2035,
+    baseline: {
+      federalTaxableCents: 250_000_00,
+      californiaTaxableCents: 0,
+      modifiedAgiCents: 0,
+    },
+  });
+
+  expect(result.unrecaptured1250GainCents).toBe(10_000_00);
+  expect(result.federalIncomeTaxCents).toBe(3_980_11);
+});
+
 it("uses net short-term loss against recapture before other long-term gain", () => {
   const result = calculate([
     homeSale({

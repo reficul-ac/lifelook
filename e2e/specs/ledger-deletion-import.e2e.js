@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { chooseOpenFile, onboard, openAdd, saveDialog, setLabeledValue } from "./helpers.js";
 
 const currentDate = `${new Date().getFullYear()}-02-15`;
-const entryButton = (name) => $(`button[aria-label="Edit ${name}"]`);
+const entryButton = (name) => $(`[aria-label="Edit ${name}"]`);
 
 describe("LifeLook native deletion and import", () => {
   it("deletes ledger records and imports a mixed CSV through relaunch", async () => {
@@ -28,16 +28,18 @@ describe("LifeLook native deletion and import", () => {
 
     await $("aria/Net Worth").click();
     const savings = await $('//*[contains(@class,"account")][.//strong[normalize-space()="Savings"]]');
-    await savings.$("aria/Edit").click();
+    await savings.click();
     await $("aria/Delete").click();
     await $("aria/Delete permanently").click();
     const checking = await $('//*[contains(@class,"account")][.//strong[normalize-space()="Checking"]]');
-    await checking.$("aria/Edit").click();
+    await checking.click();
     await $("aria/Delete").click();
-    assert.match(await $('[role="alert"]').getText(), /last account|non-zero opening balance/i);
+    assert.match(await $('[role="alertdialog"]').getText(), /opening balance/i);
+    await $("aria/Cancel").click();
     await $("aria/Cancel").click();
 
     await $("aria/Activity").click();
+    await $("aria/Actions").click();
     await $("aria/Import CSV").click();
     await $("aria/Choose CSV…").click();
     await chooseOpenFile(process.env.LIFELOOK_E2E_CSV);
@@ -47,15 +49,15 @@ describe("LifeLook native deletion and import", () => {
     await $("aria/Include row 4").click();
     await $("aria/Import selected").click();
     await entryButton("Imported pay").waitForDisplayed();
-    assert.equal((await $$('button[aria-label="Edit Imported pay"]')).length, 2);
+    assert.equal((await $$('[aria-label="Edit Imported pay"]')).length, 2);
 
     await browser.reloadSession();
     await $("aria/Activity").click();
-    assert.equal((await $$('button[aria-label="Edit Imported pay"]')).length, 2);
-    await $$('button[aria-label="Edit Imported pay"]')[0].click();
-    assert.match(await $(".muted").getText(), /read-only/i);
+    assert.equal((await $$('[aria-label="Edit Imported pay"]')).length, 2);
+    await $$('[aria-label="Edit Imported pay"]')[0].click();
+    assert.match(await $('[role="dialog"] .muted').getText(), /read-only/i);
     await $("aria/Delete").click();
     await $("aria/Delete permanently").click();
-    assert.equal((await $$('button[aria-label="Edit Imported pay"]')).length, 1);
+    assert.equal((await $$('[aria-label="Edit Imported pay"]')).length, 1);
   });
 });

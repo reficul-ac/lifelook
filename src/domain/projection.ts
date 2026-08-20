@@ -1,6 +1,6 @@
 import { estimateHouseholdTax, estimateTax, TAX_RULES_2025, TAX_RULES_2026 } from "./tax";
 import { projectedSharePrice, valueForUnits, vestValue, vestedUnitsAt } from "./equity";
-import type { AnnualProjection, ContributionResult, ContributionRule, FinancialSnapshot, MonthlyProjection, ProjectionOptions, ProjectionWarning, PropertyProjectionResult, PropertyProjectionStatus, RecurringEntry, Scenario } from "./types";
+import type { AnnualProjection, Cents, ContributionResult, ContributionRule, FinancialSnapshot, MonthlyProjection, ProjectionOptions, ProjectionWarning, PropertyProjectionResult, PropertyProjectionStatus, RecurringEntry, Scenario } from "./types";
 
 const monthKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 const monthEndDate=(month:string)=>{const date=isoDate(`${month}-01`);return new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,0)).toISOString().slice(0,10);};
@@ -76,8 +76,13 @@ export function recurringAmount(entry:RecurringEntry,annualOrOccurrenceCents:num
   return base+(calendarMonth<remainder?1:0);
 }
 
-export const ProjectionEngine = {
-  calculate(snapshot: FinancialSnapshot, scenario: Scenario, asOfDate: string, options: ProjectionOptions = {}): readonly AnnualProjection[] {
+function calculateProjection(
+  snapshot: FinancialSnapshot,
+  scenario: Scenario,
+  asOfDate: string,
+  options: ProjectionOptions,
+  taxableRentalByMonth: ReadonlyMap<string, Cents>,
+): readonly AnnualProjection[] {
     const maxMonths=(scenario as Scenario&{retirementExtension?:boolean}).retirementExtension?1200:480;
     if (scenario.horizon.months < 1 || scenario.horizon.months > maxMonths) throw new RangeError("Projection horizon must be between 1 and 480 months");
     const asOf = isoDate(asOfDate), asOfMonth = monthKey(asOf);
@@ -129,15 +134,16 @@ export const ProjectionEngine = {
       let annualNonWage=0;
       for(let calendarMonth=0;calendarMonth<12;calendarMonth++){
         const date=new Date(Date.UTC(year,calendarMonth,1)),key=monthKey(date),growthMonth=(year-start.getUTCFullYear())*12+calendarMonth-start.getUTCMonth();
+        if(employmentActive(key))annualNonWage+=taxableRentalByMonth.get(key)??0;
         for(const entry of snapshot.recurring){const count=occurrences(entry,key);if(!count)continue;const changes=events.filter(e=>(e.type==="recurring-change"||e.type==="income-change")&&e.entryId===entry.id&&e.date.slice(0,7)<=key),amount=changes.length?(changes.at(-1)! as {amountCents:number}).amountCents:entry.amountCents,value=recurringAmount(entry,amount,key,entry.annualGrowthBps??(entry.kind==="expense"?scenario.assumptions.inflationBps:0),growthMonth,count);if(entry.kind==="income"&&employmentActive(key)){annualHouseholdGross+=value;if(explicitTaxUnit){const category=entry.incomeTaxCategory??(entry.incomeType==="salary"?"wages":"taxable-nonwage");if(category==="wages"){if(!entry.ownerPersonId||!employeeWages.has(entry.ownerPersonId))throw new RangeError("Wage income requires an owner in the tax unit");employeeWages.get(entry.ownerPersonId)!.salaryCents+=value;}else if(category==="taxable-nonwage")annualNonWage+=value;}}else if(entry.kind==="expense"&&entry.taxTreatment==="pretax"&&employmentActive(key))annualHouseholdPretax+=value;}
         for(const event of events.filter(e=>e.date.slice(0,7)===key))if(event.type==="one-time-income"&&employmentActive(key)){annualHouseholdGross+=event.amountCents;if(explicitTaxUnit){const category=event.incomeTaxCategory??"taxable-nonwage";if(category==="wages"){if(!event.ownerPersonId||!employeeWages.has(event.ownerPersonId))throw new RangeError("One-time wages require an owner in the tax unit");employeeWages.get(event.ownerPersonId)!.salaryCents+=event.amountCents;}else if(category==="taxable-nonwage")annualNonWage+=event.amountCents;}}
         for(const [owner,value] of vestOwnerByMonth.get(key)??[])if(employeeWages.has(owner))employeeWages.get(owner)!.rsuCents+=value;
       }
       if(explicitTaxUnit){
-        const employees=[...employeeWages].map(([personId,wage])=>({personId,...wage})),annualBaseIncome=employees.reduce((sum,item)=>sum+item.salaryCents,0)+annualNonWage,futureBaseIncome=rows.reduce((sum,row)=>sum+row.gross,0),baseRatio=annualBaseIncome?Math.min(10000,Math.round(futureBaseIncome*10000/annualBaseIncome)):0;
+        const employees=[...employeeWages].map(([personId,wage])=>({personId,...wage})),annualBaseIncome=employees.reduce((sum,item)=>sum+item.salaryCents,0)+annualNonWage,futureBaseIncome=rows.reduce((sum,row)=>sum+row.gross+(taxableRentalByMonth.get(row.key)??0),0),baseRatio=annualBaseIncome?Math.min(10000,Math.round(futureBaseIncome*10000/annualBaseIncome)):0;
         const housingDeductions=annualHousingDeductions(snapshot,year),deductions={traditionalRetirementCents:annualHouseholdPretax,...housingDeductions};
         const estimateWithStateTax=(wageRows:typeof employees)=>{const first=estimateHouseholdTax({year,status:snapshot.taxProfile.filingStatus,employees:wageRows,nonWageTaxableCents:annualNonWage,deductions,thresholdInflationBps:scenario.assumptions.thresholdInflationBps});return estimateHouseholdTax({year,status:snapshot.taxProfile.filingStatus,employees:wageRows,nonWageTaxableCents:annualNonWage,deductions:{...deductions,stateIncomeTaxCents:first.californiaCents},thresholdInflationBps:scenario.assumptions.thresholdInflationBps});},fullLedger=estimateWithStateTax(employees),noRsu=estimateWithStateTax(employees.map(item=>({...item,rsuCents:0}))),futureRsuByOwner=new Map<string,number>();for(const row of rows)for(const [owner,value] of vestOwnerByMonth.get(row.key)??[])futureRsuByOwner.set(owner,(futureRsuByOwner.get(owner)??0)+value);const withoutFutureRsu=estimateWithStateTax(employees.map(item=>({...item,rsuCents:Math.max(0,item.rsuCents-(futureRsuByOwner.get(item.personId)??0))}))),stockTax=Math.max(0,fullLedger.fullYearLiabilityCents-withoutFutureRsu.fullYearLiabilityCents),wageTax=Math.round(noRsu.fullYearLiabilityCents*baseRatio/10_000),ledger={...fullLedger,futureCashFlowCents:wageTax+stockTax};taxLedgerByYear.set(year,ledger);
-        const allocate=(total:number,weights:number[])=>{const weight=weights.reduce((s,x)=>s+x,0),values=weights.map(value=>weight?Math.floor(total*value/weight):0);let remainder=total-values.reduce((s,x)=>s+x,0);for(let i=0;remainder>0&&i<values.length;i++,remainder--)values[i]++;return values;},wageAllocated=allocate(wageTax,rows.map(x=>Math.max(0,x.gross-x.pretax))),stockAllocated=allocate(stockTax,rows.map(x=>vestIncomeByMonth.get(x.key)??0));rows.forEach((row,i)=>{taxByMonth.set(row.key,wageAllocated[i]+stockAllocated[i]);stockTaxByMonth.set(row.key,stockAllocated[i]);});continue;
+        const allocate=(total:number,weights:number[])=>{const weight=weights.reduce((s,x)=>s+x,0),values=weights.map(value=>weight?Math.floor(total*value/weight):0);let remainder=total-values.reduce((s,x)=>s+x,0);for(let i=0;remainder>0&&i<values.length;i++,remainder--)values[i]++;return values;},wageAllocated=allocate(wageTax,rows.map(x=>Math.max(0,x.gross-x.pretax+(taxableRentalByMonth.get(x.key)??0)))),stockAllocated=allocate(stockTax,rows.map(x=>vestIncomeByMonth.get(x.key)??0));rows.forEach((row,i)=>{taxByMonth.set(row.key,wageAllocated[i]+stockAllocated[i]);stockTaxByMonth.set(row.key,stockAllocated[i]);});continue;
       }
       const stockTax=Math.max(0,estimate(annualHouseholdGross+stockGross,annualHouseholdPretax)-estimate(annualHouseholdGross,annualHouseholdPretax));
       const allocate=(total:number,weights:number[])=>{const weight=weights.reduce((s,x)=>s+x,0),values=weights.map(value=>weight?Math.floor(total*value/weight):0);let remainder=total-values.reduce((s,x)=>s+x,0);for(let i=0;remainder>0&&i<values.length;i++,remainder--)values[i]++;return values;};
@@ -280,7 +286,21 @@ export const ProjectionEngine = {
     const grouped = new Map<number, MonthlyProjection[]>();
     for (const month of months) { const year = Number(month.month.slice(0, 4)); grouped.set(year, [...(grouped.get(year) ?? []), month]); }
     return [...grouped].map(([year, items]) => {const income=sum(items,"incomeCents"),surplus=sum(items,"surplusCents"),properties=[...new Set([...propertyEvents.map(event=>event.assetId),...currentPropertyIds])].map(assetId=>aggregateProperty(year,assetId,items));return ({ year, incomeCents:income,actualIncomeCents:sum(items,"actualIncomeCents"),actualExpenseCents:sum(items,"actualExpenseCents"), expenseCents: sum(items, "expenseCents"), taxCents: sum(items, "taxCents"),cashTaxCents:sum(items,"cashTaxCents"),rsuSellToCoverTaxCents:sum(items,"rsuSellToCoverTaxCents"),taxLedger:taxLedgerByYear.get(year), savingsRateBps:income?Math.round(Math.max(0,surplus)*10000/income):0,surplusCents:surplus,contributionCents:sum(items,"contributionCents"),contributionResults:items.flatMap(x=>x.contributionResults), liquidWorthCents: items.at(-1)!.liquidWorthCents, endingNetWorthCents: items.at(-1)!.netWorthCents, debtCents: items.at(-1)!.debtCents, debtPayoffMonth:items.find(x=>x.debtCents===0)?.month, unfundedDeficitCents: sum(items, "unfundedDeficitCents"),properties, warnings: items.flatMap(x => x.warnings), months: items });});
-  }
+}
+
+export const ProjectionEngine = {
+  calculate(snapshot: FinancialSnapshot, scenario: Scenario, asOfDate: string, options: ProjectionOptions = {}): readonly AnnualProjection[] {
+    const beforeRentalTax=calculateProjection(snapshot,scenario,asOfDate,options,new Map());
+    const taxableRentalByMonth=new Map<string,Cents>();
+    for(const month of beforeRentalTax.flatMap(year=>year.months)){
+      if(options.stopEmploymentMonth&&month.month>=options.stopEmploymentMonth)continue;
+      const taxableRentalCents=month.properties.reduce((sum,property)=>sum+property.taxableRentalCents,0);
+      if(taxableRentalCents)taxableRentalByMonth.set(month.month,taxableRentalCents);
+    }
+    return taxableRentalByMonth.size
+      ? calculateProjection(snapshot,scenario,asOfDate,options,taxableRentalByMonth)
+      : beforeRentalTax;
+  },
 } as const;
 
 function sum(items: MonthlyProjection[], key: "incomeCents" | "expenseCents" | "actualIncomeCents" | "actualExpenseCents" | "taxCents"|"cashTaxCents"|"rsuSellToCoverTaxCents" | "surplusCents" | "unfundedDeficitCents"|"contributionCents") { return items.reduce((total, item) => total + item[key], 0); }

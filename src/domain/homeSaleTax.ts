@@ -115,6 +115,28 @@ const netByHoldingPeriod = (short: number, long: number) => {
   return { short: Math.max(0, short), long: Math.max(0, long), shortLossAppliedToLong };
 };
 
+const cappedMarginalTax = (
+  baseCents: Cents,
+  additionalCents: Cents,
+  brackets: Parameters<typeof progressiveTax>[1],
+  maximumRateBps: BasisPoints,
+) => {
+  const finalCents = baseCents + additionalCents;
+  let lowerBoundCents = 0;
+  let taxCents = 0;
+  for (const bracket of brackets) {
+    const upperBoundCents = bracket.upToCents ?? finalCents;
+    const sliceCents = Math.max(
+      0,
+      Math.min(finalCents, upperBoundCents) - Math.max(baseCents, lowerBoundCents),
+    );
+    taxCents += Math.round(sliceCents * Math.min(bracket.rateBps, maximumRateBps) / 10_000);
+    if (finalCents <= upperBoundCents) break;
+    lowerBoundCents = upperBoundCents;
+  }
+  return taxCents;
+};
+
 export function calculateIncrementalHomeSaleTax(input: HomeSaleTaxInput): HomeSaleTaxResult {
   validateInput(input);
   const pack = projectedTaxRules(input.year, input.thresholdInflationBps);
@@ -185,14 +207,12 @@ export function calculateIncrementalHomeSaleTax(input: HomeSaleTaxInput): HomeSa
     pack.federal[input.filingStatus].brackets,
   ) - progressiveTax(federalBase, pack.federal[input.filingStatus].brackets);
   const federalAfterRecapture = federalOrdinaryAfterSales + unrecaptured1250GainCents;
-  const recaptureOrdinaryDelta = progressiveTax(
-    federalAfterRecapture,
+  const federalRecaptureTax = cappedMarginalTax(
+    federalOrdinaryAfterSales,
+    unrecaptured1250GainCents,
     pack.federal[input.filingStatus].brackets,
-  ) - progressiveTax(federalOrdinaryAfterSales, pack.federal[input.filingStatus].brackets);
-  const recaptureTaxAtMaximumRate = Math.round(
-    unrecaptured1250GainCents * pack.unrecapturedSection1250MaxRateBps / 10_000,
+    pack.unrecapturedSection1250MaxRateBps,
   );
-  const federalRecaptureTax = Math.min(recaptureOrdinaryDelta, recaptureTaxAtMaximumRate);
   const federalPreferentialGainCents = federalLongTermGainCents - unrecaptured1250GainCents;
   const capitalGainBrackets = pack.federalLongTermCapitalGains[input.filingStatus];
   const federalPreferentialDelta = progressiveTax(

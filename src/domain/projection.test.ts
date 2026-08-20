@@ -101,6 +101,30 @@ describe("retirement employment cutoff",()=>{
     expect(year.taxLedger).toEqual(expect.objectContaining({federalAgiCents:84_000_00,modifiedAgiCents:84_000_00}));
   });
 
+  it("taxes rental income earned before retirement without adding later rental months to the baseline",()=>{
+    const financial:FinancialSnapshot={
+      household:{id:"household",name:"Household",state:"CA",people:[{id:"employee",name:"Employee"}]},
+      taxProfile:{filingStatus:"single",state:"CA",taxYear:2026,thresholdInflationBps:250,taxUnit:{id:"single",filingStatus:"single",memberPersonIds:["employee"]}},
+      accounts:[{id:"cash",name:"Cash",kind:"checking",balanceCents:0,annualReturnBps:0,liquid:true}],
+      recurring:[{id:"salary",name:"Salary",kind:"income",incomeType:"salary",incomeTaxCategory:"wages",ownerPersonId:"employee",amountCents:120_000_00,startDate:"2026-01-01",taxTreatment:"none"}],
+      assets:[{id:"rental",name:"Rental",valueCents:100_000_00,annualGrowthBps:0,housingCosts:{propertyTaxRateBps:0,insuranceMonthlyCents:0,insuranceAnnualGrowthBps:0,hoaMonthlyCents:0,hoaAnnualGrowthBps:0}}],
+      liabilities:[],
+    };
+    const plan:Scenario={...scenario,defaultContributionAccountId:"cash",events:[{id:"rent",date:"2026-01-01",type:"property-rental-start",assetId:"rental",name:"Rental income",monthlyRentalIncomeCents:1_000_00,rentalIncomeGrowthBps:0,rentalUseBps:10000,rentalTaxModelingEnabled:true,rentalType:"long-term",buildingBasisCents:0}],horizon:{start:"2026-01",months:10}};
+    const [year]=ProjectionEngine.calculate(financial,plan,"2026-01-01",{stopEmploymentMonth:"2026-09"});
+
+    expect(year.months.find(month=>month.month==="2026-09")!.incomeCents).toBe(1_000_00);
+    expect(year.properties[0].taxableRentalCents).toBe(10_000_00);
+    expect(year.taxLedger).toEqual(expect.objectContaining({
+      federalAgiCents:88_000_00,
+      modifiedAgiCents:88_000_00,
+      federalTaxableCents:71_900_00,
+      californiaTaxableCents:82_151_35,
+      fullYearLiabilityCents:21_679_68,
+    }));
+    expect(year.months.find(month=>month.month==="2026-08")!.balances!.accounts.cash).toBe(66_320_32);
+  });
+
   it("includes a vest late in the preceding month in month-end balances",()=>{
     const financial:FinancialSnapshot={...snapshot,recurring:[],assets:[{id:"rsu",name:"RSUs",valueCents:1_000,annualGrowthBps:0,equityHolding:{priceCents:1_000,priceDate:"2026-01-01",sellToCover:false,grants:[{id:"grant",ownerPersonId:"employee",grantDate:"2026-01-01",grantPriceCents:1_000,unitsMicros:1_000_000,vestEvents:[{id:"late-august",date:"2026-08-31",unitsMicros:1_000_000}]}]}}]};
     const plan:Scenario={...scenario,horizon:{start:"2026-08",months:2}};

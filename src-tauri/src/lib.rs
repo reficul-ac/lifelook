@@ -952,17 +952,19 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
             .prepare("PRAGMA table_info(retirement_plans)")?
             .query_map([], |r| r.get::<_, String>(1))?
             .collect::<Result<Vec<_>, _>>()?;
-        if !columns.iter().any(|x| x == "retirement_years_json") {
-            transaction.execute("ALTER TABLE retirement_plans ADD COLUMN retirement_years_json TEXT NOT NULL DEFAULT '{}'",[])?;
-        }
-        if !columns.iter().any(|x| x == "scheduled_income_json") {
-            transaction.execute("ALTER TABLE retirement_plans ADD COLUMN scheduled_income_json TEXT NOT NULL DEFAULT '[]'",[])?;
-        }
-        if !columns.iter().any(|x| x == "withdrawal_account_order_json") {
-            transaction.execute("ALTER TABLE retirement_plans ADD COLUMN withdrawal_account_order_json TEXT NOT NULL DEFAULT '[]'",[])?;
-        }
-        if !columns.iter().any(|x| x == "legacy_review_dismissed") {
-            transaction.execute("ALTER TABLE retirement_plans ADD COLUMN legacy_review_dismissed INTEGER NOT NULL DEFAULT 0",[])?;
+        if columns.iter().any(|x| x == "retirement_year") {
+            if !columns.iter().any(|x| x == "retirement_years_json") {
+                transaction.execute("ALTER TABLE retirement_plans ADD COLUMN retirement_years_json TEXT NOT NULL DEFAULT '{}'",[])?;
+            }
+            if !columns.iter().any(|x| x == "scheduled_income_json") {
+                transaction.execute("ALTER TABLE retirement_plans ADD COLUMN scheduled_income_json TEXT NOT NULL DEFAULT '[]'",[])?;
+            }
+            if !columns.iter().any(|x| x == "withdrawal_account_order_json") {
+                transaction.execute("ALTER TABLE retirement_plans ADD COLUMN withdrawal_account_order_json TEXT NOT NULL DEFAULT '[]'",[])?;
+            }
+            if !columns.iter().any(|x| x == "legacy_review_dismissed") {
+                transaction.execute("ALTER TABLE retirement_plans ADD COLUMN legacy_review_dismissed INTEGER NOT NULL DEFAULT 0",[])?;
+            }
         }
         transaction.execute("INSERT INTO schema_migrations(version) VALUES(19)", [])?;
     }
@@ -986,8 +988,14 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
             .prepare("PRAGMA table_info(retirement_plans)")?
             .query_map([], |r| r.get::<_, String>(1))?
             .collect::<Result<Vec<_>, _>>()?;
-        for (name,sql) in [("spending_mode","ALTER TABLE retirement_plans ADD COLUMN spending_mode TEXT NOT NULL DEFAULT 'manual' CHECK(spending_mode IN ('manual','plan'))"),("liquidatable_asset_ids_json","ALTER TABLE retirement_plans ADD COLUMN liquidatable_asset_ids_json TEXT NOT NULL DEFAULT '[]'"),("early_roth_account_ids_json","ALTER TABLE retirement_plans ADD COLUMN early_roth_account_ids_json TEXT NOT NULL DEFAULT '[]'"),("migration_review_json","ALTER TABLE retirement_plans ADD COLUMN migration_review_json TEXT NOT NULL DEFAULT '[]'")]{if !retirement_columns.iter().any(|x|x==name){transaction.execute(sql,[])?;}}
-        transaction.execute_batch("UPDATE retirement_plans SET liquidatable_asset_ids_json=selected_source_ids_json WHERE liquidatable_asset_ids_json='[]';INSERT OR IGNORE INTO schema_migrations(version) VALUES(20);")?;
+        if retirement_columns.iter().any(|x| x == "retirement_year") {
+            for (name,sql) in [("spending_mode","ALTER TABLE retirement_plans ADD COLUMN spending_mode TEXT NOT NULL DEFAULT 'manual' CHECK(spending_mode IN ('manual','plan'))"),("liquidatable_asset_ids_json","ALTER TABLE retirement_plans ADD COLUMN liquidatable_asset_ids_json TEXT NOT NULL DEFAULT '[]'"),("early_roth_account_ids_json","ALTER TABLE retirement_plans ADD COLUMN early_roth_account_ids_json TEXT NOT NULL DEFAULT '[]'"),("migration_review_json","ALTER TABLE retirement_plans ADD COLUMN migration_review_json TEXT NOT NULL DEFAULT '[]'")]{if !retirement_columns.iter().any(|x|x==name){transaction.execute(sql,[])?;}}
+            transaction.execute("UPDATE retirement_plans SET liquidatable_asset_ids_json=selected_source_ids_json WHERE liquidatable_asset_ids_json='[]'", [])?;
+        }
+        transaction.execute(
+            "INSERT OR IGNORE INTO schema_migrations(version) VALUES(20)",
+            [],
+        )?;
     }
     let version: i64 = transaction.query_row(
         "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
@@ -999,7 +1007,9 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
             .prepare("PRAGMA table_info(retirement_plans)")?
             .query_map([], |r| r.get::<_, String>(1))?
             .collect::<Result<Vec<_>, _>>()?;
-        if !columns.iter().any(|x| x == "tax_assumptions_json") {
+        if columns.iter().any(|x| x == "retirement_year")
+            && !columns.iter().any(|x| x == "tax_assumptions_json")
+        {
             transaction.execute("ALTER TABLE retirement_plans ADD COLUMN tax_assumptions_json TEXT NOT NULL DEFAULT '{}'",[])?;
         }
         transaction.execute("INSERT INTO schema_migrations(version) VALUES(21)", [])?;
@@ -1010,8 +1020,13 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         |r| r.get(0),
     )?;
     if version < 22 {
-        transaction.execute_batch(
-            "CREATE TABLE retirement_plans_v22(
+        let columns = transaction
+            .prepare("PRAGMA table_info(retirement_plans)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        if columns.iter().any(|x| x == "retirement_year") {
+            transaction.execute_batch(
+                "CREATE TABLE retirement_plans_v22(
               household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE RESTRICT,
               retirement_month TEXT NOT NULL CHECK(retirement_month GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'),
               withdrawal_rate_bps INTEGER NOT NULL CHECK(withdrawal_rate_bps BETWEEN 1 AND 10000),
@@ -1023,7 +1038,10 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
             DROP TABLE retirement_plans;
             ALTER TABLE retirement_plans_v22 RENAME TO retirement_plans;
             INSERT INTO schema_migrations(version) VALUES(22);",
-        )?;
+            )?;
+        } else {
+            transaction.execute("INSERT INTO schema_migrations(version) VALUES(22)", [])?;
+        }
     }
     let version: i64 = transaction.query_row(
         "SELECT COALESCE(MAX(version),0) FROM schema_migrations",

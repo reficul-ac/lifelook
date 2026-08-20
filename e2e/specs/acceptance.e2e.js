@@ -65,7 +65,11 @@ async function accountBalance(name) {
   return $(`//*[contains(@class,"account")][.//strong[normalize-space()="${name}"]]//b`).getText();
 }
 
-const entryButton = (name) => $(`button[aria-label="Edit ${name}"]`);
+const entryButton = (name) => $(`[aria-label="Edit ${name}"]`);
+const primaryNavButton = (name) =>
+  $(`nav[aria-label="Primary navigation"] button[aria-label="${name}"]`);
+const settingsSectionButton = (name) =>
+  $(`//nav[@aria-label="Settings sections"]//button[normalize-space()="${name}"]`);
 
 async function assertActivity({ total, rows, present = [], absent = [] }) {
   await browser.waitUntil(async () => (await activityTotal()) === total, { timeout: 3_000, timeoutMsg: `Activity total did not become ${total}` });
@@ -76,13 +80,14 @@ async function assertActivity({ total, rows, present = [], absent = [] }) {
 }
 
 async function assertDerivedViews() {
-  await $("aria/Overview").click();
+  await primaryNavButton("Overview").click();
+  await $(".hero h2").waitForDisplayed();
   assert.equal(await metricValue("Income"), "$2,000.00");
   assert.equal(await metricValue("Spending"), "$150.00");
   assert.equal(await metricValue("Saved"), "$1,850.00");
   assert.equal(await $(".hero h2").getText(), "$3,610.00");
 
-  await $("aria/Net Worth").click();
+  await primaryNavButton("Net Worth").click();
   assert.equal(await metricValue("Total assets"), "$3,610.00");
   assert.equal(await metricValue("Net worth"), "$3,610.00");
   assert.equal(await accountBalance("Everyday checking"), "$2,810.00");
@@ -152,8 +157,8 @@ describe("LifeLook native acceptance", () => {
     await $("aria/Save & Continue").click();
     for (let step = 0; step < 4; step += 1) await $("aria/Skip & Continue").click();
     await $("aria/Finish setup").click();
-    await $("aria/Overview").waitForDisplayed();
-    const overviewNav = await $("nav button:nth-child(1)");
+    await primaryNavButton("Overview").waitForDisplayed();
+    const overviewNav = await primaryNavButton("Overview");
     assert.equal(await overviewNav.getAttribute("aria-current"), "page");
     assert.equal(await $("aria/Search workspace").isEnabled(), true);
     const add = await $("aria/Add");
@@ -172,9 +177,9 @@ describe("LifeLook native acceptance", () => {
     await setLabeledValue("Opening balance (USD)", "500.00");
     await saveDialog();
 
-    await $("aria/Net Worth").click();
+    await primaryNavButton("Net Worth").click();
     const temporaryAccount = await $('//*[contains(@class,"account")][.//strong[normalize-space()="Temporary savings"]]');
-    await temporaryAccount.$("aria/Edit").click();
+    await temporaryAccount.click();
     await setLabeledValue("Account name", "Rainy day savings");
     await saveDialog();
 
@@ -190,7 +195,7 @@ describe("LifeLook native acceptance", () => {
 
     await addTransaction("Expense", { date: priorDate, amount: "40.00", account: "Everyday checking", description: "Prior year parking" });
 
-    await $("aria/Activity").click();
+    await primaryNavButton("Activity").click();
     await entryButton("Native groceries").click();
     await setLabeledValue("Amount (USD)", "150.00");
     await setLabeledValue("Description", "Edited groceries");
@@ -199,21 +204,22 @@ describe("LifeLook native acceptance", () => {
     await setLabeledValue("Amount (USD)", "250.00");
     await saveDialog();
 
-    await $("aria/Net Worth").click();
+    await primaryNavButton("Net Worth").click();
     const savingsAccount = await $('//*[contains(@class,"account")][.//strong[normalize-space()="Rainy day savings"]]');
-    await savingsAccount.$("aria/Reconcile").click();
+    await savingsAccount.$("aria/More actions for Rainy day savings").click();
+    await $("aria/Reconcile").click();
     await setLabeledValue("Date", currentDate);
     await setLabeledValue("Target current balance (USD)", "800.00");
     await saveDialog();
 
-    await $("aria/Activity").click();
+    await primaryNavButton("Activity").click();
     await assertActivity({ total: "$1,900.00", rows: 4, present: ["Native salary", "Edited groceries", "Transfer", "Balance reconciliation"], absent: ["Prior year parking"] });
-    assert.equal((await $$('button[aria-label="Edit Transfer"]')).length, 1, "the two transfer postings should render as one row");
+    assert.equal((await $$('[aria-label="Edit Transfer"]')).length, 1, "the two transfer postings should render as one row");
     await browser.execute(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true })));
     const workspaceSearch = await $('input[aria-label="Search workspace"]');
     await workspaceSearch.setValue("Edited groceries");
     await browser.keys("Enter");
-    await $("aria/Activity").waitForDisplayed();
+    await primaryNavButton("Activity").waitForDisplayed();
     await browser.waitUntil(async () => browser.execute(() => document.activeElement?.getAttribute("aria-label") === "Edit Edited groceries"));
     await browser.saveScreenshot(artifact("04-native-activity-ledger-920x650.png"));
 
@@ -221,6 +227,7 @@ describe("LifeLook native acceptance", () => {
     await searchActivity.setValue("groceries");
     await assertActivity({ total: "-$150.00", rows: 1, present: ["Edited groceries"], absent: ["Native salary", "Transfer"] });
     await setReactInput(searchActivity, "");
+    await $("aria/Filters").click();
     await $("#activity-account").selectByVisibleText("Rainy day savings");
     await assertActivity({ total: "$50.00", rows: 2, present: ["Transfer", "Balance reconciliation"], absent: ["Native salary", "Edited groceries"] });
     await $("#activity-account").selectByVisibleText("All accounts");
@@ -232,6 +239,7 @@ describe("LifeLook native acceptance", () => {
     const exportPath = process.env.LIFELOOK_E2E_ACTIVITY_EXPORT;
     assert.ok(exportPath);
     await setReactInput(searchActivity, "Transfer");
+    await $("aria/Actions").click();
     await $("aria/Export CSV").click();
     // GTK applies the active CSV filter's extension when the name is accepted.
     // Enter the basename so the resulting destination is exactly exportPath.
@@ -248,20 +256,18 @@ describe("LifeLook native acceptance", () => {
     await assertDerivedViews();
     await browser.saveScreenshot(artifact("05-native-net-worth-920x650.png"));
 
-    const planNav = await $("nav button:nth-child(3)");
+    const planNav = await primaryNavButton("Plan");
     await planNav.click();
     assert.equal(await planNav.getAttribute("aria-current"), "page");
-    const year = await $(".year-row[aria-expanded]");
-    assert.equal(await year.getAttribute("aria-expanded"), "false");
-    await year.click();
-    assert.equal(await year.getAttribute("aria-expanded"), "true");
-    const monthPanelId = await year.getAttribute("aria-controls");
-    const monthPanel = await $(`#${monthPanelId}`);
-    assert.equal(await monthPanel.getAttribute("role"), "region");
-    assert.ok((await monthPanel.getAttribute("aria-label")).includes("monthly detail"));
+    const annualWealth = await $('//details[summary[normalize-space()="View annual wealth data"]]');
+    assert.equal(await annualWealth.getAttribute("open"), null);
+    await annualWealth.$("summary").click();
+    await annualWealth.$('[aria-label="Annual wealth projection"] table').waitForDisplayed();
+    assert.notEqual(await annualWealth.getAttribute("open"), null);
     await browser.saveScreenshot(artifact("02-plan-expanded-920x650.png"));
 
-    await $("aria/Settings").click();
+    await primaryNavButton("Settings").click();
+    await settingsSectionButton("Appearance").click();
     const switches = await $$('button[role="switch"]');
     assert.equal(switches.length, 1);
     const reducedMotion = switches[0];
@@ -272,34 +278,40 @@ describe("LifeLook native acceptance", () => {
     assert.equal(await dark.getAttribute("type"), "radio");
     assert.equal(await dark.isSelected(), false);
     await dark.click();
-    assert.equal(await dark.isSelected(), true);
+    await browser.waitUntil(async () => await dark.isSelected());
+    await reducedMotion.click();
+    await browser.waitUntil(async () => (await reducedMotion.getAttribute("aria-checked")) === "true");
+    await settingsSectionButton("Household").click();
     const member = await $("aria/Member 1 name");
     await member.setValue("Persisted Member With A Deliberately Long Name");
     await $("aria/Save members").click();
     await $("aria/Household members saved.").waitForDisplayed();
-    await reducedMotion.click();
-    await browser.waitUntil(async () => (await reducedMotion.getAttribute("aria-checked")) === "true");
     await browser.saveScreenshot(artifact("03-dark-settings-920x650.png"));
 
     await browser.reloadSession();
-    await $("aria/Overview").waitForDisplayed();
+    await primaryNavButton("Overview").waitForDisplayed();
     await assertDerivedViews();
-    await $("aria/Activity").click();
+    await primaryNavButton("Activity").click();
     await assertActivity({ total: "$1,900.00", rows: 4, present: ["Native salary", "Edited groceries", "Transfer", "Balance reconciliation"], absent: ["Prior year parking"] });
-    assert.equal((await $$('button[aria-label="Edit Transfer"]')).length, 1);
-    await $("aria/Settings").click();
+    assert.equal((await $$('[aria-label="Edit Transfer"]')).length, 1);
+    await primaryNavButton("Settings").click();
+    await settingsSectionButton("Appearance").click();
     assert.equal(await $("aria/Dark").isSelected(), true);
     assert.equal(await $('button[role="switch"]').getAttribute("aria-checked"), "true");
+    await settingsSectionButton("Household").click();
     assert.equal(await $("aria/Member 1 name").getValue(), "Persisted Member With A Deliberately Long Name");
     const backupPath = process.env.LIFELOOK_E2E_BACKUP;
     assert.ok(backupPath);
+    await settingsSectionButton("Data & Privacy").click();
     await $("aria/Back up data").click();
     await chooseNativeFile(backupPath);
     await $("aria/Backup created successfully.").waitForDisplayed();
+    await settingsSectionButton("Household").click();
     const restoredMember = await $("aria/Member 1 name");
     await restoredMember.setValue("Mutated after backup");
     await $("aria/Save members").click();
     await $("aria/Household members saved.").waitForDisplayed();
+    await settingsSectionButton("Data & Privacy").click();
     await $("aria/Choose backup").click();
     await $('[role="alertdialog"]').waitForDisplayed();
     await $("aria/Choose backup and restore").click();
@@ -307,50 +319,49 @@ describe("LifeLook native acceptance", () => {
     await browser.waitUntil(async () => (await browser.execute(() => [...document.querySelectorAll('[role="status"], [role="alert"]')].map(element => element.textContent))).some(message => message?.includes("backup") || message?.includes("Backup")), { timeout: 10_000 });
     const restoreMessages = await browser.execute(() => [...document.querySelectorAll('[role="status"], [role="alert"]')].map(element => element.textContent ?? ""));
     assert.ok(restoreMessages.some(message => message.includes("Backup restored successfully")), `Restore feedback: ${restoreMessages.join(" | ")}`);
+    await settingsSectionButton("Household").click();
     assert.equal(await $("aria/Member 1 name").getValue(), "Persisted Member With A Deliberately Long Name");
     await browser.reloadSession();
-    await $("aria/Overview").waitForDisplayed();
-    await $("aria/Settings").click();
+    await primaryNavButton("Overview").waitForDisplayed();
+    await primaryNavButton("Settings").click();
     assert.equal(await $("aria/Member 1 name").getValue(), "Persisted Member With A Deliberately Long Name");
-    await $("aria/Net Worth").click();
+    await primaryNavButton("Net Worth").click();
     assert.equal(await $('//*[normalize-space()="Everyday checking"]').isExisting(), true);
 
     for (const [width, height] of [[1024, 768], [1280, 820]]) {
       await browser.setWindowSize(width, height);
-      await $("aria/Plan").click();
-      const row = await $(".year-row[aria-expanded]");
-      if ((await row.getAttribute("aria-expanded")) === "false") await row.click();
+      await primaryNavButton("Plan").click();
+      const disclosure = await $('//details[summary[normalize-space()="View annual wealth data"]]');
+      if ((await disclosure.getAttribute("open")) === null) await disclosure.$("summary").click();
+      await disclosure.$('[aria-label="Annual wealth projection"] table').waitForDisplayed();
       assert.equal(await browser.execute(() => document.documentElement.scrollWidth <= window.innerWidth), true);
       await browser.saveScreenshot(artifact(`layout-plan-expanded-${width}x${height}.png`));
     }
 
-    const activityNav = await $("nav button:nth-child(2)");
+    const activityNav = await primaryNavButton("Activity");
     await activityNav.addValue("\uE007");
     await $("aria/Search activity").waitForDisplayed();
     const colors = await browser.execute(() => {
-      const read = (selector) => {
-        let node = document.querySelector(selector);
-        let temporary = false;
-        if (!node) {
-          node = document.createElement("span");
-          node.className = selector.slice(1);
-          document.querySelector(".card").append(node);
-          temporary = true;
-        }
+      const card = document.querySelector(".transaction-action")?.closest(".card");
+      if (!(card instanceof HTMLElement)) throw new Error("Activity card is unavailable");
+      const read = (className) => {
+        const node = document.createElement("span");
+        node.className = className;
+        card.append(node);
         const style = getComputedStyle(node);
-        const sample = { color: style.color, background: getComputedStyle(node.closest(".card")).backgroundColor };
-        if (temporary) node.remove();
+        const sample = { color: style.color, background: getComputedStyle(card).backgroundColor };
+        node.remove();
         return sample;
       };
-      return { positive: read(".positive"), negative: read(".negative") };
+      return { positive: read("positive"), negative: read("negative") };
     });
     for (const sample of [colors.positive, colors.negative]) {
       assert.ok(contrast(rgbToHex(sample.color), rgbToHex(sample.background)) >= 4.5);
     }
 
     const search = await $("aria/Search activity");
-    for (let index = 0; index < 12 && !(await search.isFocused()); index += 1) {
-      await browser.keys("Tab");
+    for (let index = 0; index < 24 && !(await search.isFocused()); index += 1) {
+      await browser.keys("\uE004");
     }
     assert.equal(await search.isFocused(), true);
     const focusStyle = await browser.execute(() => {
@@ -359,5 +370,45 @@ describe("LifeLook native acceptance", () => {
     });
     assert.notEqual(focusStyle, "none");
     await browser.saveScreenshot(artifact("06-dark-activity-search-focus-1280x820.png"));
+
+    await openAdd("Asset");
+    await $('//label[contains(normalize-space(.),"This asset is a home")]//input').click();
+    await setLabeledValue("Asset name", "Retirement home");
+    await setLabeledValue("Current home value (USD)", "500000.00");
+    await setLabeledValue("Original purchase price (USD)", "300000.00");
+    await setLabeledValue("Purchase date", priorDate);
+    await $('//label[contains(normalize-space(.),"Financed with a mortgage")]//input').click();
+    await $('//summary[normalize-space()="Sale and tax details"]').click();
+    await setReactInput(await $("aria/Selling costs (%)"), "");
+    await saveDialog();
+
+    await primaryNavButton("Retirement").click();
+    const retirementMonth = await $("aria/Retirement month");
+    await retirementMonth.waitForDisplayed();
+    assert.equal(await retirementMonth.getAttribute("type"), "month");
+    const withdrawalRate = await $("aria/Withdrawal rate");
+    assert.equal(await withdrawalRate.getValue(), "3");
+    assert.equal(await withdrawalRate.$("..").getText(), "%");
+    assert.equal(await $("aria/If you keep your homes").isDisplayed(), true);
+    assert.equal(await $("aria/If you sell all homes").isDisplayed(), true);
+    for (const legacyControl of [
+      "Retirement readiness",
+      "Portfolio runway",
+      "Add retirement item",
+    ]) {
+      assert.equal(await $(`aria/${legacyControl}`).isExisting(), false);
+    }
+
+    const sellStory = await $('//article[.//h2[normalize-space()="If you sell all homes"]]');
+    const sellHeadlines = await sellStory.$$("strong");
+    assert.equal(sellHeadlines.length, 2);
+    assert.equal(await sellHeadlines[0].getText(), "Unavailable");
+    assert.equal(await sellHeadlines[1].getText(), "Unavailable");
+    await sellStory.$("aria/View calculation").click();
+    assert.match(
+      await sellStory.$(".retirement-unavailable").getText(),
+      /Add the following home details to calculate a sale[\s\S]*Add selling costs for Retirement home\./,
+    );
+    await browser.saveScreenshot(artifact("07-retirement-snapshot-unavailable-1280x820.png"));
   });
 });

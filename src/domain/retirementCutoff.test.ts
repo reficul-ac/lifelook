@@ -47,7 +47,27 @@ describe("buildRetirementCutoff",()=>{
 
     expect(cutoff.balanceMonth).toBe("2026-12");
     expect(cutoff.accounts.cash).toBe(13_600);
-    expect(cutoff.taxLedger.year).toBe(2026);
+    expect(cutoff.taxLedger).toEqual(expect.objectContaining({year:2027,federalAgiCents:0,modifiedAgiCents:0}));
+  });
+
+  it("includes an owner-occupied current home without rental events",()=>{
+    const quietScenario:Scenario={...scenario,events:[]};
+    const cutoff=buildRetirementCutoff({snapshot,scenario:quietScenario,retirementMonth:"2026-09",asOfDate:"2026-01-15"});
+
+    expect(cutoff.properties).toContainEqual(expect.objectContaining({assetId:"home",name:"Home",valueCents:100_000,mortgageCents:0,monthlyGrossRentCents:0,projectedDepreciationCents:0,source:"current"}));
+  });
+
+  it("excludes planned properties that are not owned at the cutoff without mutating the Plan",()=>{
+    const plan:Scenario={...scenario,events:[
+      {id:"future-purchase",date:"2026-10-01",type:"asset-purchase",assetId:"future-home",name:"Future home",valueCents:50_000,annualGrowthBps:0,fundingAccountId:"cash",downPaymentCents:0,costsCents:0},
+      {id:"sold-purchase",date:"2026-01-01",type:"asset-purchase",assetId:"sold-home",name:"Sold home",valueCents:40_000,annualGrowthBps:0,fundingAccountId:"cash",downPaymentCents:0,costsCents:0},
+      {id:"sold-sale",date:"2026-07-01",type:"asset-sale",assetId:"sold-home",proceedsCents:0,costsCents:0,destinationAccountId:"cash"},
+    ]};
+    const before=JSON.stringify(plan);
+    const cutoff=buildRetirementCutoff({snapshot,scenario:plan,retirementMonth:"2026-09",asOfDate:"2026-01-15"});
+
+    expect(cutoff.properties.map(property=>property.assetId)).toEqual(["home"]);
+    expect(JSON.stringify(plan)).toBe(before);
   });
 
   it("names a preceding month whose projection has no balance row",()=>{

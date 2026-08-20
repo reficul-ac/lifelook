@@ -47,21 +47,34 @@ export function buildRetirementCutoff(input:RetirementCutoffInput):RetirementCut
   const projections=ProjectionEngine.calculate(input.snapshot,scenario,input.asOfDate,{stopEmploymentMonth:input.retirementMonth});
   const balanceRow=projections.flatMap(year=>year.months).find(month=>month.month===balanceMonth);
   if(!balanceRow?.balances)throw new RangeError(`Missing projection balances for ${balanceMonth}`);
-  const taxLedger=projections.find(year=>year.year===balanceDate.getUTCFullYear())?.taxLedger;
+  const retirementYear=retirementDate.getUTCFullYear();
+  let taxLedger=projections.find(year=>year.year===retirementYear)?.taxLedger;
+  if(!taxLedger&&retirementYear!==balanceDate.getUTCFullYear()){
+    const retirementScenario={...input.scenario,horizon:{start:input.retirementMonth,months:1},retirementExtension:true} as Scenario&{retirementExtension:true};
+    taxLedger=ProjectionEngine.calculate(input.snapshot,retirementScenario,`${input.retirementMonth}-01`,{stopEmploymentMonth:input.retirementMonth}).find(year=>year.year===retirementYear)?.taxLedger;
+  }
   if(!taxLedger)throw new RangeError(`Missing tax ledger for ${balanceMonth}`);
 
   const assets={...balanceRow.balances.assets,...Object.fromEntries(Object.entries(balanceRow.balances.privateStock).map(([id,value])=>[id,value.vestedCents]))};
   const projectedMonths=projections.flatMap(year=>year.months).filter(month=>month.month<=balanceMonth);
   const currentAssetIds=new Set(input.snapshot.assets.map(asset=>asset.id));
-  const properties=balanceRow.properties.map(property=>({
-    assetId:property.assetId,
-    name:property.name,
-    valueCents:property.assetValueCents??0,
-    mortgageCents:property.mortgageBalanceCents??0,
-    monthlyGrossRentCents:property.rentCents+property.aduIncomeCents,
-    projectedDepreciationCents:projectedMonths.flatMap(month=>month.properties).filter(row=>row.assetId===property.assetId).reduce((sum,row)=>sum+row.depreciationCents,0),
-    source:currentAssetIds.has(property.assetId)?"current" as const:"planned" as const,
-  }));
+  const ownedAssetIds=new Set(Object.keys(balanceRow.balances.assets));
+  const currentProperties=input.snapshot.assets.filter(asset=>asset.housingCosts||asset.purchaseDate||asset.purchasePriceCents!=null||input.snapshot.liabilities.some(liability=>liability.mortgage?.assetId===asset.id));
+  const plannedProperties=input.scenario.events.filter((event):event is Extract<Scenario["events"][number],{type:"asset-purchase"}>=>event.type==="asset-purchase");
+  const propertyIds=[...new Set([...currentProperties.map(asset=>asset.id),...plannedProperties.map(event=>event.assetId)])].filter(assetId=>ownedAssetIds.has(assetId));
+  const properties=propertyIds.map(assetId=>{
+    const property=balanceRow.properties.find(row=>row.assetId===assetId),current=input.snapshot.assets.find(asset=>asset.id===assetId),planned=plannedProperties.find(event=>event.assetId===assetId);
+    const liabilityId=property?.liabilityId??input.snapshot.liabilities.find(liability=>liability.mortgage?.assetId===assetId)?.id??planned?.financing?.liabilityId;
+    return {
+      assetId,
+      name:property?.name??current?.name??planned!.name,
+      valueCents:balanceRow.balances!.assets[assetId],
+      mortgageCents:property?.mortgageBalanceCents??(liabilityId?balanceRow.balances!.liabilities[liabilityId]??0:0),
+      monthlyGrossRentCents:(property?.rentCents??0)+(property?.aduIncomeCents??0),
+      projectedDepreciationCents:projectedMonths.flatMap(month=>month.properties).filter(row=>row.assetId===assetId).reduce((sum,row)=>sum+row.depreciationCents,0),
+      source:currentAssetIds.has(assetId)?"current" as const:"planned" as const,
+    };
+  });
 
   return {retirementMonth:input.retirementMonth,balanceMonth,accounts:balanceRow.balances.accounts,assets,liabilities:balanceRow.balances.liabilities,properties,taxLedger};
 }

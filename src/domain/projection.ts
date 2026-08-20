@@ -3,6 +3,7 @@ import { projectedSharePrice, valueForUnits, vestValue, vestedUnitsAt } from "./
 import type { AnnualProjection, ContributionResult, ContributionRule, FinancialSnapshot, MonthlyProjection, ProjectionOptions, ProjectionWarning, PropertyProjectionResult, PropertyProjectionStatus, RecurringEntry, Scenario } from "./types";
 
 const monthKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+const monthEndDate=(month:string)=>{const date=isoDate(`${month}-01`);return new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,0)).toISOString().slice(0,10);};
 const grow = (cents: number, bps: number, months: number) => Math.round(cents * Math.pow(1 + bps / 10_000, months / 12));
 const monthsBetween=(from:string,to:string)=>Math.max(0,(Number(to.slice(0,4))-Number(from.slice(0,4)))*12+Number(to.slice(5,7))-Number(from.slice(5,7)));
 export const californiaAssessedValue=(asset:Pick<import("./types").Asset,"valueCents"|"purchasePriceCents"|"purchaseDate">,date:string,fallbackStart=date)=>grow(asset.purchasePriceCents??asset.valueCents,200,monthsBetween(asset.purchaseDate??fallbackStart,date));
@@ -83,7 +84,7 @@ export const ProjectionEngine = {
     const start = new Date(`${asOfMonth}-01T00:00:00Z`);
     const employmentActive=(month:string)=>!options.stopEmploymentMonth||month<options.stopEmploymentMonth;
     const isEmploymentIncome=(entry:RecurringEntry)=>entry.incomeTaxCategory==="wages"||entry.incomeType==="salary";
-    const finalEmploymentBalanceDate=options.stopEmploymentMonth?`${monthKey(addMonths(isoDate(`${options.stopEmploymentMonth}-01`),-1))}-01`:undefined;
+    const finalEmploymentBalanceDate=options.stopEmploymentMonth?monthEndDate(monthKey(addMonths(isoDate(`${options.stopEmploymentMonth}-01`),-1))):undefined;
     const accounts = new Map(snapshot.accounts.map(a => [a.id, { ...a, balance: a.balanceCents }]));
     const assets = new Map(snapshot.assets.map(a => [a.id, { ...a, value: a.valueCents, withheld: 0 }]));
     const debts = new Map(snapshot.liabilities.map(l => [l.id, { ...l, balance: l.balanceCents, payment: l.minimumPaymentCents }]));
@@ -128,8 +129,8 @@ export const ProjectionEngine = {
       let annualNonWage=0;
       for(let calendarMonth=0;calendarMonth<12;calendarMonth++){
         const date=new Date(Date.UTC(year,calendarMonth,1)),key=monthKey(date),growthMonth=(year-start.getUTCFullYear())*12+calendarMonth-start.getUTCMonth();
-        for(const entry of snapshot.recurring){const count=occurrences(entry,key);if(!count)continue;const changes=events.filter(e=>(e.type==="recurring-change"||e.type==="income-change")&&e.entryId===entry.id&&e.date.slice(0,7)<=key),amount=changes.length?(changes.at(-1)! as {amountCents:number}).amountCents:entry.amountCents,value=recurringAmount(entry,amount,key,entry.annualGrowthBps??(entry.kind==="expense"?scenario.assumptions.inflationBps:0),growthMonth,count);if(entry.kind==="income"&&(!isEmploymentIncome(entry)||employmentActive(key))){annualHouseholdGross+=value;if(explicitTaxUnit){const category=entry.incomeTaxCategory??(entry.incomeType==="salary"?"wages":"taxable-nonwage");if(category==="wages"){if(!entry.ownerPersonId||!employeeWages.has(entry.ownerPersonId))throw new RangeError("Wage income requires an owner in the tax unit");employeeWages.get(entry.ownerPersonId)!.salaryCents+=value;}else if(category==="taxable-nonwage")annualNonWage+=value;}}else if(entry.kind==="expense"&&entry.taxTreatment==="pretax")annualHouseholdPretax+=value;}
-        for(const event of events.filter(e=>e.date.slice(0,7)===key))if(event.type==="one-time-income"&&(event.incomeTaxCategory!=="wages"||employmentActive(key))){annualHouseholdGross+=event.amountCents;if(explicitTaxUnit){const category=event.incomeTaxCategory??"taxable-nonwage";if(category==="wages"){if(!event.ownerPersonId||!employeeWages.has(event.ownerPersonId))throw new RangeError("One-time wages require an owner in the tax unit");employeeWages.get(event.ownerPersonId)!.salaryCents+=event.amountCents;}else if(category==="taxable-nonwage")annualNonWage+=event.amountCents;}}
+        for(const entry of snapshot.recurring){const count=occurrences(entry,key);if(!count)continue;const changes=events.filter(e=>(e.type==="recurring-change"||e.type==="income-change")&&e.entryId===entry.id&&e.date.slice(0,7)<=key),amount=changes.length?(changes.at(-1)! as {amountCents:number}).amountCents:entry.amountCents,value=recurringAmount(entry,amount,key,entry.annualGrowthBps??(entry.kind==="expense"?scenario.assumptions.inflationBps:0),growthMonth,count);if(entry.kind==="income"&&employmentActive(key)){annualHouseholdGross+=value;if(explicitTaxUnit){const category=entry.incomeTaxCategory??(entry.incomeType==="salary"?"wages":"taxable-nonwage");if(category==="wages"){if(!entry.ownerPersonId||!employeeWages.has(entry.ownerPersonId))throw new RangeError("Wage income requires an owner in the tax unit");employeeWages.get(entry.ownerPersonId)!.salaryCents+=value;}else if(category==="taxable-nonwage")annualNonWage+=value;}}else if(entry.kind==="expense"&&entry.taxTreatment==="pretax"&&employmentActive(key))annualHouseholdPretax+=value;}
+        for(const event of events.filter(e=>e.date.slice(0,7)===key))if(event.type==="one-time-income"&&employmentActive(key)){annualHouseholdGross+=event.amountCents;if(explicitTaxUnit){const category=event.incomeTaxCategory??"taxable-nonwage";if(category==="wages"){if(!event.ownerPersonId||!employeeWages.has(event.ownerPersonId))throw new RangeError("One-time wages require an owner in the tax unit");employeeWages.get(event.ownerPersonId)!.salaryCents+=event.amountCents;}else if(category==="taxable-nonwage")annualNonWage+=event.amountCents;}}
         for(const [owner,value] of vestOwnerByMonth.get(key)??[])if(employeeWages.has(owner))employeeWages.get(owner)!.rsuCents+=value;
       }
       if(explicitTaxUnit){
@@ -265,10 +266,9 @@ export const ProjectionEngine = {
         }
       } else if (surplus < 0) { let remaining=-surplus; const ordered=[...scenario.withdrawals].sort((a,b)=>a.priority-b.priority).map(r=>account(r.accountId)); for(const source of ordered){const drawn=Math.min(Math.max(0,source.balance),remaining);source.balance-=drawn;remaining-=drawn;if(source.balance===0&&drawn>0)warnings.push({code:"account-depleted",message:`${source.name} was depleted.`,month:key,entityId:source.id,inputField:"withdrawals"});if(!remaining)break;} unfunded=remaining; cumulativeDeficit+=unfunded; if(unfunded)warnings.push({code:"unfunded-deficit",message:`${unfunded} cents of the deficit could not be funded.`,month:key,inputField:"withdrawals"}); }
       const liquid = [...accounts.values()].filter(a => a.liquid).reduce((s, a) => s + a.balance, 0) - cumulativeDeficit;
-      const vestingDate=employmentActive(key)?`${key}-01`:finalEmploymentBalanceDate!;
+      const balanceDate=monthEndDate(key),vestingDate=employmentActive(key)?balanceDate:finalEmploymentBalanceDate!;
       const accountTotal = [...accounts.values()].reduce((s, a) => s + a.balance, 0), assetTotal = [...assets.values()].reduce((s, a) => s + Math.max(0,(a.equityHolding?vestedEquityValue(a,vestingDate):vestedAssetValue(a,vestingDate))-a.withheld), 0), debtTotal = [...debts.values()].reduce((s, d) => s + d.balance, 0);
       const actual=snapshot.actuals?.filter(x=>x.date.slice(0,7)===key)??[], actualIncome=actual.filter(x=>x.kind==="income").reduce((s,x)=>s+Math.abs(x.amountCents),0),actualExpense=actual.filter(x=>x.kind==="expense").reduce((s,x)=>s+Math.abs(x.amountCents),0),status=key<asOfMonth?"actual":key===asOfMonth?"blended":"projected";
-      const balanceDate=`${key}-01`;
       const balances={
         accounts:Object.fromEntries([...accounts].map(([id,item])=>[id,item.balance])),
         assets:Object.fromEntries([...assets].filter(([,item])=>!item.privateStock&&!item.equityHolding).map(([id,item])=>[id,item.value])),

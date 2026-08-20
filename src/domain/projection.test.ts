@@ -56,6 +56,33 @@ describe("Carriggs joint-income projection",()=>{
   it("splits cash tax from RSU sell-to-cover so annual surplus reconciles",()=>{const [year]=ProjectionEngine.calculate(financial,plan,"2026-08-16");expect(year.rsuSellToCoverTaxCents).toBeGreaterThan(0);expect(year.taxCents).toBe(year.cashTaxCents+year.rsuSellToCoverTaxCents);expect(year.surplusCents).toBe(year.incomeCents-year.expenseCents-year.cashTaxCents);for(const month of year.months)expect(month.taxCents).toBe(month.cashTaxCents+month.rsuSellToCoverTaxCents)});
 });
 
+describe("retirement employment cutoff",()=>{
+  it("stops household wages and RSU vesting at the retirement month",()=>{
+    const personA="employee-a",personB="employee-b";
+    const financialWithSeptemberWagesAndVests:FinancialSnapshot={
+      household:{id:"household",name:"Household",state:"CA",people:[{id:personA,name:"Employee A"},{id:personB,name:"Employee B"}]},
+      taxProfile:{filingStatus:"married-joint",state:"CA",taxYear:2026,thresholdInflationBps:250,taxUnit:{id:"joint",filingStatus:"married-joint",memberPersonIds:[personA,personB]}},
+      accounts:[{id:"cash",name:"Cash",kind:"checking",balanceCents:0,annualReturnBps:0,liquid:true}],
+      recurring:[
+        {id:"a-salary",name:"A salary",kind:"income",incomeType:"salary",incomeTaxCategory:"wages",ownerPersonId:personA,amountCents:120_000_00,startDate:"2026-01-01",taxTreatment:"none"},
+        {id:"b-salary",name:"B salary",kind:"income",incomeType:"salary",incomeTaxCategory:"wages",ownerPersonId:personB,amountCents:60_000_00,startDate:"2026-01-01",taxTreatment:"none"},
+        {id:"royalties",name:"Royalties",kind:"income",incomeType:"ordinary",incomeTaxCategory:"taxable-nonwage",amountCents:500_00,frequency:"monthly",startDate:"2026-01-01",taxTreatment:"none"},
+      ],
+      assets:[{id:"rsu",name:"RSUs",valueCents:2_000,annualGrowthBps:0,equityHolding:{priceCents:1_000,priceDate:"2026-01-01",sellToCover:false,grants:[{id:"grant",ownerPersonId:personA,grantDate:"2026-01-01",grantPriceCents:1_000,unitsMicros:2_000_000,vestEvents:[{id:"august-vest",date:"2026-08-01",unitsMicros:1_000_000},{id:"september-vest",date:"2026-09-01",unitsMicros:1_000_000}]}]}}],
+      liabilities:[],
+    };
+    const plan:Scenario={...scenario,defaultContributionAccountId:"cash",events:[{id:"september-bonus",date:"2026-09-01",type:"one-time-income",amountCents:1_000_00,incomeTaxCategory:"wages",ownerPersonId:personA}],horizon:{start:"2026-01",months:9}};
+    const result=ProjectionEngine.calculate(financialWithSeptemberWagesAndVests,plan,"2026-01-01",{stopEmploymentMonth:"2026-09"});
+    const year=result[0],august=year.months.find(month=>month.month==="2026-08")!,september=year.months.find(month=>month.month==="2026-09")!;
+    const wagesThroughAugust:Record<string,number>={[personA]:80_000_00,[personB]:40_000_00};
+
+    expect(august.incomeCents).toBeGreaterThan(0);
+    expect(september.incomeCents).toBe(500_00);
+    expect(year.taxLedger!.employees.every(employee=>employee.salaryCents===wagesThroughAugust[employee.personId])).toBe(true);
+    expect(september.balances!.privateStock.rsu.vestedCents).toBe(1_000);
+  });
+});
+
 describe("ProjectionEngine",()=>{
   it("projects a funded planned property as an asset, mortgage, rent, costs, and tracker record",()=>{
     const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:5_000_00}]};

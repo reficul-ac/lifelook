@@ -52,6 +52,7 @@ export interface PlannedPropertyDetails {
   adu?: { planned: boolean; buildDate?: string; costCents: Cents; homeSquareFeet?: number; squareFeet?: number; monthlyRentalIncomeCents?: Cents; rentalIncomeGrowthBps?: BasisPoints };
 }
 export interface ProjectionHorizon { start: string; months: number }
+export interface ProjectionOptions { stopEmploymentMonth?: string }
 export type ScenarioEvent =
   | { id: string; date: string; type: "recurring-change" | "income-change"; entryId: string; amountCents: Cents }
   | { id: string; date: string; type: "one-time-income"; amountCents: Cents; incomeTaxCategory?:IncomeTaxCategory; ownerPersonId?:string }
@@ -86,5 +87,5 @@ export interface TaxRulePack { year: 2025 | 2026; federal: Record<FilingStatus, 
 export interface TaxabilityBreakdown { grossWageIncomeCents: Cents; federalDeductionCents: Cents; californiaDeductionCents: Cents; ficaExemptWagesCents: Cents }
 export interface EmployeeWages { personId:string; salaryCents:Cents; rsuCents:Cents }
 export interface HouseholdDeductions { traditionalRetirementCents:Cents; mortgageInterestCents:Cents; mortgageDebtCents?:Cents; propertyTaxCents:Cents; stateIncomeTaxCents?:Cents }
-export interface TaxLedger { year:number; employees:readonly (EmployeeWages&{socialSecurityCents:Cents;medicareCents:Cents;sdiCents:Cents})[]; grossIncomeCents:Cents; federalStandardCents:Cents; federalItemizedCents:Cents; federalDeductionCents:Cents; federalTaxableCents:Cents; californiaStandardCents:Cents; californiaItemizedCents:Cents; californiaDeductionCents:Cents; californiaTaxableCents:Cents; federalCents:Cents; californiaCents:Cents; socialSecurityCents:Cents; medicareCents:Cents; additionalMedicareCents:Cents; sdiCents:Cents; fullYearLiabilityCents:Cents; futureCashFlowCents:Cents; refundOrBalanceDue:"unknown"; sources:readonly TaxSource[]; projected:boolean }
+export interface TaxLedger { year:number; employees:readonly (EmployeeWages&{socialSecurityCents:Cents;medicareCents:Cents;sdiCents:Cents})[]; grossIncomeCents:Cents; federalAgiCents:Cents; modifiedAgiCents:Cents; federalStandardCents:Cents; federalItemizedCents:Cents; federalDeductionCents:Cents; federalTaxableCents:Cents; californiaStandardCents:Cents; californiaItemizedCents:Cents; californiaDeductionCents:Cents; californiaTaxableCents:Cents; federalCents:Cents; californiaCents:Cents; socialSecurityCents:Cents; medicareCents:Cents; additionalMedicareCents:Cents; sdiCents:Cents; fullYearLiabilityCents:Cents; futureCashFlowCents:Cents; refundOrBalanceDue:"unknown"; sources:readonly TaxSource[]; projected:boolean }
 export interface TaxEstimate { federalCents: Cents; californiaCents: Cents; socialSecurityCents: Cents; medicareCents: Cents; additionalMedicareCents?:Cents; sdiCents?:Cents; totalCents: Cents; effectiveRateBps: BasisPoints; marginalRateBps: BasisPoints; sourceYear: number; projected: boolean; sources: readonly TaxSource[] }

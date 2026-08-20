@@ -4656,20 +4656,41 @@ fn retry_database(database: &Database) -> Result<WorkspaceSnapshot, AppError> {
     }
 }
 
-#[tauri::command]
-fn system_theme_dark() -> Option<bool> {
+fn parse_color_scheme(value: &str) -> Option<bool> {
+    match value.trim_matches(|character: char| character.is_whitespace() || character == '\'') {
+        "prefer-dark" => Some(true),
+        "default" | "prefer-light" => Some(false),
+        _ => None,
+    }
+}
+
+fn parse_gtk_theme(value: &str) -> Option<bool> {
+    let theme =
+        value.trim_matches(|character: char| character.is_whitespace() || character == '\'');
+    (!theme.is_empty()).then(|| theme.to_ascii_lowercase().contains("dark"))
+}
+
+fn gsettings_interface_value(key: &str) -> Option<String> {
     let output = std::process::Command::new("gsettings")
-        .args(["get", "org.gnome.desktop.interface", "color-scheme"])
+        .args(["get", "org.gnome.desktop.interface", key])
         .output()
         .ok()?;
     if !output.status.success() {
         return None;
     }
-    let value = String::from_utf8(output.stdout).ok()?;
-    Some(
-        value.trim_matches(|character: char| character.is_whitespace() || character == '\'')
-            == "prefer-dark",
-    )
+    String::from_utf8(output.stdout).ok()
+}
+
+#[tauri::command]
+fn system_theme_dark() -> Option<bool> {
+    gsettings_interface_value("color-scheme")
+        .as_deref()
+        .and_then(parse_color_scheme)
+        .or_else(|| {
+            gsettings_interface_value("gtk-theme")
+                .as_deref()
+                .and_then(parse_gtk_theme)
+        })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -6143,5 +6164,15 @@ mod tests {
         assert!(write_activity_csv(&c, &dir.join("out.csv"), &[id]).is_err());
         assert!(!dir.join("out.csv").exists());
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn parses_modern_and_legacy_system_theme_preferences() {
+        assert_eq!(parse_color_scheme("'prefer-dark'\n"), Some(true));
+        assert_eq!(parse_color_scheme("'default'\n"), Some(false));
+        assert_eq!(parse_color_scheme("'unexpected'\n"), None);
+        assert_eq!(parse_gtk_theme("'Adwaita-dark'\n"), Some(true));
+        assert_eq!(parse_gtk_theme("'Adwaita'\n"), Some(false));
+        assert_eq!(parse_gtk_theme("\n"), None);
     }
 }

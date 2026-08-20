@@ -33,8 +33,13 @@ export function isCurrentPropertyAsset(
     "assetId" in event &&
     event.assetId === assetId &&
     (event.type === "property-rental-start" || event.type === "adu-build"));
+  const explicitHousingCosts = asset.housingCosts != null && (
+    asset.housingCosts.propertyTaxRateBps !== 0 ||
+    asset.housingCosts.insuranceMonthlyCents !== 0 ||
+    asset.housingCosts.hoaMonthlyCents !== 0
+  );
   return Boolean(
-    asset.housingCosts ||
+    explicitHousingCosts ||
     asset.housingStartDate != null ||
     asset.homeSaleAssumptions != null ||
     asset.rentalTaxBasisCents != null ||

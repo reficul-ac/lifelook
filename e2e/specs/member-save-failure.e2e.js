@@ -11,7 +11,7 @@ describe("LifeLook member-save SQLite failure", () => {
     const profile = process.env.LIFELOOK_E2E_PROFILE;
     assert.ok(profile);
     await onboard();
-    await $("aria/Settings").click();
+    await $('[aria-label="Settings"]').click();
     const member = await $("aria/Member 1 name");
     await member.setValue("Draft survives SQLite failure");
 
@@ -32,7 +32,7 @@ describe("LifeLook member-save SQLite failure", () => {
     await $("aria/Save members").click();
     await $("aria/Household members saved.").waitForDisplayed();
     await browser.reloadSession();
-    await $("aria/Settings").click();
+    await $('[aria-label="Settings"]').click();
     assert.equal(await $("aria/Member 1 name").getValue(), "Draft survives SQLite failure");
   });
 });

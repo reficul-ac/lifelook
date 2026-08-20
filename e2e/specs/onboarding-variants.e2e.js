@@ -73,17 +73,16 @@ describe("LifeLook onboarding variants", () => {
     await $("aria/Finish setup").click();
 
     await $("aria/Overview").click();
-    const noHistory = await $("//*[contains(normalize-space(), 'Historical net-worth trend unavailable')]");
-    assert.equal(await noHistory.isDisplayed(), true);
+    assert.equal(await $("aria/View exact financial position").isDisplayed(), true);
 
     await $("aria/Net Worth").click();
     assert.equal(await $("//*[normalize-space()='Card']").isExisting(), true);
     assert.equal(await $("//*[normalize-space()='Brokerage']").isExisting(), true);
     assert.equal(await $("//*[normalize-space()='IRA']").isExisting(), true);
-    await $("aria/Settings").click();
+    await $('[aria-label="Settings"]').click();
     assert.equal(await $("aria/Member 1 birth date").getValue(), "04/23/1988");
     await browser.reloadSession();
-    await $("aria/Settings").click();
+    await $('[aria-label="Settings"]').click();
     assert.equal(await $("aria/Member 1 birth date").getValue(), "04/23/1988");
   });
 });

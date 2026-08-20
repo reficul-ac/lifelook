@@ -32,7 +32,7 @@ describe("LifeLook native financial records", () => {
     assert.equal(await metricValue("Total debt"), "$80,000.00");
     assert.equal(await metricValue("Net worth"), "$21,000.00");
     const home = await $('//*[contains(@class,"account")][.//strong[normalize-space()="Home"]]');
-    await home.$("aria/Edit").click();
+    await home.click();
     await setLabeledValue("Current value (USD)", "110000.00");
     await saveDialog();
 
@@ -43,7 +43,7 @@ describe("LifeLook native financial records", () => {
     await saveDialog();
     await $("aria/Net Worth").click();
     const temporary = await $('//*[contains(@class,"account")][.//strong[normalize-space()="Temporary asset"]]');
-    await temporary.$("aria/Edit").click();
+    await temporary.click();
     await $("aria/Delete").click();
     await $("aria/Delete permanently").click();
     await browser.waitUntil(async () => !(await temporary.isExisting()));
@@ -56,7 +56,7 @@ describe("LifeLook native financial records", () => {
     await saveDialog();
     await $("aria/Net Worth").click();
     const temporaryDebt = await $('//*[contains(@class,"account")][.//strong[normalize-space()="Temporary debt"]]');
-    await temporaryDebt.$("aria/Edit").click();
+    await temporaryDebt.click();
     await $("aria/Delete").click();
     await $("aria/Delete permanently").click();
     await browser.waitUntil(async () => !(await temporaryDebt.isExisting()));
@@ -66,7 +66,7 @@ describe("LifeLook native financial records", () => {
     assert.equal(await metricValue("Total assets"), "$111,000.00");
     assert.equal(await metricValue("Total debt"), "$80,000.00");
     const mortgage = await $('//*[contains(@class,"account")][.//strong[normalize-space()="Mortgage"]]');
-    await mortgage.$("aria/Edit").click();
+    await mortgage.click();
     assert.equal(await $("aria/Custom monthly payment (USD)").getValue(), "750");
   });
 });

@@ -57,6 +57,15 @@ describe("buildRetirementCutoff",()=>{
     expect(cutoff.properties).toContainEqual(expect.objectContaining({assetId:"home",name:"Home",valueCents:100_000,mortgageCents:0,monthlyGrossRentCents:0,projectedDepreciationCents:0,source:"current"}));
   });
 
+  it("keeps an ordinary purchased asset without synthesizing a property",()=>{
+    const snapshotWithCar:FinancialSnapshot={...snapshot,assets:[...snapshot.assets,{id:"car",name:"Car",valueCents:25_000,annualGrowthBps:0,purchaseDate:"2024-01-01",purchasePriceCents:30_000}]};
+    const quietScenario:Scenario={...scenario,events:[]};
+    const cutoff=buildRetirementCutoff({snapshot:snapshotWithCar,scenario:quietScenario,retirementMonth:"2026-09",asOfDate:"2026-01-15"});
+
+    expect(cutoff.assets.car).toBe(25_000);
+    expect(cutoff.properties.map(property=>property.assetId)).toEqual(["home"]);
+  });
+
   it("excludes planned properties that are not owned at the cutoff without mutating the Plan",()=>{
     const plan:Scenario={...scenario,events:[
       {id:"future-purchase",date:"2026-10-01",type:"asset-purchase",assetId:"future-home",name:"Future home",valueCents:50_000,annualGrowthBps:0,fundingAccountId:"cash",downPaymentCents:0,costsCents:0},

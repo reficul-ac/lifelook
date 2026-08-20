@@ -12,8 +12,27 @@ describe("ScenarioPlanningDialog",()=>{
   fireEvent.click(screen.getByRole("button",{name:/More options for Asset purchase/}));
   fireEvent.click(screen.getByRole("menuitem",{name:"Edit"}));
   expect(screen.getByLabelText("Debt name")).toHaveValue("Mortgage");
+  expect(screen.getByLabelText("Selling costs (%)")).toHaveValue("");
+  expect(screen.getByLabelText("Federal depreciation claimed")).toHaveValue("0.00");
+  expect(screen.getByLabelText("California depreciation claimed")).toHaveValue("0.00");
+  fireEvent.change(screen.getByLabelText("Selling costs (%)"),{target:{value:"6"}});
+  fireEvent.click(screen.getByLabelText("Eligible for primary-home gain exclusion"));
   fireEvent.click(screen.getByRole("button",{name:"Save event"}));fireEvent.click(screen.getByRole("button",{name:"Save plan"}));
-  await waitFor(()=>expect(updateScenario).toHaveBeenCalledWith(expect.objectContaining({expectedRevision:4,events:[expect.objectContaining({financing:expect.objectContaining({liabilityId:"future-loan",principalCents:40000000})})],contributions:[]})));
+  await waitFor(()=>expect(updateScenario).toHaveBeenCalledWith(expect.objectContaining({expectedRevision:4,events:[expect.objectContaining({financing:expect.objectContaining({liabilityId:"future-loan",principalCents:40000000}),propertyDetails:expect.objectContaining({homeSaleAssumptions:{sellingCostBps:600,primaryResidenceExclusionEligible:true,accumulatedFederalDepreciationCents:0,accumulatedCaliforniaDepreciationCents:0}})})],contributions:[]})));
+ });
+ it("keeps blank planned-home selling costs undefined",async()=>{
+  const data=await testRepository.bootstrap() as Bootstrap;
+  const date=new Date();date.setUTCMonth(date.getUTCMonth()+1);const eventDate=date.toISOString().slice(0,10);
+  const record:ScenarioRecord={id:"plan",householdId:"test",name:"Plan",isBaseline:false,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:12,revision:4,events:[{id:"buy",date:eventDate,type:"asset-purchase",assetId:"future-home",name:"Future home",valueCents:50000000,annualGrowthBps:300,fundingAccountId:"cash",downPaymentCents:10000000,costsCents:100000}],defaultContributionAccountId:"cash",contributions:[],withdrawals:[]};
+  const updateScenario=vi.fn();render(<ScenarioPlanningDialog record={record} bootstrap={data} repository={{...testRepository,updateScenario}} close={vi.fn()} refresh={vi.fn()}/>);
+  fireEvent.click(screen.getByRole("button",{name:/More options for Asset purchase/}));
+  fireEvent.click(screen.getByRole("menuitem",{name:"Edit"}));
+  expect(screen.getByLabelText("Selling costs (%)")).toHaveValue("");
+  fireEvent.click(screen.getByRole("button",{name:"Save event"}));
+  fireEvent.click(screen.getByRole("button",{name:"Save plan"}));
+  await waitFor(()=>expect(updateScenario).toHaveBeenCalled());
+  const saved=updateScenario.mock.calls[0][0].events[0];
+  expect(saved.propertyDetails.homeSaleAssumptions).toBeUndefined();
  });
  it("saves a fixed monthly contribution amount",async()=>{
   const data=await testRepository.bootstrap() as Bootstrap;

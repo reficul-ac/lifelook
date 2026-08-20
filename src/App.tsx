@@ -1935,6 +1935,17 @@ function FinancialRecordDialog({
   const linkedMortgage =
     state.linkedLiability ??
     (!isAsset && liability?.mortgage?.assetId ? liability : undefined);
+  const existingAssetIsHome = Boolean(
+    state.asset &&
+      (state.asset.purchasePriceCents != null ||
+        state.asset.purchaseDate != null ||
+        state.asset.homeSaleAssumptions != null ||
+        linkedMortgage ||
+        (state.asset.housingCosts &&
+          (state.asset.housingCosts.propertyTaxRateBps !== 0 ||
+            state.asset.housingCosts.insuranceMonthlyCents !== 0 ||
+            state.asset.housingCosts.hoaMonthlyCents !== 0))),
+  );
   const [name, setName] = useState(record?.name ?? "");
   const [value, setValue] = useState("0");
   useEffect(() => {
@@ -1974,7 +1985,9 @@ function FinancialRecordDialog({
         0) / 100,
     ),
   );
-  const [home, setHome] = useState(false);
+  const [home, setHome] = useState(
+    existingAssetIsHome,
+  );
   const [privateStock, setPrivateStock] = useState(
     Boolean(state.asset?.privateStock),
   );
@@ -1991,9 +2004,41 @@ function FinancialRecordDialog({
   const [taxOnVest, setTaxOnVest] = useState(
     state.asset?.privateStock?.taxOnVest ?? false,
   );
-  const [purchasePrice, setPurchasePrice] = useState("0");
+  const [purchasePrice, setPurchasePrice] = useState(
+    state.asset?.purchasePriceCents == null
+      ? state.asset
+        ? ""
+        : "0"
+      : String(state.asset.purchasePriceCents / 100),
+  );
   const [financed, setFinanced] = useState(true);
-  const [purchaseDate, setPurchaseDate] = useState(today());
+  const [purchaseDate, setPurchaseDate] = useState(
+    state.asset?.purchaseDate ?? (state.asset ? "" : today()),
+  );
+  const [sellingCosts, setSellingCosts] = useState(
+    state.asset?.homeSaleAssumptions
+      ? String(state.asset.homeSaleAssumptions.sellingCostBps / 100)
+      : state.asset
+        ? ""
+        : "6",
+  );
+  const [primaryResidenceExclusionEligible, setPrimaryResidenceExclusionEligible] =
+    useState(
+      state.asset?.homeSaleAssumptions
+        ?.primaryResidenceExclusionEligible ?? false,
+    );
+  const [federalDepreciation, setFederalDepreciation] = useState(
+    String(
+      (state.asset?.homeSaleAssumptions
+        ?.accumulatedFederalDepreciationCents ?? 0) / 100,
+    ),
+  );
+  const [californiaDepreciation, setCaliforniaDepreciation] = useState(
+    String(
+      (state.asset?.homeSaleAssumptions
+        ?.accumulatedCaliforniaDepreciationCents ?? 0) / 100,
+    ),
+  );
   const [downPayment, setDownPayment] = useState("20");
   const [loanRate, setLoanRate] = useState("6.5");
   const [propertyTax, setPropertyTax] = useState("1.25");
@@ -2101,6 +2146,47 @@ function FinancialRecordDialog({
       return setError(
         `Enter an annual ${isAsset ? "growth" : "interest"} rate within the supported range.`,
       );
+    let homeSaleAssumptions:
+      | import("./domain/types").HomeSaleAssumptions
+      | undefined;
+    if (isAsset && home) {
+      const sellingCostBps = sellingCosts.trim()
+          ? parsePercent(sellingCosts)
+          : undefined,
+        accumulatedFederalDepreciationCents = parseMoney(federalDepreciation),
+        accumulatedCaliforniaDepreciationCents = parseMoney(
+          californiaDepreciation,
+        );
+      if (
+        accumulatedFederalDepreciationCents == null ||
+        accumulatedCaliforniaDepreciationCents == null ||
+        accumulatedFederalDepreciationCents < 0 ||
+        accumulatedCaliforniaDepreciationCents < 0
+      )
+        return setError(
+          "Enter exact non-negative accumulated depreciation amounts.",
+        );
+      if (
+        sellingCosts.trim() &&
+        (sellingCostBps == null || sellingCostBps < 0 || sellingCostBps > 10_000)
+      )
+        return setError("Enter selling costs from 0–100 percent.");
+      if (
+        state.asset?.rentalTaxBasisCents != null &&
+        accumulatedCaliforniaDepreciationCents >
+          state.asset.rentalTaxBasisCents
+      )
+        return setError(
+          "California depreciation cannot exceed the home's tax basis.",
+        );
+      if (sellingCostBps != null)
+        homeSaleAssumptions = {
+          sellingCostBps,
+          primaryResidenceExclusionEligible,
+          accumulatedFederalDepreciationCents,
+          accumulatedCaliforniaDepreciationCents,
+        };
+    }
     setBusy(true);
     try {
       if (isAsset) {
@@ -2152,6 +2238,7 @@ function FinancialRecordDialog({
             annualGrowthBps: bps,
             appreciationCurve,
             purchaseDate,
+            homeSaleAssumptions,
             propertyTaxRateBps,
             insuranceAnnualCents,
             financed,
@@ -2164,6 +2251,15 @@ function FinancialRecordDialog({
           close();
           return;
         }
+        let acquisitionData = {};
+        if (home && state.asset) {
+          const purchasePriceCents = parseMoney(purchasePrice);
+          if (!purchasePriceCents || purchasePriceCents < 0)
+            throw { message: "Enter the home's tax basis." };
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(purchaseDate))
+            throw { message: "Enter the home's purchase date." };
+          acquisitionData = { purchasePriceCents, purchaseDate };
+        }
         const input = {
           id: state.asset?.id ?? crypto.randomUUID(),
           name: name.trim(),
@@ -2172,6 +2268,12 @@ function FinancialRecordDialog({
           appreciationCurve,
           privateStock: privateStockTerms,
           equityHolding,
+          housingCosts: state.asset?.housingCosts,
+          taxableCostBasisCents: state.asset?.taxableCostBasisCents,
+          rentalTaxBasisCents: state.asset?.rentalTaxBasisCents,
+          rentalBuildingBasisCents: state.asset?.rentalBuildingBasisCents,
+          ...acquisitionData,
+          ...(home ? { homeSaleAssumptions } : {}),
         };
         if (state.asset)
           await repository.updateAsset?.({
@@ -2571,6 +2673,74 @@ function FinancialRecordDialog({
                     </>
                   )}
                 </>
+              )}
+              {isAsset && home && (
+                <details>
+                  <summary>Sale and tax details</summary>
+                  <fieldset>
+                    {state.asset && state.asset.purchaseDate == null && (
+                      <label>
+                        Purchase date
+                        <input
+                          required
+                          type="date"
+                          max={today()}
+                          value={purchaseDate}
+                          onChange={(e) => setPurchaseDate(e.target.value)}
+                        />
+                      </label>
+                    )}
+                    {state.asset && state.asset.purchasePriceCents == null && (
+                      <label>
+                        Tax basis
+                        <input
+                          required
+                          inputMode="decimal"
+                          value={purchasePrice}
+                          onChange={(e) => setPurchasePrice(e.target.value)}
+                        />
+                      </label>
+                    )}
+                    <label>
+                      Selling costs (%)
+                      <input
+                        inputMode="decimal"
+                        value={sellingCosts}
+                        onChange={(e) => setSellingCosts(e.target.value)}
+                      />
+                    </label>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={primaryResidenceExclusionEligible}
+                        onChange={(e) =>
+                          setPrimaryResidenceExclusionEligible(e.target.checked)
+                        }
+                      />{" "}
+                      Eligible for primary-home gain exclusion
+                    </label>
+                    <label>
+                      Federal depreciation claimed
+                      <input
+                        required
+                        inputMode="decimal"
+                        value={federalDepreciation}
+                        onChange={(e) => setFederalDepreciation(e.target.value)}
+                      />
+                    </label>
+                    <label>
+                      California depreciation claimed
+                      <input
+                        required
+                        inputMode="decimal"
+                        value={californiaDepreciation}
+                        onChange={(e) =>
+                          setCaliforniaDepreciation(e.target.value)
+                        }
+                      />
+                    </label>
+                  </fieldset>
+                </details>
               )}
               {(!isAsset || !advancedGrowth) && (
                 <label>

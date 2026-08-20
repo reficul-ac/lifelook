@@ -1211,6 +1211,15 @@ describe("LifeLook shell", () => {
       screen.getByLabelText("Homeowners insurance per year (USD)"),
       { target: { value: "2400" } },
     );
+    const saleDetails = screen
+      .getByText("Sale and tax details")
+      .closest("details")!;
+    expect(saleDetails).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("Sale and tax details"));
+    expect(screen.getByLabelText("Selling costs (%)")).toHaveValue("6");
+    fireEvent.click(
+      screen.getByLabelText("Eligible for primary-home gain exclusion"),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(createHome).toHaveBeenCalledWith(
@@ -1224,9 +1233,137 @@ describe("LifeLook shell", () => {
           propertyTaxRateBps: 120,
           insuranceAnnualCents: 240000,
           financed: true,
+          homeSaleAssumptions: {
+            sellingCostBps: 600,
+            primaryResidenceExclusionEligible: true,
+            accumulatedFederalDepreciationCents: 0,
+            accumulatedCaliforniaDepreciationCents: 0,
+          },
         }),
       ),
     );
+  });
+  it("repairs acquisition data and confirms sale assumptions for an existing home", async () => {
+    const data = await testRepository.bootstrap(),
+      home = {
+        id: "home",
+        householdId: "test",
+        name: "Current home",
+        valueCents: 65000000,
+        annualGrowthBps: 300,
+        housingCosts: {
+          propertyTaxRateBps: 120,
+          insuranceMonthlyCents: 20000,
+          insuranceAnnualGrowthBps: 0,
+          hoaMonthlyCents: 0,
+          hoaAnnualGrowthBps: 0,
+        },
+        purchasePriceCents: null,
+        purchaseDate: null,
+        rentalTaxBasisCents: 40000000,
+        rentalBuildingBasisCents: 30000000,
+        revision: 1,
+      },
+      updateAsset = vi.fn();
+    render(
+      <App
+        repository={{
+          ...testRepository,
+          updateAsset,
+          bootstrap: async () => ({ ...data, assets: [home] }),
+        }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /Net Worth/ }));
+    fireEvent.click(
+      screen.getByText("Current home").closest<HTMLElement>(".account")!,
+    );
+    const saleDetails = screen
+      .getByText("Sale and tax details")
+      .closest("details")!;
+    expect(saleDetails).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("Sale and tax details"));
+    expect(screen.getByLabelText("Selling costs (%)")).toHaveValue("");
+    fireEvent.change(screen.getByLabelText("Purchase date"), {
+      target: { value: "2020-01-15" },
+    });
+    fireEvent.change(screen.getByLabelText("Tax basis"), {
+      target: { value: "500000" },
+    });
+    fireEvent.change(screen.getByLabelText("Selling costs (%)"), {
+      target: { value: "6" },
+    });
+    fireEvent.click(
+      screen.getByLabelText("Eligible for primary-home gain exclusion"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(updateAsset).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "home",
+          purchasePriceCents: 50000000,
+          purchaseDate: "2020-01-15",
+          housingCosts: home.housingCosts,
+          rentalTaxBasisCents: 40000000,
+          rentalBuildingBasisCents: 30000000,
+          homeSaleAssumptions: {
+            sellingCostBps: 600,
+            primaryResidenceExclusionEligible: true,
+            accumulatedFederalDepreciationCents: 0,
+            accumulatedCaliforniaDepreciationCents: 0,
+          },
+        }),
+      ),
+    );
+  });
+  it("blocks saving a home with negative accumulated depreciation", async () => {
+    const data = await testRepository.bootstrap(),
+      home = {
+        id: "home",
+        householdId: "test",
+        name: "Current home",
+        valueCents: 65000000,
+        annualGrowthBps: 300,
+        housingCosts: {
+          propertyTaxRateBps: 120,
+          insuranceMonthlyCents: 20000,
+          insuranceAnnualGrowthBps: 0,
+          hoaMonthlyCents: 0,
+          hoaAnnualGrowthBps: 0,
+        },
+        purchasePriceCents: 50000000,
+        purchaseDate: "2020-01-15",
+        homeSaleAssumptions: {
+          sellingCostBps: 600,
+          primaryResidenceExclusionEligible: false,
+          accumulatedFederalDepreciationCents: 0,
+          accumulatedCaliforniaDepreciationCents: 0,
+        },
+        revision: 1,
+      },
+      updateAsset = vi.fn();
+    render(
+      <App
+        repository={{
+          ...testRepository,
+          updateAsset,
+          bootstrap: async () => ({ ...data, assets: [home] }),
+        }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /Net Worth/ }));
+    fireEvent.click(
+      screen.getByText("Current home").closest<HTMLElement>(".account")!,
+    );
+    fireEvent.click(screen.getByText("Sale and tax details"));
+    fireEvent.change(screen.getByLabelText("Federal depreciation claimed"), {
+      target: { value: "-1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "depreciation",
+    );
+    expect(updateAsset).not.toHaveBeenCalled();
   });
   it("saves an interpolated appreciation curve for an asset", async () => {
     const data = await testRepository.bootstrap(),
@@ -1236,6 +1373,13 @@ describe("LifeLook shell", () => {
         name: "Startup stock",
         valueCents: 100000,
         annualGrowthBps: 5000,
+        housingCosts: {
+          propertyTaxRateBps: 0,
+          insuranceMonthlyCents: 0,
+          insuranceAnnualGrowthBps: 0,
+          hoaMonthlyCents: 0,
+          hoaAnnualGrowthBps: 0,
+        },
         revision: 1,
       };
     const updateAsset = vi.fn();
@@ -1253,6 +1397,7 @@ describe("LifeLook shell", () => {
       .getByText("Startup stock")
       .closest<HTMLElement>(".account")!;
     fireEvent.click(row);
+    expect(screen.queryByText("Sale and tax details")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Annual growth (%)")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Use an appreciation curve"));
     expect(

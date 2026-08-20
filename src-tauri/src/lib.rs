@@ -11,7 +11,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 22;
+const SCHEMA_VERSION: i64 = 23;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -252,6 +252,7 @@ struct Asset {
     housing_costs: serde_json::Value,
     purchase_price_cents: Option<i64>,
     purchase_date: Option<String>,
+    home_sale_assumptions: Option<serde_json::Value>,
     taxable_cost_basis_cents: Option<i64>,
     rental_tax_basis_cents: Option<i64>,
     rental_building_basis_cents: Option<i64>,
@@ -512,6 +513,12 @@ struct AssetInput {
     #[serde(default)]
     housing_costs: Option<serde_json::Value>,
     #[serde(default)]
+    purchase_price_cents: Option<i64>,
+    #[serde(default)]
+    purchase_date: Option<String>,
+    #[serde(default)]
+    home_sale_assumptions: Option<serde_json::Value>,
+    #[serde(default)]
     taxable_cost_basis_cents: Option<i64>,
     #[serde(default)]
     rental_tax_basis_cents: Option<i64>,
@@ -542,6 +549,8 @@ struct HomeInput {
     #[serde(default)]
     appreciation_curve: Option<AppreciationCurve>,
     purchase_date: String,
+    #[serde(default)]
+    home_sale_assumptions: Option<serde_json::Value>,
     property_tax_rate_bps: i64,
     insurance_annual_cents: i64,
     financed: bool,
@@ -1016,6 +1025,27 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
             INSERT INTO schema_migrations(version) VALUES(22);",
         )?;
     }
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 23 {
+        let asset_columns = transaction
+            .prepare("PRAGMA table_info(assets)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        if !asset_columns
+            .iter()
+            .any(|name| name == "home_sale_assumptions_json")
+        {
+            transaction.execute(
+                "ALTER TABLE assets ADD COLUMN home_sale_assumptions_json TEXT",
+                [],
+            )?;
+        }
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(23)", [])?;
+    }
     transaction
         .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
     transaction.commit()?;
@@ -1192,7 +1222,7 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 })
             })?
             .collect::<Result<_, _>>()?;
-        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision,housing_costs_json,appreciation_curve_json,private_stock_json,equity_holding_json,taxable_cost_basis_cents,rental_tax_basis_cents,rental_building_basis_cents FROM assets WHERE household_id=? ORDER BY name")?;
+        let mut q=connection.prepare("SELECT id,household_id,name,value_cents,annual_growth_bps,revision,housing_costs_json,appreciation_curve_json,private_stock_json,equity_holding_json,taxable_cost_basis_cents,rental_tax_basis_cents,rental_building_basis_cents,home_sale_assumptions_json FROM assets WHERE household_id=? ORDER BY name")?;
         assets = q
             .query_map([&h.id], |r| {
                 let housing: serde_json::Value =
@@ -1220,6 +1250,9 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                         .get("purchaseDate")
                         .and_then(|value| value.as_str())
                         .map(str::to_owned),
+                    home_sale_assumptions: r
+                        .get::<_, Option<String>>(13)?
+                        .and_then(|raw| serde_json::from_str(&raw).ok()),
                     taxable_cost_basis_cents: r.get(10)?,
                     rental_tax_basis_cents: r.get(11)?,
                     rental_building_basis_cents: r.get(12)?,
@@ -3181,6 +3214,61 @@ fn validate_liability(input: &LiabilityInput) -> Result<(i64, Option<String>), A
     }
     Ok((payment, mortgage_json))
 }
+fn validate_home_sale_assumptions(
+    assumptions: Option<&serde_json::Value>,
+    rental_tax_basis_cents: Option<i64>,
+) -> Result<Option<String>, AppError> {
+    let Some(assumptions) = assumptions else {
+        return Ok(None);
+    };
+    let object = assumptions.as_object().ok_or_else(|| {
+        AppError::Validation("home sale assumptions must contain exactly four fields".into())
+    })?;
+    let fields = [
+        "sellingCostBps",
+        "primaryResidenceExclusionEligible",
+        "accumulatedFederalDepreciationCents",
+        "accumulatedCaliforniaDepreciationCents",
+    ];
+    if object.len() != fields.len() || fields.iter().any(|field| !object.contains_key(*field)) {
+        return Err(AppError::Validation(
+            "home sale assumptions must contain exactly four fields".into(),
+        ));
+    }
+    let selling_cost_bps = json_i64(assumptions, "sellingCostBps")
+        .ok_or_else(|| AppError::Validation("sellingCostBps must be an integer".into()))?;
+    if !(0..=10_000).contains(&selling_cost_bps) {
+        return Err(AppError::Validation(
+            "selling costs must be between 0 and 100 percent".into(),
+        ));
+    }
+    if assumptions
+        .get("primaryResidenceExclusionEligible")
+        .and_then(serde_json::Value::as_bool)
+        .is_none()
+    {
+        return Err(AppError::Validation(
+            "primaryResidenceExclusionEligible must be a boolean".into(),
+        ));
+    }
+    let federal =
+        json_i64(assumptions, "accumulatedFederalDepreciationCents").ok_or_else(|| {
+            AppError::Validation("accumulatedFederalDepreciationCents must be an integer".into())
+        })?;
+    let california =
+        json_i64(assumptions, "accumulatedCaliforniaDepreciationCents").ok_or_else(|| {
+            AppError::Validation("accumulatedCaliforniaDepreciationCents must be an integer".into())
+        })?;
+    validate_nonnegative_money(federal, "federal depreciation")?;
+    validate_nonnegative_money(california, "California depreciation")?;
+    if rental_tax_basis_cents.is_some_and(|basis| california > basis) {
+        return Err(AppError::Validation(
+            "California depreciation cannot exceed rental tax basis".into(),
+        ));
+    }
+    Ok(Some(serde_json::to_string(assumptions)?))
+}
+
 fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), AppError> {
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("asset name is required".into()));
@@ -3210,7 +3298,17 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
         .as_ref()
         .map(serde_json::to_string)
         .transpose()?;
-    let housing = input.housing_costs.clone().unwrap_or_else(|| serde_json::json!({"propertyTaxRateBps":0,"insuranceMonthlyCents":0,"insuranceAnnualGrowthBps":0,"hoaMonthlyCents":0,"hoaAnnualGrowthBps":0}));
+    if let Some(purchase_price_cents) = input.purchase_price_cents {
+        validate_nonnegative_money(purchase_price_cents, "purchase price")?;
+    }
+    if let Some(purchase_date) = input.purchase_date.as_deref() {
+        validate_date(purchase_date)?;
+    }
+    let home_sale_assumptions_json = validate_home_sale_assumptions(
+        input.home_sale_assumptions.as_ref(),
+        input.rental_tax_basis_cents,
+    )?;
+    let mut housing = input.housing_costs.clone().unwrap_or_else(|| serde_json::json!({"propertyTaxRateBps":0,"insuranceMonthlyCents":0,"insuranceAnnualGrowthBps":0,"hoaMonthlyCents":0,"hoaAnnualGrowthBps":0}));
     for field in [
         "propertyTaxRateBps",
         "insuranceMonthlyCents",
@@ -3229,15 +3327,30 @@ fn save_asset(db: &Connection, input: &AssetInput, update: bool) -> Result<(), A
             )));
         }
     }
+    let housing_object = housing
+        .as_object_mut()
+        .ok_or_else(|| AppError::Validation("housing costs must be a JSON object".into()))?;
+    if let Some(purchase_price_cents) = input.purchase_price_cents {
+        housing_object.insert(
+            "purchasePriceCents".into(),
+            serde_json::Value::from(purchase_price_cents),
+        );
+    }
+    if let Some(purchase_date) = input.purchase_date.as_ref() {
+        housing_object.insert(
+            "purchaseDate".into(),
+            serde_json::Value::from(purchase_date.clone()),
+        );
+    }
     let housing_json = serde_json::to_string(&housing)?;
     let hid = active_household(db)?;
     if update {
-        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,appreciation_curve_json=?5,private_stock_json=?6,equity_holding_json=?7,taxable_cost_basis_cents=?8,rental_tax_basis_cents=?9,rental_building_basis_cents=?10,revision=revision+1 WHERE id=?11 AND household_id=?12 AND revision=?13",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,equity_holding_json,input.taxable_cost_basis_cents,input.rental_tax_basis_cents,input.rental_building_basis_cents,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
+        let changed = db.execute("UPDATE assets SET name=?1,value_cents=?2,annual_growth_bps=?3,housing_costs_json=?4,appreciation_curve_json=?5,private_stock_json=?6,equity_holding_json=?7,taxable_cost_basis_cents=?8,rental_tax_basis_cents=?9,rental_building_basis_cents=?10,home_sale_assumptions_json=?11,revision=revision+1 WHERE id=?12 AND household_id=?13 AND revision=?14",params![input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,equity_holding_json,input.taxable_cost_basis_cents,input.rental_tax_basis_cents,input.rental_building_basis_cents,home_sale_assumptions_json,input.id,hid,input.expected_revision.ok_or(AppError::Conflict)?])?;
         if changed == 0 {
             return Err(AppError::Conflict);
         }
     } else {
-        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json,private_stock_json,equity_holding_json,taxable_cost_basis_cents,rental_tax_basis_cents,rental_building_basis_cents) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,equity_holding_json,input.taxable_cost_basis_cents,input.rental_tax_basis_cents,input.rental_building_basis_cents])?;
+        db.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json,private_stock_json,equity_holding_json,taxable_cost_basis_cents,rental_tax_basis_cents,rental_building_basis_cents,home_sale_assumptions_json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",params![input.id,hid,input.name.trim(),input.value_cents,input.annual_growth_bps,housing_json,curve_json,private_stock_json,equity_holding_json,input.taxable_cost_basis_cents,input.rental_tax_basis_cents,input.rental_building_basis_cents,home_sale_assumptions_json])?;
     }
     Ok(())
 }
@@ -3322,6 +3435,8 @@ fn create_home_impl(db: &mut Connection, input: &HomeInput) -> Result<(), AppErr
     let curve_json = validate_appreciation_curve(input.appreciation_curve.as_ref())?;
     validate_rate(input.property_tax_rate_bps, 0, "property tax rate")?;
     validate_nonnegative_money(input.insurance_annual_cents, "annual insurance")?;
+    let home_sale_assumptions_json =
+        validate_home_sale_assumptions(input.home_sale_assumptions.as_ref(), None)?;
     let elapsed = months_between(&input.purchase_date, &input.as_of_date)?;
     let tx = db.transaction()?;
     let hid = active_household(&tx)?;
@@ -3334,7 +3449,7 @@ fn create_home_impl(db: &mut Connection, input: &HomeInput) -> Result<(), AppErr
         ,"purchasePriceCents": input.purchase_price_cents
         ,"purchaseDate": input.purchase_date
     });
-    tx.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![input.asset_id,hid,input.name.trim(),input.current_value_cents,input.annual_growth_bps,serde_json::to_string(&housing)?,curve_json])?;
+    tx.execute("INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps,housing_costs_json,appreciation_curve_json,home_sale_assumptions_json) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",params![input.asset_id,hid,input.name.trim(),input.current_value_cents,input.annual_growth_bps,serde_json::to_string(&housing)?,curve_json,home_sale_assumptions_json])?;
     if input.financed {
         let down = input
             .down_payment_bps
@@ -4843,6 +4958,7 @@ mod tests {
                 annual_growth_bps: 300,
                 appreciation_curve: None,
                 purchase_date: "2020-01-15".into(),
+                home_sale_assumptions: None,
                 property_tax_rate_bps: 120,
                 insurance_annual_cents: 240_000,
                 financed: true,
@@ -5328,12 +5444,29 @@ mod tests {
             }),
             equity_holding: None,
             housing_costs: None,
+            purchase_price_cents: None,
+            purchase_date: None,
+            home_sale_assumptions: Some(serde_json::json!({
+                "sellingCostBps": 600,
+                "primaryResidenceExclusionEligible": true,
+                "accumulatedFederalDepreciationCents": 0,
+                "accumulatedCaliforniaDepreciationCents": 0
+            })),
             taxable_cost_basis_cents: None,
             rental_tax_basis_cents: None,
             rental_building_basis_cents: None,
             expected_revision: None,
         };
         save_asset(&c, &asset, false).unwrap();
+        assert_eq!(
+            bootstrap(&c).unwrap().assets[0].home_sale_assumptions,
+            Some(serde_json::json!({
+                "sellingCostBps": 600,
+                "primaryResidenceExclusionEligible": true,
+                "accumulatedFederalDepreciationCents": 0,
+                "accumulatedCaliforniaDepreciationCents": 0
+            }))
+        );
         let saved_curve: String = c
             .query_row(
                 "SELECT appreciation_curve_json FROM assets WHERE id='home'",
@@ -5398,11 +5531,113 @@ mod tests {
             &AssetInput {
                 expected_revision: Some(1),
                 value_cents: 51_000_000,
+                purchase_price_cents: Some(42_000_000),
+                purchase_date: Some("2020-01-15".into()),
+                home_sale_assumptions: Some(serde_json::json!({
+                    "sellingCostBps": 500,
+                    "primaryResidenceExclusionEligible": false,
+                    "accumulatedFederalDepreciationCents": 10_000,
+                    "accumulatedCaliforniaDepreciationCents": 8_000
+                })),
                 ..asset
             },
             true,
         )
         .unwrap();
+        assert_eq!(
+            bootstrap(&c).unwrap().assets[0].home_sale_assumptions,
+            Some(serde_json::json!({
+                "sellingCostBps": 500,
+                "primaryResidenceExclusionEligible": false,
+                "accumulatedFederalDepreciationCents": 10_000,
+                "accumulatedCaliforniaDepreciationCents": 8_000
+            }))
+        );
+        let updated_home = &bootstrap(&c).unwrap().assets[0];
+        assert_eq!(updated_home.purchase_price_cents, Some(42_000_000));
+        assert_eq!(updated_home.purchase_date.as_deref(), Some("2020-01-15"));
+
+        for (id, assumptions, rental_tax_basis_cents) in [
+            (
+                "selling-cost-over-range",
+                serde_json::json!({
+                    "sellingCostBps": 10_001,
+                    "primaryResidenceExclusionEligible": false,
+                    "accumulatedFederalDepreciationCents": 0,
+                    "accumulatedCaliforniaDepreciationCents": 0
+                }),
+                None,
+            ),
+            (
+                "negative-depreciation",
+                serde_json::json!({
+                    "sellingCostBps": 600,
+                    "primaryResidenceExclusionEligible": false,
+                    "accumulatedFederalDepreciationCents": -1,
+                    "accumulatedCaliforniaDepreciationCents": 0
+                }),
+                None,
+            ),
+            (
+                "california-depreciation-over-basis",
+                serde_json::json!({
+                    "sellingCostBps": 600,
+                    "primaryResidenceExclusionEligible": false,
+                    "accumulatedFederalDepreciationCents": 0,
+                    "accumulatedCaliforniaDepreciationCents": 101
+                }),
+                Some(100),
+            ),
+        ] {
+            assert!(matches!(
+                save_asset(
+                    &c,
+                    &AssetInput {
+                        id: id.into(),
+                        name: "Invalid home metadata".into(),
+                        value_cents: 1_000,
+                        annual_growth_bps: 0,
+                        appreciation_curve: None,
+                        private_stock: None,
+                        equity_holding: None,
+                        housing_costs: None,
+                        purchase_price_cents: None,
+                        purchase_date: None,
+                        home_sale_assumptions: Some(assumptions),
+                        taxable_cost_basis_cents: None,
+                        rental_tax_basis_cents,
+                        rental_building_basis_cents: None,
+                        expected_revision: None,
+                    },
+                    false,
+                ),
+                Err(AppError::Validation(_))
+            ));
+        }
+        assert!(matches!(
+            save_asset(
+                &c,
+                &AssetInput {
+                    id: "invalid-purchase-date".into(),
+                    name: "Invalid purchase date".into(),
+                    value_cents: 1_000,
+                    annual_growth_bps: 0,
+                    appreciation_curve: None,
+                    private_stock: None,
+                    equity_holding: None,
+                    housing_costs: None,
+                    purchase_price_cents: Some(1_000),
+                    purchase_date: Some("2020-02-30".into()),
+                    home_sale_assumptions: None,
+                    taxable_cost_basis_cents: None,
+                    rental_tax_basis_cents: None,
+                    rental_building_basis_cents: None,
+                    expected_revision: None,
+                },
+                false,
+            ),
+            Err(AppError::Validation(_))
+        ));
         delete_asset_from(
             &mut c,
             &DeleteInput {
@@ -5442,6 +5677,9 @@ mod tests {
             private_stock: None,
             equity_holding: None,
             housing_costs: None,
+            purchase_price_cents: None,
+            purchase_date: None,
+            home_sale_assumptions: None,
             taxable_cost_basis_cents: None,
             rental_tax_basis_cents: None,
             rental_building_basis_cents: None,
@@ -5460,6 +5698,9 @@ mod tests {
             private_stock: None,
             equity_holding: None,
             housing_costs: None,
+            purchase_price_cents: None,
+            purchase_date: None,
+            home_sale_assumptions: None,
             taxable_cost_basis_cents: None,
             rental_tax_basis_cents: None,
             rental_building_basis_cents: None,

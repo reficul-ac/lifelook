@@ -100,6 +100,11 @@ function eventFields(value: ScenarioEvent | null, bootstrap?:Bootstrap) {
     result["property.maintenanceBps"]=rate(details?.maintenanceBps??value.maintenanceBps);
     result["property.propertyTaxBasisCents"]=dollars(details?.propertyTaxBasisCents??investment?.propertyTaxBasisOverrideCents??undefined);
     result["property.buildingBasisCents"]=dollars(details?.buildingBasisCents??investment?.buildingBasisOverrideCents??undefined);
+    const sale=details?.homeSaleAssumptions;
+    result["property.sellingCostBps"]=rate(sale?.sellingCostBps);
+    result["property.primaryResidenceExclusionEligible"]=String(sale?.primaryResidenceExclusionEligible??false);
+    result["property.accumulatedFederalDepreciationCents"]=dollars(sale?.accumulatedFederalDepreciationCents??0);
+    result["property.accumulatedCaliforniaDepreciationCents"]=dollars(sale?.accumulatedCaliforniaDepreciationCents??0);
     for(const key of ["mfsLivedApartAllYear","shortTermMaterialParticipation","longTermRealEstateProfessional","longTermMaterialParticipation"] as const)result[`property.${key}`]=String(details?.[key]??investment?.[key]??false);
   }
   if (value.type === "asset-sale" && value.payoff)
@@ -962,7 +967,11 @@ function EventEditor({
           accountId: f("accountId"),
           amountCents: m("amountCents", true),
         };
-      else if (kind === "asset-purchase")
+      else if (kind === "asset-purchase") {
+        const sellingCostBps=f("property.sellingCostBps").trim()?bps(f("property.sellingCostBps")):undefined;
+        if(sellingCostBps!==undefined&&(sellingCostBps===null||sellingCostBps<0||sellingCostBps>10000))throw new Error("Selling costs must be between 0 and 100 percent.");
+        const accumulatedFederalDepreciationCents=nonnegativeMoney("property.accumulatedFederalDepreciationCents"),accumulatedCaliforniaDepreciationCents=nonnegativeMoney("property.accumulatedCaliforniaDepreciationCents");
+        const homeSaleAssumptions=sellingCostBps==null?undefined:{sellingCostBps,primaryResidenceExclusionEligible:checked("property.primaryResidenceExclusionEligible"),accumulatedFederalDepreciationCents,accumulatedCaliforniaDepreciationCents};
         event = {
           ...base,
           type: kind,
@@ -978,7 +987,7 @@ function EventEditor({
           monthlyRentalIncomeCents:nonnegativeMoney("property.monthlyRentalIncomeCents"),
           rentalIncomeGrowthBps:optionalRate("property.rentalIncomeGrowthBps"),
           maintenanceBps:optionalRate("property.maintenanceBps"),
-          propertyDetails:{...(value?.type==="asset-purchase"?value.propertyDetails:undefined),primaryResidence:checked("property.primaryResidence"),rentalUseBps:optionalRate("property.rentalUseBps"),rentalTaxModelingEnabled:checked("property.rentalTaxModelingEnabled"),rentalType:(f("property.rentalType")||"long-term") as "long-term"|"short-term",monthlyRentalIncomeCents:nonnegativeMoney("property.monthlyRentalIncomeCents"),rentalIncomeGrowthBps:optionalRate("property.rentalIncomeGrowthBps"),maintenanceBps:optionalRate("property.maintenanceBps"),propertyTaxBasisCents:nullableMoney("property.propertyTaxBasisCents"),buildingBasisCents:nullableMoney("property.buildingBasisCents"),mfsLivedApartAllYear:checked("property.mfsLivedApartAllYear"),shortTermMaterialParticipation:checked("property.shortTermMaterialParticipation"),longTermRealEstateProfessional:checked("property.longTermRealEstateProfessional"),longTermMaterialParticipation:checked("property.longTermMaterialParticipation")},
+          propertyDetails:{...(value?.type==="asset-purchase"?value.propertyDetails:undefined),primaryResidence:checked("property.primaryResidence"),rentalUseBps:optionalRate("property.rentalUseBps"),rentalTaxModelingEnabled:checked("property.rentalTaxModelingEnabled"),rentalType:(f("property.rentalType")||"long-term") as "long-term"|"short-term",monthlyRentalIncomeCents:nonnegativeMoney("property.monthlyRentalIncomeCents"),rentalIncomeGrowthBps:optionalRate("property.rentalIncomeGrowthBps"),maintenanceBps:optionalRate("property.maintenanceBps"),propertyTaxBasisCents:nullableMoney("property.propertyTaxBasisCents"),buildingBasisCents:nullableMoney("property.buildingBasisCents"),homeSaleAssumptions,mfsLivedApartAllYear:checked("property.mfsLivedApartAllYear"),shortTermMaterialParticipation:checked("property.shortTermMaterialParticipation"),longTermRealEstateProfessional:checked("property.longTermRealEstateProfessional"),longTermMaterialParticipation:checked("property.longTermMaterialParticipation")},
           financing:
             f("financing.enabled") || f("financing.liabilityId")
               ? {
@@ -993,6 +1002,7 @@ function EventEditor({
                 }
               : undefined,
         };
+      }
       else if (kind === "adu-build")
         event = {
           ...base,
@@ -1316,6 +1326,10 @@ function EventEditor({
           {percent("housing.insuranceAnnualGrowthBps","Annual insurance growth (%)")}
           {money("housing.hoaMonthlyCents","Monthly HOA (USD)",true)}
           {percent("housing.hoaAnnualGrowthBps","Annual HOA growth (%)")}
+          {percent("property.sellingCostBps","Selling costs (%)")}
+          <label className="check"><input type="checkbox" checked={f("property.primaryResidenceExclusionEligible")==="true"} onChange={(e)=>set("property.primaryResidenceExclusionEligible",String(e.target.checked))} /> Eligible for primary-home gain exclusion</label>
+          <label>Federal depreciation claimed<input inputMode="decimal" value={f("property.accumulatedFederalDepreciationCents")||"0.00"} onChange={(e)=>set("property.accumulatedFederalDepreciationCents",e.target.value)} /></label>
+          <label>California depreciation claimed<input inputMode="decimal" value={f("property.accumulatedCaliforniaDepreciationCents")||"0.00"} onChange={(e)=>set("property.accumulatedCaliforniaDepreciationCents",e.target.value)} /></label>
           <label className="check"><input type="checkbox" checked={f("property.rentalTaxModelingEnabled")==="true"} onChange={(e)=>set("property.rentalTaxModelingEnabled",String(e.target.checked))} /> Include rental income taxes, deductions, and depreciation</label>
           {f("property.rentalTaxModelingEnabled")==="true"&&<>
             <label>Rental type<select value={f("property.rentalType")||"long-term"} onChange={(e)=>set("property.rentalType",e.target.value)}><option value="long-term">Long-term rental</option><option value="short-term">Short-term rental</option></select></label>

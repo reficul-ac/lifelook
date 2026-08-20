@@ -81,6 +81,34 @@ describe("retirement employment cutoff",()=>{
     expect(year.taxLedger!.employees.every(employee=>employee.salaryCents===wagesThroughAugust[employee.personId])).toBe(true);
     expect(september.balances!.privateStock.rsu.vestedCents).toBe(1_000);
   });
+
+  it("limits tax AGI to pre-retirement taxable months while non-wage cash flow continues",()=>{
+    const financial:FinancialSnapshot={
+      household:{id:"household",name:"Household",state:"CA",people:[{id:"employee",name:"Employee"}]},
+      taxProfile:{filingStatus:"single",state:"CA",taxYear:2026,thresholdInflationBps:250,taxUnit:{id:"single",filingStatus:"single",memberPersonIds:["employee"]}},
+      accounts:[{id:"cash",name:"Cash",kind:"checking",balanceCents:0,annualReturnBps:0,liquid:true}],
+      recurring:[
+        {id:"salary",name:"Salary",kind:"income",incomeType:"salary",incomeTaxCategory:"wages",ownerPersonId:"employee",amountCents:120_000_00,startDate:"2026-01-01",taxTreatment:"none"},
+        {id:"royalties",name:"Royalties",kind:"income",incomeType:"ordinary",incomeTaxCategory:"taxable-nonwage",amountCents:500_00,frequency:"monthly",startDate:"2026-01-01",taxTreatment:"none"},
+      ],
+      assets:[],
+      liabilities:[],
+    };
+    const plan:Scenario={...scenario,defaultContributionAccountId:"cash",horizon:{start:"2026-01",months:9}};
+    const [year]=ProjectionEngine.calculate(financial,plan,"2026-01-01",{stopEmploymentMonth:"2026-09"});
+
+    expect(year.months.find(month=>month.month==="2026-09")!.incomeCents).toBe(500_00);
+    expect(year.taxLedger).toEqual(expect.objectContaining({federalAgiCents:84_000_00,modifiedAgiCents:84_000_00}));
+  });
+
+  it("includes a vest late in the preceding month in month-end balances",()=>{
+    const financial:FinancialSnapshot={...snapshot,recurring:[],assets:[{id:"rsu",name:"RSUs",valueCents:1_000,annualGrowthBps:0,equityHolding:{priceCents:1_000,priceDate:"2026-01-01",sellToCover:false,grants:[{id:"grant",ownerPersonId:"employee",grantDate:"2026-01-01",grantPriceCents:1_000,unitsMicros:1_000_000,vestEvents:[{id:"late-august",date:"2026-08-31",unitsMicros:1_000_000}]}]}}]};
+    const plan:Scenario={...scenario,horizon:{start:"2026-08",months:2}};
+    const [year]=ProjectionEngine.calculate(financial,plan,"2026-08-01",{stopEmploymentMonth:"2026-09"});
+
+    expect(year.months.find(month=>month.month==="2026-08")!.balances!.privateStock.rsu.vestedCents).toBe(1_000);
+    expect(year.months.find(month=>month.month==="2026-09")!.balances!.privateStock.rsu.vestedCents).toBe(1_000);
+  });
 });
 
 describe("ProjectionEngine",()=>{

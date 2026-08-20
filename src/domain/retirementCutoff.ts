@@ -1,5 +1,24 @@
 import { ProjectionEngine } from "./projection";
-import type { Cents, FinancialSnapshot, Scenario, TaxLedger } from "./types";
+import type { BasisPoints, Cents, FinancialSnapshot, Scenario, TaxLedger } from "./types";
+
+export type PlannedPropertyPurchase = Extract<Scenario["events"][number], { type: "asset-purchase" }>;
+
+export function latestOwnedPlannedPurchase(
+  scenario: Scenario,
+  assetId: string,
+  beforeDateExclusive: string,
+): PlannedPropertyPurchase | undefined {
+  let owned: PlannedPropertyPurchase | undefined;
+  const events = scenario.events
+    .filter((event) =>
+      event.date < beforeDateExclusive &&
+      "assetId" in event &&
+      event.assetId === assetId &&
+      (event.type === "asset-purchase" || event.type === "asset-sale"))
+    .sort((left, right) => left.date.localeCompare(right.date) || left.id.localeCompare(right.id));
+  for (const event of events) owned = event.type === "asset-purchase" ? event : undefined;
+  return owned;
+}
 
 export interface RetirementCutoffInput {
   snapshot: FinancialSnapshot;
@@ -15,6 +34,8 @@ export interface RetirementCutoffProperty {
   liabilityId?: string;
   mortgageCents: Cents;
   monthlyGrossRentCents: Cents;
+  monthlyAduRentCents?: Cents;
+  rentalUseBps?: BasisPoints;
   projectedDepreciationCents: Cents;
   source: "current" | "planned";
 }
@@ -61,11 +82,16 @@ export function buildRetirementCutoff(input:RetirementCutoffInput):RetirementCut
   const currentAssetIds=new Set(input.snapshot.assets.map(asset=>asset.id));
   const ownedAssetIds=new Set(Object.keys(balanceRow.balances.assets));
   const currentProperties=input.snapshot.assets.filter(asset=>asset.housingCosts||asset.purchaseDate||asset.purchasePriceCents!=null||input.snapshot.liabilities.some(liability=>liability.mortgage?.assetId===asset.id));
-  const plannedProperties=input.scenario.events.filter((event):event is Extract<Scenario["events"][number],{type:"asset-purchase"}>=>event.type==="asset-purchase");
-  const propertyIds=[...new Set([...currentProperties.map(asset=>asset.id),...plannedProperties.map(event=>event.assetId)])].filter(assetId=>ownedAssetIds.has(assetId));
+  const plannedPropertyIds=[...new Set(input.scenario.events.flatMap(event=>event.type==="asset-purchase"?[event.assetId]:[]))];
+  const latestPlannedProperties=plannedPropertyIds.flatMap(assetId=>{
+    const purchase=latestOwnedPlannedPurchase(input.scenario,assetId,`${input.retirementMonth}-01`);
+    return purchase?[purchase]:[];
+  });
+  const propertyIds=[...new Set([...currentProperties.map(asset=>asset.id),...latestPlannedProperties.map(event=>event.assetId)])].filter(assetId=>ownedAssetIds.has(assetId));
   const properties=propertyIds.map(assetId=>{
-    const property=balanceRow.properties.find(row=>row.assetId===assetId),current=input.snapshot.assets.find(asset=>asset.id===assetId),planned=plannedProperties.find(event=>event.assetId===assetId);
+    const current=input.snapshot.assets.find(asset=>asset.id===assetId),planned=latestOwnedPlannedPurchase(input.scenario,assetId,`${input.retirementMonth}-01`),propertyRows=balanceRow.properties.filter(row=>row.assetId===assetId),property=planned?.financing?propertyRows.filter(row=>row.liabilityId===planned.financing!.liabilityId).at(-1)??propertyRows.at(-1):propertyRows.at(-1);
     const liabilityId=property?.liabilityId??input.snapshot.liabilities.find(liability=>liability.mortgage?.assetId===assetId)?.id??planned?.financing?.liabilityId;
+    const rentalStart=input.scenario.events.filter((event):event is Extract<Scenario["events"][number],{type:"property-rental-start"}>=>event.type==="property-rental-start"&&event.assetId===assetId&&event.date<`${input.retirementMonth}-01`).sort((left,right)=>left.date.localeCompare(right.date)||left.id.localeCompare(right.id)).at(-1);
     return {
       assetId,
       name:property?.name??current?.name??planned!.name,
@@ -73,7 +99,9 @@ export function buildRetirementCutoff(input:RetirementCutoffInput):RetirementCut
       liabilityId,
       mortgageCents:property?.mortgageBalanceCents??(liabilityId?balanceRow.balances!.liabilities[liabilityId]??0:0),
       monthlyGrossRentCents:(property?.rentCents??0)+(property?.aduIncomeCents??0),
-      projectedDepreciationCents:projectedMonths.flatMap(month=>month.properties).filter(row=>row.assetId===assetId).reduce((sum,row)=>sum+row.depreciationCents,0),
+      monthlyAduRentCents:property?.aduIncomeCents??0,
+      rentalUseBps:currentAssetIds.has(assetId)?rentalStart?.rentalUseBps:planned?.propertyDetails?.rentalUseBps,
+      projectedDepreciationCents:projectedMonths.reduce((sum,month)=>{if(planned&&month.month<planned.date.slice(0,7))return sum;const rows=month.properties.filter(row=>row.assetId===assetId),row=planned?.financing?rows.filter(item=>item.liabilityId===planned.financing!.liabilityId).at(-1)??rows.at(-1):rows.at(-1);return sum+(row?.depreciationCents??0)},0),
       source:currentAssetIds.has(assetId)?"current" as const:"planned" as const,
     };
   });

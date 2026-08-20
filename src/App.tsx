@@ -1110,6 +1110,7 @@ function Workspace({
             aria-hidden={view !== "Retirement" || undefined}
           >
             <RetirementView
+              active={view === "Retirement"}
               initial={retirementSettings}
               repository={repository}
               bootstrap={bootstrap}

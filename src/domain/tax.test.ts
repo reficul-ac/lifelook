@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateTax, TAX_RULES_2025, TAX_RULES_2026 } from "./tax";
+import { estimateHouseholdTax, estimateTax, TAX_RULES_2025, TAX_RULES_2026 } from "./tax";
 import type { FilingStatus, TaxBracket, TaxRulePack } from "./types";
 
 const input = (
@@ -85,4 +85,14 @@ it("rejects ambiguous or unsafe taxability inputs", () => {
   expect(() => estimateTax(input(-1), "single", TAX_RULES_2025)).toThrow(/non-negative/);
   expect(() => estimateTax(input(100, 101), "single", TAX_RULES_2025)).toThrow(/cannot exceed/);
   expect(() => estimateTax(input(Number.MAX_SAFE_INTEGER + 1), "single", TAX_RULES_2025)).toThrow(/safe integer/);
+});
+
+it("exposes federal and modified AGI for incremental tax stacking",()=>{
+  const args={year:2026,status:"single" as const,employees:[{personId:"employee",salaryCents:100_000_00,rsuCents:20_000_00}],nonWageTaxableCents:30_000_00,deductions:{traditionalRetirementCents:10_000_00},thresholdInflationBps:250};
+  const expectedAgi=140_000_00;
+
+  expect(estimateHouseholdTax(args)).toEqual(expect.objectContaining({
+    federalAgiCents:expectedAgi,
+    modifiedAgiCents:expectedAgi,
+  }));
 });

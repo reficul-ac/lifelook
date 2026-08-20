@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use rusqlite::{backup::Backup, params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -10,7 +11,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 21;
+const SCHEMA_VERSION: i64 = 22;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -326,58 +327,16 @@ struct InvestmentComparisonInput {
 #[serde(rename_all = "camelCase")]
 struct RetirementPlanRecord {
     household_id: String,
-    selected_scenario_id: String,
-    retirement_year: i64,
-    runway_years: i64,
+    retirement_month: String,
     withdrawal_rate_bps: i64,
-    expense_buckets: serde_json::Value,
-    selected_source_ids: serde_json::Value,
-    portfolio_items: serde_json::Value,
-    withdrawal_order: serde_json::Value,
-    retirement_years: serde_json::Value,
-    scheduled_income: serde_json::Value,
-    withdrawal_account_order: serde_json::Value,
-    legacy_review_dismissed: bool,
-    spending_mode: String,
-    liquidatable_asset_ids: serde_json::Value,
-    early_roth_account_ids: serde_json::Value,
-    migration_review: serde_json::Value,
-    tax_assumptions: serde_json::Value,
     revision: i64,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RetirementPlanInput {
-    selected_scenario_id: String,
-    retirement_year: i64,
-    runway_years: i64,
+    retirement_month: String,
     withdrawal_rate_bps: i64,
-    expense_buckets: serde_json::Value,
-    selected_source_ids: serde_json::Value,
-    portfolio_items: serde_json::Value,
-    withdrawal_order: serde_json::Value,
-    #[serde(default)]
-    retirement_years: serde_json::Value,
-    #[serde(default)]
-    scheduled_income: serde_json::Value,
-    #[serde(default)]
-    withdrawal_account_order: serde_json::Value,
-    #[serde(default)]
-    legacy_review_dismissed: bool,
-    #[serde(default = "default_spending_mode")]
-    spending_mode: String,
-    #[serde(default)]
-    liquidatable_asset_ids: serde_json::Value,
-    #[serde(default)]
-    early_roth_account_ids: serde_json::Value,
-    #[serde(default)]
-    migration_review: serde_json::Value,
-    #[serde(default)]
-    tax_assumptions: serde_json::Value,
     expected_revision: i64,
-}
-fn default_spending_mode() -> String {
-    "manual".into()
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1021,11 +980,41 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         for (name,sql) in [("spending_mode","ALTER TABLE retirement_plans ADD COLUMN spending_mode TEXT NOT NULL DEFAULT 'manual' CHECK(spending_mode IN ('manual','plan'))"),("liquidatable_asset_ids_json","ALTER TABLE retirement_plans ADD COLUMN liquidatable_asset_ids_json TEXT NOT NULL DEFAULT '[]'"),("early_roth_account_ids_json","ALTER TABLE retirement_plans ADD COLUMN early_roth_account_ids_json TEXT NOT NULL DEFAULT '[]'"),("migration_review_json","ALTER TABLE retirement_plans ADD COLUMN migration_review_json TEXT NOT NULL DEFAULT '[]'")]{if !retirement_columns.iter().any(|x|x==name){transaction.execute(sql,[])?;}}
         transaction.execute_batch("UPDATE retirement_plans SET liquidatable_asset_ids_json=selected_source_ids_json WHERE liquidatable_asset_ids_json='[]';INSERT OR IGNORE INTO schema_migrations(version) VALUES(20);")?;
     }
-    let version: i64 = transaction.query_row("SELECT COALESCE(MAX(version),0) FROM schema_migrations",[],|r| r.get(0))?;
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
     if version < 21 {
-        let columns=transaction.prepare("PRAGMA table_info(retirement_plans)")?.query_map([],|r|r.get::<_,String>(1))?.collect::<Result<Vec<_>,_>>()?;
-        if !columns.iter().any(|x|x=="tax_assumptions_json") { transaction.execute("ALTER TABLE retirement_plans ADD COLUMN tax_assumptions_json TEXT NOT NULL DEFAULT '{}'",[])?; }
-        transaction.execute("INSERT INTO schema_migrations(version) VALUES(21)",[])?;
+        let columns = transaction
+            .prepare("PRAGMA table_info(retirement_plans)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        if !columns.iter().any(|x| x == "tax_assumptions_json") {
+            transaction.execute("ALTER TABLE retirement_plans ADD COLUMN tax_assumptions_json TEXT NOT NULL DEFAULT '{}'",[])?;
+        }
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(21)", [])?;
+    }
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 22 {
+        transaction.execute_batch(
+            "CREATE TABLE retirement_plans_v22(
+              household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE RESTRICT,
+              retirement_month TEXT NOT NULL CHECK(retirement_month GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'),
+              withdrawal_rate_bps INTEGER NOT NULL CHECK(withdrawal_rate_bps BETWEEN 1 AND 10000),
+              revision INTEGER NOT NULL DEFAULT 1,
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO retirement_plans_v22(household_id,retirement_month,withdrawal_rate_bps,revision,updated_at)
+            SELECT household_id,printf('%04d-01',retirement_year),withdrawal_rate_bps,revision,updated_at FROM retirement_plans;
+            DROP TABLE retirement_plans;
+            ALTER TABLE retirement_plans_v22 RENAME TO retirement_plans;
+            INSERT INTO schema_migrations(version) VALUES(22);",
+        )?;
     }
     transaction
         .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
@@ -1077,7 +1066,20 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                 revision: 1,
             });
         }
-        retirement_plan=connection.query_row("SELECT household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,spending_mode,liquidatable_asset_ids_json,early_roth_account_ids_json,migration_review_json,tax_assumptions_json,revision FROM retirement_plans WHERE household_id=?",[&h.id],|r|Ok(RetirementPlanRecord{household_id:r.get(0)?,selected_scenario_id:r.get(1)?,retirement_year:r.get(2)?,runway_years:r.get(3)?,withdrawal_rate_bps:r.get(4)?,expense_buckets:serde_json::from_str(&r.get::<_,String>(5)?).unwrap_or_else(|_|serde_json::json!([])),selected_source_ids:serde_json::from_str(&r.get::<_,String>(6)?).unwrap_or_else(|_|serde_json::json!([])),portfolio_items:serde_json::from_str(&r.get::<_,String>(7)?).unwrap_or_else(|_|serde_json::json!(["taxable","pre-tax","roth"])),withdrawal_order:serde_json::from_str(&r.get::<_,String>(8)?).unwrap_or_else(|_|serde_json::json!([])),retirement_years:serde_json::from_str(&r.get::<_,String>(9)?).unwrap_or_else(|_|serde_json::json!({})),scheduled_income:serde_json::from_str(&r.get::<_,String>(10)?).unwrap_or_else(|_|serde_json::json!([])),withdrawal_account_order:serde_json::from_str(&r.get::<_,String>(11)?).unwrap_or_else(|_|serde_json::json!([])),legacy_review_dismissed:r.get(12)?,spending_mode:r.get(13)?,liquidatable_asset_ids:serde_json::from_str(&r.get::<_,String>(14)?).unwrap_or_else(|_|serde_json::json!([])),early_roth_account_ids:serde_json::from_str(&r.get::<_,String>(15)?).unwrap_or_else(|_|serde_json::json!([])),migration_review:serde_json::from_str(&r.get::<_,String>(16)?).unwrap_or_else(|_|serde_json::json!([])),tax_assumptions:serde_json::from_str(&r.get::<_,String>(17)?).unwrap_or_else(|_|serde_json::json!({})),revision:r.get(18)?})).optional()?;
+        retirement_plan = connection
+            .query_row(
+                "SELECT household_id,retirement_month,withdrawal_rate_bps,revision FROM retirement_plans WHERE household_id=?",
+                [&h.id],
+                |r| {
+                    Ok(RetirementPlanRecord {
+                        household_id: r.get(0)?,
+                        retirement_month: r.get(1)?,
+                        withdrawal_rate_bps: r.get(2)?,
+                        revision: r.get(3)?,
+                    })
+                },
+            )
+            .optional()?;
         let mut q=connection.prepare("SELECT id,household_id,name,birth_date FROM people WHERE household_id=? ORDER BY rowid")?;
         people = q
             .query_map([&h.id], |r| {
@@ -1497,25 +1499,30 @@ fn update_retirement_plan(
     input: RetirementPlanInput,
     database: tauri::State<Database>,
 ) -> Result<RetirementPlanRecord, AppError> {
-    if input.runway_years != 50
+    if !valid_retirement_month(&input.retirement_month)
         || !(1..=10_000).contains(&input.withdrawal_rate_bps)
-        || !input.expense_buckets.is_array()
-        || !input.selected_source_ids.is_array()
-        || !input.portfolio_items.is_array()
-        || !input.withdrawal_order.is_array()
     {
         return Err(AppError::Validation("retirement plan is invalid".into()));
     }
     with_db(&database, |db| store_retirement_plan(db, input))
 }
+
+fn valid_retirement_month(value: &str) -> bool {
+    chrono::NaiveDate::parse_from_str(&format!("{value}-01"), "%Y-%m-%d")
+        .ok()
+        .is_some_and(|date| {
+            date.day() == 1 && format!("{:04}-{:02}", date.year(), date.month()) == value
+        })
+}
+
 fn store_retirement_plan(
     db: &mut Connection,
     input: RetirementPlanInput,
 ) -> Result<RetirementPlanRecord, AppError> {
-    if !matches!(input.spending_mode.as_str(), "manual" | "plan") {
-        return Err(AppError::Validation(
-            "spending mode must be manual or plan".into(),
-        ));
+    if !valid_retirement_month(&input.retirement_month)
+        || !(1..=10_000).contains(&input.withdrawal_rate_bps)
+    {
+        return Err(AppError::Validation("retirement plan is invalid".into()));
     }
     let tx = db.transaction()?;
     let household_id: String =
@@ -1531,27 +1538,15 @@ fn store_retirement_plan(
         return Err(AppError::Conflict);
     }
     let next = existing.map_or(1, |r| r + 1);
-    tx.execute("INSERT INTO retirement_plans(household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,retirement_years_json,scheduled_income_json,withdrawal_account_order_json,legacy_review_dismissed,spending_mode,liquidatable_asset_ids_json,early_roth_account_ids_json,migration_review_json,tax_assumptions_json,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19) ON CONFLICT(household_id) DO UPDATE SET selected_scenario_id=excluded.selected_scenario_id,retirement_year=excluded.retirement_year,expense_buckets_json=excluded.expense_buckets_json,retirement_years_json=excluded.retirement_years_json,scheduled_income_json=excluded.scheduled_income_json,withdrawal_account_order_json=excluded.withdrawal_account_order_json,legacy_review_dismissed=excluded.legacy_review_dismissed,spending_mode=excluded.spending_mode,liquidatable_asset_ids_json=excluded.liquidatable_asset_ids_json,early_roth_account_ids_json=excluded.early_roth_account_ids_json,migration_review_json=excluded.migration_review_json,tax_assumptions_json=excluded.tax_assumptions_json,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",params![household_id,input.selected_scenario_id,input.retirement_year,input.runway_years,input.withdrawal_rate_bps,serde_json::to_string(&input.expense_buckets)?,serde_json::to_string(&input.selected_source_ids)?,serde_json::to_string(&input.portfolio_items)?,serde_json::to_string(&input.withdrawal_order)?,serde_json::to_string(&input.retirement_years)?,serde_json::to_string(&input.scheduled_income)?,serde_json::to_string(&input.withdrawal_account_order)?,input.legacy_review_dismissed,input.spending_mode,serde_json::to_string(&input.liquidatable_asset_ids)?,serde_json::to_string(&input.early_roth_account_ids)?,serde_json::to_string(&input.migration_review)?,serde_json::to_string(&input.tax_assumptions)?,next])?;
+    tx.execute(
+        "INSERT INTO retirement_plans(household_id,retirement_month,withdrawal_rate_bps,revision) VALUES(?1,?2,?3,?4) ON CONFLICT(household_id) DO UPDATE SET retirement_month=excluded.retirement_month,withdrawal_rate_bps=excluded.withdrawal_rate_bps,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",
+        params![household_id, input.retirement_month, input.withdrawal_rate_bps, next],
+    )?;
     tx.commit()?;
     Ok(RetirementPlanRecord {
         household_id,
-        selected_scenario_id: input.selected_scenario_id,
-        retirement_year: input.retirement_year,
-        runway_years: input.runway_years,
+        retirement_month: input.retirement_month,
         withdrawal_rate_bps: input.withdrawal_rate_bps,
-        expense_buckets: input.expense_buckets,
-        selected_source_ids: input.selected_source_ids,
-        portfolio_items: input.portfolio_items,
-        withdrawal_order: input.withdrawal_order,
-        retirement_years: input.retirement_years,
-        scheduled_income: input.scheduled_income,
-        withdrawal_account_order: input.withdrawal_account_order,
-        legacy_review_dismissed: input.legacy_review_dismissed,
-        spending_mode: input.spending_mode,
-        liquidatable_asset_ids: input.liquidatable_asset_ids,
-        early_roth_account_ids: input.early_roth_account_ids,
-        migration_review: input.migration_review,
-        tax_assumptions: input.tax_assumptions,
         revision: next,
     })
 }
@@ -4670,23 +4665,8 @@ mod tests {
         let mut c = seeded();
         assert!(bootstrap(&c).unwrap().retirement_plan.is_none());
         let make = |expected_revision| RetirementPlanInput {
-            selected_scenario_id: "base".into(),
-            retirement_year: 2040,
-            runway_years: 50,
+            retirement_month: "2040-01".into(),
             withdrawal_rate_bps: 300,
-            expense_buckets: serde_json::json!([{"id":"housing","name":"Housing","mode":"annual","annualCents":2400000}]),
-            selected_source_ids: serde_json::json!(["a"]),
-            portfolio_items: serde_json::json!([]),
-            withdrawal_order: serde_json::json!(["taxable", "pre-tax", "roth"]),
-            retirement_years: serde_json::json!({}),
-            scheduled_income: serde_json::json!([]),
-            withdrawal_account_order: serde_json::json!([]),
-            legacy_review_dismissed: false,
-            spending_mode: "manual".into(),
-            liquidatable_asset_ids: serde_json::json!(["a"]),
-            early_roth_account_ids: serde_json::json!([]),
-            migration_review: serde_json::json!([]),
-            tax_assumptions: serde_json::json!({"annualQcdCents":0}),
             expected_revision,
         };
         let saved = store_retirement_plan(&mut c, make(1)).unwrap();
@@ -4696,13 +4676,105 @@ mod tests {
                 .unwrap()
                 .retirement_plan
                 .unwrap()
-                .retirement_year,
-            2040
+                .retirement_month,
+            "2040-01"
         );
         let updated = store_retirement_plan(&mut c, make(1)).unwrap();
         assert_eq!(updated.revision, 2);
         assert!(matches!(
             store_retirement_plan(&mut c, make(1)),
+            Err(AppError::Conflict)
+        ));
+    }
+    #[test]
+    fn version_22_rebuilds_retirement_plans_as_monthly_settings() {
+        let mut c = seeded();
+        c.execute_batch(
+            "DROP TABLE retirement_plans;
+            CREATE TABLE retirement_plans(
+              household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE RESTRICT,
+              selected_scenario_id TEXT NOT NULL DEFAULT '',
+              retirement_year INTEGER NOT NULL,
+              runway_years INTEGER NOT NULL DEFAULT 50,
+              withdrawal_rate_bps INTEGER NOT NULL DEFAULT 300,
+              expense_buckets_json TEXT NOT NULL DEFAULT '[]',
+              selected_source_ids_json TEXT NOT NULL DEFAULT '[]',
+              portfolio_items_json TEXT NOT NULL DEFAULT '[]',
+              withdrawal_order_json TEXT NOT NULL DEFAULT '[\"taxable\",\"pre-tax\",\"roth\"]',
+              revision INTEGER NOT NULL DEFAULT 1,
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );",
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO retirement_plans(household_id,selected_scenario_id,retirement_year,runway_years,withdrawal_rate_bps,expense_buckets_json,selected_source_ids_json,portfolio_items_json,withdrawal_order_json,revision) VALUES('h','base',2040,50,425,'[]','[]','[]','[]',3)",
+            [],
+        )
+        .unwrap();
+        c.execute("DELETE FROM schema_migrations WHERE version >= 22", [])
+            .unwrap();
+
+        migrate(&mut c).unwrap();
+
+        let columns = c
+            .prepare("PRAGMA table_info(retirement_plans)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            columns,
+            vec![
+                "household_id",
+                "retirement_month",
+                "withdrawal_rate_bps",
+                "revision",
+                "updated_at"
+            ]
+        );
+        let loaded = bootstrap(&c).unwrap().retirement_plan.unwrap();
+        assert_eq!(loaded.retirement_month, "2040-01");
+        assert_eq!(loaded.withdrawal_rate_bps, 425);
+        assert_eq!(loaded.revision, 3);
+    }
+
+    #[test]
+    fn retirement_settings_round_trip_and_enforce_revisions() {
+        let mut c = seeded();
+        let saved = store_retirement_plan(
+            &mut c,
+            RetirementPlanInput {
+                retirement_month: "2042-09".into(),
+                withdrawal_rate_bps: 300,
+                expected_revision: 1,
+            },
+        )
+        .unwrap();
+        assert_eq!(saved.retirement_month, "2042-09");
+        assert_eq!(saved.revision, 1);
+        assert_eq!(
+            store_retirement_plan(
+                &mut c,
+                RetirementPlanInput {
+                    retirement_month: "2042-10".into(),
+                    withdrawal_rate_bps: 350,
+                    expected_revision: 1,
+                },
+            )
+            .unwrap()
+            .revision,
+            2
+        );
+        assert!(matches!(
+            store_retirement_plan(
+                &mut c,
+                RetirementPlanInput {
+                    retirement_month: "2042-11".into(),
+                    withdrawal_rate_bps: 350,
+                    expected_revision: 1,
+                },
+            ),
             Err(AppError::Conflict)
         ));
     }

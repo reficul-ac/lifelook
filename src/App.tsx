@@ -72,7 +72,10 @@ import {
 import { ScenarioPlanningDialog } from "./ScenarioPlanningDialog";
 import { InvestmentView } from "./InvestmentView";
 import { RetirementView } from "./RetirementView";
-import { type RetirementPlanRecord } from "./domain";
+import {
+  defaultRetirementPlan,
+  type RetirementSettingsRecord,
+} from "./domain";
 import {
   buildSearchIndex,
   GlobalSearch,
@@ -678,12 +681,22 @@ function Workspace({
         : [],
     [snapshot, bootstrap.taxProfile, projectedScenario],
   );
-  const [retirementPlan, setRetirementPlan] =
-    useState<RetirementPlanRecord | null>(bootstrap.retirementPlan ?? null);
+  const [retirementSettings, setRetirementSettings] =
+    useState<RetirementSettingsRecord | null>(bootstrap.retirementPlan ?? null);
   useEffect(
-    () => setRetirementPlan(bootstrap.retirementPlan ?? null),
+    () => setRetirementSettings(bootstrap.retirementPlan ?? null),
     [bootstrap.retirementPlan],
   );
+  const legacyRetirementPlan = retirementSettings
+    ? {
+        ...defaultRetirementPlan(
+          Number(retirementSettings.retirementMonth.slice(0, 4)),
+        ),
+        householdId: retirementSettings.householdId,
+        withdrawalRateBps: retirementSettings.withdrawalRateBps,
+        revision: retirementSettings.revision,
+      }
+    : null;
   return (
     <div
       className={dark ? "app dark" : "app"}
@@ -1108,13 +1121,20 @@ function Workspace({
         </div>
         {view === "Retirement" && (
           <RetirementView
-            initial={retirementPlan}
+            initial={legacyRetirementPlan}
             repository={repository}
             bootstrap={bootstrap}
             snapshot={snapshot}
             scenarios={[projectedScenario]}
             projections={retirementProjections}
-            onPlanChange={setRetirementPlan}
+            onPlanChange={(plan) =>
+              setRetirementSettings((settings) => ({
+                householdId: settings?.householdId ?? bootstrap.household?.id ?? "",
+                retirementMonth: `${plan.retirementYear}-01`,
+                withdrawalRateBps: plan.withdrawalRateBps,
+                revision: plan.revision,
+              }))
+            }
           />
         )}
         {view === "Net Worth" && (

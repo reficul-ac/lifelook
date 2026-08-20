@@ -20,12 +20,13 @@ export interface RecurringEntry { id: string; name: string; amountCents: Cents; 
 export interface ImportProfile { id: string; name: string; columns: Readonly<Record<string, string>> }
 export interface ImportBatch { id: string; importedAt: string; profileId?: string; rowCount: number }
 export interface HousingCosts { propertyTaxRateBps: BasisPoints; insuranceMonthlyCents: Cents; insuranceAnnualGrowthBps: BasisPoints; hoaMonthlyCents: Cents; hoaAnnualGrowthBps: BasisPoints }
+export interface HomeSaleAssumptions { sellingCostBps:BasisPoints; primaryResidenceExclusionEligible:boolean; accumulatedFederalDepreciationCents:Cents; accumulatedCaliforniaDepreciationCents:Cents }
 export interface AppreciationCurve { startYear:number; startRateBps:BasisPoints; endYear:number; endRateBps:BasisPoints }
 export interface PrivateStockVesting { vestedBps:BasisPoints; vestingStartDate:string; remainingVestingQuarters:number; taxOnVest?:boolean }
 export interface RsuVestEvent { id:string; date:string; unitsMicros:number; actualFmvCents?:Cents|null }
 export interface RsuGrant { id:string; ownerPersonId:string; grantDate:string; grantPriceCents:Cents; unitsMicros:number; vestEvents:readonly RsuVestEvent[]; reviewRequired?:boolean }
 export interface EquityHolding { priceCents:Cents; priceDate:string; appreciationCurve?:AppreciationCurve|null; sellToCover:boolean; grants:readonly RsuGrant[] }
-export interface Asset { id: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; appreciationCurve?:AppreciationCurve|null; privateStock?:PrivateStockVesting|null; equityHolding?:EquityHolding|null; housingCosts?: HousingCosts; housingStartDate?: string; purchasePriceCents?: Cents | null; purchaseDate?: string | null; taxableCostBasisCents?:Cents|null; taxLots?:readonly TaxLotRecord[]; rentalTaxBasisCents?:Cents|null; rentalLandBasisCents?:Cents|null; rentalBuildingBasisCents?:Cents|null; rentalPlacedInServiceDate?:string|null; accumulatedFederalDepreciationCents?:Cents|null; accumulatedCaliforniaDepreciationCents?:Cents|null; federalPassiveLossCarryforwardCents?:Cents|null; californiaPassiveLossCarryforwardCents?:Cents|null }
+export interface Asset { id: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; appreciationCurve?:AppreciationCurve|null; privateStock?:PrivateStockVesting|null; equityHolding?:EquityHolding|null; housingCosts?: HousingCosts; housingStartDate?: string; purchasePriceCents?: Cents | null; purchaseDate?: string | null; homeSaleAssumptions?:HomeSaleAssumptions|null; taxableCostBasisCents?:Cents|null; taxLots?:readonly TaxLotRecord[]; rentalTaxBasisCents?:Cents|null; rentalLandBasisCents?:Cents|null; rentalBuildingBasisCents?:Cents|null; rentalPlacedInServiceDate?:string|null; federalPassiveLossCarryforwardCents?:Cents|null; californiaPassiveLossCarryforwardCents?:Cents|null }
 export interface MortgageTerms { originalPrincipalCents: Cents; termMonths: number; startDate: string; paymentOverrideCents?: Cents; assetId?: string | null }
 export interface Liability { id: string; name: string; balanceCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; mortgage?: MortgageTerms }
 export interface GrowthAssumption { inflationBps: BasisPoints; thresholdInflationBps: BasisPoints }
@@ -35,6 +36,7 @@ export interface ContributionRule { id: string; destinationType: ContributionDes
 export interface WithdrawalRule { id?: string; accountId: string; priority: number }
 export interface EventFundingSource { accountId:string; capCents?:Cents|null }
 export interface PlannedPropertyDetails {
+  homeSaleAssumptions?: HomeSaleAssumptions | null;
   mortgageTermMonths?: number;
   maintenanceBps?: BasisPoints;
   monthlyRentalIncomeCents?: Cents;

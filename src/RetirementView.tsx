@@ -1,14 +1,28 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   buildRetirementCutoff,
-  calculateRetirementSnapshot,
+  calculateRetirementProjection,
+  ageOnDate,
+  isTaxableInvestmentAccount,
   normalizeRetirementSettings,
+  resolveRetirementAccountOrder,
   resolveRetirementHomeSales,
+  retirementWithdrawalClass,
+  type Account,
   type FinancialSnapshot,
-  type RetirementSnapshotResult,
+  type RetirementProjectionResult,
+  type RetirementScenario,
   type RetirementSettingsInput,
   type RetirementSettingsRecord,
   type Scenario,
+  type WithdrawalClass,
 } from "./domain";
 import type { Bootstrap, Repository } from "./repository";
 import {
@@ -18,7 +32,14 @@ import {
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type SaveValues = Omit<RetirementSettingsInput, "expectedRevision">;
-type SettingsDraft = { retirementMonth: string; withdrawalRate: string };
+type SettingsDraft = {
+  retirementMonth: string;
+  withdrawalRate: string;
+  horizonYears: string;
+  taxableDestinationAccountId: string | null;
+  withdrawalAccountOrder: readonly string[];
+  selectedScenario: RetirementScenario;
+};
 
 export interface RetirementViewProps {
   active?: boolean;
@@ -66,8 +87,19 @@ const parseWithdrawalRate = (value: string) => {
     : null;
 };
 
-const settingsFromRecord = (value?: RetirementSettingsRecord | null) => {
-  const normalized = normalizeRetirementSettings(value);
+const parseHorizonYears = (value: string) => {
+  if (!/^\d+$/.test(value)) return null;
+  const horizonYears = Number(value);
+  return Number.isInteger(horizonYears) && horizonYears >= 1 && horizonYears <= 60
+    ? horizonYears
+    : null;
+};
+
+const settingsFromRecord = (
+  value: RetirementSettingsRecord | null | undefined,
+  accounts: readonly Account[],
+) => {
+  const normalized = normalizeRetirementSettings(value, accounts);
   return {
     ...normalized,
     withdrawalRateBps: clampBasisPoints(normalized.withdrawalRateBps),
@@ -79,21 +111,29 @@ const draftFromSettings = (
 ): SettingsDraft => ({
   retirementMonth: settings.retirementMonth,
   withdrawalRate: String(settings.withdrawalRateBps / 100),
+  horizonYears: String(settings.horizonYears),
+  taxableDestinationAccountId: settings.taxableDestinationAccountId,
+  withdrawalAccountOrder: [...settings.withdrawalAccountOrder],
+  selectedScenario: settings.selectedScenario,
 });
 
 const saveValuesFromDraft = (
   draft: SettingsDraft,
-  settings: SaveValues,
+  requiresTaxableDestination: boolean,
 ): SaveValues | null => {
   const withdrawalRateBps = parseWithdrawalRate(draft.withdrawalRate);
-  return validRetirementMonth(draft.retirementMonth) && withdrawalRateBps !== null
+  const horizonYears = parseHorizonYears(draft.horizonYears);
+  return validRetirementMonth(draft.retirementMonth) &&
+    withdrawalRateBps !== null &&
+    horizonYears !== null &&
+    (!requiresTaxableDestination || draft.taxableDestinationAccountId !== null)
     ? {
         retirementMonth: draft.retirementMonth,
         withdrawalRateBps,
-        horizonYears: settings.horizonYears,
-        taxableDestinationAccountId: settings.taxableDestinationAccountId,
-        withdrawalAccountOrder: settings.withdrawalAccountOrder,
-        selectedScenario: settings.selectedScenario,
+        horizonYears,
+        taxableDestinationAccountId: draft.taxableDestinationAccountId,
+        withdrawalAccountOrder: [...draft.withdrawalAccountOrder],
+        selectedScenario: draft.selectedScenario,
       }
     : null;
 };
@@ -104,6 +144,10 @@ const recordFingerprint = (value?: RetirementSettingsRecord | null) =>
         value.householdId,
         value.retirementMonth,
         value.withdrawalRateBps,
+        value.horizonYears,
+        value.taxableDestinationAccountId,
+        value.withdrawalAccountOrder,
+        value.selectedScenario,
         value.revision,
       ])
     : "null";
@@ -128,8 +172,10 @@ export function RetirementView(props: RetirementViewProps) {
     onUpdatePlannedHome,
   } = props;
   const initialRecord = initial ?? bootstrap.retirementPlan ?? null;
+  const taxableAccounts = bootstrap.accounts.filter(isTaxableInvestmentAccount);
+  const requiresTaxableDestination = taxableAccounts.length > 1;
   const [settings, setSettings] = useState(() =>
-    settingsFromRecord(initialRecord),
+    settingsFromRecord(initialRecord, bootstrap.accounts),
   );
   const [draft, setDraft] = useState<SettingsDraft>(() =>
     draftFromSettings(settings),
@@ -190,7 +236,7 @@ export function RetirementView(props: RetirementViewProps) {
       replacementFingerprint = nextInitialFingerprint;
     }
 
-    const nextSettings = settingsFromRecord(replacement);
+    const nextSettings = settingsFromRecord(replacement, bootstrap.accounts);
     const nextDraft = draftFromSettings(nextSettings);
     generation.current += 1;
     saving.current = false;
@@ -240,7 +286,7 @@ export function RetirementView(props: RetirementViewProps) {
           if (generation.current !== saveGeneration) return;
           failed.current = saveValuesFromDraft(
             draftRef.current,
-            settingsRef.current,
+            requiresTaxableDestination,
           );
           pending.current = null;
           saving.current = false;
@@ -254,46 +300,35 @@ export function RetirementView(props: RetirementViewProps) {
       saving.current = false;
       if (mounted.current) {
         setSaveState(
-          saveValuesFromDraft(draftRef.current, settingsRef.current)
+          saveValuesFromDraft(draftRef.current, requiresTaxableDestination)
             ? "saved"
             : "idle",
         );
       }
     })();
-  }, []);
-
-  const updateSettings = (next: Partial<SaveValues>) => {
-    const updated = { ...settingsRef.current, ...next };
-    settingsRef.current = updated;
-    setSettings(updated);
-    queueSave({
-      retirementMonth: updated.retirementMonth,
-      withdrawalRateBps: clampBasisPoints(updated.withdrawalRateBps),
-      horizonYears: updated.horizonYears,
-      taxableDestinationAccountId: updated.taxableDestinationAccountId,
-      withdrawalAccountOrder: updated.withdrawalAccountOrder,
-      selectedScenario: updated.selectedScenario,
-    });
-  };
+  }, [requiresTaxableDestination]);
 
   const updateDraft = (next: Partial<SettingsDraft>) => {
     const updated = { ...draftRef.current, ...next };
     draftRef.current = updated;
     setDraft(updated);
-    const values = saveValuesFromDraft(updated, settingsRef.current);
+    const values = saveValuesFromDraft(updated, requiresTaxableDestination);
     if (values === null) {
       pending.current = null;
       failed.current = null;
       if (mounted.current) setSaveState("idle");
       return;
     }
-    updateSettings(values);
+    const updatedSettings = { ...settingsRef.current, ...values };
+    settingsRef.current = updatedSettings;
+    setSettings(updatedSettings);
+    queueSave(values);
   };
 
   const calculation = useMemo<
     {
-      result: RetirementSnapshotResult;
-      resolvedHomeSales: ReturnType<typeof resolveRetirementHomeSales>;
+      result: RetirementProjectionResult;
+      resolvedHomeSales: ReturnType<typeof resolveRetirementHomeSales> | null;
       error: null;
     } |
     { result: null; error: string } |
@@ -301,21 +336,32 @@ export function RetirementView(props: RetirementViewProps) {
   >(() => {
     if (!active) return null;
     try {
-      const cutoff = buildRetirementCutoff({
+      const asOfDate = localIsoDate();
+      const result = calculateRetirementProjection({
         snapshot,
         scenario,
-        retirementMonth: settings.retirementMonth,
-        asOfDate: localIsoDate(),
+        asOfDate,
+        settings,
       });
-      const snapshotInput = {
+      let resolvedHomeSales: ReturnType<typeof resolveRetirementHomeSales> | null = null;
+      if (onUpdateCurrentHome && onUpdatePlannedHome) {
+        const cutoff = buildRetirementCutoff({
+          snapshot,
+          scenario,
+          retirementMonth: settings.retirementMonth,
+          asOfDate,
+        });
+        const snapshotInput = {
           cutoff,
           snapshot,
           scenario,
           withdrawalRateBps: clampBasisPoints(settings.withdrawalRateBps),
-      };
+        };
+        resolvedHomeSales = resolveRetirementHomeSales(snapshotInput);
+      }
       return {
-        result: calculateRetirementSnapshot(snapshotInput),
-        resolvedHomeSales: resolveRetirementHomeSales(snapshotInput),
+        result,
+        resolvedHomeSales,
         error: null,
       };
     } catch (error) {
@@ -332,11 +378,20 @@ export function RetirementView(props: RetirementViewProps) {
     scenario,
     settings.retirementMonth,
     settings.withdrawalRateBps,
+    settings.horizonYears,
+    settings.taxableDestinationAccountId,
+    settings.withdrawalAccountOrder,
+    settings.selectedScenario,
     snapshot,
+    onUpdateCurrentHome,
+    onUpdatePlannedHome,
   ]);
 
   const retry = () => {
-    const values = saveValuesFromDraft(draftRef.current, settingsRef.current);
+    const values = saveValuesFromDraft(
+      draftRef.current,
+      requiresTaxableDestination,
+    );
     if (values === null) {
       failed.current = null;
       setSaveState("idle");
@@ -377,6 +432,19 @@ export function RetirementView(props: RetirementViewProps) {
             <span aria-hidden="true">%</span>
           </span>
         </label>
+        <label>
+          Years in retirement
+          <input
+            aria-label="Years in retirement"
+            type="number"
+            min="1"
+            max="60"
+            step="1"
+            required
+            value={draft.horizonYears}
+            onChange={(event) => updateDraft({ horizonYears: event.target.value })}
+          />
+        </label>
         <span className={`save-state ${saveState}`} role="status" aria-live="polite">
           {saveState === "saving" ? (
             "Saving…"
@@ -390,6 +458,40 @@ export function RetirementView(props: RetirementViewProps) {
         </span>
       </section>
 
+      <section className="card retirement-settings-extra" aria-label="Retirement settings">
+        <div className="retirement-taxable-destination">
+          <strong>Taxable destination</strong>
+          {taxableAccounts.length === 0 ? (
+            <p>Add a taxable brokerage account in Net Worth to model home-sale proceeds.</p>
+          ) : taxableAccounts.length === 1 ? (
+            <p>{taxableAccounts[0]!.name} is the taxable destination for home-sale proceeds.</p>
+          ) : (
+            <label>
+              <span className="sr-only">Taxable destination</span>
+              <select
+                aria-label="Taxable destination"
+                required
+                value={draft.taxableDestinationAccountId ?? ""}
+                onChange={(event) => updateDraft({
+                  taxableDestinationAccountId: event.target.value || null,
+                })}
+              >
+                <option value="">Choose an account</option>
+                {taxableAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>{account.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+        <WithdrawalOrderSettings
+          draft={draft}
+          snapshot={snapshot}
+          retirementMonth={settings.retirementMonth}
+          onChange={(withdrawalAccountOrder) => updateDraft({ withdrawalAccountOrder })}
+        />
+      </section>
+
       {calculation === null ? null : calculation.result === null ? (
         <section className="card retirement-unavailable" role="alert">
           <h3>Retirement snapshot unavailable</h3>
@@ -397,19 +499,35 @@ export function RetirementView(props: RetirementViewProps) {
         </section>
       ) : (
         <>
-          {onUpdateCurrentHome && onUpdatePlannedHome && calculation.resolvedHomeSales.homes.length > 0 && (
-            <RetirementHomeSaleDetails
-              homes={calculation.resolvedHomeSales.homes}
-              issues={calculation.result.sellHomes.available ? [] : calculation.result.sellHomes.issues}
-              scenario={scenario}
-              retirementDate={`${settings.retirementMonth}-01`}
-              onUpdateCurrentHome={onUpdateCurrentHome}
-              onUpdatePlannedHome={onUpdatePlannedHome}
-            />
-          )}
           <section className="retirement-stories" aria-label="Retirement scenarios">
-            <RetirementStory kind="keep" result={calculation.result} />
-            <RetirementStory kind="sell" result={calculation.result} />
+            <RetirementStory
+              kind="keep"
+              result={calculation.result}
+              selected={draft.selectedScenario === "keep-homes"}
+              onSelect={() => updateDraft({ selectedScenario: "keep-homes" })}
+            />
+            <RetirementStory
+              kind="sell"
+              result={calculation.result}
+              selected={draft.selectedScenario === "sell-all-homes"}
+              onSelect={() => updateDraft({ selectedScenario: "sell-all-homes" })}
+            >
+              {onUpdateCurrentHome &&
+                onUpdatePlannedHome &&
+                calculation.resolvedHomeSales &&
+                calculation.resolvedHomeSales.homes.length > 0 ? (
+                  <RetirementHomeSaleDetails
+                    homes={calculation.resolvedHomeSales.homes}
+                    issues={calculation.result.sellHomes.available
+                      ? []
+                      : calculation.result.sellHomes.issues}
+                    scenario={scenario}
+                    retirementDate={`${settings.retirementMonth}-01`}
+                    onUpdateCurrentHome={onUpdateCurrentHome}
+                    onUpdatePlannedHome={onUpdatePlannedHome}
+                  />
+                ) : null}
+            </RetirementStory>
           </section>
         </>
       )}
@@ -417,63 +535,191 @@ export function RetirementView(props: RetirementViewProps) {
   );
 }
 
+const withdrawalClassLabel: Record<WithdrawalClass, string> = {
+  taxable: "Taxable",
+  cash: "Cash",
+  "eligible-pre-tax": "Pre-tax",
+  "penalty-pre-tax": "Pre-tax",
+  roth: "Roth",
+};
+
+function WithdrawalOrderSettings({
+  draft,
+  snapshot,
+  retirementMonth,
+  onChange,
+}: {
+  draft: SettingsDraft;
+  snapshot: FinancialSnapshot;
+  retirementMonth: string;
+  onChange: (order: readonly string[]) => void;
+}) {
+  const retirementDate = `${retirementMonth}-01`;
+  const effectiveOrder = resolveRetirementAccountOrder(
+    snapshot,
+    retirementDate,
+    draft.withdrawalAccountOrder,
+  );
+  const accounts = effectiveOrder.flatMap((accountId) => {
+    const account = snapshot.accounts.find((candidate) => candidate.id === accountId);
+    return account == null ? [] : [account];
+  });
+  const move = (index: number, offset: -1 | 1) => {
+    const next = accounts.map((account) => account.id);
+    const swapIndex = index + offset;
+    [next[index], next[swapIndex]] = [next[swapIndex]!, next[index]!];
+    onChange(next);
+  };
+
+  return (
+    <details className="retirement-withdrawal-order">
+      <summary>Withdrawal order</summary>
+      <div role="group" aria-label="Withdrawal order">
+        {accounts.length === 0 ? (
+          <p>Add an account in Net Worth to configure withdrawal order.</p>
+        ) : (
+          <ol>
+            {accounts.map((account, index) => {
+              const owner = snapshot.household.people.find(
+                (person) => person.id === account.ownerPersonId,
+              );
+              const withdrawalClass = retirementWithdrawalClass(
+                snapshot,
+                account,
+                retirementDate,
+              );
+              const age = ageOnDate(owner?.birthDate, retirementDate);
+              const ageStatus = withdrawalClass === "cash"
+                ? "Age not applicable"
+                : age === null
+                  ? "Age unknown at retirement"
+                  : `Age ${age} at retirement${
+                      withdrawalClass === "penalty-pre-tax"
+                        ? " — penalty may apply"
+                        : ""
+                    }`;
+              return (
+                <li key={account.id}>
+                  <div>
+                    <strong>{account.name}</strong>
+                    <span>
+                      {owner?.name ?? "Household"} · {withdrawalClassLabel[withdrawalClass]} · {ageStatus}
+                    </span>
+                  </div>
+                  <div className="retirement-withdrawal-actions">
+                    <button
+                      type="button"
+                      aria-label={`Move ${account.name} up`}
+                      disabled={index === 0}
+                      onClick={() => move(index, -1)}
+                    >
+                      Move up
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Move ${account.name} down`}
+                      disabled={index === accounts.length - 1}
+                      onClick={() => move(index, 1)}
+                    >
+                      Move down
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+        <button
+          type="button"
+          disabled={draft.withdrawalAccountOrder.length === 0}
+          onClick={() => onChange([])}
+        >
+          Use automatic order
+        </button>
+      </div>
+    </details>
+  );
+}
+
 function RetirementStory({
   kind,
   result,
+  selected,
+  onSelect,
+  children,
 }: {
   kind: "keep" | "sell";
-  result: RetirementSnapshotResult;
+  result: RetirementProjectionResult;
+  selected: boolean;
+  onSelect: () => void;
+  children?: ReactNode;
 }) {
   const sellingAvailable = result.sellHomes.available;
+  const keepSummary = result.keepHomes.summary;
+  const sellSummary = sellingAvailable ? result.sellHomes.summary : null;
   const headlineNetWorth = kind === "keep"
     ? money(result.netWorthCents)
     : sellingAvailable
-      ? money(result.sellHomes.liquidNetWorthCents)
+      ? money(sellSummary!.liquidNetWorthCents)
       : "Unavailable";
   const headlineIncome = kind === "keep"
-    ? money(result.keepHomes.annualPreTaxIncomeCents)
+    ? money(keepSummary.annualPreTaxIncomeCents)
     : sellingAvailable
-      ? money(result.sellHomes.annualPreTaxIncomeCents)
+      ? money(sellSummary!.annualPreTaxIncomeCents)
       : "Unavailable";
+  const scenarioName = kind === "keep" ? "Keep homes" : "Sell all homes";
 
   return (
-    <article className={`card retirement-story retirement-story-${kind}`}>
-      <div className="retirement-story-heading">
-        <p className="eyebrow">{kind === "keep" ? "Keep" : "Sell"}</p>
-        <h2>{kind === "keep" ? "If you keep your homes" : "If you sell all homes"}</h2>
-      </div>
-      <div className="retirement-story-metrics">
-        <div>
-          <span>{kind === "keep" ? "Net worth at retirement" : "Liquid net worth"}</span>
-          <strong>{headlineNetWorth}</strong>
+    <article className={`card retirement-story retirement-story-${kind}${
+      selected ? " retirement-story-selected" : ""
+    }`}>
+      <button
+        type="button"
+        className="retirement-scenario-select"
+        aria-label={`Select ${scenarioName} scenario`}
+        aria-pressed={selected}
+        onClick={onSelect}
+      >
+        <span>{selected ? "Selected" : "Select"}</span>
+      </button>
+      <div className="retirement-story-content">
+        <div className="retirement-story-heading">
+          <p className="eyebrow">{kind === "keep" ? "Keep" : "Sell"}</p>
+          <h2>{kind === "keep" ? "If you keep your homes" : "If you sell all homes"}</h2>
         </div>
-        <div>
-          <span>Estimated annual pre-tax income</span>
-          <strong>{headlineIncome}</strong>
+        <div className="retirement-story-metrics">
+          <div>
+            <span>{kind === "keep" ? "Net worth at retirement" : "Liquid net worth"}</span>
+            <strong>{headlineNetWorth}</strong>
+          </div>
+          <div>
+            <span>Estimated annual pre-tax income</span>
+            <strong>{headlineIncome}</strong>
+          </div>
         </div>
+        <p className="retirement-story-note">
+          {kind === "keep"
+            ? "Pre-tax estimate. Rental income is gross revenue."
+            : "Only homes are sold. Retirement accounts remain at face value."}
+        </p>
       </div>
-      <p className="retirement-story-note">
-        {kind === "keep"
-          ? "Pre-tax estimate. Rental income is gross revenue."
-          : "Only homes are sold. Retirement accounts remain at face value."}
-      </p>
       <details className="retirement-calculation">
         <summary>View calculation</summary>
         {kind === "keep" ? (
           <dl>
-            <CalculationRow label="Non-home net worth" value={money(result.keepHomes.nonHomeNetWorthCents)} />
+            <CalculationRow label="Non-home net worth" value={money(keepSummary.nonHomeNetWorthCents)} />
             <CalculationRow label="Withdrawal rate" value={rate(result.withdrawalRateBps)} />
-            <CalculationRow label="Withdrawal income" value={money(result.keepHomes.withdrawalIncomeCents)} />
-            <CalculationRow label="Gross rental income" value={money(result.keepHomes.grossRentalIncomeCents)} />
-            <CalculationRow label="Annual pre-tax income" value={money(result.keepHomes.annualPreTaxIncomeCents)} />
+            <CalculationRow label="Withdrawal income" value={money(keepSummary.withdrawalIncomeCents)} />
+            <CalculationRow label="Gross rental income" value={money(keepSummary.grossRentalIncomeCents)} />
+            <CalculationRow label="Annual pre-tax income" value={money(keepSummary.annualPreTaxIncomeCents)} />
           </dl>
         ) : sellingAvailable ? (
           <dl>
-            <CalculationRow label="Gross home equity" value={money(result.sellHomes.grossHomeEquityCents)} />
-            <CalculationRow label="Selling costs" value={`−${money(result.sellHomes.sellingCostsCents)}`} />
-            <CalculationRow label="Estimated incremental sale tax" value={`−${money(result.sellHomes.incrementalSaleTaxCents)}`} />
-            <CalculationRow label="Net home proceeds" value={money(result.sellHomes.netHomeProceedsCents)} />
-            <CalculationRow label="Liquid net worth" value={money(result.sellHomes.liquidNetWorthCents)} />
+            <CalculationRow label="Gross home equity" value={money(sellSummary!.grossHomeEquityCents)} />
+            <CalculationRow label="Selling costs" value={`−${money(sellSummary!.sellingCostsCents)}`} />
+            <CalculationRow label="Estimated incremental sale tax" value={`−${money(sellSummary!.incrementalSaleTaxCents)}`} />
+            <CalculationRow label="Net home proceeds" value={money(sellSummary!.netHomeProceedsCents)} />
+            <CalculationRow label="Liquid net worth" value={money(sellSummary!.liquidNetWorthCents)} />
           </dl>
         ) : (
           <div className="retirement-unavailable">
@@ -486,6 +732,7 @@ function RetirementStory({
           </div>
         )}
       </details>
+      {children}
     </article>
   );
 }

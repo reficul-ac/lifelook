@@ -3,13 +3,19 @@ import { StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildRetirementCutoff,
-  calculateRetirementSnapshot,
+  calculateRetirementProjection,
   type FinancialSnapshot,
   type RetirementCutoff,
+  type RetirementProjectionResult,
   type RetirementSnapshotResult,
   type Scenario,
 } from "./domain";
-import type { Bootstrap, Repository, RetirementSettingsRecord } from "./repository";
+import type {
+  Bootstrap,
+  BootstrapAccount,
+  Repository,
+  RetirementSettingsRecord,
+} from "./repository";
 import { RetirementView } from "./RetirementView";
 
 vi.mock("./domain", async (importOriginal) => {
@@ -17,7 +23,7 @@ vi.mock("./domain", async (importOriginal) => {
   return {
     ...actual,
     buildRetirementCutoff: vi.fn(),
-    calculateRetirementSnapshot: vi.fn(),
+    calculateRetirementProjection: vi.fn(),
   };
 });
 
@@ -106,6 +112,35 @@ const availableResult: RetirementSnapshotResult = {
   },
 };
 
+const availableProjection: RetirementProjectionResult = {
+  retirementMonth: "2042-01",
+  withdrawalRateBps: 300,
+  netWorthCents: 126_000_000,
+  keepHomes: {
+    available: true,
+    summary: {
+      ...availableResult.keepHomes,
+      annualPreTaxIncomeCents: 2_050_000,
+    },
+    years: [],
+  },
+  sellHomes: {
+    available: true,
+    summary: {
+      available: true,
+      grossHomeEquityCents: 75_000_000,
+      sellingCostsCents: 4_500_000,
+      incrementalSaleTaxCents: 2_500_000,
+      netHomeProceedsCents: 68_000_000,
+      liquidNetWorthCents: 119_000_000,
+      annualPreTaxIncomeCents: 3_570_000,
+    },
+    years: [],
+  },
+  effectiveWithdrawalOrder: [],
+  warnings: [],
+};
+
 const initial: RetirementSettingsRecord = {
   householdId: "household",
   retirementMonth: "2042-01",
@@ -125,14 +160,35 @@ const repository = (updateRetirementPlan = vi.fn()): Repository => ({
   updateRetirementPlan,
 });
 
+const bootstrapAccount = (
+  values: Partial<BootstrapAccount> & Pick<BootstrapAccount, "id" | "name" | "kind">,
+): BootstrapAccount => ({
+  householdId: "household",
+  openingBalanceCents: 100_000,
+  balanceCents: 100_000,
+  annualReturnBps: 300,
+  liquid: true,
+  revision: 1,
+  ...values,
+});
+
+const withAccounts = (accounts: readonly BootstrapAccount[]) => ({
+  bootstrap: { ...bootstrap, accounts: [...accounts] },
+  snapshot: {
+    ...snapshot,
+    accounts: accounts.map(({ householdId: _householdId, openingBalanceCents: _opening, revision: _revision, ...account }) => account),
+  },
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(buildRetirementCutoff).mockReturnValue(cutoff);
-  vi.mocked(calculateRetirementSnapshot).mockReturnValue(availableResult);
+  vi.mocked(calculateRetirementProjection).mockReturnValue(availableProjection);
 });
 
 describe("RetirementView settings and autosave", () => {
-  it("defaults to next January and 3% while evaluating only the active Plan", () => {
+  // Break caught: omitting new-setting defaults would leave a fresh retirement plan incomplete or silently autosave it on mount.
+  it("defaults to next January, 3%, and 30 years without saving on mount", () => {
     const updateRetirementPlan = vi.fn();
     const before = JSON.stringify(activeScenario);
 
@@ -151,13 +207,204 @@ describe("RetirementView settings and autosave", () => {
     expect(screen.getByLabelText("Retirement month")).toBeValid();
     expect(screen.getByLabelText("Withdrawal rate")).toHaveValue(3);
     expect(screen.getByLabelText("Withdrawal rate")).toBeValid();
+    expect(screen.getByLabelText("Years in retirement")).toHaveValue(30);
+    expect(screen.getByLabelText("Years in retirement")).toBeValid();
     expect(screen.getByRole("heading", { name: "Build the ADU" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.getByText(/Add a taxable brokerage account/i)).toBeInTheDocument();
     expect(updateRetirementPlan).not.toHaveBeenCalled();
-    expect(buildRetirementCutoff).toHaveBeenCalledWith(
-      expect.objectContaining({ scenario: activeScenario, retirementMonth: nextJanuary }),
+    expect(calculateRetirementProjection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scenario: activeScenario,
+        settings: expect.objectContaining({ retirementMonth: nextJanuary }),
+      }),
     );
     expect(JSON.stringify(activeScenario)).toBe(before);
+  });
+
+  // Break caught: normalizing without bootstrap accounts would discard the only valid sale-proceeds destination from every autosave.
+  it("auto-selects one taxable account and serializes every setting field", async () => {
+    const brokerage = bootstrapAccount({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+      subtype: "taxable-brokerage",
+    });
+    const values = withAccounts([brokerage]);
+    const starting = { ...initial, retirementMonth: "2042-09" };
+    const updateRetirementPlan = vi.fn().mockResolvedValue({
+      ...starting,
+      horizonYears: 40,
+      taxableDestinationAccountId: "brokerage",
+      revision: 2,
+    });
+
+    render(
+      <RetirementView
+        initial={starting}
+        repository={repository(updateRetirementPlan)}
+        bootstrap={values.bootstrap}
+        snapshot={values.snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    expect(screen.queryByRole("combobox", { name: "Taxable destination" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Brokerage is the taxable destination/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Years in retirement"), {
+      target: { value: "40" },
+    });
+
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(1));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+      retirementMonth: "2042-09",
+      withdrawalRateBps: 300,
+      horizonYears: 40,
+      taxableDestinationAccountId: "brokerage",
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
+      expectedRevision: 1,
+    });
+  });
+
+  // Break caught: treating an ambiguous destination as optional would save proceeds without a user-selected taxable account.
+  it("requires an explicit taxable destination when several accounts are eligible", async () => {
+    const first = bootstrapAccount({ id: "brokerage", name: "Brokerage", kind: "investment" });
+    const second = bootstrapAccount({ id: "joint", name: "Joint investing", kind: "investment" });
+    const values = withAccounts([first, second]);
+    const updateRetirementPlan = vi.fn().mockResolvedValue({
+      ...initial,
+      horizonYears: 40,
+      taxableDestinationAccountId: "brokerage",
+      revision: 2,
+    });
+
+    render(
+      <RetirementView
+        initial={initial}
+        repository={repository(updateRetirementPlan)}
+        bootstrap={values.bootstrap}
+        snapshot={values.snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    const destination = screen.getByRole("combobox", { name: "Taxable destination" });
+    expect(destination).toHaveValue("");
+    expect(destination).toBeInvalid();
+    expect(screen.getByRole("option", { name: "Choose an account" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Years in retirement"), {
+      target: { value: "40" },
+    });
+    expect(updateRetirementPlan).not.toHaveBeenCalled();
+
+    fireEvent.change(destination, { target: { value: "brokerage" } });
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(1));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+      retirementMonth: "2042-01",
+      withdrawalRateBps: 300,
+      horizonYears: 40,
+      taxableDestinationAccountId: "brokerage",
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
+      expectedRevision: 1,
+    });
+  });
+
+  // Break caught: accepting blank, fractional, zero, or excessive horizons would persist unsupported projection lengths.
+  it.each(["", "0", "12.5", "61"])(
+    "does not autosave the invalid retirement horizon %j",
+    async (value) => {
+      const updateRetirementPlan = vi.fn();
+      render(
+        <RetirementView
+          initial={initial}
+          repository={repository(updateRetirementPlan)}
+          bootstrap={bootstrap}
+          snapshot={snapshot}
+          scenario={activeScenario}
+        />,
+      );
+
+      const horizon = screen.getByLabelText("Years in retirement");
+      fireEvent.change(horizon, { target: { value } });
+      expect(horizon).toBeInvalid();
+      await act(async () => Promise.resolve());
+      expect(updateRetirementPlan).not.toHaveBeenCalled();
+    },
+  );
+
+  // Break caught: a partial or opaque withdrawal list would prevent users from understanding age-sensitive tax order or restoring automation.
+  it("shows a complete owner-aware withdrawal order, reorders it, and restores automatic order", async () => {
+    const brokerage = bootstrapAccount({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+      subtype: "taxable-brokerage",
+      ownerPersonId: "person",
+    });
+    const checking = bootstrapAccount({ id: "checking", name: "Checking", kind: "checking" });
+    const ira = bootstrapAccount({
+      id: "ira",
+      name: "Traditional IRA",
+      kind: "retirement",
+      subtype: "traditional-ira",
+      ownerPersonId: "younger",
+    });
+    const values = withAccounts([brokerage, checking, ira]);
+    values.bootstrap.people = [
+      { id: "person", householdId: "household", name: "Avery", birthDate: "1970-01-01" },
+      { id: "younger", householdId: "household", name: "Jordan", birthDate: "2000-01-01" },
+    ];
+    values.snapshot.household = {
+      ...values.snapshot.household,
+      people: values.bootstrap.people.map(({ householdId: _householdId, revision: _revision, ...person }) => ({
+        ...person,
+        birthDate: person.birthDate ?? undefined,
+      })),
+    };
+    const updateRetirementPlan = vi
+      .fn()
+      .mockImplementation(async (input) => ({
+        householdId: "household",
+        ...input,
+        revision: input.expectedRevision + 1,
+      }));
+
+    render(
+      <RetirementView
+        initial={initial}
+        repository={repository(updateRetirementPlan)}
+        bootstrap={values.bootstrap}
+        snapshot={values.snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Withdrawal order"));
+    const order = screen.getByRole("group", { name: "Withdrawal order" });
+    expect(within(order).getByText("Brokerage")).toBeInTheDocument();
+    expect(within(order).getByText("Checking")).toBeInTheDocument();
+    expect(within(order).getByText("Traditional IRA")).toBeInTheDocument();
+    expect(within(order).getByText(/Avery.*Taxable.*Age 72 at retirement/)).toBeInTheDocument();
+    expect(within(order).getByText(/Household.*Cash.*Age not applicable/)).toBeInTheDocument();
+    expect(within(order).getByText(/Jordan.*Pre-tax.*Age 42 at retirement.*penalty may apply/)).toBeInTheDocument();
+
+    fireEvent.click(within(order).getByRole("button", { name: "Move Brokerage down" }));
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(1));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        withdrawalAccountOrder: ["checking", "brokerage", "ira"],
+        taxableDestinationAccountId: "brokerage",
+        expectedRevision: 1,
+      }),
+    );
+
+    fireEvent.click(within(order).getByRole("button", { name: "Use automatic order" }));
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(2));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith(
+      expect.objectContaining({ withdrawalAccountOrder: [], expectedRevision: 2 }),
+    );
   });
 
   it("does not save on a Strict Mode mount and starts saving on the first edit", async () => {
@@ -199,7 +446,7 @@ describe("RetirementView settings and autosave", () => {
         scenario={activeScenario}
       />,
     );
-    expect(buildRetirementCutoff).toHaveBeenCalledTimes(1);
+    expect(calculateRetirementProjection).toHaveBeenCalledTimes(1);
 
     rerender(
       <RetirementView
@@ -211,8 +458,7 @@ describe("RetirementView settings and autosave", () => {
         scenario={activeScenario}
       />,
     );
-    vi.mocked(buildRetirementCutoff).mockClear();
-    vi.mocked(calculateRetirementSnapshot).mockClear();
+    vi.mocked(calculateRetirementProjection).mockClear();
     const latestScenario = { ...activeScenario, name: "Latest active Plan" };
     rerender(
       <RetirementView
@@ -224,8 +470,7 @@ describe("RetirementView settings and autosave", () => {
         scenario={latestScenario}
       />,
     );
-    expect(buildRetirementCutoff).not.toHaveBeenCalled();
-    expect(calculateRetirementSnapshot).not.toHaveBeenCalled();
+    expect(calculateRetirementProjection).not.toHaveBeenCalled();
 
     rerender(
       <RetirementView
@@ -237,11 +482,10 @@ describe("RetirementView settings and autosave", () => {
         scenario={latestScenario}
       />,
     );
-    expect(buildRetirementCutoff).toHaveBeenCalledTimes(1);
-    expect(buildRetirementCutoff).toHaveBeenLastCalledWith(
+    expect(calculateRetirementProjection).toHaveBeenCalledTimes(1);
+    expect(calculateRetirementProjection).toHaveBeenLastCalledWith(
       expect.objectContaining({ scenario: latestScenario }),
     );
-    expect(calculateRetirementSnapshot).toHaveBeenCalledTimes(1);
   });
 
   // Break caught: editing the legacy controls would drop normalized migration settings from the persisted plan update.
@@ -306,11 +550,14 @@ describe("RetirementView settings and autosave", () => {
       selectedScenario: "keep-homes",
       expectedRevision: 2,
     });
-    expect(buildRetirementCutoff).toHaveBeenLastCalledWith(
-      expect.objectContaining({ scenario: activeScenario, retirementMonth: "2042-09" }),
-    );
-    expect(calculateRetirementSnapshot).toHaveBeenLastCalledWith(
-      expect.objectContaining({ scenario: activeScenario, withdrawalRateBps: 350 }),
+    expect(calculateRetirementProjection).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        scenario: activeScenario,
+        settings: expect.objectContaining({
+          retirementMonth: "2042-09",
+          withdrawalRateBps: 350,
+        }),
+      }),
     );
     expect(await screen.findByText("Saved")).toBeInTheDocument();
     expect(onSettingsChange).toHaveBeenLastCalledWith({
@@ -528,8 +775,7 @@ describe("RetirementView settings and autosave", () => {
         scenario={activeScenario}
       />,
     );
-    const initialCutoffCalls = vi.mocked(buildRetirementCutoff).mock.calls.length;
-    const initialSnapshotCalls = vi.mocked(calculateRetirementSnapshot).mock.calls.length;
+    const initialProjectionCalls = vi.mocked(calculateRetirementProjection).mock.calls.length;
 
     fireEvent.change(screen.getByLabelText("Retirement month"), {
       target: { value: "" },
@@ -540,8 +786,7 @@ describe("RetirementView settings and autosave", () => {
     expect(screen.getByLabelText("Retirement month")).toHaveValue("");
     expect(screen.getByLabelText("Withdrawal rate")).toHaveValue(null);
     expect(updateRetirementPlan).not.toHaveBeenCalled();
-    expect(buildRetirementCutoff).toHaveBeenCalledTimes(initialCutoffCalls);
-    expect(calculateRetirementSnapshot).toHaveBeenCalledTimes(initialSnapshotCalls);
+    expect(calculateRetirementProjection).toHaveBeenCalledTimes(initialProjectionCalls);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
@@ -549,13 +794,13 @@ describe("RetirementView settings and autosave", () => {
     });
     expect(screen.getByLabelText("Withdrawal rate")).toBeInvalid();
     expect(updateRetirementPlan).not.toHaveBeenCalled();
-    expect(calculateRetirementSnapshot).toHaveBeenCalledTimes(initialSnapshotCalls);
+    expect(calculateRetirementProjection).toHaveBeenCalledTimes(initialProjectionCalls);
 
     fireEvent.change(screen.getByLabelText("Retirement month"), {
       target: { value: "2042-09" },
     });
     expect(updateRetirementPlan).not.toHaveBeenCalled();
-    expect(buildRetirementCutoff).toHaveBeenCalledTimes(initialCutoffCalls);
+    expect(calculateRetirementProjection).toHaveBeenCalledTimes(initialProjectionCalls);
     fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
       target: { value: "3.5" },
     });
@@ -628,6 +873,106 @@ describe("RetirementView settings and autosave", () => {
 });
 
 describe("RetirementView snapshot stories", () => {
+  // Break caught: replacing the full-card semantic button or nesting disclosures inside it would make card whitespace and keyboard selection inaccessible.
+  it("uses full-card sibling selection buttons with pressed and selected states", async () => {
+    const updateRetirementPlan = vi
+      .fn()
+      .mockImplementation(async (input) => ({
+        householdId: "household",
+        ...input,
+        revision: input.expectedRevision + 1,
+      }));
+    render(
+      <RetirementView
+        initial={initial}
+        repository={repository(updateRetirementPlan)}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    const keepButton = screen.getByRole("button", { name: "Select Keep homes scenario" });
+    const sellButton = screen.getByRole("button", { name: "Select Sell all homes scenario" });
+    const keepStory = keepButton.closest("article")!;
+    const sellStory = sellButton.closest("article")!;
+    expect(keepButton).toHaveAttribute("aria-pressed", "true");
+    expect(sellButton).toHaveAttribute("aria-pressed", "false");
+    expect(keepStory).toHaveClass("retirement-story-selected");
+    expect(sellStory).not.toHaveClass("retirement-story-selected");
+    expect(keepButton).toHaveClass("retirement-scenario-select");
+    expect(keepButton.querySelector("details")).toBeNull();
+    expect(keepStory.querySelector("details")).toBeInTheDocument();
+
+    fireEvent.click(sellButton);
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(1));
+    expect(sellButton).toHaveAttribute("aria-pressed", "true");
+    expect(sellStory).toHaveClass("retirement-story-selected");
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+      retirementMonth: "2042-01",
+      withdrawalRateBps: 300,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "sell-all-homes",
+      expectedRevision: 1,
+    });
+
+    keepButton.focus();
+    fireEvent.click(keepButton, { detail: 0 });
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(2));
+    expect(keepButton).toHaveFocus();
+    expect(keepButton).toHaveAttribute("aria-pressed", "true");
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        selectedScenario: "keep-homes",
+        expectedRevision: 2,
+      }),
+    );
+  });
+
+  // Break caught: reading legacy snapshot values or ignoring an authoritative selected scenario would show stale figures and selection after reload.
+  it("restores Sell selection and shows both headline values only from the domain projection", () => {
+    const restored = { ...initial, selectedScenario: "sell-all-homes" as const, revision: 7 };
+    const { rerender } = render(
+      <RetirementView
+        initial={initial}
+        repository={repository()}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    rerender(
+      <RetirementView
+        initial={restored}
+        repository={repository()}
+        bootstrap={{ ...bootstrap, retirementPlan: restored }}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Select Sell all homes scenario" }))
+      .toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("$1,260,000")).toBeInTheDocument();
+    expect(screen.getAllByText("$1,190,000")).toHaveLength(2);
+    expect(screen.getAllByText("$20,500")).toHaveLength(2);
+    expect(screen.getByText("$35,700")).toBeInTheDocument();
+    expect(screen.queryByText("$1,250,000")).not.toBeInTheDocument();
+    expect(screen.queryByText("$1,180,000")).not.toBeInTheDocument();
+    expect(calculateRetirementProjection).toHaveBeenLastCalledWith({
+      snapshot,
+      scenario: activeScenario,
+      asOfDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      settings: expect.objectContaining({
+        selectedScenario: "sell-all-homes",
+        horizonYears: 30,
+      }),
+    });
+  });
+
   it("shows the two headline stories and keeps exact calculations collapsed", () => {
     render(
       <RetirementView
@@ -675,8 +1020,8 @@ describe("RetirementView snapshot stories", () => {
   });
 
   it("keeps the available story visible and lists every structured sale issue", () => {
-    vi.mocked(calculateRetirementSnapshot).mockReturnValue({
-      ...availableResult,
+    vi.mocked(calculateRetirementProjection).mockReturnValue({
+      ...availableProjection,
       sellHomes: {
         available: false,
         issues: [
@@ -693,6 +1038,7 @@ describe("RetirementView snapshot stories", () => {
             message: "Review rental use for Pine Street; mixed-use sale tax is not supported.",
           },
         ],
+        warnings: [],
       },
     });
 
@@ -706,9 +1052,9 @@ describe("RetirementView snapshot stories", () => {
       />,
     );
 
-    expect(screen.getByText("$1,250,000")).toBeInTheDocument();
+    expect(screen.getByText("$1,260,000")).toBeInTheDocument();
     const keepStory = screen.getByRole("heading", { name: "If you keep your homes" }).closest("article")!;
-    expect(within(keepStory).getAllByText("$19,800")).toHaveLength(2);
+    expect(within(keepStory).getAllByText("$20,500")).toHaveLength(2);
     const sellStory = screen.getByRole("heading", { name: "If you sell all homes" }).closest("article")!;
     expect(within(sellStory).getAllByText("Unavailable")).toHaveLength(2);
     fireEvent.click(within(sellStory).getByText("View calculation"));
@@ -730,9 +1076,9 @@ describe("RetirementView snapshot stories", () => {
         scenario={activeScenario}
       />,
     );
-    expect(screen.getByText("$1,250,000")).toBeInTheDocument();
+    expect(screen.getByText("$1,260,000")).toBeInTheDocument();
 
-    vi.mocked(buildRetirementCutoff).mockImplementation(() => {
+    vi.mocked(calculateRetirementProjection).mockImplementation(() => {
       throw new RangeError("Missing projection balances for 2042-08");
     });
     fireEvent.change(screen.getByLabelText("Retirement month"), {

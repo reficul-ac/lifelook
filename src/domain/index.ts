@@ -7,3 +7,4 @@ export * from "./projection";
 export * from "./retirementSettings";
 export * from "./retirementCutoff";
 export * from "./retirementSnapshot";
+export * from "./retirementWithdrawals";

@@ -152,6 +152,44 @@ const recordFingerprint = (value?: RetirementSettingsRecord | null) =>
       ])
     : "null";
 
+const accountsFingerprint = (accounts: readonly Account[]) =>
+  JSON.stringify(
+    accounts.map((account) => [account.id, account.kind, account.subtype]),
+  );
+
+const hasPersistedTaxableDestination = (
+  value: RetirementSettingsRecord | null | undefined,
+  accounts: readonly Account[],
+) =>
+  typeof value?.taxableDestinationAccountId === "string" &&
+  accounts.some(
+    (account) =>
+      account.id === value.taxableDestinationAccountId &&
+      isTaxableInvestmentAccount(account),
+  );
+
+const implicitDestinationFromRecord = (
+  value: RetirementSettingsRecord | null | undefined,
+  accounts: readonly Account[],
+  normalized: ReturnType<typeof settingsFromRecord>,
+) =>
+  hasPersistedTaxableDestination(value, accounts)
+    ? null
+    : normalized.taxableDestinationAccountId;
+
+const filterWithdrawalOrder = (
+  order: readonly string[],
+  accounts: readonly Account[],
+) => {
+  const knownIds = new Set(accounts.map((account) => account.id));
+  const seenIds = new Set<string>();
+  return order.filter((accountId) => {
+    if (!knownIds.has(accountId) || seenIds.has(accountId)) return false;
+    seenIds.add(accountId);
+    return true;
+  });
+};
+
 const localIsoDate = () => {
   const now = new Date();
   return new Date(now.valueOf() - now.getTimezoneOffset() * 60_000)
@@ -174,6 +212,7 @@ export function RetirementView(props: RetirementViewProps) {
   const initialRecord = initial ?? bootstrap.retirementPlan ?? null;
   const taxableAccounts = bootstrap.accounts.filter(isTaxableInvestmentAccount);
   const requiresTaxableDestination = taxableAccounts.length > 1;
+  const currentAccountsFingerprint = accountsFingerprint(bootstrap.accounts);
   const [settings, setSettings] = useState(() =>
     settingsFromRecord(initialRecord, bootstrap.accounts),
   );
@@ -191,14 +230,23 @@ export function RetirementView(props: RetirementViewProps) {
   const seenBootstrapFingerprint = useRef(
     recordFingerprint(bootstrap.retirementPlan),
   );
+  const seenAccountsFingerprint = useRef(currentAccountsFingerprint);
   const authoritativeFingerprint = useRef(recordFingerprint(initialRecord));
+  const authoritativeRecord = useRef(initialRecord);
+  const implicitDestinationAccountId = useRef(
+    implicitDestinationFromRecord(initialRecord, bootstrap.accounts, settings),
+  );
   const mounted = useRef(false);
   const repositoryRef = useRef(repository);
   const onSettingsChangeRef = useRef(onSettingsChange);
+  const accountsRef = useRef(bootstrap.accounts);
+  const requiresTaxableDestinationRef = useRef(requiresTaxableDestination);
   const settingsRef = useRef(settings);
   const draftRef = useRef(draft);
   repositoryRef.current = repository;
   onSettingsChangeRef.current = onSettingsChange;
+  accountsRef.current = bootstrap.accounts;
+  requiresTaxableDestinationRef.current = requiresTaxableDestination;
   settingsRef.current = settings;
   draftRef.current = draft;
 
@@ -212,45 +260,119 @@ export function RetirementView(props: RetirementViewProps) {
   useEffect(() => {
     const nextInitialFingerprint = recordFingerprint(initial);
     const nextBootstrapFingerprint = recordFingerprint(bootstrap.retirementPlan);
+    const nextAccountsFingerprint = currentAccountsFingerprint;
     const bootstrapChanged =
       nextBootstrapFingerprint !== seenBootstrapFingerprint.current;
     const initialChanged =
       nextInitialFingerprint !== seenInitialFingerprint.current;
+    const accountsChanged =
+      nextAccountsFingerprint !== seenAccountsFingerprint.current;
     seenBootstrapFingerprint.current = nextBootstrapFingerprint;
     seenInitialFingerprint.current = nextInitialFingerprint;
+    seenAccountsFingerprint.current = nextAccountsFingerprint;
 
     let replacement: RetirementSettingsRecord | null | undefined;
-    let replacementFingerprint: string;
+    let replacementFingerprint = authoritativeFingerprint.current;
+    let hasReplacement = false;
     if (bootstrapChanged) {
       replacement = bootstrap.retirementPlan;
       replacementFingerprint = nextBootstrapFingerprint;
+      hasReplacement = true;
     } else if (!initialChanged) {
-      return;
+      // Account changes are reconciled below without replacing the visible draft.
     } else if (ownSaveFingerprints.current.delete(nextInitialFingerprint)) {
       authoritativeFingerprint.current = nextInitialFingerprint;
-      return;
+      authoritativeRecord.current = initial ?? null;
     } else if (nextInitialFingerprint === authoritativeFingerprint.current) {
-      return;
+      authoritativeRecord.current = initial ?? null;
     } else {
       replacement = initial;
       replacementFingerprint = nextInitialFingerprint;
+      hasReplacement = true;
     }
 
-    const nextSettings = settingsFromRecord(replacement, bootstrap.accounts);
-    const nextDraft = draftFromSettings(nextSettings);
-    generation.current += 1;
-    saving.current = false;
-    pending.current = null;
-    failed.current = null;
-    revision.current = replacement?.revision ?? nextSettings.revision;
+    if (hasReplacement) {
+      const nextSettings = settingsFromRecord(replacement, bootstrap.accounts);
+      const nextDraft = draftFromSettings(nextSettings);
+      generation.current += 1;
+      saving.current = false;
+      pending.current = null;
+      failed.current = null;
+      revision.current = replacement?.revision ?? nextSettings.revision;
+      settingsRef.current = nextSettings;
+      draftRef.current = nextDraft;
+      authoritativeFingerprint.current = replacementFingerprint;
+      authoritativeRecord.current = replacement ?? null;
+      implicitDestinationAccountId.current = implicitDestinationFromRecord(
+        replacement,
+        bootstrap.accounts,
+        nextSettings,
+      );
+      ownSaveFingerprints.current.clear();
+      setSettings(nextSettings);
+      setDraft(nextDraft);
+      setSaveState("idle");
+      return;
+    }
+    if (!accountsChanged) return;
+
+    const normalizedAuthoritative = settingsFromRecord(
+      authoritativeRecord.current,
+      bootstrap.accounts,
+    );
+    const taxableAccountIds = new Set(taxableAccounts.map((account) => account.id));
+    const currentDraft = draftRef.current;
+    const currentWasImplicit =
+      currentDraft.taxableDestinationAccountId ===
+      implicitDestinationAccountId.current;
+    const currentDestinationIsEligible =
+      currentDraft.taxableDestinationAccountId !== null &&
+      taxableAccountIds.has(currentDraft.taxableDestinationAccountId);
+    const taxableDestinationAccountId =
+      !currentWasImplicit && currentDestinationIsEligible
+        ? currentDraft.taxableDestinationAccountId
+        : normalizedAuthoritative.taxableDestinationAccountId;
+    implicitDestinationAccountId.current =
+      !currentWasImplicit && currentDestinationIsEligible
+        ? null
+        : implicitDestinationFromRecord(
+            authoritativeRecord.current,
+            bootstrap.accounts,
+            normalizedAuthoritative,
+          );
+    const withdrawalAccountOrder = filterWithdrawalOrder(
+      currentDraft.withdrawalAccountOrder,
+      bootstrap.accounts,
+    );
+    const nextDraft = {
+      ...currentDraft,
+      taxableDestinationAccountId,
+      withdrawalAccountOrder,
+    };
+    const nextSettings = {
+      ...settingsRef.current,
+      taxableDestinationAccountId,
+      withdrawalAccountOrder,
+    };
+    const hadFailedSave = failed.current !== null;
+    const reconciledSaveValues = saveValuesFromDraft(
+      nextDraft,
+      requiresTaxableDestination,
+    );
+    if (pending.current !== null) pending.current = reconciledSaveValues;
+    if (hadFailedSave) failed.current = reconciledSaveValues;
     settingsRef.current = nextSettings;
     draftRef.current = nextDraft;
-    authoritativeFingerprint.current = replacementFingerprint;
-    ownSaveFingerprints.current.clear();
     setSettings(nextSettings);
     setDraft(nextDraft);
-    setSaveState("idle");
-  }, [bootstrap.retirementPlan, initial]);
+    if (hadFailedSave) {
+      setSaveState(reconciledSaveValues === null ? "idle" : "error");
+    }
+  }, [
+    bootstrap.retirementPlan,
+    currentAccountsFingerprint,
+    initial,
+  ]);
 
   const queueSave = useCallback((values: SaveValues) => {
     const updateRetirementPlan = repositoryRef.current.updateRetirementPlan;
@@ -273,6 +395,12 @@ export function RetirementView(props: RetirementViewProps) {
           });
           if (generation.current !== saveGeneration) return;
           revision.current = saved.revision;
+          authoritativeRecord.current = saved;
+          implicitDestinationAccountId.current = implicitDestinationFromRecord(
+            saved,
+            accountsRef.current,
+            settingsFromRecord(saved, accountsRef.current),
+          );
           const notifySettingsChange = onSettingsChangeRef.current;
           if (notifySettingsChange) {
             ownSaveFingerprints.current.add(recordFingerprint(saved));
@@ -286,7 +414,7 @@ export function RetirementView(props: RetirementViewProps) {
           if (generation.current !== saveGeneration) return;
           failed.current = saveValuesFromDraft(
             draftRef.current,
-            requiresTaxableDestination,
+            requiresTaxableDestinationRef.current,
           );
           pending.current = null;
           saving.current = false;
@@ -300,15 +428,21 @@ export function RetirementView(props: RetirementViewProps) {
       saving.current = false;
       if (mounted.current) {
         setSaveState(
-          saveValuesFromDraft(draftRef.current, requiresTaxableDestination)
+          saveValuesFromDraft(
+            draftRef.current,
+            requiresTaxableDestinationRef.current,
+          )
             ? "saved"
             : "idle",
         );
       }
     })();
-  }, [requiresTaxableDestination]);
+  }, []);
 
   const updateDraft = (next: Partial<SettingsDraft>) => {
+    if (Object.prototype.hasOwnProperty.call(next, "taxableDestinationAccountId")) {
+      implicitDestinationAccountId.current = null;
+    }
     const updated = { ...draftRef.current, ...next };
     draftRef.current = updated;
     setDraft(updated);

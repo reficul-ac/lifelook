@@ -870,6 +870,274 @@ describe("RetirementView settings and autosave", () => {
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();
   });
+
+  // Break caught: treating a normalization-derived sole destination as persisted would silently keep it after a second taxable account makes the choice ambiguous.
+  it("reconciles an implicit sole destination to unresolved without discarding an invalid draft", async () => {
+    const brokerage = bootstrapAccount({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+    });
+    const joint = bootstrapAccount({
+      id: "joint",
+      name: "Joint investing",
+      kind: "investment",
+    });
+    const updateRetirementPlan = vi.fn();
+    const view = (accounts: readonly BootstrapAccount[]) => {
+      const values = withAccounts(accounts);
+      return (
+        <RetirementView
+          initial={initial}
+          repository={repository(updateRetirementPlan)}
+          bootstrap={values.bootstrap}
+          snapshot={values.snapshot}
+          scenario={activeScenario}
+        />
+      );
+    };
+    const { rerender } = render(view([brokerage]));
+    expect(screen.getByText(/Brokerage is the taxable destination/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Withdrawal rate"), {
+      target: { value: "" },
+    });
+
+    rerender(view([brokerage, joint]));
+
+    const destination = screen.getByRole("combobox", { name: "Taxable destination" });
+    await waitFor(() => expect(destination).toHaveValue(""));
+    expect(destination).toBeInvalid();
+    expect(screen.getByLabelText("Withdrawal rate")).toHaveValue(null);
+    expect(updateRetirementPlan).not.toHaveBeenCalled();
+    expect(calculateRetirementProjection).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        settings: expect.objectContaining({ taxableDestinationAccountId: null }),
+      }),
+    );
+  });
+
+  // Break caught: deriving every sole destination as implicit would erase a user's persisted destination when another eligible account appears.
+  it("keeps an explicitly persisted sole destination when accounts become multiple", async () => {
+    const brokerage = bootstrapAccount({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+    });
+    const joint = bootstrapAccount({
+      id: "joint",
+      name: "Joint investing",
+      kind: "investment",
+    });
+    const updateRetirementPlan = vi.fn();
+    const persisted = { ...initial, taxableDestinationAccountId: "brokerage" };
+    const view = (accounts: readonly BootstrapAccount[]) => {
+      const values = withAccounts(accounts);
+      return (
+        <RetirementView
+          initial={persisted}
+          repository={repository(updateRetirementPlan)}
+          bootstrap={values.bootstrap}
+          snapshot={values.snapshot}
+          scenario={activeScenario}
+        />
+      );
+    };
+    const { rerender } = render(view([brokerage]));
+
+    rerender(view([brokerage, joint]));
+
+    const destination = screen.getByRole("combobox", { name: "Taxable destination" });
+    await waitFor(() => expect(destination).toHaveValue("brokerage"));
+    expect(destination).toBeValid();
+    expect(updateRetirementPlan).not.toHaveBeenCalled();
+  });
+
+  // Break caught: ignoring account changes would leave a newly unambiguous sole destination null in the next completed autosave.
+  it("auto-selects a destination when multiple accounts become one and preserves a partial draft", async () => {
+    const brokerage = bootstrapAccount({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+    });
+    const joint = bootstrapAccount({
+      id: "joint",
+      name: "Joint investing",
+      kind: "investment",
+    });
+    const updateRetirementPlan = vi.fn().mockResolvedValue({
+      ...initial,
+      horizonYears: 40,
+      taxableDestinationAccountId: "brokerage",
+      revision: 2,
+    });
+    const view = (accounts: readonly BootstrapAccount[]) => {
+      const values = withAccounts(accounts);
+      return (
+        <RetirementView
+          initial={initial}
+          repository={repository(updateRetirementPlan)}
+          bootstrap={values.bootstrap}
+          snapshot={values.snapshot}
+          scenario={activeScenario}
+        />
+      );
+    };
+    const { rerender } = render(view([brokerage, joint]));
+    fireEvent.change(screen.getByLabelText("Years in retirement"), {
+      target: { value: "12.5" },
+    });
+
+    rerender(view([brokerage]));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Brokerage is the taxable destination/i)).toBeInTheDocument();
+    });
+    expect(screen.getByLabelText("Years in retirement")).toHaveValue(12.5);
+    expect(updateRetirementPlan).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Years in retirement"), {
+      target: { value: "40" },
+    });
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(1));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        horizonYears: 40,
+        taxableDestinationAccountId: "brokerage",
+        expectedRevision: 1,
+      }),
+    );
+  });
+
+  // Break caught: retaining a deleted explicit destination in projection state would model proceeds against an account the user can no longer select.
+  it("makes a deleted selected destination unresolved among remaining accounts without a stale save", async () => {
+    const brokerage = bootstrapAccount({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+    });
+    const joint = bootstrapAccount({
+      id: "joint",
+      name: "Joint investing",
+      kind: "investment",
+    });
+    const trust = bootstrapAccount({
+      id: "trust",
+      name: "Trust investing",
+      kind: "investment",
+    });
+    const persisted = { ...initial, taxableDestinationAccountId: "brokerage" };
+    const updateRetirementPlan = vi.fn().mockResolvedValue({
+      ...persisted,
+      taxableDestinationAccountId: "joint",
+      revision: 2,
+    });
+    const view = (accounts: readonly BootstrapAccount[]) => {
+      const values = withAccounts(accounts);
+      return (
+        <RetirementView
+          initial={persisted}
+          repository={repository(updateRetirementPlan)}
+          bootstrap={values.bootstrap}
+          snapshot={values.snapshot}
+          scenario={activeScenario}
+        />
+      );
+    };
+    const { rerender } = render(view([brokerage, joint, trust]));
+
+    rerender(view([joint, trust]));
+
+    const destination = screen.getByRole("combobox", { name: "Taxable destination" });
+    await waitFor(() => expect(destination).toHaveValue(""));
+    expect(destination).toBeInvalid();
+    expect(updateRetirementPlan).not.toHaveBeenCalled();
+    expect(calculateRetirementProjection).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        settings: expect.objectContaining({ taxableDestinationAccountId: null }),
+      }),
+    );
+    fireEvent.change(destination, { target: { value: "joint" } });
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(1));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        taxableDestinationAccountId: "joint",
+        expectedRevision: 1,
+      }),
+    );
+  });
+
+  // Break caught: rebuilding a failed retry from an unreconciled draft would resend deleted, duplicate, or unknown withdrawal account IDs.
+  it("reconciles withdrawal IDs after account replacement while preserving a failed unrelated edit", async () => {
+    const brokerage = bootstrapAccount({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+    });
+    const checking = bootstrapAccount({ id: "checking", name: "Checking", kind: "checking" });
+    const ira = bootstrapAccount({
+      id: "ira",
+      name: "Traditional IRA",
+      kind: "retirement",
+      subtype: "traditional-ira",
+    });
+    const roth = bootstrapAccount({
+      id: "roth",
+      name: "Roth IRA",
+      kind: "retirement",
+      subtype: "roth-ira",
+    });
+    const persisted = {
+      ...initial,
+      withdrawalAccountOrder: ["ira", "ira", "missing", "brokerage"],
+    };
+    const updateRetirementPlan = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("conflict"))
+      .mockResolvedValueOnce({
+        ...persisted,
+        retirementMonth: "2042-09",
+        withdrawalAccountOrder: ["brokerage"],
+        revision: 2,
+      });
+    const view = (accounts: readonly BootstrapAccount[]) => {
+      const values = withAccounts(accounts);
+      return (
+        <RetirementView
+          initial={persisted}
+          repository={repository(updateRetirementPlan)}
+          bootstrap={values.bootstrap}
+          snapshot={values.snapshot}
+          scenario={activeScenario}
+        />
+      );
+    };
+    const { rerender } = render(view([brokerage, checking, ira]));
+    fireEvent.change(screen.getByLabelText("Retirement month"), {
+      target: { value: "2042-09" },
+    });
+    expect(
+      await screen.findByRole("button", { name: "Save failed — retry" }),
+    ).toBeInTheDocument();
+
+    rerender(view([brokerage, checking, roth]));
+
+    fireEvent.click(screen.getByText("Withdrawal order"));
+    const order = screen.getByRole("group", { name: "Withdrawal order" });
+    await waitFor(() => expect(within(order).queryByText("Traditional IRA")).not.toBeInTheDocument());
+    expect(within(order).getByText("Brokerage")).toBeInTheDocument();
+    expect(within(order).getByText("Checking")).toBeInTheDocument();
+    expect(within(order).getByText("Roth IRA")).toBeInTheDocument();
+    expect(screen.getByLabelText("Retirement month")).toHaveValue("2042-09");
+    fireEvent.click(screen.getByRole("button", { name: "Save failed — retry" }));
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(2));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        retirementMonth: "2042-09",
+        taxableDestinationAccountId: "brokerage",
+        withdrawalAccountOrder: ["brokerage"],
+        expectedRevision: 1,
+      }),
+    );
+  });
 });
 
 describe("RetirementView snapshot stories", () => {

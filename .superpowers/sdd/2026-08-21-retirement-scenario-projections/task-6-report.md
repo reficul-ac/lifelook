@@ -100,3 +100,24 @@ Each new test names the production mutation it catches. Coverage asserts rendere
 - `npm test`: PASS, 16 files and 345 tests.
 - `git diff --check`: PASS.
 - Vite retains its existing non-blocking advisory for the main minified chunk over 500 kB.
+
+## Fix Round 3: Render-to-Effect Save Adoption Race
+
+- Added a latest-accounts fingerprint ref that is updated synchronously during every render and captured with each dispatched retirement-settings request.
+- Save success and failure handling compare the dispatched fingerprint with the render-current fingerprint before adopting a record, creating an own-save fingerprint, reporting an error, or calling `onSettingsChange`.
+- When a response arrives after a new account render but before its passive reconciliation effect, the save loop waits for that effect. Reconciliation filters the live draft, retains unrelated fields, and releases the loop to save only valid destination/order values using the stale success's returned revision.
+- Authoritative replacements and unmount cleanup also release reconciliation waiters, preventing an obsolete request from hanging or later emitting its record.
+
+### Fix Round 3 TDD Evidence
+
+- RED: `npm test -- --run src/RetirementView.test.tsx` initially failed 1 test with 27 passes because revision 2 and its deleted destination/order were emitted before passive reconciliation.
+- The finalized same-task regression keeps the existing component instance, renders the deleted-account props, resolves the save in a following sibling, and suspends the render before passive effects. A targeted mutation back to passive-generation-only adoption failed 1 test with 27 skipped and directly observed the stale revision-2 emission.
+- GREEN: `npm test -- --run src/RetirementView.test.tsx` passed 1 file and 28 tests with render-current fingerprint validation restored.
+- The regression asserts that the stale record is never emitted, the valid follow-up payload uses `expectedRevision: 2`, only the revision-3 reconciled record is emitted, and the unrelated retirement-month draft remains intact.
+
+### Fix Round 3 Verification
+
+- `npm test -- --run src/RetirementView.test.tsx src/App.test.tsx && npm run build`: PASS, 2 files and 84 tests; TypeScript and Vite production build passed.
+- `npm test`: PASS, 16 files and 346 tests.
+- `git diff --check`: PASS.
+- Vite retains its existing non-blocking advisory for the main minified chunk over 500 kB.

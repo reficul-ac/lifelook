@@ -226,6 +226,8 @@ export function RetirementView(props: RetirementViewProps) {
   const failed = useRef<SaveValues | null>(null);
   const generation = useRef(0);
   const accountGeneration = useRef(0);
+  const latestAccountsFingerprint = useRef(currentAccountsFingerprint);
+  const accountReconciliationWaiters = useRef(new Set<() => void>());
   const ownSaveFingerprints = useRef(new Set<string>());
   const seenInitialFingerprint = useRef(recordFingerprint(initial));
   const seenBootstrapFingerprint = useRef(
@@ -244,6 +246,7 @@ export function RetirementView(props: RetirementViewProps) {
   const requiresTaxableDestinationRef = useRef(requiresTaxableDestination);
   const settingsRef = useRef(settings);
   const draftRef = useRef(draft);
+  latestAccountsFingerprint.current = currentAccountsFingerprint;
   repositoryRef.current = repository;
   onSettingsChangeRef.current = onSettingsChange;
   accountsRef.current = bootstrap.accounts;
@@ -255,6 +258,8 @@ export function RetirementView(props: RetirementViewProps) {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      for (const resolve of accountReconciliationWaiters.current) resolve();
+      accountReconciliationWaiters.current.clear();
     };
   }, []);
 
@@ -313,6 +318,8 @@ export function RetirementView(props: RetirementViewProps) {
       setSettings(nextSettings);
       setDraft(nextDraft);
       setSaveState("idle");
+      for (const resolve of accountReconciliationWaiters.current) resolve();
+      accountReconciliationWaiters.current.clear();
       return;
     }
     if (!accountsChanged) return;
@@ -372,6 +379,8 @@ export function RetirementView(props: RetirementViewProps) {
     if (hadFailedSave) {
       setSaveState(reconciledSaveValues === null ? "idle" : "error");
     }
+    for (const resolve of accountReconciliationWaiters.current) resolve();
+    accountReconciliationWaiters.current.clear();
   }, [
     bootstrap.retirementPlan,
     currentAccountsFingerprint,
@@ -392,6 +401,7 @@ export function RetirementView(props: RetirementViewProps) {
       while (generation.current === saveGeneration && pending.current) {
         const next = pending.current;
         const dispatchedAccountGeneration = accountGeneration.current;
+        const dispatchedAccountsFingerprint = latestAccountsFingerprint.current;
         pending.current = null;
         try {
           const saved = await repositoryRef.current.updateRetirementPlan!({
@@ -400,11 +410,16 @@ export function RetirementView(props: RetirementViewProps) {
           });
           if (generation.current !== saveGeneration) return;
           revision.current = saved.revision;
-          if (accountGeneration.current !== dispatchedAccountGeneration) {
-            pending.current = saveValuesFromDraft(
-              draftRef.current,
-              requiresTaxableDestinationRef.current,
-            );
+          if (
+            latestAccountsFingerprint.current !==
+            dispatchedAccountsFingerprint
+          ) {
+            if (accountGeneration.current === dispatchedAccountGeneration) {
+              await new Promise<void>((resolve) => {
+                accountReconciliationWaiters.current.add(resolve);
+              });
+            }
+            if (generation.current !== saveGeneration) return;
             if (pending.current !== null) continue;
             saving.current = false;
             if (mounted.current) setSaveState("idle");
@@ -427,11 +442,16 @@ export function RetirementView(props: RetirementViewProps) {
           }
         } catch {
           if (generation.current !== saveGeneration) return;
-          if (accountGeneration.current !== dispatchedAccountGeneration) {
-            pending.current = saveValuesFromDraft(
-              draftRef.current,
-              requiresTaxableDestinationRef.current,
-            );
+          if (
+            latestAccountsFingerprint.current !==
+            dispatchedAccountsFingerprint
+          ) {
+            if (accountGeneration.current === dispatchedAccountGeneration) {
+              await new Promise<void>((resolve) => {
+                accountReconciliationWaiters.current.add(resolve);
+              });
+            }
+            if (generation.current !== saveGeneration) return;
             if (pending.current !== null) continue;
             saving.current = false;
             if (mounted.current) setSaveState("idle");

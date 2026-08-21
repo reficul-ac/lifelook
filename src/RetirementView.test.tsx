@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { StrictMode } from "react";
+import { startTransition, StrictMode } from "react";
+import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildRetirementCutoff,
@@ -1247,6 +1248,160 @@ describe("RetirementView settings and autosave", () => {
         }),
       }),
     );
+  });
+
+  // Break caught: checking account generation only in a passive effect would emit a stale save resolved after the deletion render but before that effect.
+  it("rejects a deferred save resolved in the account-deletion render task before passive reconciliation", async () => {
+    const brokerage = bootstrapAccount({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+    });
+    const ira = bootstrapAccount({
+      id: "ira",
+      name: "Traditional IRA",
+      kind: "retirement",
+      subtype: "traditional-ira",
+    });
+    const joint = bootstrapAccount({
+      id: "joint",
+      name: "Joint investing",
+      kind: "investment",
+    });
+    const checking = bootstrapAccount({ id: "checking", name: "Checking", kind: "checking" });
+    const persisted = {
+      ...initial,
+      taxableDestinationAccountId: "brokerage",
+      withdrawalAccountOrder: ["ira", "brokerage"],
+    };
+    let finishStaleSave: ((record: RetirementSettingsRecord) => void) | undefined;
+    const updateRetirementPlan = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise<RetirementSettingsRecord>((resolve) => {
+          finishStaleSave = resolve;
+        }),
+      )
+      .mockResolvedValueOnce({
+        ...persisted,
+        retirementMonth: "2042-09",
+        taxableDestinationAccountId: "joint",
+        withdrawalAccountOrder: [],
+        revision: 3,
+      });
+    const onSettingsChange = vi.fn();
+    const view = (accounts: readonly BootstrapAccount[]) => {
+      const values = withAccounts(accounts);
+      return (
+        <RetirementView
+          initial={persisted}
+          repository={repository(updateRetirementPlan)}
+          bootstrap={values.bootstrap}
+          snapshot={values.snapshot}
+          scenario={activeScenario}
+          onSettingsChange={onSettingsChange}
+        />
+      );
+    };
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const actEnvironment = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean;
+    };
+    const originalActEnvironment = actEnvironment.IS_REACT_ACT_ENVIRONMENT;
+    let finishDeletionRender: (() => void) | undefined;
+    const deletionRenderStarted = new Promise<void>((resolve) => {
+      finishDeletionRender = resolve;
+    });
+    let finishDeletionSuspension: (() => void) | undefined;
+    const deletionSuspension = new Promise<void>((resolve) => {
+      finishDeletionSuspension = resolve;
+    });
+    let deletionSuspended = true;
+    let resolvedDuringRender = false;
+    function ResolveSaveAfterRetirementRender() {
+      if (!resolvedDuringRender) {
+        resolvedDuringRender = true;
+        finishStaleSave?.({
+          ...persisted,
+          retirementMonth: "2042-09",
+          revision: 2,
+        });
+        finishDeletionRender?.();
+      }
+      if (deletionSuspended) throw deletionSuspension;
+      return null;
+    }
+    function AccountRaceView({
+      accounts,
+      resolveSave = false,
+    }: {
+      accounts: readonly BootstrapAccount[];
+      resolveSave?: boolean;
+    }) {
+      return (
+        <>
+          {view(accounts)}
+          {resolveSave ? <ResolveSaveAfterRetirementRender /> : null}
+        </>
+      );
+    }
+
+    try {
+      await act(async () => {
+        root.render(<AccountRaceView accounts={[brokerage, ira]} />);
+      });
+      fireEvent.change(within(container).getByLabelText("Retirement month"), {
+        target: { value: "2042-09" },
+      });
+      expect(updateRetirementPlan).toHaveBeenCalledTimes(1);
+
+      actEnvironment.IS_REACT_ACT_ENVIRONMENT = false;
+      startTransition(() => {
+        root.render(
+          <AccountRaceView accounts={[joint, checking]} resolveSave />,
+        );
+      });
+      await deletionRenderStarted;
+      await Promise.resolve();
+      expect(onSettingsChange).not.toHaveBeenCalledWith({
+        ...persisted,
+        retirementMonth: "2042-09",
+        revision: 2,
+      });
+
+      actEnvironment.IS_REACT_ACT_ENVIRONMENT = originalActEnvironment;
+      await act(async () => {
+        deletionSuspended = false;
+        finishDeletionSuspension?.();
+        await deletionSuspension;
+      });
+      await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(2));
+      expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+        retirementMonth: "2042-09",
+        withdrawalRateBps: 300,
+        horizonYears: 30,
+        taxableDestinationAccountId: "joint",
+        withdrawalAccountOrder: [],
+        selectedScenario: "keep-homes",
+        expectedRevision: 2,
+      });
+      expect(await within(container).findByText("Saved")).toBeInTheDocument();
+      expect(onSettingsChange).toHaveBeenCalledTimes(1);
+      expect(onSettingsChange).toHaveBeenCalledWith({
+        ...persisted,
+        retirementMonth: "2042-09",
+        taxableDestinationAccountId: "joint",
+        withdrawalAccountOrder: [],
+        revision: 3,
+      });
+      expect(within(container).getByLabelText("Retirement month")).toHaveValue("2042-09");
+    } finally {
+      actEnvironment.IS_REACT_ACT_ENVIRONMENT = originalActEnvironment;
+      await act(async () => root.unmount());
+      container.remove();
+    }
   });
 });
 

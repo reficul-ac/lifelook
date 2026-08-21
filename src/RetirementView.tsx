@@ -564,6 +564,11 @@ export function RetirementView(props: RetirementViewProps) {
     queueSave(values);
   };
 
+  const entityNames = Object.fromEntries(
+    [...bootstrap.accounts, ...bootstrap.assets, ...bootstrap.recurring]
+      .map((entity) => [entity.id, entity.name]),
+  );
+
   return (
     <div className="content retirement-view">
       <section className="card retirement-snapshot-header">
@@ -698,9 +703,7 @@ export function RetirementView(props: RetirementViewProps) {
             projection={draft.selectedScenario === "keep-homes"
               ? calculation.result.keepHomes
               : calculation.result.sellHomes}
-            accountNames={Object.fromEntries(
-              bootstrap.accounts.map((account) => [account.id, account.name]),
-            )}
+            accountNames={entityNames}
           />
         </>
       )}

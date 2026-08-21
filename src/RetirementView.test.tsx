@@ -1861,4 +1861,79 @@ describe("RetirementView snapshot stories", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Missing projection balances for 2042-08");
     expect(screen.queryByRole("row", { name: /2042.*Person.*62/ })).not.toBeInTheDocument();
   });
+
+  // Production mutation caught: passing account labels alone exposes recurring and asset IDs in annual warning context.
+  it("uses recurring and asset names for selected-projection warning entities", () => {
+    const pineRental = {
+      id: "rental-asset",
+      householdId: "household",
+      name: "Pine rental",
+      valueCents: 700_000_00,
+      annualGrowthBps: 300,
+      revision: 1,
+    };
+    const consultingIncome = {
+      id: "recurring-consulting",
+      householdId: "household",
+      categoryId: "income",
+      name: "Consulting income",
+      amountCents: 5_000_00,
+      kind: "income" as const,
+      frequency: "monthly" as const,
+      startDate: "2040-01-01",
+      annualGrowthBps: 0,
+      taxTreatment: "none" as const,
+      revision: 1,
+    };
+    const namedBootstrap: Bootstrap = {
+      ...bootstrap,
+      assets: [pineRental],
+      recurring: [consultingIncome],
+    };
+    const namedSnapshot: FinancialSnapshot = {
+      ...snapshot,
+      assets: [pineRental],
+      recurring: [consultingIncome],
+    };
+    vi.mocked(calculateRetirementProjection).mockReturnValue({
+      ...availableProjection,
+      keepHomes: {
+        ...availableProjection.keepHomes,
+        years: [{
+          ...annualProjectionRow,
+          warnings: [
+            {
+              code: "activity-ended",
+              year: 2042,
+              entityId: "recurring-consulting",
+              message: "Consulting income ends on 2042-06-30.",
+            },
+            {
+              code: "unsupported-rental-tax",
+              year: 2042,
+              entityId: "rental-asset",
+              message: "Rental tax treatment is unavailable for Pine rental.",
+            },
+          ],
+        }],
+      },
+    });
+
+    render(
+      <RetirementView
+        initial={initial}
+        repository={repository()}
+        bootstrap={namedBootstrap}
+        snapshot={namedSnapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "View 2042 year details" }));
+    const warnings = within(screen.getByRole("region", { name: "Warnings for 2042" })).getAllByRole("listitem");
+    expect(warnings[0]).toHaveTextContent("Year 2042 · Consulting income");
+    expect(warnings[1]).toHaveTextContent("Year 2042 · Pine rental");
+    expect(warnings[0]).not.toHaveTextContent("recurring-consulting");
+    expect(warnings[1]).not.toHaveTextContent("rental-asset");
+  });
 });

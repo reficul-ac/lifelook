@@ -34,9 +34,9 @@ const firstYear = {
   },
   homeSale: {
     grossSaleValueCents: 900_000_00,
-    sellingCostsCents: 54_000_00,
-    mortgagePayoffCents: 220_000_00,
-    incrementalSaleTaxCents: 31_000_00,
+    sellingCostsCents: 0,
+    mortgagePayoffCents: 1,
+    incrementalSaleTaxCents: 55,
     netProceedsCents: 595_000_00,
   },
   withdrawalSources: [{
@@ -53,10 +53,11 @@ const firstYear = {
     taxCharacterSupported: true,
   }],
   warnings: [
-    { code: "early-withdrawal", year: 2042, entityId: "traditional-ira", message: "A 10% penalty applies before age 59½." },
-    { code: "account-depleted", year: 2042, entityId: "traditional-ira", message: "The account reached zero." },
-    { code: "activity-ended", year: 2042, entityId: "rental", message: "Rental activity ended after the sale." },
-    { code: "unfunded-spending", year: 2042, message: "Planned spending was not fully funded." },
+    { code: "early-withdrawal", year: 2042, entityId: "traditional-ira", message: "5001 cents of early-distribution penalties were estimated." },
+    { code: "account-depleted", year: 2042, entityId: "traditional-ira", message: "Traditional IRA was depleted." },
+    { code: "activity-ended", year: 2042, entityId: "consulting", message: "Consulting income ends on 2042-06-30." },
+    { code: "unfunded-spending", year: 2042, message: "753 cents of spending could not be funded." },
+    { code: "unsupported-rental-tax", year: 2042, entityId: "rental", message: "Rental tax treatment is unavailable for Pine rental." },
   ],
 } satisfies RetirementProjectionYear;
 
@@ -121,10 +122,11 @@ describe("RetirementProjectionTable", () => {
       "Ending destination balance",
       "Ending net worth",
     ]) {
-      expect(screen.getByRole("columnheader", { name: heading })).toBeInTheDocument();
+      expect(screen.getByRole("columnheader", { name: heading })).toHaveAttribute("scope", "col");
     }
 
     const firstRow = screen.getByRole("row", { name: /2042.*Avery.*62/ });
+    expect(within(firstRow).getByRole("rowheader", { name: /2042.*Avery.*62/ })).toHaveAttribute("scope", "row");
     expect(within(firstRow).getByText("$1,000,000")).toBeInTheDocument();
     expect(within(firstRow).getByText("$40,000")).toBeInTheDocument();
     expect(within(firstRow).getByText("$8,500")).toBeInTheDocument();
@@ -134,6 +136,32 @@ describe("RetirementProjectionTable", () => {
     expect(within(firstRow).getByText("$1,500")).toBeInTheDocument();
     expect(within(firstRow).getByText("$13,500")).toBeInTheDocument();
     expect(within(firstRow).getByText("$1,021,000")).toBeInTheDocument();
+  });
+
+  // Production mutation caught: unmounting collapsed detail rows leaves aria-controls pointing at IDs that do not exist, and indistinguishable controls force screen-reader users to guess the year.
+  it("keeps one uniquely named, connected disclosure control and detail target for every year", () => {
+    render(
+      <RetirementProjectionTable
+        selectedScenario="keep-homes"
+        projection={projection}
+        accountNames={{}}
+      />,
+    );
+
+    const controls = screen.getAllByRole("button", { name: /View 204[23] year details/ });
+    expect(controls).toHaveLength(2);
+    expect(controls[0]).toHaveAttribute("aria-expanded", "false");
+    expect(controls[1]).toHaveAttribute("aria-expanded", "false");
+    for (const control of controls) {
+      const target = document.getElementById(control.getAttribute("aria-controls")!);
+      expect(target).toBeInTheDocument();
+      expect(target).toHaveAttribute("hidden");
+    }
+
+    fireEvent.click(controls[0]!);
+    expect(controls[0]).toHaveAttribute("aria-expanded", "true");
+    expect(document.getElementById(controls[0]!.getAttribute("aria-controls")!)).not.toHaveAttribute("hidden");
+    expect(controls[1]).toHaveAttribute("aria-expanded", "false");
   });
 
   // Production mutation caught: removing the semantic sign label makes a deficit dependent on red styling alone.
@@ -156,19 +184,21 @@ describe("RetirementProjectionTable", () => {
       <RetirementProjectionTable
         selectedScenario="keep-homes"
         projection={projection}
-        accountNames={{ "traditional-ira": "Traditional IRA", rental: "Pine rental" }}
+        accountNames={{ "traditional-ira": "Traditional IRA", rental: "Pine rental", consulting: "Consulting income" }}
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "View year details" })[0]!);
-    const details = screen.getByText("Rental income").closest(".retirement-year-details")!;
+    fireEvent.click(screen.getByRole("button", { name: "View 2042 year details" }));
+    const details = document.getElementById("retirement-year-2042")!;
     expect(details).toBeInTheDocument();
-    expect(screen.getByText("Mortgage principal")).toBeInTheDocument();
-    expect(screen.getByText("Mortgage interest")).toBeInTheDocument();
-    expect(screen.getByText("Property tax")).toBeInTheDocument();
-    expect(screen.getByText("Home insurance")).toBeInTheDocument();
-    expect(screen.getByText("HOA")).toBeInTheDocument();
-    expect(screen.getByText("Maintenance")).toBeInTheDocument();
+    expect(within(details).getByText("Rental income")).toBeInTheDocument();
+    expect(within(details).getByText("Mortgage principal")).toBeInTheDocument();
+    expect(within(details).getByText("Mortgage interest")).toBeInTheDocument();
+    expect(within(details).getByText("Property tax")).toBeInTheDocument();
+    expect(within(details).getByText("Home insurance")).toBeInTheDocument();
+    expect(within(details).getByText("HOA")).toBeInTheDocument();
+    expect(within(details).getByText("Maintenance")).toBeInTheDocument();
+    expect(within(details).getByRole("region", { name: "Withdrawal sources for 2042" })).toHaveTextContent("Traditional IRA: $40,000");
     expect(details.closest("td")).toHaveAttribute("colspan", "10");
   });
 
@@ -182,7 +212,7 @@ describe("RetirementProjectionTable", () => {
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "View year details" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "View 2042 year details" }));
     expect(screen.getByText("Gross proceeds")).toBeInTheDocument();
     expect(screen.getByText("Selling costs")).toBeInTheDocument();
     expect(screen.getByText("Mortgage payoff")).toBeInTheDocument();
@@ -195,15 +225,76 @@ describe("RetirementProjectionTable", () => {
       <RetirementProjectionTable
         selectedScenario="keep-homes"
         projection={projection}
-        accountNames={{ "traditional-ira": "Traditional IRA", rental: "Pine rental" }}
+        accountNames={{ "traditional-ira": "Traditional IRA", rental: "Pine rental", consulting: "Consulting income" }}
       />,
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "View year details" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "View 2042 year details" }));
     const warnings = within(screen.getByRole("region", { name: "Warnings for 2042" })).getAllByRole("listitem");
-    expect(warnings[0]).toHaveTextContent("Early withdrawal: A 10% penalty applies before age 59½. Year 2042 · Traditional IRA");
-    expect(warnings[1]).toHaveTextContent("Account depleted: The account reached zero. Year 2042 · Traditional IRA");
-    expect(warnings[2]).toHaveTextContent("Activity ended: Rental activity ended after the sale. Year 2042 · Pine rental");
-    expect(warnings[3]).toHaveTextContent("Unfunded spending: Planned spending was not fully funded. Year 2042");
+    expect(warnings[0]).toHaveTextContent("Early withdrawal penalty: $50.01 of early-distribution penalties were estimated. Year 2042 · Traditional IRA");
+    expect(warnings[1]).toHaveTextContent("Account depleted: Traditional IRA was depleted. Year 2042 · Traditional IRA");
+    expect(warnings[2]).toHaveTextContent("Activity ended: Consulting income ends on 2042-06-30. Year 2042 · Consulting income");
+    expect(warnings[3]).toHaveTextContent("Unfunded spending: $7.53 of spending could not be funded. Year 2042");
+    expect(warnings[4]).toHaveTextContent("Rental tax needs attention: Rental tax treatment is unavailable for Pine rental. Year 2042 · Pine rental");
+  });
+
+  // Production mutation caught: formatting all dollars to whole units or applying a negative sign from the field label turns sub-dollar sale values into misleading signed zeroes.
+  it("preserves sub-dollar sale amounts and never signs a zero cost", () => {
+    render(
+      <RetirementProjectionTable
+        selectedScenario="sell-all-homes"
+        projection={projection}
+        accountNames={{}}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "View 2042 year details" }));
+    expect(screen.getByLabelText("Selling costs: $0")).toHaveTextContent("$0");
+    expect(screen.getByLabelText("Mortgage payoff: negative $0.01")).toHaveTextContent("−$0.01");
+    expect(screen.getByLabelText("Incremental sale tax: negative $0.55")).toHaveTextContent("−$0.55");
+  });
+
+  // Production mutation caught: showing only missing-data issues makes a warning-only unavailable projection look like a home-data form instead of a failed calculation.
+  it("shows warning-only unavailable calculation failures as actionable projection warnings", () => {
+    const { rerender } = render(
+      <RetirementProjectionTable
+        selectedScenario="sell-all-homes"
+        projection={{
+          available: false,
+          issues: [],
+          warnings: [{
+            code: "calculation-error",
+            message: "Missing projection balances for 2042-08",
+          }],
+        }}
+        accountNames={{}}
+      />,
+    );
+
+    const unavailable = screen.getByRole("region", { name: "Sell all homes annual projection" });
+    expect(unavailable).toHaveTextContent("Calculation needs attention: Missing projection balances for 2042-08");
+    expect(unavailable).not.toHaveTextContent("Complete the following home details");
+
+    rerender(
+      <RetirementProjectionTable
+        selectedScenario="sell-all-homes"
+        projection={{
+          available: false,
+          issues: [{
+            assetId: "pine-rental",
+            assetName: "Pine rental",
+            field: "purchaseDate",
+            message: "Add a purchase date for Pine rental.",
+          }],
+          warnings: [{
+            code: "calculation-error",
+            message: "Missing projection balances for 2042-08",
+          }],
+        }}
+        accountNames={{}}
+      />,
+    );
+    expect(unavailable).toHaveTextContent("Add a purchase date for Pine rental.");
+    expect(unavailable).toHaveTextContent("Calculation needs attention: Missing projection balances for 2042-08");
   });
 });

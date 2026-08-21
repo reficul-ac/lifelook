@@ -18,13 +18,15 @@ export interface RetirementProjectionTableProps {
 const scenarioLabel = (scenario: RetirementScenario) =>
   scenario === "keep-homes" ? "Keep homes" : "Sell all homes";
 
-const currency = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 0,
-});
-
-const absoluteMoney = (cents: number) => currency.format(Math.abs(cents) / 100);
+const absoluteMoney = (cents: number) => {
+  const fractionDigits = Math.abs(cents) % 100 === 0 ? 0 : 2;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: 2,
+  }).format(Math.abs(cents) / 100);
+};
 
 function MoneyValue({
   cents,
@@ -36,27 +38,32 @@ function MoneyValue({
   negative?: boolean;
 }) {
   const value = absoluteMoney(cents);
+  const signed = negative && cents !== 0;
   return (
     <span
-      className={negative ? "retirement-negative-value" : undefined}
-      aria-label={negative ? `${label}: negative ${value}` : `${label}: ${value}`}
+      className={signed ? "retirement-negative-value" : undefined}
+      aria-label={signed ? `${label}: negative ${value}` : `${label}: ${value}`}
     >
-      {negative ? "−" : ""}{value}
+      {signed ? "−" : ""}{value}
     </span>
   );
 }
 
 const warningTitle: Record<RetirementProjectionWarning["code"], string> = {
-  "missing-destination": "Missing destination",
-  "missing-home-data": "Missing home data",
-  "early-withdrawal": "Early withdrawal",
+  "missing-destination": "Destination needed",
+  "missing-home-data": "Home details needed",
+  "early-withdrawal": "Early withdrawal penalty",
   "account-depleted": "Account depleted",
   "unfunded-spending": "Unfunded spending",
   "activity-ended": "Activity ended",
-  "calculation-error": "Projection calculation error",
+  "calculation-error": "Calculation needs attention",
   "unsupported-tax-character": "Unsupported tax character",
-  "unsupported-rental-tax": "Unsupported rental tax",
+  "unsupported-rental-tax": "Rental tax needs attention",
 };
+
+const formatWarningCents = (message: string) =>
+  message.replace(/\b(\d+) cents\b/g, (_match, cents: string) =>
+    absoluteMoney(Number(cents)));
 
 function WarningCopy({
   warning,
@@ -64,7 +71,7 @@ function WarningCopy({
   accountNames,
 }: {
   warning: RetirementProjectionWarning;
-  year: number;
+  year?: number;
   accountNames: Readonly<Record<string, string>>;
 }) {
   const warningYear = warning.year ?? year;
@@ -74,9 +81,9 @@ function WarningCopy({
   return (
     <li className="retirement-projection-warning">
       <strong>{warningTitle[warning.code]}</strong>
-      {": "}{warning.message}
+      {": "}{formatWarningCents(warning.message)}
       <span className="retirement-warning-context">
-        {` Year ${warningYear}${entity === null ? "" : ` · ${entity}`}`}
+        {`${warningYear == null ? "" : ` Year ${warningYear}`}${entity === null ? "" : ` · ${entity}`}`}
       </span>
     </li>
   );
@@ -86,13 +93,15 @@ function YearDetails({
   year,
   selectedScenario,
   accountNames,
+  hidden,
 }: {
   year: RetirementProjectionYear;
   selectedScenario: RetirementScenario;
   accountNames: Readonly<Record<string, string>>;
+  hidden: boolean;
 }) {
   return (
-    <div className="retirement-year-details" id={`retirement-year-${year.year}`}>
+    <div className="retirement-year-details" id={`retirement-year-${year.year}`} hidden={hidden}>
       <dl>
         <div><dt>Rental income</dt><dd><MoneyValue label="Rental income" cents={year.rentalIncomeCents} /></dd></div>
         <div><dt>Mortgage principal</dt><dd><MoneyValue label="Mortgage principal" cents={year.housing.principalCents} /></dd></div>
@@ -153,12 +162,30 @@ export function RetirementProjectionTable({
     return (
       <section className="card retirement-projection retirement-projection-unavailable" aria-label={`${label} annual projection`}>
         <h3>{label} annual projection unavailable</h3>
-        <p>Complete the following home details to see annual results.</p>
-        <ul>
-          {projection.issues.map((issue, index) => (
-            <li key={`${issue.assetId}-${issue.field}-${index}`}>{issue.message}</li>
-          ))}
-        </ul>
+        {projection.issues.length > 0 ? (
+          <>
+            <p>Complete the following home details to see annual results.</p>
+            <ul>
+              {projection.issues.map((issue, index) => (
+                <li key={`${issue.assetId}-${issue.field}-${index}`}>{issue.message}</li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        {projection.warnings.length > 0 ? (
+          <section aria-label="Projection warnings">
+            <h4>Projection warnings</h4>
+            <ul>
+              {projection.warnings.map((warning, index) => (
+                <WarningCopy
+                  key={`${warning.code}-${warning.entityId ?? "household"}-${index}`}
+                  warning={warning}
+                  accountNames={accountNames}
+                />
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </section>
     );
   }
@@ -203,6 +230,7 @@ export function RetirementProjectionTable({
                       <small>{year.ages.map((age) => `${age.name} ${age.age ?? "age unavailable"}`).join(", ")}</small>
                       <button
                         type="button"
+                        aria-label={`View ${year.year} year details`}
                         aria-expanded={expanded}
                         aria-controls={`retirement-year-${year.year}`}
                         onClick={() => toggleYear(year.year)}
@@ -220,13 +248,16 @@ export function RetirementProjectionTable({
                     <td><MoneyValue label="Ending destination balance" cents={year.destinationBalanceCents} /></td>
                     <td><MoneyValue label="Ending net worth" cents={year.endingNetWorthCents} /></td>
                   </tr>
-                  {expanded ? (
-                    <tr>
+                  <tr hidden={!expanded}>
                       <td colSpan={10}>
-                        <YearDetails year={year} selectedScenario={selectedScenario} accountNames={accountNames} />
+                        <YearDetails
+                          year={year}
+                          selectedScenario={selectedScenario}
+                          accountNames={accountNames}
+                          hidden={!expanded}
+                        />
                       </td>
                     </tr>
-                  ) : null}
                 </Fragment>
               );
             })}

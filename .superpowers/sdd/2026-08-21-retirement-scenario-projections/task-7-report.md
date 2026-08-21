@@ -26,3 +26,25 @@
 - The React layer formats and selects supplied fields but does not calculate projection totals or formulas.
 - Table headers/caption/scopes, signed accessible shortfall copy, one detail control per year, and full-width following detail rows are present.
 - `git diff --check` reported no whitespace errors before commit.
+
+## Review fix round 1
+
+### Staged TDD evidence
+
+1. Projection table RED: after adding production-shaped unavailable, disclosure, warning, and money tests, `npm test -- --run src/RetirementProjectionTable.test.tsx` reported 6 failures. They identified indistinguishable controls and missing targets, raw cent warning text, signed zero/rounded cents, and omitted unavailable warnings. GREEN: the 8 table tests passed after rendering every detail target hidden until expanded, assigning a year-specific accessible control name, preserving cents, and rendering unavailable warnings alongside issues.
+2. Retirement view RED: `npm test -- --run src/RetirementView.test.tsx` reported the raw `recurring-consulting` warning entity ID. GREEN: all 32 view tests passed after passing a unified account/asset/recurring label map to the table.
+
+### Review changes
+
+- Warning-only unavailable results now render their `calculation-error` message as an actionable warning; unavailable results with both issues and warnings render both.
+- All detail targets remain mounted with unique IDs while collapsed, and every control is uniquely named by year with a valid `aria-controls` relationship.
+- Warning messages now format production `cents` counts as money and retain domain year/entity context.
+- Exact money rendering keeps nonzero cents; a negative sign is applied only to nonzero values.
+
+### Round 1 final verification
+
+`npm test -- --run src/RetirementProjectionTable.test.tsx src/RetirementView.test.tsx && npm run build`
+
+- 40 focused tests passed.
+- TypeScript and Vite production build passed.
+- Vite retained the advisory for a minified JavaScript chunk over 500 kB.

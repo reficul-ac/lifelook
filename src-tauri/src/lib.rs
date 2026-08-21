@@ -11,7 +11,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 23;
+const SCHEMA_VERSION: i64 = 24;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -1070,6 +1070,14 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
                 [],
             )?;
         }
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(23)", [])?;
+    }
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 24 {
         let retirement_columns = transaction
             .prepare("PRAGMA table_info(retirement_plans)")?
             .query_map([], |r| r.get::<_, String>(1))?
@@ -1096,7 +1104,7 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
                 transaction.execute(sql, [])?;
             }
         }
-        transaction.execute("INSERT INTO schema_migrations(version) VALUES(23)", [])?;
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(24)", [])?;
     }
     transaction
         .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
@@ -5078,8 +5086,8 @@ mod tests {
         ));
     }
     #[test]
-    fn version_23_adds_retirement_projection_preferences() {
-        // Break caught: upgrading a v22 database can omit retirement projection defaults or fail to expose them through bootstrap.
+    fn version_24_adds_retirement_projection_preferences_to_v23_databases() {
+        // Break caught: a database already marked v23 can skip retirement columns and make bootstrap query fields that do not exist.
         let mut c = seeded();
         c.execute_batch(
             "DROP TABLE retirement_plans;
@@ -5091,17 +5099,30 @@ mod tests {
               updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             INSERT INTO retirement_plans(household_id,retirement_month,withdrawal_rate_bps,revision) VALUES('h','2042-09',350,1);
-            DELETE FROM schema_migrations WHERE version >= 23;",
+            DELETE FROM schema_migrations WHERE version >= 24;",
         )
         .unwrap();
 
         migrate(&mut c).unwrap();
 
         let loaded = bootstrap(&c).unwrap().retirement_plan.unwrap();
+        let version: i64 = c
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(version, 24);
         assert_eq!(loaded.horizon_years, 30);
         assert_eq!(loaded.taxable_destination_account_id, None);
         assert_eq!(loaded.withdrawal_account_order, Vec::<String>::new());
         assert_eq!(loaded.selected_scenario, "keep-homes");
+        migrate(&mut c).unwrap();
+        let version: i64 = c
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(version, 24);
         c.execute(
             "INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,liquid,subtype) VALUES('brokerage','h','Brokerage','investment',0,0,'taxable-brokerage'),('401k','h','401k','retirement',0,0,'employer-pre-tax')",
             [],

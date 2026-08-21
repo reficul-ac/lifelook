@@ -203,6 +203,82 @@ describe("age-aware retirement withdrawal ordering", () => {
       },
     });
   });
+
+  // Break caught: falling back to conflicting account kinds for any retirement subtype would change its bucket or tax character, producing cash/taxable draws instead of the subtype's pre-tax or Roth treatment.
+  it("uses every explicit retirement subtype over a conflicting account kind for ordering and draws", () => {
+    const traditionalIra = account({
+      id: "traditional-ira",
+      name: "Traditional IRA in checking kind",
+      kind: "checking",
+      subtype: "traditional-ira",
+      ownerPersonId: "older",
+    });
+    const employerPreTax = account({
+      id: "employer-pre-tax",
+      name: "Employer pre-tax in investment kind",
+      kind: "investment",
+      subtype: "employer-pre-tax",
+      ownerPersonId: "younger",
+    });
+    const rothIra = account({
+      id: "roth-ira",
+      name: "Roth IRA in checking kind",
+      kind: "checking",
+      subtype: "roth-ira",
+      ownerPersonId: "younger",
+      rothContributionBasisCents: 60_000,
+    });
+    const employerRoth = account({
+      id: "employer-roth",
+      name: "Employer Roth in investment kind",
+      kind: "investment",
+      subtype: "employer-roth",
+      ownerPersonId: "older",
+      rothContributionBasisCents: 60_000,
+    });
+    const cash = account({ id: "cash", name: "Cash", kind: "checking", subtype: "cash" });
+    const conflictedAccounts = [traditionalIra, employerPreTax, rothIra, employerRoth, cash];
+    const conflictingSnapshot = snapshot(conflictedAccounts);
+    const people = [
+      { id: "older", name: "Older", birthDate: "1969-01-01" },
+      { id: "younger", name: "Younger", birthDate: "1970-07-02" },
+    ];
+
+    expect(defaultRetirementAccountOrder({
+      ...conflictingSnapshot,
+      household: { ...conflictingSnapshot.household, people },
+    }, "2030-01-01")).toEqual([
+      "traditional-ira",
+      "cash",
+      "employer-pre-tax",
+      "roth-ira",
+      "employer-roth",
+    ]);
+    expect(drawRetirementFunds({
+      amountCents: 400_000,
+      date: "2030-01-01",
+      order: ["traditional-ira", "employer-pre-tax", "roth-ira", "employer-roth"],
+      accounts: conflictedAccounts,
+      balances: {
+        "traditional-ira": 100_000,
+        "employer-pre-tax": 100_000,
+        "roth-ira": 100_000,
+        "employer-roth": 100_000,
+        cash: 100_000,
+      },
+      people,
+    })).toMatchObject({
+      ordinaryIncomeCents: 200_000,
+      rothTaxableCents: 80_000,
+      earlyPenaltyCents: 14_000,
+      sources: [
+        expect.objectContaining({ accountId: "traditional-ira", ordinaryIncomeCents: 100_000, earlyPenaltyCents: 0 }),
+        expect.objectContaining({ accountId: "employer-pre-tax", ordinaryIncomeCents: 100_000, earlyPenaltyCents: 10_000 }),
+        expect.objectContaining({ accountId: "roth-ira", rothTaxableCents: 40_000, earlyPenaltyCents: 4_000 }),
+        expect.objectContaining({ accountId: "employer-roth", rothTaxableCents: 40_000, earlyPenaltyCents: 0 }),
+      ],
+    });
+  });
 });
 
 describe("retirement fund draws", () => {

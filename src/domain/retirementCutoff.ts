@@ -1,4 +1,4 @@
-import { calculateRetirementPlan } from "./projection";
+import { calculateRetirementPlan, projectGrowth } from "./projection";
 import type { BasisPoints, Cents, FinancialSnapshot, Scenario, TaxLedger } from "./types";
 
 export type PlannedPropertyPurchase = Extract<Scenario["events"][number], { type: "asset-purchase" }>;
@@ -79,6 +79,7 @@ export interface RetirementCutoff {
   accounts: Readonly<Record<string, Cents>>;
   assets: Readonly<Record<string, Cents>>;
   liabilities: Readonly<Record<string, Cents>>;
+  accountProvenanceChangedIds?: readonly string[];
   properties: readonly RetirementCutoffProperty[];
   taxLedger: TaxLedger;
 }
@@ -112,6 +113,32 @@ export function buildRetirementCutoff(input:RetirementCutoffInput):RetirementCut
 
   const assets={...balanceRow.balances.assets,...Object.fromEntries(Object.entries(balanceRow.balances.privateStock).map(([id,value])=>[id,value.vestedCents]))};
   const projectedMonths=projections.flatMap(year=>year.months).filter(month=>month.month<=balanceMonth);
+  const accountProvenanceChangedIds = new Set<string>();
+  let priorAccountBalances = Object.fromEntries(input.snapshot.accounts.map((account) =>
+    [account.id, account.balanceCents]));
+  for (const month of projectedMonths) {
+    if (month.balances == null) continue;
+    const transitionByAccount = new Map<string, Cents>();
+    for (const transition of month.accountTransitions) {
+      accountProvenanceChangedIds.add(transition.accountId);
+      transitionByAccount.set(
+        transition.accountId,
+        (transitionByAccount.get(transition.accountId) ?? 0) + transition.amountCents,
+      );
+    }
+    for (const account of input.snapshot.accounts) {
+      const expectedBalance = projectGrowth(
+        priorAccountBalances[account.id] ?? account.balanceCents,
+        account.annualReturnBps,
+        1,
+      ) + (transitionByAccount.get(account.id) ?? 0);
+      const actualBalance = month.balances.accounts[account.id];
+      if (actualBalance != null && actualBalance !== expectedBalance) {
+        accountProvenanceChangedIds.add(account.id);
+      }
+    }
+    priorAccountBalances = { ...month.balances.accounts };
+  }
   const currentAssetIds=new Set(input.snapshot.assets.map(asset=>asset.id));
   const ownedAssetIds=new Set(Object.keys(balanceRow.balances.assets));
   const currentProperties=input.snapshot.assets.filter(asset=>isCurrentPropertyAsset(input.snapshot,input.scenario,asset.id,`${input.retirementMonth}-01`));
@@ -139,5 +166,5 @@ export function buildRetirementCutoff(input:RetirementCutoffInput):RetirementCut
     };
   });
 
-  return {retirementMonth:input.retirementMonth,balanceMonth,accounts:balanceRow.balances.accounts,assets,liabilities:balanceRow.balances.liabilities,properties,taxLedger};
+  return {retirementMonth:input.retirementMonth,balanceMonth,accounts:balanceRow.balances.accounts,assets,liabilities:balanceRow.balances.liabilities,accountProvenanceChangedIds:[...accountProvenanceChangedIds],properties,taxLedger};
 }

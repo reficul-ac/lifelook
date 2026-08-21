@@ -227,7 +227,6 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
 
     if (withdrawalClass === "taxable") {
       const lots = taxableLots[accountId];
-      const providedLots = lots != null && lots.length > 0;
       const completeLots = lots != null && lots.length > 0 && lots.every((lot) =>
         parseDate(lot.acquiredOn ?? undefined) != null && Number.isSafeInteger(lot.marketValueCents) && lot.marketValueCents >= 0 &&
         Number.isSafeInteger(lot.federalBasisCents) && lot.federalBasisCents >= 0 &&
@@ -276,7 +275,7 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
         const basisSoldCents = Math.min(basisCents, Math.round(basisCents * amountCents / availableCents));
         taxableBasis[accountId] = basisCents - basisSoldCents;
         taxableGainCents = amountCents - basisSoldCents;
-        taxCharacterSupported = !providedLots && taxableGainCents === 0;
+        taxCharacterSupported = false;
       }
       if (unsupportedTaxCharacterAccountIds.has(accountId)) taxCharacterSupported = false;
     } else if (withdrawalClass === "eligible-pre-tax" || withdrawalClass === "penalty-pre-tax") {

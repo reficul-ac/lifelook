@@ -357,6 +357,65 @@ describe("retirement fund draws", () => {
     });
   });
 
+  // Production mutation caught: aggregate basis equal to market value can hide mixed gain/loss lots, so a partial FIFO draw is not provably gain-free without lots.
+  it("marks an aggregate-basis partial taxable draw unsupported without exact lots", () => {
+    const brokerage = account({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+      subtype: "taxable-brokerage",
+      taxableCostBasisCents: 100_000,
+    });
+
+    const result = drawRetirementFunds({
+      amountCents: 50_000,
+      date: "2030-01-01",
+      order: ["brokerage"],
+      accounts: [brokerage],
+      balances: { brokerage: 100_000 },
+    });
+
+    expect(result.sources[0]).toMatchObject({
+      amountCents: 50_000,
+      taxableGainCents: 0,
+      taxCharacterSupported: false,
+    });
+    expect(result.taxCharacterSupported).toBe(false);
+  });
+
+  // Production mutation caught: inferring zero gain from equal aggregate basis loses the first FIFO lot's gain when an offsetting loss is held in a later lot.
+  it("uses exact FIFO lots for a partial draw from a mixed gain-loss account", () => {
+    const brokerage = account({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+      subtype: "taxable-brokerage",
+      taxableCostBasisCents: 100_000,
+      taxLots: [
+        { id: "gain-lot", acquiredOn: "2020-01-01", marketValueCents: 50_000, federalBasisCents: 25_000, californiaBasisCents: 25_000 },
+        { id: "loss-lot", acquiredOn: "2021-01-01", marketValueCents: 50_000, federalBasisCents: 75_000, californiaBasisCents: 75_000 },
+      ],
+    });
+
+    const result = drawRetirementFunds({
+      amountCents: 50_000,
+      date: "2030-01-01",
+      order: ["brokerage"],
+      accounts: [brokerage],
+      balances: { brokerage: 100_000 },
+      taxableLots: { brokerage: brokerage.taxLots! },
+    });
+
+    expect(result.sources[0]).toMatchObject({
+      amountCents: 50_000,
+      taxableGainCents: 25_000,
+      federalLongTermGainCents: 25_000,
+      californiaGainCents: 25_000,
+      taxCharacterSupported: true,
+    });
+    expect(result.taxableLots).toEqual({ brokerage: [brokerage.taxLots![1]] });
+  });
+
   // Break caught: mutating caller-owned balance or basis records while drawing would corrupt the projection state that supplied this pure calculation.
   it("returns updated draw state without mutating retained input records", () => {
     const brokerage = account({

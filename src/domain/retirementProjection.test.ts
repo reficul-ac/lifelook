@@ -28,6 +28,13 @@ const financialSnapshot: FinancialSnapshot = {
     subtype: "taxable-brokerage",
     balanceCents: 1_000_000_00,
     taxableCostBasisCents: 1_000_000_00,
+    taxLots: [{
+      id: "opening-lot",
+      acquiredOn: "2020-01-01",
+      marketValueCents: 1_000_000_00,
+      federalBasisCents: 1_000_000_00,
+      californiaBasisCents: 1_000_000_00,
+    }],
     annualReturnBps: 0,
     liquid: true,
   }],
@@ -57,6 +64,22 @@ const settings: NormalizedRetirementSettings = {
   selectedScenario: "keep-homes",
   revision: 1,
 };
+
+const exactTaxableAccount = (
+  balanceCents: number,
+  taxableCostBasisCents = balanceCents,
+): FinancialSnapshot["accounts"][number] => ({
+  ...financialSnapshot.accounts[0],
+  balanceCents,
+  taxableCostBasisCents,
+  taxLots: [{
+    id: `opening-lot-${balanceCents}-${taxableCostBasisCents}`,
+    acquiredOn: "2020-01-01",
+    marketValueCents: balanceCents,
+    federalBasisCents: taxableCostBasisCents,
+    californiaBasisCents: taxableCostBasisCents,
+  }],
+});
 
 describe("calculateRetirementProjection", () => {
   // Production mutation caught: dropping either snapshot-derived scenario summary leaves the overview without its shared source of truth.
@@ -274,7 +297,7 @@ describe("calculateRetirementProjection", () => {
       snapshot: {
         ...financialSnapshot,
         accounts: [
-          { ...financialSnapshot.accounts[0], balanceCents: 10_000_000, taxableCostBasisCents: 10_000_000 },
+          exactTaxableAccount(10_000_000),
           { id: "cash-1", name: "Cash", kind: "checking", subtype: "cash", balanceCents: 5_000_000, annualReturnBps: 0, liquid: true },
         ],
       },
@@ -333,7 +356,7 @@ describe("calculateRetirementProjection", () => {
     const result = calculateRetirementProjection({
       snapshot: {
         ...financialSnapshot,
-        accounts: [{ ...financialSnapshot.accounts[0], balanceCents: 20_000_000, taxableCostBasisCents: 20_000_000 }],
+        accounts: [exactTaxableAccount(20_000_000)],
       },
       scenario: plannedHomeScenario,
       asOfDate: "2026-12-15",
@@ -355,7 +378,7 @@ describe("calculateRetirementProjection", () => {
     const result = calculateRetirementProjection({
       snapshot: {
         ...financialSnapshot,
-        accounts: [{ ...financialSnapshot.accounts[0], balanceCents: 10_000_000, taxableCostBasisCents: 10_000_000 }],
+        accounts: [exactTaxableAccount(10_000_000)],
         assets: [{
           id: "home",
           name: "Home",
@@ -396,7 +419,7 @@ describe("calculateRetirementProjection", () => {
     const result = calculateRetirementProjection({
       snapshot: {
         ...financialSnapshot,
-        accounts: [{ ...financialSnapshot.accounts[0], balanceCents: 10_000_000, taxableCostBasisCents: 10_000_000 }],
+        accounts: [exactTaxableAccount(10_000_000)],
         assets: [{
           id: "home",
           name: "Home",
@@ -462,7 +485,7 @@ describe("calculateRetirementProjection", () => {
       horizon: { start: "2026-12", months: 12 },
       events: [{
         id: "purchase-1",
-        date: "2026-12-01",
+        date: "2027-01-01",
         type: "asset-purchase",
         assetId: "rental-1",
         name: "Rental home",
@@ -502,11 +525,7 @@ describe("calculateRetirementProjection", () => {
     const result = calculateRetirementProjection({
       snapshot: {
         ...financialSnapshot,
-        accounts: [{
-          ...financialSnapshot.accounts[0],
-          balanceCents: 20_000_000,
-          taxableCostBasisCents: 20_000_000,
-        }],
+        accounts: [exactTaxableAccount(20_000_000)],
         recurring: [{
           id: "expense-1",
           name: "Living expenses",
@@ -528,24 +547,24 @@ describe("calculateRetirementProjection", () => {
     });
     const year = result.keepHomes.years[0];
 
-    expect(year.startingPortfolioCents).toBe(18_000_000);
-    expect(year.withdrawalTargetCents).toBe(540_000);
+    expect(year.startingPortfolioCents).toBe(20_000_000);
+    expect(year.withdrawalTargetCents).toBe(600_000);
     expect(year.rentalIncomeCents).toBe(1_200_000);
     expect(year.planExpenseCents).toBe(600_000);
     expect(year.housing).toEqual({
-      principalCents: 1_280_934,
-      interestCents: 1_119_066,
-      propertyTaxCents: 1_455_554,
+      principalCents: 1_268_251,
+      interestCents: 1_131_749,
+      propertyTaxCents: 1_453_154,
       insuranceCents: 120_000,
       hoaCents: 60_000,
       maintenanceCents: 120_000,
     });
-    expect(year.housingExpenseCents).toBe(4_155_554);
-    expect(year.shortfallCents).toBe(3_015_554);
-    expect(year.endingBalances.accounts["taxable-1"]).toBe(14_444_446);
+    expect(year.housingExpenseCents).toBe(4_153_154);
+    expect(year.shortfallCents).toBe(2_953_154);
+    expect(year.endingBalances.accounts["taxable-1"]).toBe(14_446_846);
     expect(year.endingBalances.assets["rental-1"]).toBe(12_000_000);
-    expect(year.endingBalances.liabilities["mortgage-1"]).toBe(8_619_066);
-    expect(year.endingNetWorthCents).toBe(17_825_380);
+    expect(year.endingBalances.liabilities["mortgage-1"]).toBe(8_731_749);
+    expect(year.endingNetWorthCents).toBe(17_715_097);
     expect(year.endingNetWorthCents).toBe(
       Object.values(year.endingBalances.accounts).reduce((sum, value) => sum + value, 0) +
       Object.values(year.endingBalances.assets).reduce((sum, value) => sum + value, 0) -
@@ -651,11 +670,7 @@ describe("calculateRetirementProjection", () => {
       snapshot: {
         ...financialSnapshot,
         accounts: [
-          {
-            ...financialSnapshot.accounts[0],
-            balanceCents: 500_000,
-            taxableCostBasisCents: 500_000,
-          },
+          exactTaxableAccount(500_000),
           {
             id: "cash-1",
             name: "Cash reserve",
@@ -706,11 +721,7 @@ describe("calculateRetirementProjection", () => {
   test("sells all homes together at retirement and deposits exact net proceeds with basis", () => {
     const homeSnapshot: FinancialSnapshot = {
       ...financialSnapshot,
-      accounts: [{
-        ...financialSnapshot.accounts[0],
-        balanceCents: 5_000_000,
-        taxableCostBasisCents: 5_000_000,
-      }],
+      accounts: [exactTaxableAccount(5_000_000)],
       assets: [
         {
           id: "rental-1",
@@ -870,7 +881,7 @@ describe("calculateRetirementProjection", () => {
     const result = calculateRetirementProjection({
       snapshot: {
         ...financialSnapshot,
-        accounts: [{ ...financialSnapshot.accounts[0], balanceCents: 2_000_000, taxableCostBasisCents: 2_000_000 }],
+        accounts: [exactTaxableAccount(2_000_000)],
         assets: [{
           id: "underwater-home",
           name: "Underwater home",
@@ -927,6 +938,7 @@ describe("calculateRetirementProjection", () => {
             ...financialSnapshot.accounts[0],
             balanceCents: 0,
             taxableCostBasisCents: 0,
+            taxLots: [],
           },
           {
             id: "ira-1",
@@ -975,6 +987,7 @@ describe("calculateRetirementProjection", () => {
           ...financialSnapshot.accounts[0],
           balanceCents: 100_000_000,
           taxableCostBasisCents: 50_000_000,
+          taxLots: [],
         }],
       },
       scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
@@ -1018,6 +1031,40 @@ describe("calculateRetirementProjection", () => {
     }));
   });
 
+  // Production mutation caught: comparing only the cutoff endpoint misses equal inflow/outflow activity that restores the balance but changes FIFO lot provenance.
+  test("rejects stale lots after offsetting pre-retirement account flows", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [
+          {
+            ...financialSnapshot.accounts[0],
+            balanceCents: 100_000_000,
+            taxableCostBasisCents: 50_000_000,
+            taxLots: [{ id: "old-lot", acquiredOn: "2020-01-01", marketValueCents: 100_000_000, federalBasisCents: 50_000_000, californiaBasisCents: 50_000_000 }],
+          },
+          { id: "cash-1", name: "Cash", kind: "checking", subtype: "cash", balanceCents: 0, annualReturnBps: 0, liquid: true },
+        ],
+      },
+      scenario: {
+        ...scenario,
+        horizon: { start: "2026-01", months: 12 },
+        events: [
+          { id: "offset-in", date: "2026-03-01", type: "account-contribution", accountId: "taxable-1", amountCents: 10_000_000 },
+          { id: "offset-out", date: "2026-04-01", type: "account-transfer", fromAccountId: "taxable-1", toAccountId: "cash-1", amountCents: 10_000_000 },
+        ],
+      },
+      asOfDate: "2026-01-15",
+      settings: { ...settings, retirementMonth: "2027-01", withdrawalRateBps: 1, horizonYears: 1 },
+    });
+
+    expect(result.keepHomes.years[0].endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
+    expect(result.keepHomes.years[0].warnings).toContainEqual(expect.objectContaining({
+      code: "unsupported-tax-character",
+      entityId: "taxable-1",
+    }));
+  });
+
   // Production mutation caught: normalizing a mismatched lot total or treating an invalid acquisition date as short-term presents unsupported metadata as exact tax.
   test.each([
     ["mismatched total", [{ id: "bad-total", acquiredOn: "2020-01-01", marketValueCents: 90_000_000, federalBasisCents: 45_000_000, californiaBasisCents: 45_000_000 }]],
@@ -1048,6 +1095,7 @@ describe("calculateRetirementProjection", () => {
           {
             ...financialSnapshot.accounts[0],
             taxableCostBasisCents: 50_000_000,
+            taxLots: [],
           },
           { id: "cash-1", name: "Cash", kind: "checking", subtype: "cash", balanceCents: 100_000_000, annualReturnBps: 0, liquid: true },
         ],
@@ -1074,9 +1122,7 @@ describe("calculateRetirementProjection", () => {
       snapshot: {
         ...financialSnapshot,
         accounts: [{
-          ...financialSnapshot.accounts[0],
-          balanceCents: 100_000,
-          taxableCostBasisCents: 100_000,
+          ...exactTaxableAccount(100_000),
         }],
         recurring: [{
           id: "expense-1",
@@ -1118,7 +1164,7 @@ describe("calculateRetirementProjection", () => {
           people: [{ id: "person-1", name: "Morgan", birthDate: "2000-06-15" }],
         },
         accounts: [
-          { ...financialSnapshot.accounts[0], balanceCents: 0, taxableCostBasisCents: 0 },
+          { ...financialSnapshot.accounts[0], balanceCents: 0, taxableCostBasisCents: 0, taxLots: [] },
           { id: "ira-1", name: "Morgan IRA", kind: "retirement", subtype: "traditional-ira", ownerPersonId: "person-1", balanceCents: 500_000_000, annualReturnBps: 0, liquid: true },
         ],
         recurring: [{
@@ -1330,5 +1376,68 @@ describe("calculateRetirementProjection", () => {
     expect(result.keepHomes.years[1].warnings).toContainEqual(expect.objectContaining({ code: "calculation-error", year: 2028 }));
     expect(result.keepHomes.years[2].endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
     expect(result.keepHomes.years[2].warnings).toContainEqual(expect.objectContaining({ code: "calculation-error", year: 2029 }));
+  });
+
+  // Production mutation caught: sharing Keep's unfiltered Plan failure with Sell clears Sell for an invalid event that targets a home Sell removed at retirement.
+  test("isolates an irrelevant post-sale Plan failure to Keep", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        assets: [{
+          id: "home",
+          name: "Home",
+          valueCents: 50_000_000,
+          annualGrowthBps: 0,
+          purchasePriceCents: 50_000_000,
+          purchaseDate: "2020-01-01",
+          housingCosts: { propertyTaxRateBps: 0, insuranceMonthlyCents: 0, insuranceAnnualGrowthBps: 0, hoaMonthlyCents: 0, hoaAnnualGrowthBps: 0 },
+          homeSaleAssumptions: { sellingCostBps: 0, primaryResidenceExclusionEligible: true, accumulatedFederalDepreciationCents: 0, accumulatedCaliforniaDepreciationCents: 0 },
+        }],
+      },
+      scenario: {
+        ...scenario,
+        horizon: { start: "2026-12", months: 12 },
+        events: [{
+          id: "invalid-post-sale-adu",
+          date: "2028-01-01",
+          type: "adu-build",
+          assetId: "home",
+          name: "Invalid post-sale ADU",
+          costCents: 0,
+          homeSquareFeet: 0,
+          aduSquareFeet: 500,
+          fundingAccountId: "taxable-1",
+        }],
+      },
+      asOfDate: "2026-12-15",
+      settings: { ...settings, retirementMonth: "2027-01", withdrawalRateBps: 1, horizonYears: 3 },
+    });
+    expect(result.sellHomes.available).toBe(true);
+    if (!result.sellHomes.available) throw new Error("expected Sell homes to be available");
+
+    expect(result.keepHomes.years[1].warnings).toContainEqual(expect.objectContaining({ code: "calculation-error", year: 2028 }));
+    expect(result.sellHomes.years).toHaveLength(3);
+    expect(result.sellHomes.years.flatMap((year) => year.warnings.filter((warning) =>
+      warning.code === "calculation-error"))).toEqual([]);
+    expect(result.sellHomes.years[2].endingBalances.accounts["taxable-1"]).toBe(150_000_000);
+  });
+
+  // Production mutation caught: extending the horizon before structural protection lets malformed or far-past retirement months throw instead of returning stable error rows.
+  test.each(["not-a-month", "2020-01"])("returns structured setup errors for retirement month %s", (retirementMonth) => {
+    let result: ReturnType<typeof calculateRetirementProjection> | undefined;
+    expect(() => {
+      result = calculateRetirementProjection({
+        snapshot: financialSnapshot,
+        scenario,
+        asOfDate: "2026-12-15",
+        settings: { ...settings, retirementMonth, horizonYears: 2 },
+      });
+    }).not.toThrow();
+
+    expect(result?.retirementMonth).toBe(retirementMonth);
+    expect(result?.keepHomes.years).toHaveLength(2);
+    expect(result?.keepHomes.years.every((year) =>
+      year.warnings.some((warning) => warning.code === "calculation-error"))).toBe(true);
+    expect(result?.sellHomes.available).toBe(false);
   });
 });

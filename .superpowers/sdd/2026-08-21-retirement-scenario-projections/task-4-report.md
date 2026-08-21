@@ -282,3 +282,59 @@ Calendar placement of exact Plan dispositions:
 - Deliberate conservative boundary: cutoff account activity is not recharacterized as market growth. If complete lot provenance cannot be reconciled, an affected taxable draw/Plan outflow is unavailable rather than presenting estimated holding-period or jurisdiction precision.
 - The exceptional Plan retry path is bounded by the validated 60 retirement years and runs only after the normal one-pass projection throws.
 - The unrelated untracked `.superpowers/brainstorm/` directory was preserved and excluded from the commit.
+
+---
+
+## Review Fix Round 3
+
+### Status
+
+Both remaining review findings were reproduced with targeted tests, fixed, self-reviewed, and verified.
+
+### Result
+
+- Plan calculation and failure discovery now run independently for Keep and Sell. Sell projects a scenario copy with post-retirement ADU, rental-start, sale, and linked debt-payoff events removed only for homes actually sold at retirement. A Keep-only invalid event on a removed Sell home therefore clears Keep from its failing year onward without erasing valid Sell rows.
+- Retirement-month and horizon validation now execute inside structural setup protection. Malformed or pre-as-of retirement months return stable cleared calculation-error rows and Sell unavailable instead of throwing.
+- Home-sale tax facts are included only in the first retirement row; later rows no longer re-submit an earlier disposal to a later calendar-year tax calculation.
+- Cutoff construction now records every source-tagged account transition and also detects any untagged account change beyond monthly growth. Taxable accounts with any pre-retirement provenance-changing activity cannot reuse static snapshot lots as exact cutoff lots, even when offsetting inflow/outflow restores the endpoint balance.
+- Taxable withdrawals without complete exact lots are always marked unsupported. Equal aggregate market value and basis no longer imply that a partial FIFO draw has zero gain; exact mixed gain/loss lots continue to produce the literal first-lot gain.
+
+### Review TDD Evidence
+
+Per-scenario failure isolation and protected setup:
+
+- Mutations named: share Keep's Plan failure with Sell after Sell removed the invalid event target; extend or parse the retirement horizon outside setup protection.
+- RED: `npx vitest run src/domain/retirementProjection.test.ts -t "irrelevant post-sale|structured setup errors"`
+- Failures: Sell inherited Keep's 2028 calculation error; malformed `not-a-month` threw `Invalid month`; past `2020-01` threw `Retirement horizon cannot end before scenario starts`.
+- GREEN: the same command passed all three selected cases. Keep clears from 2028, while the fully sale-ready Sell fixture retains all three rows and literal `150,000,000` ending taxable balance. Both invalid/past inputs return two structured error rows without throwing.
+
+Conservative cutoff provenance and aggregate basis:
+
+- Mutations named: validate lots only against the growth-only endpoint, missing offsetting account flows; infer a gain-free partial FIFO disposition solely because aggregate basis equals market value.
+- RED: `npx vitest run src/domain/retirementProjection.test.ts src/domain/retirementWithdrawals.test.ts -t "offsetting pre-retirement|aggregate-basis partial"`
+- Failures: the offsetting-flow projection retained populated `100,000,000` taxable state instead of becoming unavailable; the aggregate-only partial draw reported `taxCharacterSupported: true`.
+- GREEN: the same command passed both selected cases. Offsetting pre-retirement contribution/transfer activity produces `unsupported-tax-character` and cleared maps; the aggregate-only draw is explicitly unsupported.
+- Companion exact-lot check: `npx vitest run src/domain/retirementWithdrawals.test.ts -t "aggregate-basis partial|mixed gain-loss"` passed 2 selected tests. Exact FIFO lots with aggregate zero gain realize the first lot's literal `25,000` long-term federal/California gain on the partial draw.
+- Integration GREEN: `npx vitest run src/domain/retirementProjection.test.ts src/domain/retirementWithdrawals.test.ts src/domain/retirementCutoff.test.ts` passed 3 files and 66 tests before the companion test was added.
+
+### Final Fresh Verification
+
+- Full requested affected command: `npm test -- --run src/domain/retirementProjection.test.ts src/domain/retirementSnapshot.test.ts src/domain/projection.test.ts src/domain/tax.test.ts src/domain/homeSaleTax.test.ts src/domain/retirementWithdrawals.test.ts src/domain/retirementCutoff.test.ts && npm run build && git diff --check`
+- PASS: 7 files, 217 tests; TypeScript project build and Vite production build passed; whitespace check passed.
+- Full repository suite: `npm test -- --run`
+- PASS: 15 files, 315 tests.
+
+### Review-Fix Files
+
+- `src/domain/retirementProjection.ts`
+- `src/domain/retirementProjection.test.ts`
+- `src/domain/retirementCutoff.ts`
+- `src/domain/retirementWithdrawals.ts`
+- `src/domain/retirementWithdrawals.test.ts`
+- `.superpowers/sdd/2026-08-21-retirement-scenario-projections/task-4-report.md`
+
+### Review-Fix Concerns
+
+- No blocking concern remains.
+- Deliberate conservative boundary: any taxable-account activity before the retirement cutoff invalidates static snapshot lots unless a future boundary evolves exact acquisition, basis, and jurisdiction metadata through those transitions. This returns structured unavailability instead of false precision.
+- The unrelated untracked `.superpowers/brainstorm/` directory remains preserved and excluded.

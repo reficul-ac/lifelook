@@ -185,6 +185,7 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
   });
 
   it("shows editable mutable assumptions even when a home is complete", () => {
+    const onEditAcquisition = vi.fn();
     render(
       <RetirementHomeSaleDetails
         homes={[completeHome]}
@@ -193,6 +194,7 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
         retirementDate="2042-01-01"
         onUpdateCurrentHome={vi.fn()}
         onUpdatePlannedHome={vi.fn()}
+        onEditAcquisition={onEditAcquisition}
       />,
     );
 
@@ -202,6 +204,13 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
     expect(within(home).getByLabelText("Federal depreciation claimed")).toHaveValue("12000");
     expect(within(home).getByLabelText("California depreciation claimed")).toHaveValue("9000");
     expect(within(home).getByLabelText("Eligible for primary-home gain exclusion")).toBeChecked();
+    fireEvent.click(within(home).getByRole("button", {
+      name: "Edit Complete home acquisition in Net Worth",
+    }));
+    expect(onEditAcquisition).toHaveBeenCalledWith(
+      completeHome,
+      expect.any(HTMLElement),
+    );
   });
 
   // Break caught: clearing local form state after a rejected persistence call prevents retrying the user's exact draft.

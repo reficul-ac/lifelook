@@ -1102,6 +1102,58 @@ describe("calculateRetirementProjection", () => {
     );
   });
 
+  // Production mutation caught: carrying the as-of Roth basis through a known
+  // pre-retirement account transition assigns a precise earnings split at cutoff.
+  test("makes an unqualified Roth draw unavailable after pre-retirement basis provenance changes", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [
+          { ...exactTaxableAccount(0), taxLots: undefined },
+          {
+            id: "roth-1",
+            name: "Roth IRA",
+            kind: "retirement",
+            subtype: "roth-ira",
+            balanceCents: 0,
+            annualReturnBps: 0,
+            liquid: false,
+            ownerPersonId: "person-1",
+            rothContributionBasisCents: 0,
+            rothOpeningYear: 2020,
+          },
+        ],
+      },
+      scenario: {
+        ...scenario,
+        horizon: { start: "2026-01", months: 12 },
+        events: [{
+          id: "pre-retirement-roth-contribution",
+          date: "2026-06-01",
+          type: "account-contribution",
+          accountId: "roth-1",
+          amountCents: 100_000_000,
+        }],
+      },
+      asOfDate: "2026-01-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        withdrawalRateBps: 10_000,
+        horizonYears: 1,
+        withdrawalAccountOrder: ["roth-1", "taxable-1"],
+      },
+    });
+
+    expect(result.keepHomes.available).toBe(false);
+    if (result.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({
+      code: "unsupported-tax-character",
+      entityId: "roth-1",
+    }));
+  });
+
   // Production mutation caught: treating a pre-retirement contribution as market growth rescales a stale lot to the cutoff balance and invents exact gain character.
   test("rejects stale lots when account activity evolves the cutoff balance", () => {
     const result = calculateRetirementProjection({
@@ -1732,6 +1784,68 @@ describe("calculateRetirementProjection", () => {
       taxYear: 2027,
     }));
     expect(year.endingNetWorthCents).toBe(100_000_000 - year.estimatedTaxCents);
+  });
+
+  // Production mutation caught: recording a Roth-transfer provenance problem but
+  // enforcing that marker only for taxable brokerages fabricates a precise Roth row.
+  test("makes a Roth draw unavailable after an unclassified Plan transfer", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [
+          { ...exactTaxableAccount(0), taxLots: undefined },
+          {
+            id: "cash-1",
+            name: "Cash",
+            kind: "checking",
+            subtype: "cash",
+            balanceCents: 100_000_000,
+            annualReturnBps: 0,
+            liquid: true,
+          },
+          {
+            id: "roth-1",
+            name: "Roth IRA",
+            kind: "retirement",
+            subtype: "roth-ira",
+            balanceCents: 0,
+            annualReturnBps: 0,
+            liquid: false,
+            ownerPersonId: "person-1",
+            rothContributionBasisCents: 0,
+            rothOpeningYear: 2020,
+          },
+        ],
+      },
+      scenario: {
+        ...scenario,
+        horizon: { start: "2026-12", months: 12 },
+        events: [{
+          id: "unclassified-roth-transfer",
+          date: "2027-03-01",
+          type: "account-transfer",
+          fromAccountId: "cash-1",
+          toAccountId: "roth-1",
+          amountCents: 100_000_000,
+        }],
+      },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        withdrawalRateBps: 10_000,
+        horizonYears: 1,
+        withdrawalAccountOrder: ["roth-1", "cash-1", "taxable-1"],
+      },
+    });
+
+    expect(result.keepHomes.available).toBe(false);
+    if (result.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({
+      code: "unsupported-tax-character",
+      entityId: "roth-1",
+    }));
   });
 
   // Production mutations caught: drawing after twelve months with the period-start

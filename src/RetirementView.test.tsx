@@ -117,6 +117,7 @@ const availableResult: RetirementSnapshotResult = {
 
 const availableProjection = {
   retirementMonth: "2042-01",
+  firstWithdrawalDate: "2042-12-31",
   withdrawalRateBps: 300,
   netWorthCents: 126_000_000,
   keepHomes: {
@@ -431,9 +432,9 @@ describe("RetirementView settings and autosave", () => {
     expect(within(order).getByText("Checking")).toBeInTheDocument();
     expect(within(order).getByText("Traditional IRA")).toBeInTheDocument();
     expect(within(order).getByText("Roth IRA")).toBeInTheDocument();
-    expect(within(order).getByText(/Avery.*Taxable.*Age 72 at retirement/)).toBeInTheDocument();
+    expect(within(order).getByText(/Avery.*Taxable.*Age 72 at first annual draw/)).toBeInTheDocument();
     expect(within(order).getByText(/Household.*Cash.*Age not applicable/)).toBeInTheDocument();
-    expect(within(order).getByText(/Jordan.*Pre-tax.*Age 42 at retirement.*penalty may apply/)).toBeInTheDocument();
+    expect(within(order).getByText(/Jordan.*Pre-tax.*Age 42 at first annual draw.*penalty may apply/)).toBeInTheDocument();
     expect(within(order).getByText(/Taxable sales may realize capital gains/)).toBeInTheDocument();
     expect(within(order).getByText(/ordinary income.*early-withdrawal penalty/i)).toBeInTheDocument();
     expect(within(order).getByText(/five tax years.*preserved last.*tax-free growth/i)).toBeInTheDocument();
@@ -453,6 +454,72 @@ describe("RetirementView settings and autosave", () => {
     expect(updateRetirementPlan).toHaveBeenLastCalledWith(
       expect.objectContaining({ withdrawalAccountOrder: [], expectedRevision: 2 }),
     );
+  });
+
+  // Production mutations caught: recomputing order and age at the retirement-month
+  // start makes the UI disagree with the boundary's period-end withdrawal treatment.
+  it("shows the boundary order and owner age at the first annual draw", () => {
+    const brokerage = bootstrapAccount({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+      subtype: "taxable-brokerage",
+    });
+    const checking = bootstrapAccount({
+      id: "checking",
+      name: "Checking",
+      kind: "checking",
+      subtype: "cash",
+    });
+    const ira = bootstrapAccount({
+      id: "ira",
+      name: "Traditional IRA",
+      kind: "retirement",
+      subtype: "traditional-ira",
+      ownerPersonId: "person",
+    });
+    const values = withAccounts([brokerage, checking, ira]);
+    values.bootstrap.people = [{
+      id: "person",
+      householdId: "household",
+      name: "Morgan",
+      birthDate: "1971-06-01",
+    }];
+    values.snapshot.household = {
+      ...values.snapshot.household,
+      people: [{ id: "person", name: "Morgan", birthDate: "1971-06-01" }],
+    };
+    vi.mocked(calculateRetirementProjection).mockReturnValue({
+      ...availableProjection,
+      firstWithdrawalDate: "2031-08-31",
+      effectiveWithdrawalOrder: ["brokerage", "ira", "checking"],
+    });
+
+    render(
+      <RetirementView
+        initial={{
+          ...initial,
+          retirementMonth: "2030-09",
+          taxableDestinationAccountId: "brokerage",
+        }}
+        repository={repository()}
+        bootstrap={values.bootstrap}
+        snapshot={values.snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Withdrawal order"));
+    const order = screen.getByRole("group", { name: "Withdrawal order" });
+    expect(within(order).getAllByRole("listitem").map((row) =>
+      row.querySelector("strong")?.textContent)).toEqual([
+      "Brokerage",
+      "Traditional IRA",
+      "Checking",
+    ]);
+    expect(within(order).getByText(/Morgan.*Pre-tax.*Age 60 at first annual draw/))
+      .toBeInTheDocument();
+    expect(within(order).queryByText(/penalty may apply/)).not.toBeInTheDocument();
   });
 
   it("does not save on a Strict Mode mount and starts saving on the first edit", async () => {

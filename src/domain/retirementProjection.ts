@@ -99,6 +99,7 @@ export interface UnavailableRetirementScenarioProjection {
 
 export interface RetirementProjectionResult {
   retirementMonth: string;
+  firstWithdrawalDate: string;
   withdrawalRateBps: BasisPoints;
   netWorthCents: Cents | null;
   keepHomes: AvailableRetirementScenarioProjection<RetirementSnapshotResult["keepHomes"]> |
@@ -177,13 +178,6 @@ interface RetirementHomeSaleRollForward {
 
 const sumRecord = (values: Readonly<Record<string, Cents>>) =>
   Object.values(values).reduce((sum, value) => sum + value, 0);
-
-const homeEquity = (
-  state: RetirementYearState,
-  homes: readonly { assetId: string; liabilityId?: string }[],
-) => homes.reduce((sum, home) =>
-  sum + (state.assets[home.assetId] ?? 0) -
-  (home.liabilityId == null ? 0 : state.liabilities[home.liabilityId] ?? 0), 0);
 
 const portfolioValue = (
   state: RetirementYearState,
@@ -330,6 +324,9 @@ const initialState = (
           balance,
           Math.max(0, account.rothContributionBasisCents ?? 0),
         );
+      }
+      if (cutoff.accountProvenanceChangedIds?.includes(account.id)) {
+        unsupportedTaxCharacter[account.id] = true;
       }
     }
   }
@@ -1076,6 +1073,7 @@ const setupFailureResult = (
   };
   return {
     retirementMonth: input.settings.retirementMonth,
+    firstWithdrawalDate: monthEndDate(addMonths(safeStartMonth, 11)),
     withdrawalRateBps: input.settings.withdrawalRateBps,
     netWorthCents: null,
     keepHomes: unavailable,
@@ -1222,9 +1220,12 @@ export function calculateRetirementProjection(
   }
 
   const keepPlan = calculateRetirementPlanBoundary(input, input.scenario);
+  const firstWithdrawalDate = monthEndDate(
+    addMonths(input.settings.retirementMonth, 11),
+  );
   const effectiveWithdrawalOrder = resolveRetirementAccountOrder(
     input.snapshot,
-    monthEndDate(addMonths(input.settings.retirementMonth, 11)),
+    firstWithdrawalDate,
     input.settings.withdrawalAccountOrder,
   );
   const keepYears = runRetirementScenario(
@@ -1324,6 +1325,7 @@ export function calculateRetirementProjection(
 
   return {
     retirementMonth: keepSnapshot.retirementMonth,
+    firstWithdrawalDate,
     withdrawalRateBps: keepSnapshot.withdrawalRateBps,
     netWorthCents: keepSnapshot.netWorthCents,
     keepHomes: keepAvailable

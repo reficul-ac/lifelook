@@ -326,10 +326,6 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
           : "unsupported";
         taxCharacterSupported = aggregateBasisKnown;
       }
-      if (unsupportedTaxCharacterAccountIds.has(accountId)) {
-        taxEstimateMethod = "unsupported";
-        taxCharacterSupported = false;
-      }
     } else if (withdrawalClass === "eligible-pre-tax" || withdrawalClass === "penalty-pre-tax") {
       taxEstimateMethod = "ordinary-income";
       ordinaryIncomeCents = amountCents;
@@ -373,6 +369,14 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
           taxCharacterSupported = false;
         }
       }
+    }
+
+    const unsupportedCharacterIsIrrelevant = withdrawalClass === "roth" &&
+      rothQualification(account, input.date, input.people ?? []) === true;
+    if (unsupportedTaxCharacterAccountIds.has(accountId) &&
+      !unsupportedCharacterIsIrrelevant) {
+      taxEstimateMethod = "unsupported";
+      taxCharacterSupported = false;
     }
 
     sources.push({

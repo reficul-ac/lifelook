@@ -637,6 +637,8 @@ export function RetirementView(props: RetirementViewProps) {
           draft={draft}
           snapshot={snapshot}
           retirementMonth={settings.retirementMonth}
+          firstWithdrawalDate={calculation?.result?.firstWithdrawalDate}
+          projectedOrder={calculation?.result?.effectiveWithdrawalOrder}
           onChange={(withdrawalAccountOrder) => updateDraft({ withdrawalAccountOrder })}
         />
       </section>
@@ -722,19 +724,29 @@ function WithdrawalOrderSettings({
   draft,
   snapshot,
   retirementMonth,
+  firstWithdrawalDate,
+  projectedOrder,
   onChange,
 }: {
   draft: SettingsDraft;
   snapshot: FinancialSnapshot;
   retirementMonth: string;
+  firstWithdrawalDate?: string;
+  projectedOrder?: readonly string[];
   onChange: (order: readonly string[]) => void;
 }) {
-  const retirementDate = `${retirementMonth}-01`;
-  const effectiveOrder = resolveRetirementAccountOrder(
+  const withdrawalDate = firstWithdrawalDate ?? `${retirementMonth}-01`;
+  const locallyResolvedOrder = resolveRetirementAccountOrder(
     snapshot,
-    retirementDate,
+    withdrawalDate,
     draft.withdrawalAccountOrder,
   );
+  const projectedIds = new Set(projectedOrder);
+  const effectiveOrder = projectedOrder != null &&
+    projectedOrder.length === locallyResolvedOrder.length &&
+    locallyResolvedOrder.every((accountId) => projectedIds.has(accountId))
+    ? projectedOrder
+    : locallyResolvedOrder;
   const accounts = effectiveOrder.flatMap((accountId) => {
     const account = snapshot.accounts.find((candidate) => candidate.id === accountId);
     return account == null ? [] : [account];
@@ -761,14 +773,14 @@ function WithdrawalOrderSettings({
               const withdrawalClass = retirementWithdrawalClass(
                 snapshot,
                 account,
-                retirementDate,
+                withdrawalDate,
               );
-              const age = ageOnDate(owner?.birthDate, retirementDate);
+              const age = ageOnDate(owner?.birthDate, withdrawalDate);
               const ageStatus = withdrawalClass === "cash"
                 ? "Age not applicable"
                 : age === null
-                  ? "Age unknown at retirement"
-                  : `Age ${age} at retirement${
+                  ? "Age unknown at first annual draw"
+                  : `Age ${age} at first annual draw${
                       withdrawalClass === "penalty-pre-tax"
                         ? " — penalty may apply"
                         : ""

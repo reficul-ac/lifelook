@@ -308,21 +308,19 @@ function HomeDetails({
       <details>
         <summary>Edit sale details</summary>
         <form onSubmit={save}>
-          {(home.purchaseDate == null || home.taxBasisCents == null) && (
-            <div className="retirement-acquisition-source">
-              <p>
-                Acquisition date and purchase basis are maintained in {home.property.source === "current" ? "Net Worth" : "Plan"}.
-              </p>
-              {onEditAcquisition && (
-                <button
-                  type="button"
-                  onClick={(event) => onEditAcquisition(home, event.currentTarget)}
-                >
-                  Edit {home.property.name} acquisition in {home.property.source === "current" ? "Net Worth" : "Plan"}
-                </button>
-              )}
-            </div>
-          )}
+          <div className="retirement-acquisition-source">
+            <p>
+              Acquisition date and purchase basis are maintained in {home.property.source === "current" ? "Net Worth" : "Plan"}.
+            </p>
+            {onEditAcquisition && (
+              <button
+                type="button"
+                onClick={(event) => onEditAcquisition(home, event.currentTarget)}
+              >
+                Edit {home.property.name} acquisition in {home.property.source === "current" ? "Net Worth" : "Plan"}
+              </button>
+            )}
+          </div>
           <label>
             Selling costs (%)
             <input

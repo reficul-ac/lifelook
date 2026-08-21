@@ -121,3 +121,28 @@ Each new test names the production mutation it catches. Coverage asserts rendere
 - `npm test`: PASS, 16 files and 346 tests.
 - `git diff --check`: PASS.
 - Vite retains its existing non-blocking advisory for the main minified chunk over 500 kB.
+
+## Fix Round 4: Commit-Phase Account Save Validity
+
+- Replaced the render-written latest-account fingerprint with committed account generations established during `useLayoutEffect`. A committed deletion now reconciles the draft and invalidates an older request before promise continuations can adopt its record, fingerprint it as an own echo, or call `onSettingsChange`.
+- Removed the account-reconciliation waiter set entirely. Stale success responses still advance the optimistic revision, then the serialized loop rebuilds from the already reconciled committed draft; stale failures likewise yield to committed account state. There is no internal reconciliation wait that an abandoned render can strand.
+- Synchronizes repository, notification, account, destination-requirement, settings, and draft refs from committed layout effects instead of mutating them during work-in-progress renders.
+- Retained the same-task deletion regression as a genuinely committed transition: a sibling layout effect resolves the deferred request, and the scheduler yields before passive effects. Added a separate transition that renders account set B, resolves save A, suspends, and is synchronously abandoned back to committed account set A. It asserts save A is emitted once, reaches `Saved`, and a later edit dispatches with `expectedRevision: 2`.
+
+### Fix Round 4 TDD Evidence
+
+- Baseline: `npm test -- --run src/RetirementView.test.tsx` passed 1 file and 28 tests before the new regression.
+- RED: after adding the concurrent-abort regression, `npm test -- --run src/RetirementView.test.tsx` failed exactly 1 test with 28 passing. `onSettingsChange` remained at zero calls and the rendered state remained `Saving…`, reproducing the abandoned-render waiter deadlock.
+- GREEN: after commit-phase reconciliation and waiter removal, the same command passed 1 file and 29 tests.
+- Mutation check: temporarily changing the reconciliation hook back to `useEffect` made `npm test -- --run src/RetirementView.test.tsx -t "rejects a deferred save resolved by a sibling layout effect"` fail 1 test with 28 skipped because stale revision 2 reached `onSettingsChange`. Restoring `useLayoutEffect` made the targeted command pass 1 test with 28 skipped.
+- The first build identified a test-helper-only TypeScript inference error (`TS2786`, suspended helper inferred as `void`). Giving the always-throwing helper an explicit `null` component return type preserved the behavior; the focused test and build then passed.
+
+### Fix Round 4 Verification and Self-Review
+
+- `npm test -- --run src/RetirementView.test.tsx src/App.test.tsx`: PASS, 2 files and 85 tests.
+- `npm test`: PASS, 16 files and 347 tests.
+- `npm run build`: PASS, including TypeScript and the Vite production build.
+- `git diff --check`: PASS.
+- Mutation review covers moving reconciliation back to a passive effect, reintroducing render-side account validity, accepting deleted destination/order IDs, failing to carry revision 2, and leaving `saving.current` unable to start the next edit.
+- Strict Mode, account lifecycle normalization, partial draft preservation, retry/replacement behavior, own-save echoes, and App integration remain covered by the passing focused and full suites.
+- Vite retains its existing non-blocking advisory for the main minified chunk over 500 kB. The unrelated pre-existing `.superpowers/brainstorm/` content remains untouched and unstaged.

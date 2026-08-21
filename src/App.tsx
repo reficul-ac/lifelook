@@ -72,6 +72,7 @@ import {
 import { ScenarioPlanningDialog } from "./ScenarioPlanningDialog";
 import { InvestmentView } from "./InvestmentView";
 import { RetirementView } from "./RetirementView";
+import type { HomeSaleSourcePatch } from "./RetirementHomeSaleDetails";
 import { type RetirementSettingsRecord } from "./domain";
 import {
   buildSearchIndex,
@@ -681,6 +682,80 @@ function Workspace({
     () => setRetirementSettings(bootstrap.retirementPlan ?? null),
     [bootstrap.retirementPlan],
   );
+  const updateRetirementCurrentHome = async (
+    assetId: string,
+    patch: HomeSaleSourcePatch,
+  ) => {
+    const asset = bootstrap.assets.find((item) => item.id === assetId);
+    if (asset == null || repository.updateAsset == null) {
+      throw new Error("Current home source is unavailable");
+    }
+    await repository.updateAsset({
+      id: asset.id,
+      name: asset.name,
+      valueCents: asset.valueCents,
+      annualGrowthBps: asset.annualGrowthBps,
+      ...(asset.appreciationCurve !== undefined
+        ? { appreciationCurve: asset.appreciationCurve }
+        : {}),
+      ...(asset.privateStock !== undefined ? { privateStock: asset.privateStock } : {}),
+      ...(asset.equityHolding !== undefined ? { equityHolding: asset.equityHolding } : {}),
+      ...(asset.housingCosts !== undefined ? { housingCosts: asset.housingCosts } : {}),
+      ...(asset.taxableCostBasisCents !== undefined
+        ? { taxableCostBasisCents: asset.taxableCostBasisCents }
+        : {}),
+      ...(asset.rentalTaxBasisCents !== undefined
+        ? { rentalTaxBasisCents: asset.rentalTaxBasisCents }
+        : {}),
+      ...(asset.rentalBuildingBasisCents !== undefined
+        ? { rentalBuildingBasisCents: asset.rentalBuildingBasisCents }
+        : {}),
+      ...patch,
+      expectedRevision: asset.revision,
+    });
+    await onRefresh();
+  };
+  const updateRetirementPlannedHome = async (
+    eventId: string,
+    patch: HomeSaleSourcePatch,
+  ) => {
+    const record = bootstrap.scenarios.find(
+      (item) => item.id === selectedScenario.id,
+    );
+    const purchase = record?.events.find((event) => event.id === eventId);
+    if (
+      record == null ||
+      purchase?.type !== "asset-purchase" ||
+      repository.updateScenario == null
+    ) {
+      throw new Error("Planned home source is unavailable");
+    }
+    const events = record.events.map((event) =>
+      event.id === eventId
+        ? {
+            ...purchase,
+            date: patch.purchaseDate,
+            valueCents: patch.purchasePriceCents,
+            propertyDetails: {
+              ...purchase.propertyDetails,
+              homeSaleAssumptions: patch.homeSaleAssumptions,
+            },
+          }
+        : event,
+    );
+    await repository.updateScenario({
+      id: record.id,
+      name: record.name,
+      assumptions: record.assumptions,
+      horizonMonths: record.horizonMonths,
+      events,
+      defaultContributionAccountId: record.defaultContributionAccountId,
+      contributions: record.contributions,
+      withdrawals: record.withdrawals,
+      expectedRevision: record.revision,
+    });
+    await onRefresh();
+  };
   return (
     <div
       className={dark ? "app dark" : "app"}
@@ -1117,6 +1192,8 @@ function Workspace({
               snapshot={snapshot}
               scenario={projectedScenario}
               onSettingsChange={setRetirementSettings}
+              onUpdateCurrentHome={updateRetirementCurrentHome}
+              onUpdatePlannedHome={updateRetirementPlannedHome}
             />
           </div>
         )}

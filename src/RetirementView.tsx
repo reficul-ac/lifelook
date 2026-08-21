@@ -3,6 +3,7 @@ import {
   buildRetirementCutoff,
   calculateRetirementSnapshot,
   normalizeRetirementSettings,
+  resolveRetirementHomeSales,
   type FinancialSnapshot,
   type RetirementSnapshotResult,
   type RetirementSettingsInput,
@@ -10,6 +11,10 @@ import {
   type Scenario,
 } from "./domain";
 import type { Bootstrap, Repository } from "./repository";
+import {
+  RetirementHomeSaleDetails,
+  type HomeSaleSourcePatch,
+} from "./RetirementHomeSaleDetails";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type SaveValues = Omit<RetirementSettingsInput, "expectedRevision">;
@@ -23,6 +28,14 @@ export interface RetirementViewProps {
   snapshot: FinancialSnapshot;
   scenario: Scenario;
   onSettingsChange?: (settings: RetirementSettingsRecord) => void;
+  onUpdateCurrentHome?: (
+    assetId: string,
+    patch: HomeSaleSourcePatch,
+  ) => Promise<void>;
+  onUpdatePlannedHome?: (
+    eventId: string,
+    patch: HomeSaleSourcePatch,
+  ) => Promise<void>;
 }
 
 const money = (cents: number) =>
@@ -111,6 +124,8 @@ export function RetirementView(props: RetirementViewProps) {
     snapshot,
     scenario,
     onSettingsChange,
+    onUpdateCurrentHome,
+    onUpdatePlannedHome,
   } = props;
   const initialRecord = initial ?? bootstrap.retirementPlan ?? null;
   const [settings, setSettings] = useState(() =>
@@ -276,7 +291,11 @@ export function RetirementView(props: RetirementViewProps) {
   };
 
   const calculation = useMemo<
-    { result: RetirementSnapshotResult; error: null } |
+    {
+      result: RetirementSnapshotResult;
+      resolvedHomeSales: ReturnType<typeof resolveRetirementHomeSales>;
+      error: null;
+    } |
     { result: null; error: string } |
     null
   >(() => {
@@ -288,13 +307,15 @@ export function RetirementView(props: RetirementViewProps) {
         retirementMonth: settings.retirementMonth,
         asOfDate: localIsoDate(),
       });
-      return {
-        result: calculateRetirementSnapshot({
+      const snapshotInput = {
           cutoff,
           snapshot,
           scenario,
           withdrawalRateBps: clampBasisPoints(settings.withdrawalRateBps),
-        }),
+      };
+      return {
+        result: calculateRetirementSnapshot(snapshotInput),
+        resolvedHomeSales: resolveRetirementHomeSales(snapshotInput),
         error: null,
       };
     } catch (error) {
@@ -375,10 +396,22 @@ export function RetirementView(props: RetirementViewProps) {
           <p>{calculation.error}</p>
         </section>
       ) : (
-        <section className="retirement-stories" aria-label="Retirement scenarios">
-          <RetirementStory kind="keep" result={calculation.result} />
-          <RetirementStory kind="sell" result={calculation.result} />
-        </section>
+        <>
+          {onUpdateCurrentHome && onUpdatePlannedHome && calculation.resolvedHomeSales.homes.length > 0 && (
+            <RetirementHomeSaleDetails
+              homes={calculation.resolvedHomeSales.homes}
+              issues={calculation.result.sellHomes.available ? [] : calculation.result.sellHomes.issues}
+              scenario={scenario}
+              retirementDate={`${settings.retirementMonth}-01`}
+              onUpdateCurrentHome={onUpdateCurrentHome}
+              onUpdatePlannedHome={onUpdatePlannedHome}
+            />
+          )}
+          <section className="retirement-stories" aria-label="Retirement scenarios">
+            <RetirementStory kind="keep" result={calculation.result} />
+            <RetirementStory kind="sell" result={calculation.result} />
+          </section>
+        </>
       )}
     </div>
   );

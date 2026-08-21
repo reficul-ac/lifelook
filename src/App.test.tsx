@@ -768,6 +768,226 @@ describe("LifeLook shell", () => {
     calculateSnapshot.mockRestore();
   });
 
+  // Break caught: saving a retirement-only copy, dropping appreciation, or omitting the current asset revision bypasses the authoritative asset mutation.
+  it("persists retirement edits to the authoritative current-home asset and refreshes bootstrap", async () => {
+    const data = await testRepository.bootstrap();
+    const home = {
+      id: "home",
+      householdId: "test",
+      name: "Current home",
+      valueCents: 700_000_00,
+      annualGrowthBps: 350,
+      appreciationCurve: {
+        startYear: 2026,
+        startRateBps: 500,
+        endYear: 2036,
+        endRateBps: 300,
+      },
+      housingCosts: {
+        propertyTaxRateBps: 120,
+        insuranceMonthlyCents: 200_00,
+        insuranceAnnualGrowthBps: 250,
+        hoaMonthlyCents: 0,
+        hoaAnnualGrowthBps: 0,
+      },
+      purchasePriceCents: 450_000_00,
+      purchaseDate: null,
+      revision: 7,
+    };
+    const scenario = {
+      id: "base",
+      householdId: "test",
+      name: "Baseline",
+      isBaseline: true,
+      assumptions: { inflationBps: 250, thresholdInflationBps: 250 },
+      horizonMonths: 360,
+      revision: 4,
+      events: [],
+      contributions: [],
+      withdrawals: [],
+    };
+    const retirementPlan = {
+      householdId: "test",
+      retirementMonth: "2042-01",
+      withdrawalRateBps: 300,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes" as const,
+      revision: 2,
+    };
+    const bootstrap = vi.fn().mockResolvedValue({
+      ...data,
+      assets: [home],
+      scenarios: [scenario],
+      retirementPlan,
+      taxProfile: {
+        filingStatus: "single" as const,
+        state: "CA" as const,
+        taxYear: 2026 as const,
+        thresholdInflationBps: 250,
+        revision: 1,
+        taxUnit: {
+          id: "single",
+          filingStatus: "single" as const,
+          memberPersonIds: ["person"],
+        },
+      },
+    });
+    const updateAsset = vi.fn().mockResolvedValue(undefined);
+    render(<App repository={{ ...testRepository, bootstrap, updateAsset }} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Retirement/ }));
+    const details = await screen.findByRole("article", { name: "Current home sale details" });
+    fireEvent.click(within(details).getByText("Edit sale details"));
+    fireEvent.change(within(details).getByLabelText("Purchase date"), {
+      target: { value: "2020-06-01" },
+    });
+    fireEvent.change(within(details).getByLabelText("Selling costs (%)"), {
+      target: { value: "6" },
+    });
+    fireEvent.click(within(details).getByLabelText("Eligible for primary-home gain exclusion"));
+    fireEvent.click(within(details).getByRole("button", { name: "Save sale details" }));
+
+    await waitFor(() =>
+      expect(updateAsset).toHaveBeenCalledWith({
+        id: "home",
+        name: "Current home",
+        valueCents: 700_000_00,
+        annualGrowthBps: 350,
+        appreciationCurve: home.appreciationCurve,
+        housingCosts: home.housingCosts,
+        purchaseDate: "2020-06-01",
+        purchasePriceCents: 450_000_00,
+        homeSaleAssumptions: {
+          sellingCostBps: 600,
+          primaryResidenceExclusionEligible: true,
+          accumulatedFederalDepreciationCents: 0,
+          accumulatedCaliforniaDepreciationCents: 0,
+        },
+        expectedRevision: 7,
+      }),
+    );
+    await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+  });
+
+  // Break caught: mutating the scenario in place or rebuilding unrelated events changes Plan data outside the selected purchase source.
+  it("clones only the matching planned-home purchase event and refreshes bootstrap", async () => {
+    const data = await testRepository.bootstrap();
+    const unrelatedEvent = {
+      id: "bonus",
+      date: "2030-06-01",
+      type: "one-time-income" as const,
+      amountCents: 25_000_00,
+    };
+    const purchase = {
+      id: "buy-planned-home",
+      date: "2035-01-01",
+      type: "asset-purchase" as const,
+      assetId: "planned-home",
+      name: "Planned home",
+      valueCents: 900_000_00,
+      annualGrowthBps: 300,
+      fundingAccountId: "cash",
+      downPaymentCents: 900_000_00,
+      costsCents: 0,
+      propertyDetails: {
+        primaryResidence: undefined,
+        rentalUseBps: 0,
+        rentalTaxModelingEnabled: false,
+        rentalType: "long-term" as const,
+        maintenanceBps: 100,
+      },
+    };
+    const scenario = {
+      id: "base",
+      householdId: "test",
+      name: "Baseline",
+      isBaseline: true,
+      assumptions: { inflationBps: 250, thresholdInflationBps: 250 },
+      horizonMonths: 360,
+      revision: 4,
+      events: [unrelatedEvent, purchase],
+      defaultContributionAccountId: "cash",
+      contributions: [],
+      withdrawals: [],
+    };
+    const retirementPlan = {
+      householdId: "test",
+      retirementMonth: "2042-01",
+      withdrawalRateBps: 300,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes" as const,
+      revision: 2,
+    };
+    const bootstrap = vi.fn().mockResolvedValue({
+      ...data,
+      accounts: [{ ...data.accounts[0], openingBalanceCents: 2_000_000_00, balanceCents: 2_000_000_00 }],
+      scenarios: [scenario],
+      retirementPlan,
+      taxProfile: {
+        filingStatus: "single" as const,
+        state: "CA" as const,
+        taxYear: 2026 as const,
+        thresholdInflationBps: 250,
+        revision: 1,
+        taxUnit: {
+          id: "single",
+          filingStatus: "single" as const,
+          memberPersonIds: ["person"],
+        },
+      },
+    });
+    const updateScenario = vi.fn().mockResolvedValue(undefined);
+    const scenarioBefore = JSON.stringify(scenario);
+    render(<App repository={{ ...testRepository, bootstrap, updateScenario }} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Retirement/ }));
+    const details = await screen.findByRole("article", { name: "Planned home sale details" });
+    fireEvent.click(within(details).getByText("Edit sale details"));
+    fireEvent.change(within(details).getByLabelText("Selling costs (%)"), {
+      target: { value: "6" },
+    });
+    fireEvent.click(within(details).getByLabelText("Eligible for primary-home gain exclusion"));
+    fireEvent.click(within(details).getByRole("button", { name: "Save sale details" }));
+
+    await waitFor(() => expect(updateScenario).toHaveBeenCalledTimes(1));
+    const saved = updateScenario.mock.calls[0][0];
+    expect(saved).toEqual({
+      id: "base",
+      name: "Baseline",
+      assumptions: scenario.assumptions,
+      horizonMonths: 360,
+      events: [
+        unrelatedEvent,
+        {
+          ...purchase,
+          propertyDetails: {
+            ...purchase.propertyDetails,
+            homeSaleAssumptions: {
+              sellingCostBps: 600,
+              primaryResidenceExclusionEligible: true,
+              accumulatedFederalDepreciationCents: 0,
+              accumulatedCaliforniaDepreciationCents: 0,
+            },
+          },
+        },
+      ],
+      defaultContributionAccountId: "cash",
+      contributions: [],
+      withdrawals: [],
+      expectedRevision: 4,
+    });
+    expect(saved.events).not.toBe(scenario.events);
+    expect(saved.events[0]).toBe(unrelatedEvent);
+    expect(saved.events[1]).not.toBe(purchase);
+    expect(JSON.stringify(saved.events[0])).toBe(JSON.stringify(unrelatedEvent));
+    expect(JSON.stringify(scenario)).toBe(scenarioBefore);
+    await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+  });
+
   it("recovers from a startup failure without reloading", async () => {
     const bootstrap = vi.fn().mockRejectedValue({
       code: "corrupt",

@@ -330,6 +330,10 @@ struct RetirementPlanRecord {
     household_id: String,
     retirement_month: String,
     withdrawal_rate_bps: i64,
+    horizon_years: i64,
+    taxable_destination_account_id: Option<String>,
+    withdrawal_account_order: Vec<String>,
+    selected_scenario: String,
     revision: i64,
 }
 #[derive(Debug, Deserialize)]
@@ -337,6 +341,10 @@ struct RetirementPlanRecord {
 struct RetirementPlanInput {
     retirement_month: String,
     withdrawal_rate_bps: i64,
+    horizon_years: i64,
+    taxable_destination_account_id: Option<String>,
+    withdrawal_account_order: Vec<String>,
+    selected_scenario: String,
     expected_revision: i64,
 }
 #[derive(Debug, Deserialize)]
@@ -1062,6 +1070,32 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
                 [],
             )?;
         }
+        let retirement_columns = transaction
+            .prepare("PRAGMA table_info(retirement_plans)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        for (name, sql) in [
+            (
+                "horizon_years",
+                "ALTER TABLE retirement_plans ADD COLUMN horizon_years INTEGER NOT NULL DEFAULT 30 CHECK(horizon_years BETWEEN 1 AND 60)",
+            ),
+            (
+                "taxable_destination_account_id",
+                "ALTER TABLE retirement_plans ADD COLUMN taxable_destination_account_id TEXT REFERENCES accounts(id) ON DELETE SET NULL",
+            ),
+            (
+                "withdrawal_account_order_json",
+                "ALTER TABLE retirement_plans ADD COLUMN withdrawal_account_order_json TEXT NOT NULL DEFAULT '[]'",
+            ),
+            (
+                "selected_scenario",
+                "ALTER TABLE retirement_plans ADD COLUMN selected_scenario TEXT NOT NULL DEFAULT 'keep-homes' CHECK(selected_scenario IN ('keep-homes','sell-all-homes'))",
+            ),
+        ] {
+            if !retirement_columns.iter().any(|column| column == name) {
+                transaction.execute(sql, [])?;
+            }
+        }
         transaction.execute("INSERT INTO schema_migrations(version) VALUES(23)", [])?;
     }
     transaction
@@ -1116,14 +1150,28 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
         }
         retirement_plan = connection
             .query_row(
-                "SELECT household_id,retirement_month,withdrawal_rate_bps,revision FROM retirement_plans WHERE household_id=?",
+                "SELECT household_id,retirement_month,withdrawal_rate_bps,horizon_years,taxable_destination_account_id,withdrawal_account_order_json,selected_scenario,revision FROM retirement_plans WHERE household_id=?",
                 [&h.id],
                 |r| {
+                    let withdrawal_account_order_json: String = r.get(5)?;
                     Ok(RetirementPlanRecord {
                         household_id: r.get(0)?,
                         retirement_month: r.get(1)?,
                         withdrawal_rate_bps: r.get(2)?,
-                        revision: r.get(3)?,
+                        horizon_years: r.get(3)?,
+                        taxable_destination_account_id: r.get(4)?,
+                        withdrawal_account_order: serde_json::from_str(
+                            &withdrawal_account_order_json,
+                        )
+                        .map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(
+                                5,
+                                rusqlite::types::Type::Text,
+                                Box::new(error),
+                            )
+                        })?,
+                        selected_scenario: r.get(6)?,
+                        revision: r.get(7)?,
                     })
                 },
             )
@@ -1550,11 +1598,7 @@ fn update_retirement_plan(
     input: RetirementPlanInput,
     database: tauri::State<Database>,
 ) -> Result<RetirementPlanRecord, AppError> {
-    if !valid_retirement_month(&input.retirement_month)
-        || !(1..=10_000).contains(&input.withdrawal_rate_bps)
-    {
-        return Err(AppError::Validation("retirement plan is invalid".into()));
-    }
+    validate_retirement_plan_input(&input)?;
     with_db(&database, |db| store_retirement_plan(db, input))
 }
 
@@ -1566,15 +1610,25 @@ fn valid_retirement_month(value: &str) -> bool {
         })
 }
 
+fn validate_retirement_plan_input(input: &RetirementPlanInput) -> Result<(), AppError> {
+    if !valid_retirement_month(&input.retirement_month)
+        || !(1..=10_000).contains(&input.withdrawal_rate_bps)
+        || !(1..=60).contains(&input.horizon_years)
+        || !matches!(
+            input.selected_scenario.as_str(),
+            "keep-homes" | "sell-all-homes"
+        )
+    {
+        return Err(AppError::Validation("retirement plan is invalid".into()));
+    }
+    Ok(())
+}
+
 fn store_retirement_plan(
     db: &mut Connection,
     input: RetirementPlanInput,
 ) -> Result<RetirementPlanRecord, AppError> {
-    if !valid_retirement_month(&input.retirement_month)
-        || !(1..=10_000).contains(&input.withdrawal_rate_bps)
-    {
-        return Err(AppError::Validation("retirement plan is invalid".into()));
-    }
+    validate_retirement_plan_input(&input)?;
     let tx = db.transaction()?;
     let household_id: String =
         tx.query_row("SELECT id FROM households LIMIT 1", [], |r| r.get(0))?;
@@ -1588,16 +1642,56 @@ fn store_retirement_plan(
     if existing.unwrap_or(1) != input.expected_revision {
         return Err(AppError::Conflict);
     }
+    if let Some(destination_account_id) = &input.taxable_destination_account_id {
+        let destination_is_valid: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND household_id=?2 AND kind='investment' AND (subtype IS NULL OR subtype='taxable-brokerage'))",
+            params![destination_account_id, household_id],
+            |r| r.get(0),
+        )?;
+        if !destination_is_valid {
+            return Err(AppError::Validation(
+                "taxable destination account is invalid".into(),
+            ));
+        }
+    }
+    if input
+        .withdrawal_account_order
+        .iter()
+        .collect::<HashSet<_>>()
+        .len()
+        != input.withdrawal_account_order.len()
+    {
+        return Err(AppError::Validation(
+            "withdrawal account order contains duplicate accounts".into(),
+        ));
+    }
+    for account_id in &input.withdrawal_account_order {
+        let belongs_to_household: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND household_id=?2)",
+            params![account_id, household_id],
+            |r| r.get(0),
+        )?;
+        if !belongs_to_household {
+            return Err(AppError::Validation(
+                "withdrawal account order contains an unknown account".into(),
+            ));
+        }
+    }
     let next = existing.map_or(1, |r| r + 1);
+    let withdrawal_account_order_json = serde_json::to_string(&input.withdrawal_account_order)?;
     tx.execute(
-        "INSERT INTO retirement_plans(household_id,retirement_month,withdrawal_rate_bps,revision) VALUES(?1,?2,?3,?4) ON CONFLICT(household_id) DO UPDATE SET retirement_month=excluded.retirement_month,withdrawal_rate_bps=excluded.withdrawal_rate_bps,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",
-        params![household_id, input.retirement_month, input.withdrawal_rate_bps, next],
+        "INSERT INTO retirement_plans(household_id,retirement_month,withdrawal_rate_bps,horizon_years,taxable_destination_account_id,withdrawal_account_order_json,selected_scenario,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(household_id) DO UPDATE SET retirement_month=excluded.retirement_month,withdrawal_rate_bps=excluded.withdrawal_rate_bps,horizon_years=excluded.horizon_years,taxable_destination_account_id=excluded.taxable_destination_account_id,withdrawal_account_order_json=excluded.withdrawal_account_order_json,selected_scenario=excluded.selected_scenario,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",
+        params![household_id, input.retirement_month, input.withdrawal_rate_bps, input.horizon_years, input.taxable_destination_account_id, withdrawal_account_order_json, input.selected_scenario, next],
     )?;
     tx.commit()?;
     Ok(RetirementPlanRecord {
         household_id,
         retirement_month: input.retirement_month,
         withdrawal_rate_bps: input.withdrawal_rate_bps,
+        horizon_years: input.horizon_years,
+        taxable_destination_account_id: input.taxable_destination_account_id,
+        withdrawal_account_order: input.withdrawal_account_order,
+        selected_scenario: input.selected_scenario,
         revision: next,
     })
 }
@@ -4867,15 +4961,26 @@ mod tests {
     }
     #[test]
     fn retirement_plan_round_trips_and_enforces_revisions() {
+        // Break caught: retirement preference fields can be lost, accepted for invalid accounts, or bypass optimistic revisions.
         let mut c = seeded();
+        c.execute(
+            "INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,liquid,subtype) VALUES('brokerage','h','Brokerage','investment',0,0,'taxable-brokerage'),('401k','h','401k','retirement',0,0,'employer-pre-tax'),('ira','h','IRA','investment',0,0,'traditional-ira')",
+            [],
+        )
+        .unwrap();
         assert!(bootstrap(&c).unwrap().retirement_plan.is_none());
         let make = |expected_revision| RetirementPlanInput {
             retirement_month: "2040-01".into(),
             withdrawal_rate_bps: 300,
+            horizon_years: 45,
+            taxable_destination_account_id: Some("brokerage".into()),
+            withdrawal_account_order: vec!["401k".into(), "brokerage".into()],
+            selected_scenario: "sell-all-homes".into(),
             expected_revision,
         };
         let saved = store_retirement_plan(&mut c, make(1)).unwrap();
         assert_eq!(saved.revision, 1);
+        assert_eq!(saved.horizon_years, 45);
         assert_eq!(
             bootstrap(&c)
                 .unwrap()
@@ -4884,15 +4989,142 @@ mod tests {
                 .retirement_month,
             "2040-01"
         );
+        let loaded = bootstrap(&c).unwrap().retirement_plan.unwrap();
+        assert_eq!(loaded.horizon_years, 45);
+        assert_eq!(
+            loaded.taxable_destination_account_id.as_deref(),
+            Some("brokerage")
+        );
+        assert_eq!(
+            loaded.withdrawal_account_order,
+            vec!["401k".to_string(), "brokerage".to_string()]
+        );
+        assert_eq!(loaded.selected_scenario, "sell-all-homes");
         let updated = store_retirement_plan(&mut c, make(1)).unwrap();
         assert_eq!(updated.revision, 2);
         assert!(matches!(
             store_retirement_plan(&mut c, make(1)),
             Err(AppError::Conflict)
         ));
+        assert!(matches!(
+            store_retirement_plan(
+                &mut c,
+                RetirementPlanInput {
+                    horizon_years: 0,
+                    ..make(2)
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            store_retirement_plan(
+                &mut c,
+                RetirementPlanInput {
+                    horizon_years: 61,
+                    ..make(2)
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            store_retirement_plan(
+                &mut c,
+                RetirementPlanInput {
+                    taxable_destination_account_id: Some("missing".into()),
+                    ..make(2)
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            store_retirement_plan(
+                &mut c,
+                RetirementPlanInput {
+                    taxable_destination_account_id: Some("ira".into()),
+                    ..make(2)
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            store_retirement_plan(
+                &mut c,
+                RetirementPlanInput {
+                    withdrawal_account_order: vec!["401k".into(), "401k".into()],
+                    ..make(2)
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            store_retirement_plan(
+                &mut c,
+                RetirementPlanInput {
+                    withdrawal_account_order: vec!["missing".into()],
+                    ..make(2)
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+        assert!(matches!(
+            store_retirement_plan(
+                &mut c,
+                RetirementPlanInput {
+                    selected_scenario: "invalid".into(),
+                    ..make(2)
+                }
+            ),
+            Err(AppError::Validation(_))
+        ));
+    }
+    #[test]
+    fn version_23_adds_retirement_projection_preferences() {
+        // Break caught: upgrading a v22 database can omit retirement projection defaults or fail to expose them through bootstrap.
+        let mut c = seeded();
+        c.execute_batch(
+            "DROP TABLE retirement_plans;
+            CREATE TABLE retirement_plans(
+              household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE RESTRICT,
+              retirement_month TEXT NOT NULL CHECK(retirement_month GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]'),
+              withdrawal_rate_bps INTEGER NOT NULL CHECK(withdrawal_rate_bps BETWEEN 1 AND 10000),
+              revision INTEGER NOT NULL DEFAULT 1,
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO retirement_plans(household_id,retirement_month,withdrawal_rate_bps,revision) VALUES('h','2042-09',350,1);
+            DELETE FROM schema_migrations WHERE version >= 23;",
+        )
+        .unwrap();
+
+        migrate(&mut c).unwrap();
+
+        let loaded = bootstrap(&c).unwrap().retirement_plan.unwrap();
+        assert_eq!(loaded.horizon_years, 30);
+        assert_eq!(loaded.taxable_destination_account_id, None);
+        assert_eq!(loaded.withdrawal_account_order, Vec::<String>::new());
+        assert_eq!(loaded.selected_scenario, "keep-homes");
+        c.execute(
+            "INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,liquid,subtype) VALUES('brokerage','h','Brokerage','investment',0,0,'taxable-brokerage'),('401k','h','401k','retirement',0,0,'employer-pre-tax')",
+            [],
+        )
+        .unwrap();
+        let saved = store_retirement_plan(
+            &mut c,
+            RetirementPlanInput {
+                retirement_month: "2042-09".into(),
+                withdrawal_rate_bps: 350,
+                horizon_years: 45,
+                taxable_destination_account_id: Some("brokerage".into()),
+                withdrawal_account_order: vec!["brokerage".into(), "401k".into()],
+                selected_scenario: "sell-all-homes".into(),
+                expected_revision: 1,
+            },
+        )
+        .unwrap();
+        assert_eq!(saved.horizon_years, 45);
     }
     #[test]
     fn version_22_rebuilds_retirement_plans_as_monthly_settings() {
+        // Break caught: rebuilding legacy annual retirement plans can omit the current v23 projection preference columns.
         let mut c = seeded();
         c.execute_batch(
             "DROP TABLE retirement_plans;
@@ -4935,7 +5167,11 @@ mod tests {
                 "retirement_month",
                 "withdrawal_rate_bps",
                 "revision",
-                "updated_at"
+                "updated_at",
+                "horizon_years",
+                "taxable_destination_account_id",
+                "withdrawal_account_order_json",
+                "selected_scenario"
             ]
         );
         let loaded = bootstrap(&c).unwrap().retirement_plan.unwrap();
@@ -4952,6 +5188,10 @@ mod tests {
             RetirementPlanInput {
                 retirement_month: "2042-09".into(),
                 withdrawal_rate_bps: 300,
+                horizon_years: 30,
+                taxable_destination_account_id: None,
+                withdrawal_account_order: vec![],
+                selected_scenario: "keep-homes".into(),
                 expected_revision: 1,
             },
         )
@@ -4964,6 +5204,10 @@ mod tests {
                 RetirementPlanInput {
                     retirement_month: "2042-10".into(),
                     withdrawal_rate_bps: 350,
+                    horizon_years: 30,
+                    taxable_destination_account_id: None,
+                    withdrawal_account_order: vec![],
+                    selected_scenario: "keep-homes".into(),
                     expected_revision: 1,
                 },
             )
@@ -4977,6 +5221,10 @@ mod tests {
                 RetirementPlanInput {
                     retirement_month: "2042-11".into(),
                     withdrawal_rate_bps: 350,
+                    horizon_years: 30,
+                    taxable_destination_account_id: None,
+                    withdrawal_account_order: vec![],
+                    selected_scenario: "keep-homes".into(),
                     expected_revision: 1,
                 },
             ),

@@ -111,6 +111,12 @@ describe("calculateRetirementProjection", () => {
     });
     expect(result.keepHomes.years).toHaveLength(30);
     expect(result.sellHomes.years).toHaveLength(30);
+    expect(result.keepHomes.years[0].withdrawalFundedCents).toBe(3_000_000);
+    expect(result.keepHomes.years[0].rentalIncomeCents).toBe(0);
+    expect(result.keepHomes.summary.annualPreTaxIncomeCents).toBe(3_000_000);
+    expect(result.sellHomes.years[0].withdrawalFundedCents).toBe(3_000_000);
+    expect(result.sellHomes.years[0].rentalIncomeCents).toBe(0);
+    expect(result.sellHomes.summary.annualPreTaxIncomeCents).toBe(3_000_000);
   });
 
   // Production mutation caught: using or mutating the Plan's 12-month display horizon truncates the independent 30-year retirement series.

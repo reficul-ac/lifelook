@@ -5098,11 +5098,12 @@ mod tests {
               revision INTEGER NOT NULL DEFAULT 1,
               updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
-            INSERT INTO retirement_plans(household_id,retirement_month,withdrawal_rate_bps,revision) VALUES('h','2042-09',350,1);
+            INSERT INTO retirement_plans(household_id,retirement_month,withdrawal_rate_bps,revision) VALUES('h','2042-09',350,7);
             DELETE FROM schema_migrations WHERE version >= 24;",
         )
         .unwrap();
 
+        migrate(&mut c).unwrap();
         migrate(&mut c).unwrap();
 
         let loaded = bootstrap(&c).unwrap().retirement_plan.unwrap();
@@ -5116,13 +5117,16 @@ mod tests {
         assert_eq!(loaded.taxable_destination_account_id, None);
         assert_eq!(loaded.withdrawal_account_order, Vec::<String>::new());
         assert_eq!(loaded.selected_scenario, "keep-homes");
-        migrate(&mut c).unwrap();
-        let version: i64 = c
-            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
-                row.get(0)
-            })
-            .unwrap();
-        assert_eq!(version, 24);
+        assert_eq!(loaded.revision, 7);
+        assert_eq!(
+            c.query_row(
+                "SELECT count(*) FROM schema_migrations WHERE version=24",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1
+        );
         c.execute(
             "INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,liquid,subtype) VALUES('brokerage','h','Brokerage','investment',0,0,'taxable-brokerage'),('401k','h','401k','retirement',0,0,'employer-pre-tax')",
             [],
@@ -5137,11 +5141,12 @@ mod tests {
                 taxable_destination_account_id: Some("brokerage".into()),
                 withdrawal_account_order: vec!["brokerage".into(), "401k".into()],
                 selected_scenario: "sell-all-homes".into(),
-                expected_revision: 1,
+                expected_revision: 7,
             },
         )
         .unwrap();
         assert_eq!(saved.horizon_years, 45);
+        assert_eq!(saved.revision, 8);
     }
     #[test]
     fn version_22_rebuilds_retirement_plans_as_monthly_settings() {
@@ -5779,6 +5784,59 @@ mod tests {
             .blockers
             .iter()
             .any(|x| x.contains("import batch")));
+    }
+
+    #[test]
+    fn deleting_selected_retirement_destination_leaves_an_ambiguous_choice_unresolved() {
+        // Break caught: replacing a deleted destination with another eligible account silently changes where retirement proceeds are deposited.
+        let mut c = seeded();
+        c.execute(
+            "INSERT INTO accounts(id,household_id,name,kind,opening_balance_cents,liquid,subtype) VALUES('brokerage','h','Brokerage','investment',0,0,'taxable-brokerage'),('joint','h','Joint investing','investment',0,0,'taxable-brokerage'),('reserve','h','Reserve investing','investment',0,0,'taxable-brokerage')",
+            [],
+        )
+        .unwrap();
+        store_retirement_plan(
+            &mut c,
+            RetirementPlanInput {
+                retirement_month: "2042-01".into(),
+                withdrawal_rate_bps: 300,
+                horizon_years: 30,
+                taxable_destination_account_id: Some("brokerage".into()),
+                withdrawal_account_order: vec![],
+                selected_scenario: "sell-all-homes".into(),
+                expected_revision: 1,
+            },
+        )
+        .unwrap();
+
+        delete_account_from(
+            &mut c,
+            &DeleteInput {
+                id: "brokerage".into(),
+                expected_revision: 1,
+            },
+        )
+        .unwrap();
+
+        let snapshot = bootstrap(&c).unwrap();
+        assert_eq!(
+            snapshot
+                .accounts
+                .iter()
+                .filter(|account| {
+                    account.kind == "investment"
+                        && account.subtype.as_deref() == Some("taxable-brokerage")
+                })
+                .count(),
+            2
+        );
+        assert_eq!(
+            snapshot
+                .retirement_plan
+                .unwrap()
+                .taxable_destination_account_id,
+            None
+        );
     }
 
     #[test]

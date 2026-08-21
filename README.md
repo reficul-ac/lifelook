@@ -50,6 +50,7 @@ Activity can export exactly the current search/account/year results to an unencr
 - **CSV import** supports UTF-8 files up to 10 MiB and 50,000 rows, saved mappings, ISO or US dates, signed or debit/credit amounts, category review, duplicate warnings with explicit override, and all-or-nothing commits. **CSV export** follows the active Activity filters and writes auditable RFC 4180 posting rows through a staged atomic replacement.
 - **Tax estimates** apply versioned federal, payroll, and California planning rules. The supported traditional workplace-retirement preset reduces federal and California taxable wages but remains subject to Social Security and Medicare tax. Explanations disclose the source year, effective and marginal rates, projected threshold growth, and exclusions.
 - **Scenario comparison** shows annual net worth, goal funding, and unfunded deficits for up to three selected scenarios. Baseline is fixed; other scenarios can be cloned, renamed, edited, and deleted.
+- **Retirement** compares keeping or selling homes, projects annual fixed-rate withdrawals and Plan spending, and orders accounts using owner age and account tax treatment. Results are planning estimates rather than tax advice.
 - **Backup/restore** creates portable, unencrypted `.lifelook` snapshots. Restore validates and stages the selected backup before replacing the current local workspace; the selected backup itself is not modified.
 
 ### Actuals, assumptions, and projections
@@ -62,7 +63,7 @@ LifeLook has no user account, telemetry, advertising, cloud sync, or required ne
 
 LifeLook provides planning estimates, not tax, legal, accounting, or investment advice. It does not prepare returns and omits credits, itemized deductions, capital gains, and self-employment tax in v1.
 
-Goal funding is deterministic rather than Monte Carlo. Future withdrawal taxes, automatic purchases or sales, automatic debt payoff, and automatic retirement transitions are not modeled. Earmarked money remains part of its destination account, so it is not counted twice.
+Goal funding is deterministic rather than Monte Carlo. Special early-withdrawal penalty exceptions, advanced retirement strategies, automatic purchases or sales, automatic debt payoff, and automatic retirement transitions are not modeled. Earmarked money remains part of its destination account, so it is not counted twice.
 
 ## Troubleshooting
 

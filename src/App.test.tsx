@@ -712,6 +712,194 @@ describe("LifeLook shell", () => {
     expect(await screen.findByText("Saved")).toBeInTheDocument();
   });
 
+  // Break caught: remounting Retirement or saving sale details through a private copy loses the selected Sell scenario and never refreshes its shared source data.
+  it("keeps Sell selected after shared home details refresh and navigation", async () => {
+    const data = await testRepository.bootstrap();
+    const account = {
+      id: "taxable",
+      householdId: "test",
+      name: "Taxable brokerage",
+      kind: "investment" as const,
+      openingBalanceCents: 0,
+      balanceCents: 0,
+      annualReturnBps: 0,
+      liquid: true,
+      subtype: "taxable-brokerage" as const,
+      taxableCostBasisCents: 0,
+      revision: 1,
+    };
+    const cash = {
+      id: "cash",
+      householdId: "test",
+      name: "Cash",
+      kind: "checking" as const,
+      openingBalanceCents: 100_000_000,
+      balanceCents: 100_000_000,
+      annualReturnBps: 0,
+      liquid: true,
+      revision: 1,
+    };
+    let home = {
+      id: "home",
+      householdId: "test",
+      name: "Home",
+      valueCents: 50_000_000,
+      annualGrowthBps: 0,
+      housingCosts: {
+        propertyTaxRateBps: 100,
+        insuranceMonthlyCents: 0,
+        insuranceAnnualGrowthBps: 0,
+        hoaMonthlyCents: 0,
+        hoaAnnualGrowthBps: 0,
+      },
+      purchasePriceCents: 40_000_000,
+      purchaseDate: "2020-01-01",
+      homeSaleAssumptions: undefined as
+        | import("./domain").HomeSaleAssumptions
+        | null
+        | undefined,
+      revision: 1,
+    };
+    const scenario = {
+      id: "base",
+      householdId: "test",
+      name: "Baseline",
+      isBaseline: true,
+      assumptions: { inflationBps: 250, thresholdInflationBps: 250 },
+      horizonMonths: 360,
+      revision: 1,
+      events: [],
+      contributions: [],
+      withdrawals: [],
+    };
+    let retirementPlan = {
+      householdId: "test",
+      retirementMonth: "2042-01",
+      withdrawalRateBps: 300,
+      horizonYears: 1,
+      taxableDestinationAccountId: "taxable" as string | null,
+      withdrawalAccountOrder: [] as string[],
+      selectedScenario: "keep-homes" as
+        | "keep-homes"
+        | "sell-all-homes",
+      revision: 1,
+    };
+    const bootstrap = vi.fn(async () => ({
+      ...data,
+      people: [{
+        id: "person",
+        householdId: "test",
+        name: "Test Person",
+        birthDate: "1980-06-15",
+      }],
+      accounts: [cash, account],
+      assets: [home],
+      scenarios: [scenario],
+      retirementPlan,
+      taxProfile: {
+        filingStatus: "single" as const,
+        state: "CA" as const,
+        taxYear: 2026 as const,
+        thresholdInflationBps: 250,
+        revision: 1,
+        taxUnit: {
+          id: "single",
+          filingStatus: "single" as const,
+          memberPersonIds: ["person"],
+        },
+      },
+    }));
+    const updateRetirementPlan = vi.fn(async (
+      input: Parameters<
+        NonNullable<import("./repository").Repository["updateRetirementPlan"]>
+      >[0],
+    ) => {
+      retirementPlan = {
+        householdId: "test",
+        retirementMonth: input.retirementMonth,
+        withdrawalRateBps: input.withdrawalRateBps,
+        horizonYears: input.horizonYears,
+        taxableDestinationAccountId: input.taxableDestinationAccountId,
+        withdrawalAccountOrder: [...input.withdrawalAccountOrder],
+        selectedScenario: input.selectedScenario,
+        revision: input.expectedRevision + 1,
+      };
+      return retirementPlan;
+    });
+    const updateAsset = vi.fn(async (
+      input: Parameters<
+        NonNullable<import("./repository").Repository["updateAsset"]>
+      >[0],
+    ) => {
+      home = {
+        ...home,
+        homeSaleAssumptions: input.homeSaleAssumptions,
+        revision: home.revision + 1,
+      };
+    });
+
+    render(
+      <App
+        repository={{
+          ...testRepository,
+          bootstrap,
+          updateRetirementPlan,
+          updateAsset,
+        }}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Retirement/ }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Select Sell all homes scenario",
+    }));
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedScenario: "sell-all-homes" }),
+    ));
+    expect(screen.getByRole("region", {
+      name: "Sell all homes annual projection",
+    })).toHaveTextContent("Add selling costs for Home.");
+
+    let details = screen.getByRole("article", { name: "Home sale details" });
+    fireEvent.click(within(details).getByText("Edit sale details"));
+    fireEvent.change(within(details).getByLabelText("Selling costs (%)"), {
+      target: { value: "6" },
+    });
+    fireEvent.click(within(details).getByLabelText(
+      "Eligible for primary-home gain exclusion",
+    ));
+    fireEvent.click(within(details).getByRole("button", {
+      name: "Save sale details",
+    }));
+
+    await waitFor(() => expect(updateAsset).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "home",
+        homeSaleAssumptions: {
+          sellingCostBps: 600,
+          primaryResidenceExclusionEligible: true,
+          accumulatedFederalDepreciationCents: 0,
+          accumulatedCaliforniaDepreciationCents: 0,
+        },
+      }),
+    ));
+    expect(await screen.findByRole("table", {
+      name: "Sell all homes annual projection",
+    })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Overview/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Retirement/ }));
+
+    expect(screen.getByRole("button", {
+      name: "Select Sell all homes scenario",
+    })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("table", {
+      name: "Sell all homes annual projection",
+    })).toBeInTheDocument();
+    details = screen.getByRole("article", { name: "Home sale details" });
+    expect(within(details).getByText("6%")).toBeInTheDocument();
+  });
+
   it("defers retirement calculation updates while its persistent tab is inactive", async () => {
     const data = await testRepository.bootstrap();
     const scenario = {

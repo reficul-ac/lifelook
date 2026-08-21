@@ -17,7 +17,9 @@ export interface HomeSaleSourcePatch {
 
 export class HomeSaleReloadError extends Error {
   constructor(readonly retryReload: () => Promise<void>) {
-    super("Home sale details were saved, but refreshed data could not be loaded.");
+    super(
+      "Home sale details were saved, but refreshed data could not be loaded.",
+    );
     this.name = "HomeSaleReloadError";
   }
 }
@@ -64,7 +66,9 @@ const date = (value: string) =>
 const parsePercent = (value: string) => {
   if (!/^(?:\d+)(?:\.\d{1,2})?$/.test(value.trim())) return null;
   const basisPoints = Math.round(Number(value) * 100);
-  return Number.isInteger(basisPoints) && basisPoints >= 0 && basisPoints <= 10_000
+  return Number.isInteger(basisPoints) &&
+    basisPoints >= 0 &&
+    basisPoints <= 10_000
     ? basisPoints
     : null;
 };
@@ -73,9 +77,10 @@ const draftFor = (home: ResolvedRetirementHome): Draft => ({
   purchaseDate: home.purchaseDate ?? "",
   purchasePrice:
     home.taxBasisCents == null ? "" : String(home.taxBasisCents / 100),
-  sellingCosts: home.assumptions == null
-    ? ""
-    : String(home.assumptions.sellingCostBps / 100),
+  sellingCosts:
+    home.assumptions == null
+      ? ""
+      : String(home.assumptions.sellingCostBps / 100),
   primaryResidenceExclusionEligible:
     home.assumptions?.primaryResidenceExclusionEligible ?? false,
   federalDepreciation: String(
@@ -112,19 +117,21 @@ const inferredPlannedEligibility = (
   const lookbackStart = addUtcYears(retirement, -5);
   const residenceStart = acquired > lookbackStart ? acquired : lookbackStart;
   const rentalStart = scenario.events
-    .filter((event) =>
-      event.type === "property-rental-start" &&
-      event.assetId === home.property.assetId &&
-      event.date >= purchase.date &&
-      event.date < retirementDate,
+    .filter(
+      (event) =>
+        event.type === "property-rental-start" &&
+        event.assetId === home.property.assetId &&
+        event.date >= purchase.date &&
+        event.date < retirementDate,
     )
     .sort(
       (left, right) =>
         left.date.localeCompare(right.date) || left.id.localeCompare(right.id),
     )[0];
-  const residenceEnd = rentalStart == null
-    ? retirement
-    : new Date(`${rentalStart.date}T00:00:00Z`);
+  const residenceEnd =
+    rentalStart == null
+      ? retirement
+      : new Date(`${rentalStart.date}T00:00:00Z`);
   return addUtcYears(residenceStart, 2) <= residenceEnd;
 };
 
@@ -263,8 +270,8 @@ function HomeDetails({
       purchasePriceCents,
       homeSaleAssumptions: {
         sellingCostBps,
-        primaryResidenceExclusionEligible: inferredEligibility ??
-          draft.primaryResidenceExclusionEligible,
+        primaryResidenceExclusionEligible:
+          inferredEligibility ?? draft.primaryResidenceExclusionEligible,
         accumulatedFederalDepreciationCents,
         accumulatedCaliforniaDepreciationCents,
       },
@@ -281,7 +288,8 @@ function HomeDetails({
           home.property.assetId,
           retirementDate,
         );
-        if (purchase == null) throw new Error("Planned home purchase not found");
+        if (purchase == null)
+          throw new Error("Planned home purchase not found");
         await onUpdatePlannedHome(purchase.id, patch);
       }
     } catch (saveError) {
@@ -304,7 +312,9 @@ function HomeDetails({
       setError("");
       setRetryReload(null);
     } catch {
-      setError("Home sale details were saved, but refreshed data could not be loaded.");
+      setError(
+        "Home sale details were saved, but refreshed data could not be loaded.",
+      );
     } finally {
       setSaving(false);
     }
@@ -342,15 +352,11 @@ function HomeDetails({
             </dd>
             <dt>Federal depreciation claimed</dt>
             <dd>
-              {money(
-                home.assumptions.accumulatedFederalDepreciationCents,
-              )}
+              {money(home.assumptions.accumulatedFederalDepreciationCents)}
             </dd>
             <dt>California depreciation claimed</dt>
             <dd>
-              {money(
-                home.assumptions.accumulatedCaliforniaDepreciationCents,
-              )}
+              {money(home.assumptions.accumulatedCaliforniaDepreciationCents)}
             </dd>
           </>
         )}

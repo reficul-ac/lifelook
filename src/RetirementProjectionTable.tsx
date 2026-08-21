@@ -44,7 +44,8 @@ function MoneyValue({
       className={signed ? "retirement-negative-value" : undefined}
       aria-label={signed ? `${label}: negative ${value}` : `${label}: ${value}`}
     >
-      {signed ? "−" : ""}{value}
+      {signed ? "−" : ""}
+      {value}
     </span>
   );
 }
@@ -63,7 +64,8 @@ const warningTitle: Record<RetirementProjectionWarning["code"], string> = {
 
 const formatWarningCents = (message: string) =>
   message.replace(/\b(\d+) cents\b/g, (_match, cents: string) =>
-    absoluteMoney(Number(cents)));
+    absoluteMoney(Number(cents)),
+  );
 
 function WarningCopy({
   warning,
@@ -75,13 +77,15 @@ function WarningCopy({
   accountNames: Readonly<Record<string, string>>;
 }) {
   const warningYear = warning.year ?? year;
-  const entity = warning.entityId == null
-    ? null
-    : accountNames[warning.entityId] ?? warning.entityId;
+  const entity =
+    warning.entityId == null
+      ? null
+      : (accountNames[warning.entityId] ?? warning.entityId);
   return (
     <li className="retirement-projection-warning">
       <strong>{warningTitle[warning.code]}</strong>
-      {": "}{formatWarningCents(warning.message)}
+      {": "}
+      {formatWarningCents(warning.message)}
       <span className="retirement-warning-context">
         {`${warningYear == null ? "" : ` Year ${warningYear}`}${entity === null ? "" : ` · ${entity}`}`}
       </span>
@@ -101,21 +105,110 @@ function YearDetails({
   hidden: boolean;
 }) {
   return (
-    <div className="retirement-year-details" id={`retirement-year-${year.year}`} hidden={hidden}>
+    <div
+      className="retirement-year-details"
+      id={`retirement-year-${year.year}`}
+      hidden={hidden}
+    >
       <dl>
-        <div><dt>Rental income</dt><dd><MoneyValue label="Rental income" cents={year.rentalIncomeCents} /></dd></div>
-        <div><dt>Mortgage principal</dt><dd><MoneyValue label="Mortgage principal" cents={year.housing.principalCents} /></dd></div>
-        <div><dt>Mortgage interest</dt><dd><MoneyValue label="Mortgage interest" cents={year.housing.interestCents} /></dd></div>
-        <div><dt>Property tax</dt><dd><MoneyValue label="Property tax" cents={year.housing.propertyTaxCents} /></dd></div>
-        <div><dt>Home insurance</dt><dd><MoneyValue label="Home insurance" cents={year.housing.insuranceCents} /></dd></div>
-        <div><dt>HOA</dt><dd><MoneyValue label="HOA" cents={year.housing.hoaCents} /></dd></div>
-        <div><dt>Maintenance</dt><dd><MoneyValue label="Maintenance" cents={year.housing.maintenanceCents} /></dd></div>
+        <div>
+          <dt>Rental income</dt>
+          <dd>
+            <MoneyValue label="Rental income" cents={year.rentalIncomeCents} />
+          </dd>
+        </div>
+        <div>
+          <dt>Mortgage principal</dt>
+          <dd>
+            <MoneyValue
+              label="Mortgage principal"
+              cents={year.housing.principalCents}
+            />
+          </dd>
+        </div>
+        <div>
+          <dt>Mortgage interest</dt>
+          <dd>
+            <MoneyValue
+              label="Mortgage interest"
+              cents={year.housing.interestCents}
+            />
+          </dd>
+        </div>
+        <div>
+          <dt>Property tax</dt>
+          <dd>
+            <MoneyValue
+              label="Property tax"
+              cents={year.housing.propertyTaxCents}
+            />
+          </dd>
+        </div>
+        <div>
+          <dt>Home insurance</dt>
+          <dd>
+            <MoneyValue
+              label="Home insurance"
+              cents={year.housing.insuranceCents}
+            />
+          </dd>
+        </div>
+        <div>
+          <dt>HOA</dt>
+          <dd>
+            <MoneyValue label="HOA" cents={year.housing.hoaCents} />
+          </dd>
+        </div>
+        <div>
+          <dt>Maintenance</dt>
+          <dd>
+            <MoneyValue
+              label="Maintenance"
+              cents={year.housing.maintenanceCents}
+            />
+          </dd>
+        </div>
         {selectedScenario === "sell-all-homes" && year.homeSale ? (
           <>
-            <div><dt>Gross proceeds</dt><dd><MoneyValue label="Gross proceeds" cents={year.homeSale.grossSaleValueCents} /></dd></div>
-            <div><dt>Selling costs</dt><dd><MoneyValue label="Selling costs" cents={year.homeSale.sellingCostsCents} negative /></dd></div>
-            <div><dt>Mortgage payoff</dt><dd><MoneyValue label="Mortgage payoff" cents={year.homeSale.mortgagePayoffCents} negative /></dd></div>
-            <div><dt>Incremental sale tax</dt><dd><MoneyValue label="Incremental sale tax" cents={year.homeSale.incrementalSaleTaxCents} negative /></dd></div>
+            <div>
+              <dt>Gross proceeds</dt>
+              <dd>
+                <MoneyValue
+                  label="Gross proceeds"
+                  cents={year.homeSale.grossSaleValueCents}
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>Selling costs</dt>
+              <dd>
+                <MoneyValue
+                  label="Selling costs"
+                  cents={year.homeSale.sellingCostsCents}
+                  negative
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>Mortgage payoff</dt>
+              <dd>
+                <MoneyValue
+                  label="Mortgage payoff"
+                  cents={year.homeSale.mortgagePayoffCents}
+                  negative
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>Incremental sale tax</dt>
+              <dd>
+                <MoneyValue
+                  label="Incremental sale tax"
+                  cents={year.homeSale.incrementalSaleTaxCents}
+                  negative
+                />
+              </dd>
+            </div>
           </>
         ) : null}
       </dl>
@@ -125,7 +218,8 @@ function YearDetails({
           <ul>
             {year.withdrawalSources.map((source) => (
               <li key={`${source.accountId}-${source.taxYear}`}>
-                {accountNames[source.accountId] ?? source.accountId}: {absoluteMoney(source.amountCents)}
+                {accountNames[source.accountId] ?? source.accountId}:{" "}
+                {absoluteMoney(source.amountCents)}
               </li>
             ))}
           </ul>
@@ -155,19 +249,26 @@ export function RetirementProjectionTable({
   projection,
   accountNames,
 }: RetirementProjectionTableProps) {
-  const [expandedYears, setExpandedYears] = useState<ReadonlySet<number>>(new Set());
+  const [expandedYears, setExpandedYears] = useState<ReadonlySet<number>>(
+    new Set(),
+  );
   const label = scenarioLabel(selectedScenario);
 
   if (!projection.available) {
     return (
-      <section className="card retirement-projection retirement-projection-unavailable" aria-label={`${label} annual projection`}>
+      <section
+        className="card retirement-projection retirement-projection-unavailable"
+        aria-label={`${label} annual projection`}
+      >
         <h3>{label} annual projection unavailable</h3>
         {projection.issues.length > 0 ? (
           <>
             <p>Complete the following home details to see annual results.</p>
             <ul>
               {projection.issues.map((issue, index) => (
-                <li key={`${issue.assetId}-${issue.field}-${index}`}>{issue.message}</li>
+                <li key={`${issue.assetId}-${issue.field}-${index}`}>
+                  {issue.message}
+                </li>
               ))}
             </ul>
           </>
@@ -200,10 +301,15 @@ export function RetirementProjectionTable({
   };
 
   return (
-    <section className="card retirement-projection" aria-label={`${label} annual projection`}>
+    <section
+      className="card retirement-projection"
+      aria-label={`${label} annual projection`}
+    >
       <div className="retirement-table-scroll">
         <table aria-label={`${label} annual projection`}>
-          <caption>{label} annual projection — {projection.years.length}-year horizon</caption>
+          <caption>
+            {label} annual projection — {projection.years.length}-year horizon
+          </caption>
           <thead>
             <tr>
               <th scope="col">Year and ages</th>
@@ -227,7 +333,14 @@ export function RetirementProjectionTable({
                   <tr>
                     <th scope="row" className="retirement-projection-year">
                       <span>{year.year}</span>
-                      <small>{year.ages.map((age) => `${age.name} ${age.age ?? "age unavailable"}`).join(", ")}</small>
+                      <small>
+                        {year.ages
+                          .map(
+                            (age) =>
+                              `${age.name} ${age.age ?? "age unavailable"}`,
+                          )
+                          .join(", ")}
+                      </small>
                       <button
                         type="button"
                         aria-label={`View ${year.year} year details`}
@@ -238,26 +351,74 @@ export function RetirementProjectionTable({
                         View year details
                       </button>
                     </th>
-                    <td><MoneyValue label="Starting portfolio" cents={year.startingPortfolioCents} /></td>
-                    <td><MoneyValue label="Pre-tax withdrawal" cents={year.withdrawalFundedCents} /></td>
-                    <td><MoneyValue label="Estimated taxes" cents={year.estimatedTaxCents} /></td>
-                    <td><MoneyValue label="After-tax income" cents={year.afterTaxIncomeCents} /></td>
-                    <td><MoneyValue label="Plan expenses" cents={year.planExpenseCents} /></td>
-                    <td><MoneyValue label="Housing expenses" cents={year.housingExpenseCents} /></td>
-                    <td><MoneyValue label={shortfall ? "Shortfall" : "Surplus"} cents={shortfall ? year.shortfallCents : year.surplusCents} negative={shortfall} /></td>
-                    <td><MoneyValue label="Ending destination balance" cents={year.destinationBalanceCents} /></td>
-                    <td><MoneyValue label="Ending net worth" cents={year.endingNetWorthCents} /></td>
+                    <td>
+                      <MoneyValue
+                        label="Starting portfolio"
+                        cents={year.startingPortfolioCents}
+                      />
+                    </td>
+                    <td>
+                      <MoneyValue
+                        label="Pre-tax withdrawal"
+                        cents={year.withdrawalFundedCents}
+                      />
+                    </td>
+                    <td>
+                      <MoneyValue
+                        label="Estimated taxes"
+                        cents={year.estimatedTaxCents}
+                      />
+                    </td>
+                    <td>
+                      <MoneyValue
+                        label="After-tax income"
+                        cents={year.afterTaxIncomeCents}
+                      />
+                    </td>
+                    <td>
+                      <MoneyValue
+                        label="Plan expenses"
+                        cents={year.planExpenseCents}
+                      />
+                    </td>
+                    <td>
+                      <MoneyValue
+                        label="Housing expenses"
+                        cents={year.housingExpenseCents}
+                      />
+                    </td>
+                    <td>
+                      <MoneyValue
+                        label={shortfall ? "Shortfall" : "Surplus"}
+                        cents={
+                          shortfall ? year.shortfallCents : year.surplusCents
+                        }
+                        negative={shortfall}
+                      />
+                    </td>
+                    <td>
+                      <MoneyValue
+                        label="Ending destination balance"
+                        cents={year.destinationBalanceCents}
+                      />
+                    </td>
+                    <td>
+                      <MoneyValue
+                        label="Ending net worth"
+                        cents={year.endingNetWorthCents}
+                      />
+                    </td>
                   </tr>
                   <tr hidden={!expanded}>
-                      <td colSpan={10}>
-                        <YearDetails
-                          year={year}
-                          selectedScenario={selectedScenario}
-                          accountNames={accountNames}
-                          hidden={!expanded}
-                        />
-                      </td>
-                    </tr>
+                    <td colSpan={10}>
+                      <YearDetails
+                        year={year}
+                        selectedScenario={selectedScenario}
+                        accountNames={accountNames}
+                        hidden={!expanded}
+                      />
+                    </td>
+                  </tr>
                 </Fragment>
               );
             })}

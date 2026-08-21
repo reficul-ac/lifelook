@@ -1580,6 +1580,151 @@ describe("RetirementView settings and autosave", () => {
 });
 
 describe("RetirementView snapshot stories", () => {
+  // Break caught: rendering summaries and annual rows from separate calculators lets the first-year income disagree and leaves Sell selection on Keep data.
+  it("reconciles real Keep and Sell headlines with their first annual rows", async () => {
+    const actualDomain = await vi.importActual<typeof import("./domain")>("./domain");
+    vi.mocked(calculateRetirementProjection).mockImplementation(
+      actualDomain.calculateRetirementProjection,
+    );
+    const taxable = bootstrapAccount({
+      id: "taxable",
+      name: "Taxable brokerage",
+      kind: "investment",
+      openingBalanceCents: 100_000_000,
+      balanceCents: 100_000_000,
+      annualReturnBps: 0,
+      subtype: "taxable-brokerage",
+      taxableCostBasisCents: 100_000_000,
+    });
+    const home = {
+      id: "home",
+      householdId: "household",
+      name: "Home",
+      valueCents: 50_000_000,
+      annualGrowthBps: 0,
+      housingCosts: {
+        propertyTaxRateBps: 0,
+        insuranceMonthlyCents: 0,
+        insuranceAnnualGrowthBps: 0,
+        hoaMonthlyCents: 0,
+        hoaAnnualGrowthBps: 0,
+      },
+      purchasePriceCents: 40_000_000,
+      purchaseDate: "2020-01-01",
+      homeSaleAssumptions: {
+        sellingCostBps: 0,
+        primaryResidenceExclusionEligible: true,
+        accumulatedFederalDepreciationCents: 0,
+        accumulatedCaliforniaDepreciationCents: 0,
+      },
+      revision: 1,
+    };
+    const realSnapshot: FinancialSnapshot = {
+      ...snapshot,
+      household: {
+        ...snapshot.household,
+        people: [{ id: "person", name: "Person", birthDate: "1980-06-15" }],
+      },
+      taxProfile: {
+        ...snapshot.taxProfile,
+        taxUnit: {
+          id: "single",
+          filingStatus: "single",
+          memberPersonIds: ["person"],
+        },
+      },
+      accounts: [{
+        id: taxable.id,
+        name: taxable.name,
+        kind: taxable.kind,
+        balanceCents: taxable.balanceCents,
+        annualReturnBps: taxable.annualReturnBps,
+        liquid: taxable.liquid,
+        subtype: taxable.subtype,
+        taxableCostBasisCents: taxable.taxableCostBasisCents,
+        taxLots: [{
+          id: "opening-lot",
+          acquiredOn: "2020-01-01",
+          marketValueCents: 100_000_000,
+          federalBasisCents: 100_000_000,
+          californiaBasisCents: 100_000_000,
+        }],
+      }],
+      assets: [home],
+    };
+    const realScenario: Scenario = {
+      ...activeScenario,
+      events: [],
+      horizon: { start: "2026-01", months: 12 },
+    };
+    const realSettings: RetirementSettingsRecord = {
+      ...initial,
+      retirementMonth: "2042-01",
+      horizonYears: 1,
+      taxableDestinationAccountId: "taxable",
+    };
+    const updateRetirementPlan = vi.fn(async (input) => ({
+      householdId: "household",
+      retirementMonth: input.retirementMonth,
+      withdrawalRateBps: input.withdrawalRateBps,
+      horizonYears: input.horizonYears,
+      taxableDestinationAccountId: input.taxableDestinationAccountId,
+      withdrawalAccountOrder: input.withdrawalAccountOrder,
+      selectedScenario: input.selectedScenario,
+      revision: input.expectedRevision + 1,
+    }));
+
+    render(
+      <RetirementView
+        initial={realSettings}
+        repository={repository(updateRetirementPlan)}
+        bootstrap={{
+          ...bootstrap,
+          people: [{
+            id: "person",
+            householdId: "household",
+            name: "Person",
+            birthDate: "1980-06-15",
+          }],
+          accounts: [taxable],
+          assets: [home],
+          retirementPlan: realSettings,
+        }}
+        snapshot={realSnapshot}
+        scenario={realScenario}
+      />,
+    );
+
+    const keepStory = screen.getByRole("heading", {
+      name: "If you keep your homes",
+    }).closest("article")!;
+    expect(within(
+      within(keepStory).getByText("Estimated annual pre-tax income").parentElement!,
+    ).getByText("$30,000")).toBeInTheDocument();
+    expect(screen.getByRole("table", {
+      name: "Keep homes annual projection",
+    })).toBeInTheDocument();
+    expect(screen.getByLabelText("Pre-tax withdrawal: $30,000")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Select Sell all homes scenario",
+    }));
+
+    const sellStory = screen.getByRole("heading", {
+      name: "If you sell all homes",
+    }).closest("article")!;
+    expect(within(
+      within(sellStory).getByText("Estimated annual pre-tax income").parentElement!,
+    ).getByText("$45,000")).toBeInTheDocument();
+    expect(screen.getByRole("table", {
+      name: "Sell all homes annual projection",
+    })).toBeInTheDocument();
+    expect(screen.getByLabelText("Pre-tax withdrawal: $45,000")).toBeInTheDocument();
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ selectedScenario: "sell-all-homes" }),
+    ));
+  });
+
   // Break caught: replacing the full-card semantic button or nesting disclosures inside it would make card whitespace and keyboard selection inaccessible.
   it("uses full-card sibling selection buttons with pressed and selected states", async () => {
     const updateRetirementPlan = vi

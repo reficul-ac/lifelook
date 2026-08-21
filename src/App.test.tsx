@@ -920,8 +920,7 @@ describe("LifeLook shell", () => {
       revision: 2,
     };
     const restored = { ...data, scenarios: [restoredScenario] };
-    const buildCutoff = vi.spyOn(domain, "buildRetirementCutoff");
-    const calculateSnapshot = vi.spyOn(domain, "calculateRetirementSnapshot");
+    const calculateProjection = vi.spyOn(domain, "calculateRetirementProjection");
     render(
       <App
         repository={{
@@ -934,29 +933,26 @@ describe("LifeLook shell", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: /Retirement/ }));
-    expect(buildCutoff).toHaveBeenCalledTimes(1);
+    expect(calculateProjection).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
-    buildCutoff.mockClear();
-    calculateSnapshot.mockClear();
+    calculateProjection.mockClear();
     selectSettingsData();
     fireEvent.click(screen.getByRole("button", { name: "Choose backup" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Choose backup and restore" }),
     );
     await screen.findByText("Restored baseline");
-    expect(buildCutoff).not.toHaveBeenCalled();
-    expect(calculateSnapshot).not.toHaveBeenCalled();
+    expect(calculateProjection).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: /Retirement/ }));
     expect(
       await screen.findByRole("heading", { name: "Restored baseline" }),
     ).toBeInTheDocument();
-    expect(buildCutoff).toHaveBeenCalledTimes(1);
-    buildCutoff.mockRestore();
-    calculateSnapshot.mockRestore();
+    expect(calculateProjection).toHaveBeenCalledTimes(1);
+    calculateProjection.mockRestore();
   });
 
-  // Break caught: forwarding an already-recorded acquisition field makes the native update_asset contract reject the entire authoritative save.
+  // Break caught: accepting acquisition edits inside Retirement creates a second owner for facts maintained by Net Worth.
   it.each([
     {
       name: "purchase price",
@@ -980,15 +976,10 @@ describe("LifeLook shell", () => {
       immutableField: "purchaseDate" as const,
       refreshedValue: "$450,000",
     },
-  ])("persists a missing acquisition fact without resending immutable $name", async ({
+  ])("routes a missing acquisition fact to Net Worth instead of writing $name", async ({
     purchasePriceCents,
     purchaseDate,
     missingLabel,
-    missingValue,
-    savedField,
-    savedValue,
-    immutableField,
-    refreshedValue,
   }) => {
     const data = await testRepository.bootstrap();
     let authoritativeHome = {
@@ -1035,13 +1026,25 @@ describe("LifeLook shell", () => {
       retirementMonth: "2042-01",
       withdrawalRateBps: 300,
       horizonYears: 30,
-      taxableDestinationAccountId: null,
+      taxableDestinationAccountId: "retirement-brokerage",
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes" as const,
       revision: 2,
     };
     const bootstrap = vi.fn(async () => ({
       ...data,
+      accounts: [
+        ...data.accounts,
+        {
+          ...data.accounts[0],
+          id: "retirement-brokerage",
+          name: "Retirement brokerage",
+          kind: "investment" as const,
+          subtype: "taxable-brokerage" as const,
+          openingBalanceCents: 1_000_000,
+          balanceCents: 1_000_000,
+        },
+      ],
       assets: [authoritativeHome],
       scenarios: [scenario],
       retirementPlan,
@@ -1093,57 +1096,19 @@ describe("LifeLook shell", () => {
     render(<App repository={{ ...testRepository, bootstrap, updateAsset }} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Retirement/ }));
-    let details = await screen.findByRole("article", {
+    const details = await screen.findByRole("article", {
       name: "Current home sale details",
     });
     fireEvent.click(within(details).getByText("Edit sale details"));
-    fireEvent.change(within(details).getByLabelText(missingLabel), {
-      target: { value: missingValue },
-    });
-    fireEvent.change(within(details).getByLabelText("Selling costs (%)"), {
-      target: { value: "6" },
-    });
-    fireEvent.click(
-      within(details).getByLabelText(
-        "Eligible for primary-home gain exclusion",
-      ),
-    );
-    fireEvent.click(
-      within(details).getByRole("button", { name: "Save sale details" }),
-    );
+    expect(within(details).queryByLabelText(missingLabel)).not.toBeInTheDocument();
+    fireEvent.click(within(details).getByRole("button", {
+      name: "Edit Current home acquisition in Net Worth",
+    }));
 
-    await waitFor(() => expect(updateAsset).toHaveBeenCalledTimes(1));
-    const saved = updateAsset.mock.calls[0][0];
-    expect(saved).toEqual(
-      expect.objectContaining({
-        id: "home",
-        name: "Current home",
-        valueCents: 700_000_00,
-        annualGrowthBps: 350,
-        appreciationCurve: authoritativeHome.appreciationCurve,
-        housingCosts: authoritativeHome.housingCosts,
-        [savedField]: savedValue,
-        homeSaleAssumptions: {
-          sellingCostBps: 600,
-          primaryResidenceExclusionEligible: true,
-          accumulatedFederalDepreciationCents: 0,
-          accumulatedCaliforniaDepreciationCents: 0,
-        },
-        expectedRevision: 7,
-      }),
-    );
-    expect(saved).not.toHaveProperty(immutableField);
-    await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
-    details = await screen.findByRole("article", {
-      name: "Current home sale details",
-    });
-    await waitFor(() =>
-      expect(within(details).getByText("Complete")).toBeInTheDocument(),
-    );
-    expect(within(details).getByText(refreshedValue)).toBeInTheDocument();
-    expect(
-      screen.queryByText("Sale details could not be saved. Retry when ready."),
-    ).not.toBeInTheDocument();
+    expect(updateAsset).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /Net Worth/ }))
+      .toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("dialog", { name: "Edit asset" })).toBeInTheDocument();
   });
 
   // Break caught: treating a post-commit bootstrap failure as a write failure makes retry repeat a stale-revision asset mutation forever.
@@ -1163,7 +1128,7 @@ describe("LifeLook shell", () => {
         hoaAnnualGrowthBps: 0,
       },
       purchasePriceCents: 450_000_00,
-      purchaseDate: null as string | null,
+      purchaseDate: "2020-06-01" as string | null,
       homeSaleAssumptions: undefined as
         | import("./domain").HomeSaleAssumptions
         | null
@@ -1187,7 +1152,7 @@ describe("LifeLook shell", () => {
       retirementMonth: "2042-01",
       withdrawalRateBps: 300,
       horizonYears: 30,
-      taxableDestinationAccountId: null,
+      taxableDestinationAccountId: "retirement-brokerage",
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes" as const,
       revision: 2,
@@ -1198,6 +1163,18 @@ describe("LifeLook shell", () => {
       if (loadCount === 2) throw new Error("reload unavailable");
       return {
         ...data,
+        accounts: [
+          ...data.accounts,
+          {
+            ...data.accounts[0],
+            id: "retirement-brokerage",
+            name: "Retirement brokerage",
+            kind: "investment" as const,
+            subtype: "taxable-brokerage" as const,
+            openingBalanceCents: 1_000_000,
+            balanceCents: 1_000_000,
+          },
+        ],
         assets: [authoritativeHome],
         scenarios: [scenario],
         retirementPlan,
@@ -1226,7 +1203,6 @@ describe("LifeLook shell", () => {
         }
         authoritativeHome = {
           ...authoritativeHome,
-          purchaseDate: input.purchaseDate ?? authoritativeHome.purchaseDate,
           homeSaleAssumptions: input.homeSaleAssumptions,
           revision: authoritativeHome.revision + 1,
         };
@@ -1239,9 +1215,6 @@ describe("LifeLook shell", () => {
       name: "Reload home sale details",
     });
     fireEvent.click(within(details).getByText("Edit sale details"));
-    fireEvent.change(within(details).getByLabelText("Purchase date"), {
-      target: { value: "2020-06-01" },
-    });
     fireEvent.change(within(details).getByLabelText("Selling costs (%)"), {
       target: { value: "6" },
     });
@@ -1257,9 +1230,7 @@ describe("LifeLook shell", () => {
     expect(await within(details).findByRole("alert")).toHaveTextContent(
       "saved, but refreshed data could not be loaded",
     );
-    expect(within(details).getByLabelText("Purchase date")).toHaveValue(
-      "2020-06-01",
-    );
+    expect(within(details).getByLabelText("Selling costs (%)")).toHaveValue("6");
     expect(updateAsset).toHaveBeenCalledTimes(1);
     expect(bootstrap).toHaveBeenCalledTimes(2);
 
@@ -1325,14 +1296,25 @@ describe("LifeLook shell", () => {
       retirementMonth: "2042-01",
       withdrawalRateBps: 300,
       horizonYears: 30,
-      taxableDestinationAccountId: null,
+      taxableDestinationAccountId: "retirement-brokerage",
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes" as const,
       revision: 2,
     };
     const bootstrap = vi.fn().mockResolvedValue({
       ...data,
-      accounts: [{ ...data.accounts[0], openingBalanceCents: 2_000_000_00, balanceCents: 2_000_000_00 }],
+      accounts: [
+        { ...data.accounts[0], openingBalanceCents: 2_000_000_00, balanceCents: 2_000_000_00 },
+        {
+          ...data.accounts[0],
+          id: "retirement-brokerage",
+          name: "Retirement brokerage",
+          kind: "investment" as const,
+          subtype: "taxable-brokerage" as const,
+          openingBalanceCents: 1_000_000,
+          balanceCents: 1_000_000,
+        },
+      ],
       scenarios: [scenario],
       retirementPlan,
       taxProfile: {

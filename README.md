@@ -61,9 +61,9 @@ Activity can export exactly the current search/account/year results to an unencr
 
 LifeLook has no user account, telemetry, advertising, cloud sync, or required network service. The SQLite database lives in your operating system’s per-user application-data directory (`com.lifelook.desktop`). OS file permissions provide v1 protection. The database, CSV exports, and backups are **not encrypted by LifeLook**; disk encryption and careful backup storage are recommended.
 
-LifeLook provides planning estimates, not tax, legal, accounting, or investment advice. It does not prepare returns and omits credits, itemized deductions, capital gains, and self-employment tax in v1.
+LifeLook provides planning estimates, not tax, legal, accounting, or investment advice. It does not prepare returns and omits credits, most itemized deductions, and self-employment tax. Capital-gain support is limited to modeled taxable-account retirement withdrawals when cost basis is available and to modeled home sales; it does not cover arbitrary security sales, wash sales, loss harvesting, or other advanced strategies.
 
-Goal funding is deterministic rather than Monte Carlo. Special early-withdrawal penalty exceptions, advanced retirement strategies, automatic purchases or sales, automatic debt payoff, and automatic retirement transitions are not modeled. Earmarked money remains part of its destination account, so it is not counted twice.
+Goal funding is deterministic rather than Monte Carlo. Special early-withdrawal penalty exceptions and advanced retirement strategies—including Rule of 55, 72(t), Roth-conversion ladders, RMD optimization, IRMAA optimization, and Social Security claiming optimization—are not modeled. Automatic purchases or sales, automatic debt payoff, and automatic retirement transitions are also not modeled. Earmarked money remains part of its destination account, so it is not counted twice.
 
 ## Troubleshooting
 

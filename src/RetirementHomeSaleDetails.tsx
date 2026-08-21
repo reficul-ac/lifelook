@@ -10,8 +10,6 @@ import {
 import { parseMoney } from "./money";
 
 export interface HomeSaleSourcePatch {
-  purchaseDate: string;
-  purchasePriceCents: Cents;
   homeSaleAssumptions: HomeSaleAssumptions;
 }
 
@@ -35,11 +33,13 @@ export interface RetirementHomeSaleDetailsProps {
     eventId: string,
     patch: HomeSaleSourcePatch,
   ) => Promise<void>;
+  onEditAcquisition?: (
+    home: ResolvedRetirementHome,
+    invoker: HTMLElement,
+  ) => void;
 }
 
 type Draft = {
-  purchaseDate: string;
-  purchasePrice: string;
   sellingCosts: string;
   primaryResidenceExclusionEligible: boolean;
   federalDepreciation: string;
@@ -70,14 +70,13 @@ const parsePercent = (value: string) => {
 };
 
 const draftFor = (home: ResolvedRetirementHome): Draft => ({
-  purchaseDate: home.purchaseDate ?? "",
-  purchasePrice:
-    home.taxBasisCents == null ? "" : String(home.taxBasisCents / 100),
   sellingCosts: home.assumptions == null
     ? ""
     : String(home.assumptions.sellingCostBps / 100),
   primaryResidenceExclusionEligible:
-    home.assumptions?.primaryResidenceExclusionEligible ?? false,
+    home.primaryResidenceEligibility.source === "unknown"
+      ? false
+      : home.primaryResidenceEligibility.eligible,
   federalDepreciation: String(
     (home.assumptions?.accumulatedFederalDepreciationCents ?? 0) / 100,
   ),
@@ -85,48 +84,6 @@ const draftFor = (home: ResolvedRetirementHome): Draft => ({
     (home.assumptions?.accumulatedCaliforniaDepreciationCents ?? 0) / 100,
   ),
 });
-
-const addUtcYears = (value: Date, years: number) => {
-  const result = new Date(value);
-  result.setUTCFullYear(result.getUTCFullYear() + years);
-  return result;
-};
-
-const inferredPlannedEligibility = (
-  home: ResolvedRetirementHome,
-  scenario: Scenario,
-  retirementDate: string,
-) => {
-  if (home.property.source !== "planned" || home.assumptions != null) {
-    return undefined;
-  }
-  const purchase = latestOwnedPlannedPurchase(
-    scenario,
-    home.property.assetId,
-    retirementDate,
-  );
-  if (purchase?.propertyDetails?.primaryResidence == null) return undefined;
-  if (!purchase.propertyDetails.primaryResidence) return false;
-  const retirement = new Date(`${retirementDate}T00:00:00Z`);
-  const acquired = new Date(`${purchase.date}T00:00:00Z`);
-  const lookbackStart = addUtcYears(retirement, -5);
-  const residenceStart = acquired > lookbackStart ? acquired : lookbackStart;
-  const rentalStart = scenario.events
-    .filter((event) =>
-      event.type === "property-rental-start" &&
-      event.assetId === home.property.assetId &&
-      event.date >= purchase.date &&
-      event.date < retirementDate,
-    )
-    .sort(
-      (left, right) =>
-        left.date.localeCompare(right.date) || left.id.localeCompare(right.id),
-    )[0];
-  const residenceEnd = rentalStart == null
-    ? retirement
-    : new Date(`${rentalStart.date}T00:00:00Z`);
-  return addUtcYears(residenceStart, 2) <= residenceEnd;
-};
 
 const homeSourceFingerprint = (
   home: ResolvedRetirementHome,
@@ -140,6 +97,7 @@ const homeSourceFingerprint = (
       home.purchaseDate,
       home.taxBasisCents,
       home.assumptions,
+      home.primaryResidenceEligibility,
     ]);
   }
   const purchase = latestOwnedPlannedPurchase(
@@ -153,7 +111,7 @@ const homeSourceFingerprint = (
     purchase?.date ?? home.purchaseDate,
     purchase?.valueCents ?? home.taxBasisCents,
     purchase?.propertyDetails?.homeSaleAssumptions ?? home.assumptions,
-    inferredPlannedEligibility(home, scenario, retirementDate),
+    home.primaryResidenceEligibility,
   ]);
 };
 
@@ -164,6 +122,7 @@ export function RetirementHomeSaleDetails({
   retirementDate,
   onUpdateCurrentHome,
   onUpdatePlannedHome,
+  onEditAcquisition,
 }: RetirementHomeSaleDetailsProps) {
   return (
     <section className="card retirement-home-sale-details">
@@ -179,6 +138,7 @@ export function RetirementHomeSaleDetails({
           retirementDate={retirementDate}
           onUpdateCurrentHome={onUpdateCurrentHome}
           onUpdatePlannedHome={onUpdatePlannedHome}
+          onEditAcquisition={onEditAcquisition}
         />
       ))}
     </section>
@@ -192,6 +152,7 @@ function HomeDetails({
   retirementDate,
   onUpdateCurrentHome,
   onUpdatePlannedHome,
+  onEditAcquisition,
 }: {
   home: ResolvedRetirementHome;
   issues: readonly RetirementMissingData[];
@@ -199,33 +160,20 @@ function HomeDetails({
   retirementDate: string;
   onUpdateCurrentHome: RetirementHomeSaleDetailsProps["onUpdateCurrentHome"];
   onUpdatePlannedHome: RetirementHomeSaleDetailsProps["onUpdatePlannedHome"];
+  onEditAcquisition: RetirementHomeSaleDetailsProps["onEditAcquisition"];
 }) {
-  const inferredEligibility = inferredPlannedEligibility(
-    home,
-    scenario,
-    retirementDate,
-  );
-  const [draft, setDraft] = useState(() => {
-    const initial = draftFor(home);
-    return {
-      ...initial,
-      primaryResidenceExclusionEligible:
-        inferredEligibility ?? initial.primaryResidenceExclusionEligible,
-    };
-  });
+  const [draft, setDraft] = useState(() => draftFor(home));
   const [error, setError] = useState("");
   const [retryReload, setRetryReload] = useState<(() => Promise<void>) | null>(
     null,
   );
   const [saving, setSaving] = useState(false);
-  const missing = new Set(issues.map((issue) => issue.field));
 
   const set = (values: Partial<Draft>) =>
     setDraft((current) => ({ ...current, ...values }));
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    const purchasePriceCents = parseMoney(draft.purchasePrice);
     const sellingCostBps = parsePercent(draft.sellingCosts);
     const accumulatedFederalDepreciationCents = parseMoney(
       draft.federalDepreciation,
@@ -233,16 +181,6 @@ function HomeDetails({
     const accumulatedCaliforniaDepreciationCents = parseMoney(
       draft.californiaDepreciation,
     );
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.purchaseDate)) {
-      setRetryReload(null);
-      setError("Enter a valid purchase date.");
-      return;
-    }
-    if (purchasePriceCents == null || purchasePriceCents <= 0) {
-      setRetryReload(null);
-      setError("Enter an exact positive purchase price.");
-      return;
-    }
     if (sellingCostBps == null) {
       setRetryReload(null);
       setError("Enter selling costs from 0–100 percent.");
@@ -259,12 +197,14 @@ function HomeDetails({
       return;
     }
     const patch: HomeSaleSourcePatch = {
-      purchaseDate: draft.purchaseDate,
-      purchasePriceCents,
       homeSaleAssumptions: {
         sellingCostBps,
-        primaryResidenceExclusionEligible: inferredEligibility ??
-          draft.primaryResidenceExclusionEligible,
+        ...(home.primaryResidenceEligibility.source === "derived"
+          ? {}
+          : {
+              primaryResidenceExclusionEligible:
+                draft.primaryResidenceExclusionEligible,
+            }),
         accumulatedFederalDepreciationCents,
         accumulatedCaliforniaDepreciationCents,
       },
@@ -314,8 +254,8 @@ function HomeDetails({
     <article aria-label={`${home.property.name} sale details`}>
       <h4>{home.property.name}</h4>
       <p>{issues.length === 0 ? "Complete" : "Needs details"}</p>
-      {inferredEligibility != null && (
-        <p>{`${inferredEligibility ? "Eligible" : "Not eligible"} (inferred from Plan)`}</p>
+      {home.primaryResidenceEligibility.source === "derived" && (
+        <p>{`${home.primaryResidenceEligibility.eligible ? "Eligible" : "Not eligible"} (derived from Plan)`}</p>
       )}
       <dl>
         {home.purchaseDate && (
@@ -334,12 +274,6 @@ function HomeDetails({
           <>
             <dt>Selling costs</dt>
             <dd>{home.assumptions.sellingCostBps / 100}%</dd>
-            <dt>Primary-home gain exclusion</dt>
-            <dd>
-              {home.assumptions.primaryResidenceExclusionEligible
-                ? "Eligible"
-                : "Not eligible"}
-            </dd>
             <dt>Federal depreciation claimed</dt>
             <dd>
               {money(
@@ -354,6 +288,14 @@ function HomeDetails({
             </dd>
           </>
         )}
+        <dt>Primary-home gain exclusion</dt>
+        <dd>
+          {home.primaryResidenceEligibility.source === "unknown"
+            ? "Needs confirmation"
+            : home.primaryResidenceEligibility.eligible
+              ? "Eligible"
+              : "Not eligible"}
+        </dd>
         <dt>Plan-derived projected sale value</dt>
         <dd>{money(home.property.valueCents)}</dd>
         <dt>Plan-derived appreciation</dt>
@@ -366,75 +308,63 @@ function HomeDetails({
       <details>
         <summary>Edit sale details</summary>
         <form onSubmit={save}>
-          {missing.has("purchaseDate") && (
-            <label>
-              Purchase date
-              <input
-                type="date"
-                value={draft.purchaseDate}
-                onChange={(event) => set({ purchaseDate: event.target.value })}
-              />
-            </label>
+          {(home.purchaseDate == null || home.taxBasisCents == null) && (
+            <div className="retirement-acquisition-source">
+              <p>
+                Acquisition date and purchase basis are maintained in {home.property.source === "current" ? "Net Worth" : "Plan"}.
+              </p>
+              {onEditAcquisition && (
+                <button
+                  type="button"
+                  onClick={(event) => onEditAcquisition(home, event.currentTarget)}
+                >
+                  Edit {home.property.name} acquisition in {home.property.source === "current" ? "Net Worth" : "Plan"}
+                </button>
+              )}
+            </div>
           )}
-          {missing.has("taxBasis") && (
-            <label>
-              Purchase price
+          <label>
+            Selling costs (%)
+            <input
+              inputMode="decimal"
+              value={draft.sellingCosts}
+              onChange={(event) => set({ sellingCosts: event.target.value })}
+            />
+          </label>
+          {home.primaryResidenceEligibility.source !== "derived" && (
+            <label className="check">
               <input
-                inputMode="decimal"
-                value={draft.purchasePrice}
-                onChange={(event) => set({ purchasePrice: event.target.value })}
-              />
-            </label>
-          )}
-          {missing.has("sellingCostBps") && (
-            <label>
-              Selling costs (%)
-              <input
-                inputMode="decimal"
-                value={draft.sellingCosts}
-                onChange={(event) => set({ sellingCosts: event.target.value })}
-              />
-            </label>
-          )}
-          {missing.has("primaryResidenceEligibility") &&
-            inferredEligibility == null && (
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={draft.primaryResidenceExclusionEligible}
-                  onChange={(event) =>
-                    set({
-                      primaryResidenceExclusionEligible: event.target.checked,
-                    })
-                  }
-                />{" "}
-                Eligible for primary-home gain exclusion
-              </label>
-            )}
-          {missing.has("federalDepreciation") && (
-            <label>
-              Federal depreciation claimed
-              <input
-                inputMode="decimal"
-                value={draft.federalDepreciation}
+                type="checkbox"
+                checked={draft.primaryResidenceExclusionEligible}
                 onChange={(event) =>
-                  set({ federalDepreciation: event.target.value })
+                  set({
+                    primaryResidenceExclusionEligible: event.target.checked,
+                  })
                 }
-              />
+              />{" "}
+              Eligible for primary-home gain exclusion
             </label>
           )}
-          {missing.has("californiaDepreciation") && (
-            <label>
-              California depreciation claimed
-              <input
-                inputMode="decimal"
-                value={draft.californiaDepreciation}
-                onChange={(event) =>
-                  set({ californiaDepreciation: event.target.value })
-                }
-              />
-            </label>
-          )}
+          <label>
+            Federal depreciation claimed
+            <input
+              inputMode="decimal"
+              value={draft.federalDepreciation}
+              onChange={(event) =>
+                set({ federalDepreciation: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            California depreciation claimed
+            <input
+              inputMode="decimal"
+              value={draft.californiaDepreciation}
+              onChange={(event) =>
+                set({ californiaDepreciation: event.target.value })
+              }
+            />
+          </label>
           {error && <p role="alert">{error}</p>}
           <button
             type={retryReload == null ? "submit" : "button"}

@@ -59,6 +59,7 @@ const warningTitle: Record<RetirementProjectionWarning["code"], string> = {
   "calculation-error": "Calculation needs attention",
   "unsupported-tax-character": "Unsupported tax character",
   "unsupported-rental-tax": "Rental tax needs attention",
+  "conservative-taxable-basis": "Conservative taxable basis",
 };
 
 const formatWarningCents = (message: string) =>

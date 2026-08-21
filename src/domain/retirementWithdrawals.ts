@@ -7,6 +7,17 @@ export type WithdrawalClass =
   | "penalty-pre-tax"
   | "roth";
 
+export type RetirementTaxEstimateMethod =
+  | "not-taxable"
+  | "exact-tax-lots"
+  | "conservative-aggregate-basis"
+  | "ordinary-income"
+  | "qualified-roth"
+  | "unqualified-roth-ira"
+  | "unqualified-employer-roth"
+  | "mixed-supported"
+  | "unsupported";
+
 interface DateParts {
   year: number;
   month: number;
@@ -81,6 +92,9 @@ const classifyWithdrawal = (
   return "taxable";
 };
 
+export const isRetirementDrawableAccount = (account: Account) =>
+  account.kind !== "credit";
+
 export const retirementWithdrawalClass = (
   snapshot: FinancialSnapshot,
   account: Account,
@@ -102,7 +116,8 @@ export const defaultRetirementAccountOrder = (
   date: string,
 ): readonly string[] => withdrawalClassOrder.flatMap((withdrawalClass) =>
   snapshot.accounts
-    .filter((account) => retirementWithdrawalClass(snapshot, account, date) === withdrawalClass)
+    .filter((account) => isRetirementDrawableAccount(account) &&
+      retirementWithdrawalClass(snapshot, account, date) === withdrawalClass)
     .map((account) => account.id),
 );
 
@@ -111,7 +126,9 @@ export const resolveRetirementAccountOrder = (
   date: string,
   override: readonly string[],
 ): readonly string[] => {
-  const knownIds = new Set(snapshot.accounts.map((account) => account.id));
+  const knownIds = new Set(snapshot.accounts
+    .filter(isRetirementDrawableAccount)
+    .map((account) => account.id));
   const seenIds = new Set<string>();
   const specified = override.filter((accountId) => {
     if (!knownIds.has(accountId) || seenIds.has(accountId)) return false;
@@ -145,6 +162,7 @@ export interface RetirementDrawSource {
   federalShortTermGainCents: Cents;
   federalLongTermGainCents: Cents;
   californiaGainCents: Cents;
+  taxEstimateMethod: RetirementTaxEstimateMethod;
   taxCharacterSupported: boolean;
 }
 
@@ -172,6 +190,24 @@ const initialBasis = (
   accountBasis: Cents | null | undefined,
 ) => values?.[accountId] ?? accountBasis ?? 0;
 
+const hasOwn = (values: Readonly<Record<string, Cents>> | undefined, id: string) =>
+  values != null && Object.prototype.hasOwnProperty.call(values, id);
+
+const rothQualification = (
+  account: Account,
+  date: string,
+  people: readonly Person[],
+): boolean | null => {
+  const distribution = parseDate(date);
+  const birthDate = ownerBirthDate(people, account);
+  if (distribution == null || birthDate == null || parseDate(birthDate) == null ||
+    account.rothOpeningYear == null || !Number.isInteger(account.rothOpeningYear)) {
+    return null;
+  }
+  return isAtLeastAge59AndHalf(birthDate, date) &&
+    distribution.year >= account.rothOpeningYear + 5;
+};
+
 export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawResult => {
   const balances = { ...input.balances };
   const taxableBasis = { ...input.taxableBasis };
@@ -191,11 +227,14 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
       );
     }
     if (withdrawalClass === "roth") {
-      rothContributionBasis[account.id] = initialBasis(
-        input.rothContributionBasis,
-        account.id,
-        account.rothContributionBasisCents,
-      );
+      if (hasOwn(input.rothContributionBasis, account.id) ||
+        account.rothContributionBasisCents != null) {
+        rothContributionBasis[account.id] = initialBasis(
+          input.rothContributionBasis,
+          account.id,
+          account.rothContributionBasisCents,
+        );
+      }
     }
   }
 
@@ -222,6 +261,7 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
     let federalShortTermGainCents = 0;
     let federalLongTermGainCents = 0;
     let californiaGainCents = 0;
+    let taxEstimateMethod: RetirementTaxEstimateMethod = "not-taxable";
     let taxCharacterSupported = true;
     const withdrawalClass = classifyWithdrawal(account, input.date, input.people ?? []);
 
@@ -268,28 +308,70 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
         taxableLots[accountId] = remainingLots;
         taxableBasis[accountId] = remainingLots.reduce((sum, lot) => sum + lot.federalBasisCents, 0);
         taxableGainCents = federalShortTermGainCents + federalLongTermGainCents;
+        taxEstimateMethod = "exact-tax-lots";
         taxCharacterSupported = federalShortTermGainCents >= 0 &&
           federalLongTermGainCents >= 0 && californiaGainCents >= 0;
       } else {
         const basisCents = Math.max(0, taxableBasis[accountId] ?? 0);
-        const basisSoldCents = Math.min(basisCents, Math.round(basisCents * amountCents / availableCents));
+        const fullLiquidation = amountCents === availableCents;
+        const basisSoldCents = fullLiquidation ? basisCents : 0;
         taxableBasis[accountId] = basisCents - basisSoldCents;
-        taxableGainCents = amountCents - basisSoldCents;
+        taxableGainCents = Math.max(0, amountCents - basisSoldCents);
+        federalShortTermGainCents = taxableGainCents;
+        californiaGainCents = taxableGainCents;
+        const aggregateBasisKnown = hasOwn(input.taxableBasis, accountId) ||
+          account.taxableCostBasisCents != null;
+        taxEstimateMethod = aggregateBasisKnown
+          ? "conservative-aggregate-basis"
+          : "unsupported";
+        taxCharacterSupported = aggregateBasisKnown;
+      }
+      if (unsupportedTaxCharacterAccountIds.has(accountId)) {
+        taxEstimateMethod = "unsupported";
         taxCharacterSupported = false;
       }
-      if (unsupportedTaxCharacterAccountIds.has(accountId)) taxCharacterSupported = false;
     } else if (withdrawalClass === "eligible-pre-tax" || withdrawalClass === "penalty-pre-tax") {
+      taxEstimateMethod = "ordinary-income";
       ordinaryIncomeCents = amountCents;
       if (withdrawalClass === "penalty-pre-tax") {
         earlyPenaltyCents = Math.round(amountCents * 1_000 / 10_000);
       }
     } else if (withdrawalClass === "roth") {
-      const basisCents = Math.max(0, rothContributionBasis[accountId] ?? 0);
-      const contributionDistributionCents = Math.min(amountCents, basisCents);
-      rothContributionBasis[accountId] = basisCents - contributionDistributionCents;
-      rothTaxableCents = amountCents - contributionDistributionCents;
-      if (rothTaxableCents > 0 && !isAtLeastAge59AndHalf(ownerBirthDate(input.people ?? [], account), input.date)) {
-        earlyPenaltyCents = Math.round(rothTaxableCents * 1_000 / 10_000);
+      const basisKnown = Object.prototype.hasOwnProperty.call(
+        rothContributionBasis,
+        accountId,
+      );
+      const qualified = rothQualification(account, input.date, input.people ?? []);
+      if (!basisKnown && qualified !== true) {
+        taxEstimateMethod = "unsupported";
+        taxCharacterSupported = false;
+      } else if (!basisKnown) {
+        taxEstimateMethod = "qualified-roth";
+      } else {
+        const basisCents = Math.max(0, rothContributionBasis[accountId] ?? 0);
+        const contributionDistributionCents = account.subtype === "employer-roth"
+          ? Math.min(basisCents, Math.round(basisCents * amountCents / availableCents))
+          : Math.min(amountCents, basisCents);
+        rothContributionBasis[accountId] = basisCents - contributionDistributionCents;
+        const earningsDistributionCents = amountCents - contributionDistributionCents;
+        if (earningsDistributionCents === 0) {
+          taxEstimateMethod = account.subtype === "employer-roth"
+            ? "unqualified-employer-roth"
+            : "unqualified-roth-ira";
+        } else if (qualified === true) {
+          taxEstimateMethod = "qualified-roth";
+        } else if (qualified === false) {
+          rothTaxableCents = earningsDistributionCents;
+          taxEstimateMethod = account.subtype === "employer-roth"
+            ? "unqualified-employer-roth"
+            : "unqualified-roth-ira";
+          if (!isAtLeastAge59AndHalf(ownerBirthDate(input.people ?? [], account), input.date)) {
+            earlyPenaltyCents = Math.round(rothTaxableCents * 1_000 / 10_000);
+          }
+        } else {
+          taxEstimateMethod = "unsupported";
+          taxCharacterSupported = false;
+        }
       }
     }
 
@@ -304,6 +386,7 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
       federalShortTermGainCents,
       federalLongTermGainCents,
       californiaGainCents,
+      taxEstimateMethod,
       taxCharacterSupported,
     });
   }

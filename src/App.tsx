@@ -41,6 +41,7 @@ import {
   vestedAssetValue,
   vestedUnitsAt,
   type FinancialSnapshot,
+  type ResolvedRetirementHome,
   type Scenario,
 } from "./domain";
 
@@ -78,6 +79,7 @@ import {
 } from "./RetirementHomeSaleDetails";
 import { parseMoney } from "./money";
 import { type RetirementSettingsRecord } from "./domain";
+import { financialSnapshotFromBootstrap } from "./financialSnapshot";
 import {
   buildSearchIndex,
   GlobalSearch,
@@ -518,55 +520,7 @@ function Workspace({
     setView(result.view);
   }
   const snapshot = useMemo<FinancialSnapshot>(
-    () => ({
-      household: {
-        id: bootstrap.household?.id ?? "local",
-        name: bootstrap.household?.name ?? "Household",
-        state: "CA",
-        people: bootstrap.people.map((p) => ({
-          id: p.id,
-          name: p.name,
-          birthDate: p.birthDate ?? undefined,
-        })),
-      },
-      taxProfile: bootstrap.taxProfile!,
-      accounts: bootstrap.accounts.map((a) => ({
-        id: a.id,
-        name: a.name,
-        kind: a.kind,
-        balanceCents: a.balanceCents,
-        annualReturnBps: a.annualReturnBps,
-        liquid: a.liquid,
-      })),
-      recurring: bootstrap.recurring.map((r) => ({
-        ...r,
-        accountId: r.accountId ?? undefined,
-        endDate: r.endDate ?? undefined,
-        taxTreatment: r.taxTreatment ?? "none",
-        incomeType: r.incomeType ?? "ordinary",
-        kind:
-          bootstrap.categories.find((c) => c.id === r.categoryId)?.kind ===
-          "income"
-            ? "income"
-            : "expense",
-      })),
-      assets: bootstrap.assets,
-      liabilities: bootstrap.liabilities.map((liability) => ({
-        ...liability,
-        mortgage: liability.mortgage
-          ? {
-              ...liability.mortgage,
-              paymentOverrideCents:
-                liability.mortgage.paymentOverrideCents ?? undefined,
-            }
-          : undefined,
-      })),
-      actuals: bootstrap.activity.map((posting) => ({
-        date: posting.occurredOn,
-        kind: posting.kind,
-        amountCents: posting.amountCents,
-      })),
-    }),
+    () => financialSnapshotFromBootstrap(bootstrap),
     [bootstrap],
   );
   const scenarios = useMemo(
@@ -721,12 +675,6 @@ function Workspace({
       ...(asset.rentalBuildingBasisCents !== undefined
         ? { rentalBuildingBasisCents: asset.rentalBuildingBasisCents }
         : {}),
-      ...(asset.purchaseDate == null
-        ? { purchaseDate: patch.purchaseDate }
-        : {}),
-      ...(asset.purchasePriceCents == null
-        ? { purchasePriceCents: patch.purchasePriceCents }
-        : {}),
       homeSaleAssumptions: patch.homeSaleAssumptions,
       expectedRevision: asset.revision,
     });
@@ -751,8 +699,6 @@ function Workspace({
       event.id === eventId
         ? {
             ...purchase,
-            date: patch.purchaseDate,
-            valueCents: patch.purchasePriceCents,
             propertyDetails: {
               ...purchase.propertyDetails,
               homeSaleAssumptions: patch.homeSaleAssumptions,
@@ -772,6 +718,44 @@ function Workspace({
       expectedRevision: record.revision,
     });
     await reloadRetirementHomeSource();
+  };
+  const editRetirementHomeAcquisition = (
+    home: ResolvedRetirementHome,
+    invoker: HTMLElement,
+  ) => {
+    if (home.property.source === "current") {
+      const asset = bootstrap.assets.find(
+        (candidate) => candidate.id === home.property.assetId,
+      );
+      if (asset == null) return;
+      setView("Net Worth");
+      openDialog(
+        {
+          type: "asset",
+          asset,
+          linkedLiability: bootstrap.liabilities.find(
+            (liability) => liability.mortgage?.assetId === asset.id,
+          ),
+        },
+        invoker,
+      );
+      return;
+    }
+    const record = bootstrap.scenarios.find(
+      (candidate) => candidate.id === selectedScenario.id,
+    );
+    const purchase = record?.events.find(
+      (event) =>
+        event.type === "asset-purchase" &&
+        event.assetId === home.property.assetId &&
+        event.date === home.purchaseDate,
+    );
+    if (record == null || purchase?.type !== "asset-purchase") return;
+    setView("Plan");
+    openDialog(
+      { type: "scenario-plan", scenario: record, focusedEventId: purchase.id },
+      invoker,
+    );
   };
   return (
     <div
@@ -1211,6 +1195,7 @@ function Workspace({
               onSettingsChange={setRetirementSettings}
               onUpdateCurrentHome={updateRetirementCurrentHome}
               onUpdatePlannedHome={updateRetirementPlannedHome}
+              onEditAcquisition={editRetirementHomeAcquisition}
             />
           </div>
         )}

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { calculateRetirementSnapshot, type RetirementMissingData } from "./retirementSnapshot";
+import {
+  calculateRetirementSnapshot,
+  resolveRetirementHomeSales,
+  type RetirementMissingData,
+} from "./retirementSnapshot";
 import { buildRetirementCutoff, type RetirementCutoff } from "./retirementCutoff";
 import type { FinancialSnapshot, HomeSaleAssumptions, Scenario, TaxLedger } from "./types";
 
@@ -925,5 +929,121 @@ describe("calculateRetirementSnapshot validation", () => {
     expect(() => calculate(value)).toThrow(
       "Retirement cutoff property home value must match cutoff assets",
     );
+  });
+});
+
+describe("retirement home eligibility resolution", () => {
+  const plannedEligibilityFixture = (
+    primaryResidence: boolean | undefined,
+    rentalStart?: string,
+  ) => {
+    const snapshot = baseSnapshot();
+    snapshot.assets = snapshot.assets.filter((asset) => asset.id !== "home");
+    snapshot.liabilities = snapshot.liabilities.filter((liability) => liability.id !== "mortgage");
+    const assumptions = {
+      sellingCostBps: 500,
+      accumulatedFederalDepreciationCents: 0,
+      accumulatedCaliforniaDepreciationCents: 0,
+    } as HomeSaleAssumptions;
+    const scenario: Scenario = {
+      ...baseScenario(),
+      events: [{
+        id: "planned-home-purchase",
+        date: "2024-01-01",
+        type: "asset-purchase",
+        assetId: "planned-home",
+        name: "Planned home",
+        valueCents: 200_000,
+        annualGrowthBps: 0,
+        fundingAccountId: "cash",
+        downPaymentCents: 200_000,
+        costsCents: 0,
+        propertyDetails: {
+          ...(primaryResidence === undefined ? {} : { primaryResidence }),
+          ...(rentalStart ? {
+            rentalUseBps: 10_000,
+            rentalTaxModelingEnabled: true,
+            buildingBasisCents: 160_000,
+          } : {}),
+          homeSaleAssumptions: assumptions,
+        },
+      }, ...(rentalStart ? [{
+        id: "planned-home-rental",
+        date: rentalStart,
+        type: "property-rental-start" as const,
+        assetId: "planned-home",
+        name: "Planned home rental",
+        monthlyRentalIncomeCents: 1_000,
+        rentalIncomeGrowthBps: 0,
+        rentalUseBps: 10_000,
+        rentalTaxModelingEnabled: true,
+        rentalType: "long-term" as const,
+        propertyTaxBasisCents: 200_000,
+        buildingBasisCents: 160_000,
+      }] : [])],
+    };
+    const cutoff: RetirementCutoff = {
+      ...baseCutoff(),
+      retirementMonth: "2027-07",
+      balanceMonth: "2027-06",
+      assets: { "planned-home": 200_000 },
+      liabilities: {},
+      properties: [{
+        assetId: "planned-home",
+        name: "Planned home",
+        valueCents: 200_000,
+        mortgageCents: 0,
+        monthlyGrossRentCents: rentalStart ? 1_000 : 0,
+        rentalUseBps: rentalStart ? 10_000 : 0,
+        projectedDepreciationCents: 0,
+        source: "planned",
+      }],
+    };
+    return { cutoff, snapshot, scenario, withdrawalRateBps: 300 };
+  };
+
+  // Production mutation caught: deriving eligibility in React leaves the pure
+  // boundary unavailable and encourages saving a duplicate answer into Plan.
+  it("derives a planned primary residence's eligibility inside the domain", () => {
+    const resolved = resolveRetirementHomeSales(plannedEligibilityFixture(true));
+
+    expect(resolved.homes[0].primaryResidenceEligibility).toEqual({
+      source: "derived",
+      eligible: true,
+    });
+    expect(resolved.issues).not.toContainEqual(expect.objectContaining({
+      field: "primaryResidenceEligibility",
+    }));
+    expect(resolved.sales[0].primaryResidenceExclusionEligible).toBe(true);
+  });
+
+  // Production mutation caught: ignoring an occupancy-to-rental transition would
+  // derive the two-year residence test from purchase and sale dates alone.
+  it("derives ineligibility when known occupancy ends before two years", () => {
+    const resolved = resolveRetirementHomeSales(
+      plannedEligibilityFixture(true, "2025-06-01"),
+    );
+
+    expect(resolved.homes[0].primaryResidenceEligibility).toEqual({
+      source: "derived",
+      eligible: false,
+    });
+    expect(resolved.issues).not.toContainEqual(expect.objectContaining({
+      field: "primaryResidenceEligibility",
+    }));
+  });
+
+  // Production mutation caught: treating an absent primary-residence fact as false
+  // silently denies the exclusion instead of requesting one authoritative answer.
+  it("keeps eligibility explicitly unknown when the Plan cannot prove residence status", () => {
+    const resolved = resolveRetirementHomeSales(plannedEligibilityFixture(undefined));
+
+    expect(resolved.homes[0].primaryResidenceEligibility).toEqual({
+      source: "unknown",
+    });
+    expect(resolved.issues).toContainEqual(expect.objectContaining({
+      field: "primaryResidenceEligibility",
+    }));
+    expect(resolved.sales).toEqual([]);
   });
 });

@@ -4,6 +4,7 @@ import {
   defaultRetirementAccountOrder,
   drawRetirementFunds,
   isAtLeastAge59AndHalf,
+  isRetirementDrawableAccount,
   resolveRetirementAccountOrder,
 } from "./index";
 import type { Account, FinancialSnapshot } from "./types";
@@ -159,6 +160,25 @@ describe("age-aware retirement withdrawal ordering", () => {
     ]);
   });
 
+  // Production mutations caught: treating every account balance as spendable would
+  // put credit debt into the withdrawal order and inflate the eligible portfolio.
+  it("centralizes drawability and excludes credit accounts from automatic and overridden order", () => {
+    const credit = account({
+      id: "credit",
+      name: "Credit card",
+      kind: "credit",
+      balanceCents: -50_000,
+    });
+    const withCredit = snapshot([...accounts, credit]);
+
+    expect(isRetirementDrawableAccount(credit)).toBe(false);
+    expect(isRetirementDrawableAccount(accounts[0])).toBe(true);
+    expect(defaultRetirementAccountOrder(withCredit, "2030-01-01"))
+      .not.toContain("credit");
+    expect(resolveRetirementAccountOrder(withCredit, "2030-01-01", ["credit", "roth"]))
+      .not.toContain("credit");
+  });
+
   // Break caught: consulting account kind after an explicit subtype would classify taxable brokerage balances as cash or penalty-sensitive pre-tax solely because of a conflicting legacy kind.
   it("uses explicit subtype before account kind in both ordering and draw tax treatment", () => {
     const retirementTaxable = account({
@@ -194,12 +214,12 @@ describe("age-aware retirement withdrawal ordering", () => {
         cash: 100_000,
       },
     })).toMatchObject({
-      taxableGainCents: 77_500,
+      taxableGainCents: 90_000,
       ordinaryIncomeCents: 0,
       earlyPenaltyCents: 0,
       taxableBasis: {
         "retirement-taxable": 0,
-        "checking-taxable": 12_500,
+        "checking-taxable": 25_000,
       },
     });
   });
@@ -227,6 +247,7 @@ describe("age-aware retirement withdrawal ordering", () => {
       subtype: "roth-ira",
       ownerPersonId: "younger",
       rothContributionBasisCents: 60_000,
+      rothOpeningYear: 2020,
     });
     const employerRoth = account({
       id: "employer-roth",
@@ -235,6 +256,7 @@ describe("age-aware retirement withdrawal ordering", () => {
       subtype: "employer-roth",
       ownerPersonId: "older",
       rothContributionBasisCents: 60_000,
+      rothOpeningYear: 2028,
     });
     const cash = account({ id: "cash", name: "Cash", kind: "checking", subtype: "cash" });
     const conflictedAccounts = [traditionalIra, employerPreTax, rothIra, employerRoth, cash];
@@ -324,8 +346,9 @@ describe("retirement fund draws", () => {
     });
   });
 
-  // Break caught: subtracting the full taxable cost basis on a partial sale would understate the taxable gain and leave the remaining basis wrong.
-  it("depletes a taxable account partially and reduces its cost basis proportionally", () => {
+  // Production mutation caught: allocating aggregate basis proportionally to a
+  // partial brokerage sale claims unsupported lot selection and may understate tax.
+  it("retains aggregate basis on a partial sale and conservatively treats proceeds as short-term gain", () => {
     const brokerage = account({
       id: "brokerage",
       name: "Brokerage",
@@ -344,12 +367,12 @@ describe("retirement fund draws", () => {
       fundedCents: 50_000,
       unfundedCents: 0,
       balances: { brokerage: 50_000 },
-      taxableBasis: { brokerage: 30_000 },
-      taxableGainCents: 20_000,
+      taxableBasis: { brokerage: 60_000 },
+      taxableGainCents: 50_000,
       sources: [{
         accountId: "brokerage",
         amountCents: 50_000,
-        taxableGainCents: 20_000,
+        taxableGainCents: 50_000,
         ordinaryIncomeCents: 0,
         rothTaxableCents: 0,
         earlyPenaltyCents: 0,
@@ -357,8 +380,10 @@ describe("retirement fund draws", () => {
     });
   });
 
-  // Production mutation caught: aggregate basis equal to market value can hide mixed gain/loss lots, so a partial FIFO draw is not provably gain-free without lots.
-  it("marks an aggregate-basis partial taxable draw unsupported without exact lots", () => {
+  // Production mutations caught: rejecting persisted aggregate basis makes every
+  // funded production brokerage unavailable, while calling its gain long-term
+  // would claim a holding period the persisted record does not contain.
+  it("uses disclosed conservative short-term treatment for a supported aggregate-basis draw", () => {
     const brokerage = account({
       id: "brokerage",
       name: "Brokerage",
@@ -377,10 +402,37 @@ describe("retirement fund draws", () => {
 
     expect(result.sources[0]).toMatchObject({
       amountCents: 50_000,
-      taxableGainCents: 0,
+      taxableGainCents: 50_000,
+      federalShortTermGainCents: 50_000,
+      federalLongTermGainCents: 0,
+      californiaGainCents: 50_000,
+      taxEstimateMethod: "conservative-aggregate-basis",
+      taxCharacterSupported: true,
+    });
+    expect(result.taxCharacterSupported).toBe(true);
+  });
+
+  // Production mutation caught: assuming zero basis when no basis was persisted
+  // fabricates taxable gain instead of identifying the unsupported fact.
+  it("keeps a funded taxable draw unsupported when aggregate basis is missing", () => {
+    const brokerage = account({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+      subtype: "taxable-brokerage",
+      taxableCostBasisCents: null,
+    });
+
+    expect(drawRetirementFunds({
+      amountCents: 50_000,
+      date: "2030-01-01",
+      order: ["brokerage"],
+      accounts: [brokerage],
+      balances: { brokerage: 100_000 },
+    }).sources[0]).toMatchObject({
+      taxEstimateMethod: "unsupported",
       taxCharacterSupported: false,
     });
-    expect(result.taxCharacterSupported).toBe(false);
   });
 
   // Production mutation caught: inferring zero gain from equal aggregate basis loses the first FIFO lot's gain when an offsetting loss is held in a later lot.
@@ -441,13 +493,15 @@ describe("retirement fund draws", () => {
     expect(taxableBasis).toEqual({ brokerage: 67 });
     expect(result).toMatchObject({
       balances: { brokerage: 51 },
-      taxableBasis: { brokerage: 34 },
-      taxableGainCents: 17,
+      taxableBasis: { brokerage: 67 },
+      taxableGainCents: 50,
     });
   });
 
-  // Break caught: using truncation for odd-cent proportional basis sales or retaining a residual basis after full depletion would misstate taxable gain in later projection years.
-  it("rounds odd-cent proportional taxable basis and clears it on full depletion", () => {
+  // Production mutation caught: retaining aggregate basis after final liquidation
+  // would fabricate a future tax shield; recognizing the resulting modeled loss
+  // would exceed the conservative model's supported capital-loss scope.
+  it("clears aggregate basis on full depletion without claiming a capital loss", () => {
     const brokerage = account({
       id: "brokerage",
       name: "Brokerage",
@@ -465,8 +519,8 @@ describe("retirement fund draws", () => {
 
     expect(partial).toMatchObject({
       balances: { brokerage: 51 },
-      taxableBasis: { brokerage: 34 },
-      taxableGainCents: 17,
+      taxableBasis: { brokerage: 67 },
+      taxableGainCents: 50,
     });
     expect(drawRetirementFunds({
       amountCents: 51,
@@ -478,7 +532,7 @@ describe("retirement fund draws", () => {
     })).toMatchObject({
       balances: { brokerage: 0 },
       taxableBasis: { brokerage: 0 },
-      taxableGainCents: 17,
+      taxableGainCents: 0,
     });
   });
 
@@ -521,7 +575,9 @@ describe("retirement fund draws", () => {
       name: "Roth IRA",
       kind: "retirement",
       subtype: "roth-ira",
+      ownerPersonId: "owner",
       rothContributionBasisCents: 60_000,
+      rothOpeningYear: 2020,
     });
 
     expect(drawRetirementFunds({
@@ -530,6 +586,7 @@ describe("retirement fund draws", () => {
       order: ["roth"],
       accounts: [roth],
       balances: { roth: 100_000 },
+      people: snapshot([]).household.people,
     })).toMatchObject({
       balances: { roth: 20_000 },
       rothContributionBasis: { roth: 0 },
@@ -544,6 +601,122 @@ describe("retirement fund draws", () => {
         earlyPenaltyCents: 2_000,
       }],
     });
+  });
+
+  // Production mutation caught: age alone is insufficient for a qualified Roth
+  // distribution; both owner age and the account's five-tax-year period matter.
+  it("treats Roth IRA earnings as tax-free only after age 59½ and five tax years", () => {
+    const roth = account({
+      id: "roth",
+      name: "Roth IRA",
+      kind: "retirement",
+      subtype: "roth-ira",
+      ownerPersonId: "older",
+      rothContributionBasisCents: 60_000,
+      rothOpeningYear: 2020,
+    });
+    const people = [{ id: "older", name: "Older", birthDate: "1960-01-01" }];
+
+    expect(drawRetirementFunds({
+      amountCents: 80_000,
+      date: "2030-12-31",
+      order: ["roth"],
+      accounts: [roth],
+      balances: { roth: 100_000 },
+      people,
+    }).sources[0]).toMatchObject({
+      rothTaxableCents: 0,
+      earlyPenaltyCents: 0,
+      taxEstimateMethod: "qualified-roth",
+      taxCharacterSupported: true,
+    });
+
+    expect(drawRetirementFunds({
+      amountCents: 80_000,
+      date: "2023-12-31",
+      order: ["roth"],
+      accounts: [{ ...roth, rothOpeningYear: 2022 }],
+      balances: { roth: 100_000 },
+      people,
+    }).sources[0]).toMatchObject({
+      rothTaxableCents: 20_000,
+      earlyPenaltyCents: 0,
+      taxEstimateMethod: "unqualified-roth-ira",
+      taxCharacterSupported: true,
+    });
+  });
+
+  // Production mutation caught: employer Roth distributions are pro-rata rather
+  // than Roth-IRA contribution-first when the distribution is not qualified.
+  it("uses pro-rata basis for an unqualified employer Roth distribution", () => {
+    const employerRoth = account({
+      id: "employer-roth",
+      name: "Employer Roth",
+      kind: "retirement",
+      subtype: "employer-roth",
+      ownerPersonId: "owner",
+      rothContributionBasisCents: 60_000,
+      rothOpeningYear: 2028,
+    });
+
+    expect(drawRetirementFunds({
+      amountCents: 50_000,
+      date: "2030-01-01",
+      order: ["employer-roth"],
+      accounts: [employerRoth],
+      balances: { "employer-roth": 100_000 },
+      people: snapshot([]).household.people,
+    })).toMatchObject({
+      rothContributionBasis: { "employer-roth": 30_000 },
+      rothTaxableCents: 20_000,
+      earlyPenaltyCents: 2_000,
+      sources: [expect.objectContaining({
+        taxEstimateMethod: "unqualified-employer-roth",
+        taxCharacterSupported: true,
+      })],
+    });
+  });
+
+  // Production mutation caught: guessing qualification when opening year or owner
+  // birth date is absent turns unsupported Roth earnings into precise tax output.
+  it("returns unsupported tax character when Roth qualification facts are missing", () => {
+    const missingOpening = account({
+      id: "missing-opening",
+      name: "Roth IRA missing opening year",
+      kind: "retirement",
+      subtype: "roth-ira",
+      ownerPersonId: "owner",
+      rothContributionBasisCents: 10_000,
+    });
+    const missingBirth = account({
+      ...missingOpening,
+      id: "missing-birth",
+      name: "Roth IRA missing birth date",
+      ownerPersonId: "missing-birth-date",
+      rothOpeningYear: 2020,
+    });
+    const result = drawRetirementFunds({
+      amountCents: 200_000,
+      date: "2030-12-31",
+      order: ["missing-opening", "missing-birth"],
+      accounts: [missingOpening, missingBirth],
+      balances: { "missing-opening": 100_000, "missing-birth": 100_000 },
+      people: snapshot([]).household.people,
+    });
+
+    expect(result.taxCharacterSupported).toBe(false);
+    expect(result.sources).toEqual([
+      expect.objectContaining({
+        accountId: "missing-opening",
+        taxEstimateMethod: "unsupported",
+        taxCharacterSupported: false,
+      }),
+      expect.objectContaining({
+        accountId: "missing-birth",
+        taxEstimateMethod: "unsupported",
+        taxCharacterSupported: false,
+      }),
+    ]);
   });
 
   // Break caught: reporting a requested amount as funded when ordered balances are exhausted would hide an uncovered retirement spending need.

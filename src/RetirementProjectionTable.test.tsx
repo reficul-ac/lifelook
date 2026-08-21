@@ -50,6 +50,7 @@ const firstYear = {
     federalShortTermGainCents: 0,
     federalLongTermGainCents: 0,
     californiaGainCents: 0,
+    taxEstimateMethod: "exact-tax-lots",
     taxCharacterSupported: true,
   }],
   warnings: [
@@ -95,6 +96,7 @@ const projection: AvailableRetirementScenarioProjection<unknown> = {
   available: true,
   summary: {},
   years: [firstYear, secondYear],
+  warnings: [],
 };
 
 describe("RetirementProjectionTable", () => {
@@ -266,6 +268,7 @@ describe("RetirementProjectionTable", () => {
             code: "calculation-error",
             message: "Missing projection balances for 2042-08",
           }],
+          years: [],
         }}
         accountNames={{}}
       />,
@@ -290,6 +293,7 @@ describe("RetirementProjectionTable", () => {
             code: "calculation-error",
             message: "Missing projection balances for 2042-08",
           }],
+          years: [],
         }}
         accountNames={{}}
       />,

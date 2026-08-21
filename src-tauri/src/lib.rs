@@ -3342,17 +3342,28 @@ fn validate_home_sale_assumptions(
         return Ok(None);
     };
     let object = assumptions.as_object().ok_or_else(|| {
-        AppError::Validation("home sale assumptions must contain exactly four fields".into())
+        AppError::Validation("home sale assumptions must contain the supported fields".into())
     })?;
-    let fields = [
+    let required_fields = [
+        "sellingCostBps",
+        "accumulatedFederalDepreciationCents",
+        "accumulatedCaliforniaDepreciationCents",
+    ];
+    let supported_fields = [
         "sellingCostBps",
         "primaryResidenceExclusionEligible",
         "accumulatedFederalDepreciationCents",
         "accumulatedCaliforniaDepreciationCents",
     ];
-    if object.len() != fields.len() || fields.iter().any(|field| !object.contains_key(*field)) {
+    if required_fields
+        .iter()
+        .any(|field| !object.contains_key(*field))
+        || object
+            .keys()
+            .any(|field| !supported_fields.contains(&field.as_str()))
+    {
         return Err(AppError::Validation(
-            "home sale assumptions must contain exactly four fields".into(),
+            "home sale assumptions must contain the supported fields".into(),
         ));
     }
     let selling_cost_bps = json_i64(assumptions, "sellingCostBps")
@@ -3362,14 +3373,12 @@ fn validate_home_sale_assumptions(
             "selling costs must be between 0 and 100 percent".into(),
         ));
     }
-    if assumptions
-        .get("primaryResidenceExclusionEligible")
-        .and_then(serde_json::Value::as_bool)
-        .is_none()
-    {
-        return Err(AppError::Validation(
-            "primaryResidenceExclusionEligible must be a boolean".into(),
-        ));
+    if let Some(eligibility) = assumptions.get("primaryResidenceExclusionEligible") {
+        if !eligibility.is_null() && !eligibility.is_boolean() {
+            return Err(AppError::Validation(
+                "primaryResidenceExclusionEligible must be a boolean or null".into(),
+            ));
+        }
     }
     let federal =
         json_i64(assumptions, "accumulatedFederalDepreciationCents").ok_or_else(|| {
@@ -5008,8 +5017,34 @@ mod tests {
             vec!["401k".to_string(), "brokerage".to_string()]
         );
         assert_eq!(loaded.selected_scenario, "sell-all-homes");
-        let updated = store_retirement_plan(&mut c, make(1)).unwrap();
+        let updated = store_retirement_plan(
+            &mut c,
+            RetirementPlanInput {
+                retirement_month: "2045-09".into(),
+                withdrawal_rate_bps: 425,
+                horizon_years: 35,
+                taxable_destination_account_id: Some("brokerage".into()),
+                withdrawal_account_order: vec!["brokerage".into(), "401k".into()],
+                selected_scenario: "keep-homes".into(),
+                expected_revision: 1,
+            },
+        )
+        .unwrap();
         assert_eq!(updated.revision, 2);
+        let reloaded = bootstrap(&c).unwrap().retirement_plan.unwrap();
+        assert_eq!(reloaded.retirement_month, "2045-09");
+        assert_eq!(reloaded.withdrawal_rate_bps, 425);
+        assert_eq!(reloaded.horizon_years, 35);
+        assert_eq!(
+            reloaded.taxable_destination_account_id.as_deref(),
+            Some("brokerage")
+        );
+        assert_eq!(
+            reloaded.withdrawal_account_order,
+            vec!["brokerage".to_string(), "401k".to_string()]
+        );
+        assert_eq!(reloaded.selected_scenario, "keep-homes");
+        assert_eq!(reloaded.revision, 2);
         assert!(matches!(
             store_retirement_plan(&mut c, make(1)),
             Err(AppError::Conflict)
@@ -5084,6 +5119,19 @@ mod tests {
             ),
             Err(AppError::Validation(_))
         ));
+    }
+
+    #[test]
+    fn home_sale_assumptions_allow_domain_derived_eligibility() {
+        // Break caught: requiring a stored eligibility boolean duplicates a fact the pure
+        // retirement boundary can derive from authoritative Plan history.
+        let assumptions = serde_json::json!({
+            "sellingCostBps": 500,
+            "accumulatedFederalDepreciationCents": 0,
+            "accumulatedCaliforniaDepreciationCents": 0
+        });
+
+        assert!(validate_home_sale_assumptions(Some(&assumptions), None).is_ok());
     }
     #[test]
     fn version_24_adds_retirement_projection_preferences_to_v23_databases() {

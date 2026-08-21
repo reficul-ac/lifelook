@@ -39,6 +39,7 @@ const completeHome: ResolvedRetirementHome = {
   },
   mortgageCents: 225_000_00,
   use: "personal",
+  primaryResidenceEligibility: { source: "stored", eligible: true },
 };
 
 const incompleteHome: ResolvedRetirementHome = {
@@ -56,6 +57,7 @@ const incompleteHome: ResolvedRetirementHome = {
   assumptions: null,
   mortgageCents: 300_000_00,
   use: "personal",
+  primaryResidenceEligibility: { source: "unknown" },
 };
 
 const incompleteIssues: readonly RetirementMissingData[] = [
@@ -115,22 +117,24 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
     ).toBeInTheDocument();
     expect(within(home).getByText("Eligible")).toBeInTheDocument();
     expect(
-      within(home).getByText("Federal depreciation claimed"),
+      within(home).getAllByText("Federal depreciation claimed")[0],
     ).toBeInTheDocument();
     expect(within(home).getByText("$12,000")).toBeInTheDocument();
     expect(
-      within(home).getByText("California depreciation claimed"),
+      within(home).getAllByText("California depreciation claimed")[0],
     ).toBeInTheDocument();
     expect(within(home).getByText("$9,000")).toBeInTheDocument();
     expect(within(home).getByText("$825,000")).toBeInTheDocument();
     expect(within(home).getByText("Plan-derived projected sale value")).toBeInTheDocument();
     expect(within(home).getByText("Plan-derived appreciation")).toBeInTheDocument();
-    expect(within(home).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(within(home).getByText("Edit sale details").closest("details"))
+      .not.toHaveAttribute("open");
   });
 
-  // Break caught: sending only newly entered fields, or rendering a control for the inherited basis, corrupts the shared asset patch contract.
-  it("renders controls only for missing facts and saves the complete authoritative patch", async () => {
+  // Break caught: an empty complete-home form prevents corrections, while editing acquisition facts here duplicates Net Worth ownership.
+  it("edits every mutable sale assumption and routes acquisition corrections to Net Worth", async () => {
     const onUpdateCurrentHome = vi.fn().mockResolvedValue(undefined);
+    const onEditAcquisition = vi.fn();
     render(
       <RetirementHomeSaleDetails
         homes={[completeHome, incompleteHome]}
@@ -139,6 +143,7 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
         retirementDate="2042-01-01"
         onUpdateCurrentHome={onUpdateCurrentHome}
         onUpdatePlannedHome={vi.fn()}
+        onEditAcquisition={onEditAcquisition}
       />,
     );
 
@@ -146,10 +151,15 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
     expect(within(home).getByText("Needs details")).toBeInTheDocument();
     fireEvent.click(within(home).getByText("Edit sale details"));
 
+    expect(within(home).queryByLabelText("Purchase date")).not.toBeInTheDocument();
     expect(within(home).queryByLabelText("Purchase price")).not.toBeInTheDocument();
-    fireEvent.change(within(home).getByLabelText("Purchase date"), {
-      target: { value: "2020-06-01" },
-    });
+    fireEvent.click(within(home).getByRole("button", {
+      name: "Edit Current home acquisition in Net Worth",
+    }));
+    expect(onEditAcquisition).toHaveBeenCalledWith(
+      incompleteHome,
+      expect.any(HTMLElement),
+    );
     fireEvent.change(within(home).getByLabelText("Selling costs (%)"), {
       target: { value: "6" },
     });
@@ -164,8 +174,6 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
 
     await waitFor(() =>
       expect(onUpdateCurrentHome).toHaveBeenCalledWith("home", {
-        purchaseDate: "2020-06-01",
-        purchasePriceCents: 450_000_00,
         homeSaleAssumptions: {
           sellingCostBps: 600,
           primaryResidenceExclusionEligible: true,
@@ -174,6 +182,26 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
         },
       }),
     );
+  });
+
+  it("shows editable mutable assumptions even when a home is complete", () => {
+    render(
+      <RetirementHomeSaleDetails
+        homes={[completeHome]}
+        issues={[]}
+        scenario={scenario}
+        retirementDate="2042-01-01"
+        onUpdateCurrentHome={vi.fn()}
+        onUpdatePlannedHome={vi.fn()}
+      />,
+    );
+
+    const home = screen.getByRole("article", { name: "Complete home sale details" });
+    fireEvent.click(within(home).getByText("Edit sale details"));
+    expect(within(home).getByLabelText("Selling costs (%)")).toHaveValue("5");
+    expect(within(home).getByLabelText("Federal depreciation claimed")).toHaveValue("12000");
+    expect(within(home).getByLabelText("California depreciation claimed")).toHaveValue("9000");
+    expect(within(home).getByLabelText("Eligible for primary-home gain exclusion")).toBeChecked();
   });
 
   // Break caught: clearing local form state after a rejected persistence call prevents retrying the user's exact draft.
@@ -194,9 +222,6 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
 
     const home = screen.getByRole("article", { name: "Current home sale details" });
     fireEvent.click(within(home).getByText("Edit sale details"));
-    fireEvent.change(within(home).getByLabelText("Purchase date"), {
-      target: { value: "2020-06-01" },
-    });
     fireEvent.change(within(home).getByLabelText("Selling costs (%)"), {
       target: { value: "6" },
     });
@@ -204,15 +229,15 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
     fireEvent.click(within(home).getByRole("button", { name: "Save sale details" }));
 
     expect(await within(home).findByRole("alert")).toHaveTextContent("could not be saved");
-    expect(within(home).getByLabelText("Purchase date")).toHaveValue("2020-06-01");
+    expect(within(home).getByLabelText("Selling costs (%)")).toHaveValue("6");
     fireEvent.click(within(home).getByRole("button", { name: "Retry save" }));
     await waitFor(() => expect(onUpdateCurrentHome).toHaveBeenCalledTimes(2));
     expect(onUpdateCurrentHome.mock.calls[1]).toEqual(onUpdateCurrentHome.mock.calls[0]);
   });
 
-  // Break caught: rejecting the repository's exact maximum prevents a valid authoritative purchase basis from being repaired.
-  it("accepts the exact shared maximum money value", async () => {
-    const onUpdateCurrentHome = vi.fn().mockResolvedValue(undefined);
+  // Break caught: acquisition facts must remain owned by the Net Worth editor, including boundary values.
+  it("routes a missing purchase basis instead of accepting a private retirement copy", () => {
+    const onEditAcquisition = vi.fn();
     render(
       <RetirementHomeSaleDetails
         homes={[{ ...completeHome, taxBasisCents: null }]}
@@ -226,8 +251,9 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
         ]}
         scenario={scenario}
         retirementDate="2042-01-01"
-        onUpdateCurrentHome={onUpdateCurrentHome}
+        onUpdateCurrentHome={vi.fn()}
         onUpdatePlannedHome={vi.fn()}
+        onEditAcquisition={onEditAcquisition}
       />,
     );
 
@@ -235,57 +261,14 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
       name: "Complete home sale details",
     });
     fireEvent.click(within(home).getByText("Edit sale details"));
-    fireEvent.change(within(home).getByLabelText("Purchase price"), {
-      target: { value: "999999999999.99" },
-    });
-    fireEvent.click(
-      within(home).getByRole("button", { name: "Save sale details" }),
+    expect(within(home).queryByLabelText("Purchase price")).not.toBeInTheDocument();
+    fireEvent.click(within(home).getByRole("button", {
+      name: "Edit Complete home acquisition in Net Worth",
+    }));
+    expect(onEditAcquisition).toHaveBeenCalledWith(
+      expect.objectContaining({ property: expect.objectContaining({ assetId: "complete-home" }) }),
+      expect.any(HTMLElement),
     );
-
-    await waitFor(() =>
-      expect(onUpdateCurrentHome).toHaveBeenCalledWith(
-        "complete-home",
-        expect.objectContaining({ purchasePriceCents: 99_999_999_999_999 }),
-      ),
-    );
-  });
-
-  // Break caught: accepting one cent beyond the repository ceiling defers a known validation failure until persistence.
-  it("rejects money above the shared maximum before persistence", async () => {
-    const onUpdateCurrentHome = vi.fn();
-    render(
-      <RetirementHomeSaleDetails
-        homes={[{ ...completeHome, taxBasisCents: null }]}
-        issues={[
-          {
-            assetId: "complete-home",
-            assetName: "Complete home",
-            field: "taxBasis",
-            message: "Add a tax basis for Complete home.",
-          },
-        ]}
-        scenario={scenario}
-        retirementDate="2042-01-01"
-        onUpdateCurrentHome={onUpdateCurrentHome}
-        onUpdatePlannedHome={vi.fn()}
-      />,
-    );
-
-    const home = screen.getByRole("article", {
-      name: "Complete home sale details",
-    });
-    fireEvent.click(within(home).getByText("Edit sale details"));
-    fireEvent.change(within(home).getByLabelText("Purchase price"), {
-      target: { value: "1000000000000.00" },
-    });
-    fireEvent.click(
-      within(home).getByRole("button", { name: "Save sale details" }),
-    );
-
-    expect(await within(home).findByRole("alert")).toHaveTextContent(
-      "exact positive purchase price",
-    );
-    expect(onUpdateCurrentHome).not.toHaveBeenCalled();
   });
 
   // Break caught: reusing App's signed money parser without an editor guard allows negative accumulated depreciation into the repository payload.
@@ -386,6 +369,7 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
     assumptions: null,
     mortgageCents: 500_000_00,
     use: "rental",
+    primaryResidenceEligibility: { source: "derived", eligible: true },
   };
   const plannedIssues: readonly RetirementMissingData[] = [
     {
@@ -393,12 +377,6 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
       assetName: "Planned home",
       field: "sellingCostBps",
       message: "Add selling costs for Planned home.",
-    },
-    {
-      assetId: "planned-home",
-      assetName: "Planned home",
-      field: "primaryResidenceEligibility",
-      message: "Confirm primary residence eligibility for Planned home.",
     },
     {
       assetId: "planned-home",
@@ -414,8 +392,8 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
     },
   ];
 
-  // Break caught: ignoring two years of provable Plan residence asks for redundant input or persists against the projected asset ID.
-  it("infers eligibility from purchase, primary-residence, and history data and saves by event ID", async () => {
+  // Break caught: ignoring domain-derived eligibility asks for redundant input or persists a derived fact against the projected asset ID.
+  it("uses domain-derived eligibility and saves only uncertain assumptions by event ID", async () => {
     const onUpdatePlannedHome = vi.fn().mockResolvedValue(undefined);
     render(
       <RetirementHomeSaleDetails
@@ -429,7 +407,7 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
     );
 
     const home = screen.getByRole("article", { name: "Planned home sale details" });
-    expect(within(home).getByText("Eligible (inferred from Plan)")).toBeInTheDocument();
+    expect(within(home).getByText("Eligible (derived from Plan)")).toBeInTheDocument();
     fireEvent.click(within(home).getByText("Edit sale details"));
     expect(within(home).queryByLabelText("Eligible for primary-home gain exclusion")).not.toBeInTheDocument();
     fireEvent.change(within(home).getByLabelText("Selling costs (%)"), {
@@ -439,11 +417,8 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
 
     await waitFor(() =>
       expect(onUpdatePlannedHome).toHaveBeenCalledWith("buy-planned-home", {
-        purchaseDate: "2035-01-01",
-        purchasePriceCents: 900_000_00,
         homeSaleAssumptions: {
           sellingCostBps: 600,
-          primaryResidenceExclusionEligible: true,
           accumulatedFederalDepreciationCents: 0,
           accumulatedCaliforniaDepreciationCents: 0,
         },
@@ -462,8 +437,16 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
     };
     render(
       <RetirementHomeSaleDetails
-        homes={[{ ...plannedHome, property: { ...plannedHome.property, monthlyGrossRentCents: 0, rentalUseBps: 0 }, use: "personal" }]}
-        issues={plannedIssues}
+        homes={[{ ...plannedHome, property: { ...plannedHome.property, monthlyGrossRentCents: 0, rentalUseBps: 0 }, use: "personal", primaryResidenceEligibility: { source: "unknown" } }]}
+        issues={[
+          ...plannedIssues,
+          {
+            assetId: "planned-home",
+            assetName: "Planned home",
+            field: "primaryResidenceEligibility",
+            message: "Confirm primary residence eligibility for Planned home.",
+          },
+        ]}
         scenario={unknownScenario}
         retirementDate="2042-01-01"
         onUpdateCurrentHome={vi.fn()}
@@ -490,6 +473,7 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
             accumulatedFederalDepreciationCents: 10_000_00,
             accumulatedCaliforniaDepreciationCents: 8_000_00,
           },
+          primaryResidenceEligibility: { source: "stored", eligible: false },
         }]}
         issues={[]}
         scenario={plannedScenario}
@@ -578,8 +562,7 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
     expect(onUpdatePlannedHome).toHaveBeenLastCalledWith(
       "buy-first-home",
       expect.objectContaining({
-        purchaseDate: "2030-01-01",
-        purchasePriceCents: 500_000_00,
+        homeSaleAssumptions: expect.objectContaining({ sellingCostBps: 700 }),
       }),
     );
 
@@ -615,15 +598,13 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
     expect(onUpdatePlannedHome).toHaveBeenLastCalledWith(
       "buy-second-home",
       expect.objectContaining({
-        purchaseDate: "2038-01-01",
-        purchasePriceCents: 900_000_00,
         homeSaleAssumptions: expect.objectContaining({ sellingCostBps: 600 }),
       }),
     );
   });
 
-  // Break caught: retaining a hidden false checkbox value after a retirement-month change persists stale eligibility even when current Plan history proves true.
-  it("resets changed inference and derives the hidden eligibility from current props on submit", async () => {
+  // Break caught: retaining a stale boundary result after the retirement month changes can display the wrong derived eligibility.
+  it("resets the editor when the boundary supplies changed derived eligibility", async () => {
     const inferenceScenario: Scenario = {
       ...scenario,
       events: [purchase],
@@ -632,9 +613,12 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
       .fn()
       .mockRejectedValueOnce(new Error("write unavailable"))
       .mockResolvedValueOnce(undefined);
-    const renderDetails = (retirementDate: string) => (
+    const renderDetails = (retirementDate: string, eligible: boolean) => (
       <RetirementHomeSaleDetails
-        homes={[plannedHome]}
+        homes={[{
+          ...plannedHome,
+          primaryResidenceEligibility: { source: "derived", eligible },
+        }]}
         issues={plannedIssues}
         scenario={inferenceScenario}
         retirementDate={retirementDate}
@@ -642,11 +626,11 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
         onUpdatePlannedHome={onUpdatePlannedHome}
       />
     );
-    const { rerender } = render(renderDetails("2036-01-01"));
+    const { rerender } = render(renderDetails("2036-01-01", false));
 
     let home = screen.getByRole("article", { name: "Planned home sale details" });
     expect(
-      within(home).getByText("Not eligible (inferred from Plan)"),
+      within(home).getByText("Not eligible (derived from Plan)"),
     ).toBeInTheDocument();
     fireEvent.click(within(home).getByText("Edit sale details"));
     fireEvent.change(within(home).getByLabelText("Selling costs (%)"), {
@@ -659,16 +643,16 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
     expect(onUpdatePlannedHome).toHaveBeenLastCalledWith(
       "buy-planned-home",
       expect.objectContaining({
-        homeSaleAssumptions: expect.objectContaining({
-          primaryResidenceExclusionEligible: false,
+        homeSaleAssumptions: expect.not.objectContaining({
+          primaryResidenceExclusionEligible: expect.anything(),
         }),
       }),
     );
 
-    rerender(renderDetails("2042-01-01"));
+    rerender(renderDetails("2042-01-01", true));
     home = screen.getByRole("article", { name: "Planned home sale details" });
     expect(
-      within(home).getByText("Eligible (inferred from Plan)"),
+      within(home).getByText("Eligible (derived from Plan)"),
     ).toBeInTheDocument();
     expect(within(home).queryByRole("alert")).not.toBeInTheDocument();
     fireEvent.click(within(home).getByText("Edit sale details"));
@@ -684,11 +668,10 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
     expect(onUpdatePlannedHome).toHaveBeenLastCalledWith(
       "buy-planned-home",
       expect.objectContaining({
-        homeSaleAssumptions: expect.objectContaining({
-          sellingCostBps: 600,
-          primaryResidenceExclusionEligible: true,
-        }),
+        homeSaleAssumptions: expect.objectContaining({ sellingCostBps: 600 }),
       }),
     );
+    expect(onUpdatePlannedHome.mock.calls[1]?.[1].homeSaleAssumptions)
+      .not.toHaveProperty("primaryResidenceExclusionEligible");
   });
 });

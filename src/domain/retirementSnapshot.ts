@@ -51,6 +51,9 @@ export interface ResolvedRetirementHome {
   liabilityId?: string;
   mortgageCents: Cents;
   use?: HomeSaleTaxItem["use"];
+  primaryResidenceEligibility:
+    | { source: "stored" | "derived"; eligible: boolean }
+    | { source: "unknown" };
 }
 
 const issueMessage = (field: RetirementMissingData["field"], name: string) => {
@@ -192,6 +195,45 @@ const resolveHomeUse = (
   return rentalEvidence ? "rental" : "personal";
 };
 
+const addUtcYears = (value: Date, years: number) => {
+  const result = new Date(value);
+  result.setUTCFullYear(result.getUTCFullYear() + years);
+  return result;
+};
+
+const plannedPrimaryResidenceEligibility = (
+  input: RetirementSnapshotInput,
+  planned: PlannedPropertyPurchase | undefined,
+): ResolvedRetirementHome["primaryResidenceEligibility"] => {
+  if (planned?.propertyDetails?.primaryResidence == null) return { source: "unknown" };
+  if (!planned.propertyDetails.primaryResidence) {
+    return { source: "derived", eligible: false };
+  }
+  const disposedOn = new Date(`${input.cutoff.retirementMonth}-01T00:00:00Z`);
+  const acquiredOn = new Date(`${planned.date}T00:00:00Z`);
+  if (Number.isNaN(disposedOn.valueOf()) || Number.isNaN(acquiredOn.valueOf())) {
+    return { source: "unknown" };
+  }
+  const lookbackStart = addUtcYears(disposedOn, -5);
+  const residenceStart = acquiredOn > lookbackStart ? acquiredOn : lookbackStart;
+  const rentalStart = input.scenario.events
+    .filter((event): event is Extract<Scenario["events"][number], { type: "property-rental-start" }> =>
+      event.type === "property-rental-start" &&
+      event.assetId === planned.assetId &&
+      event.date >= planned.date &&
+      event.date < `${input.cutoff.retirementMonth}-01`)
+    .sort((left, right) =>
+      left.date.localeCompare(right.date) || left.id.localeCompare(right.id))[0];
+  const residenceEnd = rentalStart == null
+    ? disposedOn
+    : new Date(`${rentalStart.date}T00:00:00Z`);
+  if (Number.isNaN(residenceEnd.valueOf())) return { source: "unknown" };
+  return {
+    source: "derived",
+    eligible: addUtcYears(residenceStart, 2) <= residenceEnd,
+  };
+};
+
 const resolveHomes = (input: RetirementSnapshotInput) => input.cutoff.properties.map((property): ResolvedRetirementHome => {
   const current = property.source === "current"
     ? input.snapshot.assets.find((asset) => asset.id === property.assetId)
@@ -207,19 +249,29 @@ const resolveHomes = (input: RetirementSnapshotInput) => input.cutoff.properties
     ? input.snapshot.liabilities.find((liability) => liability.mortgage?.assetId === property.assetId)?.id
     : planned?.financing?.liabilityId;
   const liabilityId = property.liabilityId ?? metadataLiabilityId;
+  const assumptions = property.source === "current"
+    ? current?.homeSaleAssumptions
+    : planned?.propertyDetails?.homeSaleAssumptions;
+  const primaryResidenceEligibility = typeof assumptions?.primaryResidenceExclusionEligible === "boolean"
+    ? {
+      source: "stored" as const,
+      eligible: assumptions.primaryResidenceExclusionEligible,
+    }
+    : property.source === "planned"
+      ? plannedPrimaryResidenceEligibility(input, planned)
+      : { source: "unknown" as const };
 
   return {
     property,
     purchaseDate: property.source === "current" ? current?.purchaseDate : planned?.date,
     taxBasisCents: property.source === "current" ? current?.purchasePriceCents : planned?.valueCents,
-    assumptions: property.source === "current"
-      ? current?.homeSaleAssumptions
-      : planned?.propertyDetails?.homeSaleAssumptions,
+    assumptions,
     liabilityId,
     mortgageCents: liabilityId && hasOwn(input.cutoff.liabilities, liabilityId)
       ? input.cutoff.liabilities[liabilityId]
       : property.mortgageCents,
     use: resolveHomeUse(input, property, current, planned),
+    primaryResidenceEligibility,
   };
 });
 
@@ -272,7 +324,7 @@ export function resolveRetirementHomeSales(
     if (!mortgageReconciles) addIssue(issues, property, "mortgageBalance");
 
     if (home.use == null) addIssue(issues, property, "rentalUse");
-    if (typeof assumptions?.primaryResidenceExclusionEligible !== "boolean") {
+    if (home.primaryResidenceEligibility.source === "unknown") {
       addIssue(issues, property, "primaryResidenceEligibility");
     }
     if (assumptions?.accumulatedFederalDepreciationCents == null) {
@@ -285,6 +337,9 @@ export function resolveRetirementHomeSales(
 
   const sales = issues.length === 0 ? homes.map((home): HomeSaleTaxItem => {
     const assumptions = home.assumptions!;
+    if (home.primaryResidenceEligibility.source === "unknown") {
+      throw new Error(`Primary residence eligibility is unresolved for ${home.property.name}`);
+    }
     return {
       id: home.property.assetId,
       name: home.property.name,
@@ -299,7 +354,7 @@ export function resolveRetirementHomeSales(
         assumptions.accumulatedFederalDepreciationCents + home.property.projectedDepreciationCents,
       accumulatedCaliforniaDepreciationCents:
         assumptions.accumulatedCaliforniaDepreciationCents + home.property.projectedDepreciationCents,
-      primaryResidenceExclusionEligible: assumptions.primaryResidenceExclusionEligible,
+      primaryResidenceExclusionEligible: home.primaryResidenceEligibility.eligible,
     };
   }) : [];
 

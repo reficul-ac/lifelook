@@ -18,6 +18,7 @@ import type {
   Repository,
   RetirementSettingsRecord,
 } from "./repository";
+import { financialSnapshotFromBootstrap } from "./financialSnapshot";
 import { RetirementView } from "./RetirementView";
 
 vi.mock("./domain", async (importOriginal) => {
@@ -114,7 +115,7 @@ const availableResult: RetirementSnapshotResult = {
   },
 };
 
-const availableProjection: RetirementProjectionResult = {
+const availableProjection = {
   retirementMonth: "2042-01",
   withdrawalRateBps: 300,
   netWorthCents: 126_000_000,
@@ -125,6 +126,7 @@ const availableProjection: RetirementProjectionResult = {
       annualPreTaxIncomeCents: 2_050_000,
     },
     years: [],
+    warnings: [],
   },
   sellHomes: {
     available: true,
@@ -138,10 +140,12 @@ const availableProjection: RetirementProjectionResult = {
       annualPreTaxIncomeCents: 3_570_000,
     },
     years: [],
+    warnings: [],
   },
   effectiveWithdrawalOrder: [],
+  resolvedHomeSales: { homes: [], issues: [], sales: [] },
   warnings: [],
-};
+} satisfies RetirementProjectionResult;
 
 const annualProjectionRow = {
   year: 2042,
@@ -383,7 +387,15 @@ describe("RetirementView settings and autosave", () => {
       subtype: "traditional-ira",
       ownerPersonId: "younger",
     });
-    const values = withAccounts([brokerage, checking, ira]);
+    const roth = bootstrapAccount({
+      id: "roth",
+      name: "Roth IRA",
+      kind: "retirement",
+      subtype: "roth-ira",
+      ownerPersonId: "person",
+      rothOpeningYear: 2038,
+    });
+    const values = withAccounts([brokerage, checking, ira, roth]);
     values.bootstrap.people = [
       { id: "person", householdId: "household", name: "Avery", birthDate: "1970-01-01" },
       { id: "younger", householdId: "household", name: "Jordan", birthDate: "2000-01-01" },
@@ -418,15 +430,19 @@ describe("RetirementView settings and autosave", () => {
     expect(within(order).getByText("Brokerage")).toBeInTheDocument();
     expect(within(order).getByText("Checking")).toBeInTheDocument();
     expect(within(order).getByText("Traditional IRA")).toBeInTheDocument();
+    expect(within(order).getByText("Roth IRA")).toBeInTheDocument();
     expect(within(order).getByText(/Avery.*Taxable.*Age 72 at retirement/)).toBeInTheDocument();
     expect(within(order).getByText(/Household.*Cash.*Age not applicable/)).toBeInTheDocument();
     expect(within(order).getByText(/Jordan.*Pre-tax.*Age 42 at retirement.*penalty may apply/)).toBeInTheDocument();
+    expect(within(order).getByText(/Taxable sales may realize capital gains/)).toBeInTheDocument();
+    expect(within(order).getByText(/ordinary income.*early-withdrawal penalty/i)).toBeInTheDocument();
+    expect(within(order).getByText(/five tax years.*preserved last.*tax-free growth/i)).toBeInTheDocument();
 
     fireEvent.click(within(order).getByRole("button", { name: "Move Brokerage down" }));
     await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(1));
     expect(updateRetirementPlan).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        withdrawalAccountOrder: ["checking", "brokerage", "ira"],
+        withdrawalAccountOrder: ["checking", "brokerage", "ira", "roth"],
         taxableDestinationAccountId: "brokerage",
         expectedRevision: 1,
       }),
@@ -1619,42 +1635,44 @@ describe("RetirementView snapshot stories", () => {
       },
       revision: 1,
     };
-    const realSnapshot: FinancialSnapshot = {
-      ...snapshot,
-      household: {
-        ...snapshot.household,
-        people: [{ id: "person", name: "Person", birthDate: "1980-06-15" }],
-      },
+    const realBootstrap: Bootstrap = {
+      ...bootstrap,
+      people: [{
+        id: "person",
+        householdId: "household",
+        name: "Person",
+        birthDate: "1980-06-15",
+      }],
       taxProfile: {
-        ...snapshot.taxProfile,
+        ...bootstrap.taxProfile!,
         taxUnit: {
           id: "single",
           filingStatus: "single",
           memberPersonIds: ["person"],
         },
       },
-      accounts: [{
-        id: taxable.id,
-        name: taxable.name,
-        kind: taxable.kind,
-        balanceCents: taxable.balanceCents,
-        annualReturnBps: taxable.annualReturnBps,
-        liquid: taxable.liquid,
-        subtype: taxable.subtype,
-        taxableCostBasisCents: taxable.taxableCostBasisCents,
-        taxLots: [{
-          id: "opening-lot",
-          acquiredOn: "2020-01-01",
-          marketValueCents: 100_000_000,
-          federalBasisCents: 100_000_000,
-          californiaBasisCents: 100_000_000,
-        }],
-      }],
+      accounts: [taxable],
       assets: [home],
     };
+    const realSnapshot = financialSnapshotFromBootstrap(realBootstrap);
     const realScenario: Scenario = {
       ...activeScenario,
-      events: [],
+      events: [{
+        id: "rent-home",
+        date: "2027-01-01",
+        type: "property-rental-start",
+        assetId: "home",
+        name: "Rent Home",
+        monthlyRentalIncomeCents: 1_000_00,
+        rentalIncomeGrowthBps: 0,
+        rentalUseBps: 10_000,
+        rentalTaxModelingEnabled: true,
+        rentalType: "long-term",
+        longTermRealEstateProfessional: true,
+        longTermMaterialParticipation: true,
+        propertyTaxBasisCents: 40_000_000,
+        buildingBasisCents: 30_000_000,
+      }],
       horizon: { start: "2026-01", months: 12 },
     };
     const realSettings: RetirementSettingsRecord = {
@@ -1679,15 +1697,7 @@ describe("RetirementView snapshot stories", () => {
         initial={realSettings}
         repository={repository(updateRetirementPlan)}
         bootstrap={{
-          ...bootstrap,
-          people: [{
-            id: "person",
-            householdId: "household",
-            name: "Person",
-            birthDate: "1980-06-15",
-          }],
-          accounts: [taxable],
-          assets: [home],
+          ...realBootstrap,
           retirementPlan: realSettings,
         }}
         snapshot={realSnapshot}
@@ -1700,11 +1710,13 @@ describe("RetirementView snapshot stories", () => {
     }).closest("article")!;
     expect(within(
       within(keepStory).getByText("Estimated annual pre-tax income").parentElement!,
-    ).getByText("$30,000")).toBeInTheDocument();
+    ).getByText("$47,400")).toBeInTheDocument();
     expect(screen.getByRole("table", {
       name: "Keep homes annual projection",
     })).toBeInTheDocument();
-    expect(screen.getByLabelText("Pre-tax withdrawal: $30,000")).toBeInTheDocument();
+    expect(screen.getByLabelText("Pre-tax withdrawal: $35,400")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View 2042 year details" }));
+    expect(screen.getByLabelText("Rental income: $12,000")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", {
       name: "Select Sell all homes scenario",
@@ -1715,11 +1727,11 @@ describe("RetirementView snapshot stories", () => {
     }).closest("article")!;
     expect(within(
       within(sellStory).getByText("Estimated annual pre-tax income").parentElement!,
-    ).getByText("$45,000")).toBeInTheDocument();
+    ).getByText("$49,048")).toBeInTheDocument();
     expect(screen.getByRole("table", {
       name: "Sell all homes annual projection",
     })).toBeInTheDocument();
-    expect(screen.getByLabelText("Pre-tax withdrawal: $45,000")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Pre-tax withdrawal: \$49,0/)).toBeInTheDocument();
     await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledWith(
       expect.objectContaining({ selectedScenario: "sell-all-homes" }),
     ));
@@ -1771,6 +1783,7 @@ describe("RetirementView snapshot stories", () => {
     });
 
     keepButton.focus();
+    fireEvent.keyDown(keepButton, { key: "Enter", code: "Enter" });
     fireEvent.click(keepButton, { detail: 0 });
     await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(2));
     expect(keepButton).toHaveFocus();
@@ -1779,6 +1792,20 @@ describe("RetirementView snapshot stories", () => {
       expect.objectContaining({
         selectedScenario: "keep-homes",
         expectedRevision: 2,
+      }),
+    );
+
+    sellButton.focus();
+    fireEvent.keyDown(sellButton, { key: " ", code: "Space" });
+    fireEvent.keyUp(sellButton, { key: " ", code: "Space" });
+    fireEvent.click(sellButton, { detail: 0 });
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(3));
+    expect(sellButton).toHaveFocus();
+    expect(sellButton).toHaveAttribute("aria-pressed", "true");
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        selectedScenario: "sell-all-homes",
+        expectedRevision: 3,
       }),
     );
   });
@@ -1891,6 +1918,7 @@ describe("RetirementView snapshot stories", () => {
           },
         ],
         warnings: [],
+        years: [],
       },
     });
 
@@ -1916,6 +1944,46 @@ describe("RetirementView snapshot stories", () => {
         "Review rental use for Pine Street; mixed-use sale tax is not supported.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("renders no financial headlines or rows when the selected calculation is unavailable", () => {
+    const warning = {
+      code: "missing-destination" as const,
+      message: "Choose a taxable destination account before calculating retirement.",
+    };
+    vi.mocked(calculateRetirementProjection).mockReturnValue({
+      ...availableProjection,
+      netWorthCents: null,
+      keepHomes: {
+        available: false,
+        issues: [],
+        warnings: [warning],
+        years: [],
+      },
+      sellHomes: {
+        available: false,
+        issues: [],
+        warnings: [warning],
+        years: [],
+      },
+      warnings: [warning],
+    });
+
+    render(
+      <RetirementView
+        initial={initial}
+        repository={repository()}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    expect(screen.getAllByText("Unavailable")).toHaveLength(4);
+    expect(screen.queryByText(/\$[\d,]+/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Projection warnings" }))
+      .toHaveTextContent("Choose a taxable destination account");
   });
 
   it("removes prior financial figures when projection calculation fails", () => {
@@ -1957,6 +2025,7 @@ describe("RetirementView snapshot stories", () => {
           message: "Add a purchase date for Oak Street.",
         }],
         warnings: [],
+        years: [],
       },
     });
 

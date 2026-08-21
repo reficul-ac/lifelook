@@ -8,13 +8,11 @@ import {
   useState,
 } from "react";
 import {
-  buildRetirementCutoff,
   calculateRetirementProjection,
   ageOnDate,
   isTaxableInvestmentAccount,
   normalizeRetirementSettings,
   resolveRetirementAccountOrder,
-  resolveRetirementHomeSales,
   retirementWithdrawalClass,
   type Account,
   type FinancialSnapshot,
@@ -59,6 +57,10 @@ export interface RetirementViewProps {
     eventId: string,
     patch: HomeSaleSourcePatch,
   ) => Promise<void>;
+  onEditAcquisition?: (
+    home: import("./domain").ResolvedRetirementHome,
+    invoker: HTMLElement,
+  ) => void;
 }
 
 const money = (cents: number) =>
@@ -210,6 +212,7 @@ export function RetirementView(props: RetirementViewProps) {
     onSettingsChange,
     onUpdateCurrentHome,
     onUpdatePlannedHome,
+    onEditAcquisition,
   } = props;
   const initialRecord = initial ?? bootstrap.retirementPlan ?? null;
   const taxableAccounts = bootstrap.accounts.filter(isTaxableInvestmentAccount);
@@ -490,11 +493,7 @@ export function RetirementView(props: RetirementViewProps) {
   };
 
   const calculation = useMemo<
-    {
-      result: RetirementProjectionResult;
-      resolvedHomeSales: ReturnType<typeof resolveRetirementHomeSales> | null;
-      error: null;
-    } |
+    { result: RetirementProjectionResult; error: null } |
     { result: null; error: string } |
     null
   >(() => {
@@ -507,25 +506,8 @@ export function RetirementView(props: RetirementViewProps) {
         asOfDate,
         settings,
       });
-      let resolvedHomeSales: ReturnType<typeof resolveRetirementHomeSales> | null = null;
-      if (onUpdateCurrentHome && onUpdatePlannedHome) {
-        const cutoff = buildRetirementCutoff({
-          snapshot,
-          scenario,
-          retirementMonth: settings.retirementMonth,
-          asOfDate,
-        });
-        const snapshotInput = {
-          cutoff,
-          snapshot,
-          scenario,
-          withdrawalRateBps: clampBasisPoints(settings.withdrawalRateBps),
-        };
-        resolvedHomeSales = resolveRetirementHomeSales(snapshotInput);
-      }
       return {
         result,
-        resolvedHomeSales,
         error: null,
       };
     } catch (error) {
@@ -547,8 +529,6 @@ export function RetirementView(props: RetirementViewProps) {
     settings.withdrawalAccountOrder,
     settings.selectedScenario,
     snapshot,
-    onUpdateCurrentHome,
-    onUpdatePlannedHome,
   ]);
 
   const retry = () => {
@@ -683,10 +663,10 @@ export function RetirementView(props: RetirementViewProps) {
             >
               {onUpdateCurrentHome &&
                 onUpdatePlannedHome &&
-                calculation.resolvedHomeSales &&
-                calculation.resolvedHomeSales.homes.length > 0 ? (
+                calculation.result.resolvedHomeSales &&
+                calculation.result.resolvedHomeSales.homes.length > 0 ? (
                   <RetirementHomeSaleDetails
-                    homes={calculation.resolvedHomeSales.homes}
+                    homes={calculation.result.resolvedHomeSales.homes}
                     issues={calculation.result.sellHomes.available
                       ? []
                       : calculation.result.sellHomes.issues}
@@ -694,6 +674,7 @@ export function RetirementView(props: RetirementViewProps) {
                     retirementDate={`${settings.retirementMonth}-01`}
                     onUpdateCurrentHome={onUpdateCurrentHome}
                     onUpdatePlannedHome={onUpdatePlannedHome}
+                    onEditAcquisition={onEditAcquisition}
                   />
                 ) : null}
             </RetirementStory>
@@ -717,6 +698,24 @@ const withdrawalClassLabel: Record<WithdrawalClass, string> = {
   "eligible-pre-tax": "Pre-tax",
   "penalty-pre-tax": "Pre-tax",
   roth: "Roth",
+};
+
+const withdrawalExplanation = (
+  account: Account,
+  withdrawalClass: WithdrawalClass,
+) => {
+  switch (withdrawalClass) {
+    case "cash":
+      return "Cash is spendable without selling investments or triggering retirement-distribution tax.";
+    case "taxable":
+      return "Taxable sales may realize capital gains; they are generally used before retirement accounts to reduce early-withdrawal risk.";
+    case "eligible-pre-tax":
+      return "Distributions are taxed as ordinary income.";
+    case "penalty-pre-tax":
+      return "Distributions are taxed as ordinary income; an early-withdrawal penalty may apply because the owner is under age 59½.";
+    case "roth":
+      return `${account.subtype === "employer-roth" ? "Employer Roth" : "Roth"} qualification requires age 59½ and five tax years; the account is preserved last for potential tax-free growth.`;
+  }
 };
 
 function WithdrawalOrderSettings({
@@ -781,6 +780,9 @@ function WithdrawalOrderSettings({
                     <span>
                       {owner?.name ?? "Household"} · {withdrawalClassLabel[withdrawalClass]} · {ageStatus}
                     </span>
+                    <span className="retirement-withdrawal-explanation">
+                      {withdrawalExplanation(account, withdrawalClass)}
+                    </span>
                   </div>
                   <div className="retirement-withdrawal-actions">
                     <button
@@ -830,19 +832,20 @@ function RetirementStory({
   onSelect: () => void;
   children?: ReactNode;
 }) {
-  const sellingAvailable = result.sellHomes.available;
-  const keepSummary = result.keepHomes.summary;
-  const sellSummary = sellingAvailable ? result.sellHomes.summary : null;
-  const headlineNetWorth = kind === "keep"
-    ? money(result.netWorthCents)
-    : sellingAvailable
-      ? money(sellSummary!.liquidNetWorthCents)
-      : "Unavailable";
-  const headlineIncome = kind === "keep"
-    ? money(keepSummary.annualPreTaxIncomeCents)
-    : sellingAvailable
-      ? money(sellSummary!.annualPreTaxIncomeCents)
-      : "Unavailable";
+  const projection = kind === "keep" ? result.keepHomes : result.sellHomes;
+  const available = projection.available;
+  const keepSummary = result.keepHomes.available ? result.keepHomes.summary : null;
+  const sellSummary = result.sellHomes.available ? result.sellHomes.summary : null;
+  const headlineNetWorth = !available
+    ? "Unavailable"
+    : kind === "keep"
+      ? result.netWorthCents == null ? "Unavailable" : money(result.netWorthCents)
+      : money(sellSummary!.liquidNetWorthCents);
+  const headlineIncome = !available
+    ? "Unavailable"
+    : kind === "keep"
+      ? money(keepSummary!.annualPreTaxIncomeCents)
+      : money(sellSummary!.annualPreTaxIncomeCents);
   const scenarioName = kind === "keep" ? "Keep homes" : "Sell all homes";
 
   return (
@@ -881,15 +884,26 @@ function RetirementStory({
       </div>
       <details className="retirement-calculation">
         <summary>View calculation</summary>
-        {kind === "keep" ? (
+        {!available ? (
+          <div className="retirement-unavailable">
+            <p>This scenario cannot be calculated from the available data.</p>
+            {projection.issues.length > 0 ? (
+              <ul>
+                {projection.issues.map((issue, index) => (
+                  <li key={`${issue.assetId}-${issue.field}-${index}`}>{issue.message}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : kind === "keep" ? (
           <dl>
-            <CalculationRow label="Non-home net worth" value={money(keepSummary.nonHomeNetWorthCents)} />
+            <CalculationRow label="Non-home net worth" value={money(keepSummary!.nonHomeNetWorthCents)} />
             <CalculationRow label="Withdrawal rate" value={rate(result.withdrawalRateBps)} />
-            <CalculationRow label="Withdrawal income" value={money(keepSummary.withdrawalIncomeCents)} />
-            <CalculationRow label="Gross rental income" value={money(keepSummary.grossRentalIncomeCents)} />
-            <CalculationRow label="Annual pre-tax income" value={money(keepSummary.annualPreTaxIncomeCents)} />
+            <CalculationRow label="Withdrawal income" value={money(keepSummary!.withdrawalIncomeCents)} />
+            <CalculationRow label="Gross rental income" value={money(keepSummary!.grossRentalIncomeCents)} />
+            <CalculationRow label="Annual pre-tax income" value={money(keepSummary!.annualPreTaxIncomeCents)} />
           </dl>
-        ) : sellingAvailable ? (
+        ) : (
           <dl>
             <CalculationRow label="Gross home equity" value={money(sellSummary!.grossHomeEquityCents)} />
             <CalculationRow label="Selling costs" value={`−${money(sellSummary!.sellingCostsCents)}`} />
@@ -897,15 +911,6 @@ function RetirementStory({
             <CalculationRow label="Net home proceeds" value={money(sellSummary!.netHomeProceedsCents)} />
             <CalculationRow label="Liquid net worth" value={money(sellSummary!.liquidNetWorthCents)} />
           </dl>
-        ) : (
-          <div className="retirement-unavailable">
-            <p>Add the following home details to calculate a sale.</p>
-            <ul>
-              {result.sellHomes.issues.map((issue, index) => (
-                <li key={`${issue.assetId}-${issue.field}-${index}`}>{issue.message}</li>
-              ))}
-            </ul>
-          </div>
         )}
       </details>
       {children}

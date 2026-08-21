@@ -20,7 +20,7 @@ export interface RecurringEntry { id: string; name: string; amountCents: Cents; 
 export interface ImportProfile { id: string; name: string; columns: Readonly<Record<string, string>> }
 export interface ImportBatch { id: string; importedAt: string; profileId?: string; rowCount: number }
 export interface HousingCosts { propertyTaxRateBps: BasisPoints; insuranceMonthlyCents: Cents; insuranceAnnualGrowthBps: BasisPoints; hoaMonthlyCents: Cents; hoaAnnualGrowthBps: BasisPoints }
-export interface HomeSaleAssumptions { sellingCostBps:BasisPoints; primaryResidenceExclusionEligible:boolean; accumulatedFederalDepreciationCents:Cents; accumulatedCaliforniaDepreciationCents:Cents }
+export interface HomeSaleAssumptions { sellingCostBps:BasisPoints; primaryResidenceExclusionEligible?:boolean|null; accumulatedFederalDepreciationCents:Cents; accumulatedCaliforniaDepreciationCents:Cents }
 export interface AppreciationCurve { startYear:number; startRateBps:BasisPoints; endYear:number; endRateBps:BasisPoints }
 export interface PrivateStockVesting { vestedBps:BasisPoints; vestingStartDate:string; remainingVestingQuarters:number; taxOnVest?:boolean }
 export interface RsuVestEvent { id:string; date:string; unitsMicros:number; actualFmvCents?:Cents|null }

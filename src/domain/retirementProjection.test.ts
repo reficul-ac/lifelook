@@ -91,6 +91,8 @@ describe("calculateRetirementProjection", () => {
       settings,
     });
 
+    expect(result.keepHomes.available).toBe(true);
+    if (!result.keepHomes.available) throw new Error("expected Keep homes to be available");
     expect(result.keepHomes.summary).toEqual({
       homeEquityCents: 0,
       nonHomeNetWorthCents: 1_000_000_00,
@@ -239,7 +241,7 @@ describe("calculateRetirementProjection", () => {
       incrementalSaleTaxCents:3_510_000,
       netHomeProceedsCents:16_490_000,
       liquidNetWorthCents:116_490_000,
-      annualPreTaxIncomeCents:11_649,
+      annualPreTaxIncomeCents:60_011_649,
     });
   });
 
@@ -417,7 +419,7 @@ describe("calculateRetirementProjection", () => {
       assets: {},
       liabilities: { mortgage: 20_000_000 },
     });
-    expect(result.keepHomes.years[1].startingPortfolioCents).toBe(40_000_000);
+    expect(result.keepHomes.years[1].startingPortfolioCents).toBe(60_000_000);
   });
 
   // Production mutation caught: replaying a later Plan sale transition for a home already sold at retirement deposits the same gross proceeds twice in Sell.
@@ -593,10 +595,10 @@ describe("calculateRetirementProjection", () => {
       asOfDate: "2026-12-15",
       settings: { ...settings, retirementMonth: "2027-01", withdrawalRateBps: 1, horizonYears: 1 },
     });
-    const year = result.keepHomes.years[0];
-
-    expect(year.endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
-    expect(year.warnings).toEqual(expect.arrayContaining([
+    expect(result.keepHomes.available).toBe(false);
+    if (result.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "unsupported-rental-tax", year: 2027, entityId: "home-1" }),
       expect.objectContaining({ code: "calculation-error", year: 2027 }),
     ]));
@@ -647,10 +649,10 @@ describe("calculateRetirementProjection", () => {
       asOfDate: "2026-12-15",
       settings: { ...settings, retirementMonth: "2027-01", withdrawalRateBps: 1, horizonYears: 1 },
     });
-    const year=result.keepHomes.years[0];
-
-    expect(year.endingBalances).toEqual({accounts:{},assets:{},liabilities:{}});
-    expect(year.warnings).toContainEqual(expect.objectContaining({code:"unsupported-rental-tax",entityId:"rental-1"}));
+    expect(result.keepHomes.available).toBe(false);
+    if (result.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({code:"unsupported-rental-tax",entityId:"rental-1"}));
   });
 
   // Production mutation caught: ignoring unequal federal and California passive carryforwards taxes positive rent under a fabricated shared jurisdictional baseline.
@@ -664,10 +666,10 @@ describe("calculateRetirementProjection", () => {
       asOfDate:"2026-12-15",
       settings:{...settings,retirementMonth:"2027-01",withdrawalRateBps:1,horizonYears:1},
     });
-    const year=result.keepHomes.years[0];
-
-    expect(year.endingBalances).toEqual({accounts:{},assets:{},liabilities:{}});
-    expect(year.warnings).toContainEqual(expect.objectContaining({code:"unsupported-rental-tax",entityId:"rental-1"}));
+    expect(result.keepHomes.available).toBe(false);
+    if (result.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({code:"unsupported-rental-tax",entityId:"rental-1"}));
   });
 
   // Production mutation caught: honoring the override before the selected taxable destination on a shortfall drains the fallback cash account first.
@@ -713,9 +715,8 @@ describe("calculateRetirementProjection", () => {
     expect(year.withdrawalTargetCents).toBe(250);
     expect(year.shortfallCents).toBe(1_199_750);
     expect(year.withdrawalSources.map((source) => [source.accountId, source.amountCents])).toEqual([
-      ["cash-1", 250],
+      ["cash-1", 700_000],
       ["taxable-1", 500_000],
-      ["cash-1", 699_750],
     ]);
     expect(year.endingBalances.accounts).toEqual({
       "taxable-1": 0,
@@ -871,15 +872,14 @@ describe("calculateRetirementProjection", () => {
 
     expect(result.warnings).toContainEqual(expect.objectContaining({
       code: "missing-destination",
-      year: 2027,
     }));
-    expect(result.keepHomes.years[0].warnings).toContainEqual(expect.objectContaining({
+    expect(result.keepHomes.available).toBe(false);
+    expect(result.sellHomes.available).toBe(false);
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.sellHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({
       code: "missing-destination",
     }));
-    expect(result.keepHomes.years[0].warnings).toContainEqual(expect.objectContaining({
-      code: "calculation-error",
-    }));
-    expect(result.keepHomes.years[0].endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
   });
 
   // Production mutation caught: depositing negative net sale proceeds directly creates a negative brokerage and basis instead of funding the closing deficit through normal withdrawals.
@@ -984,8 +984,8 @@ describe("calculateRetirementProjection", () => {
     ]));
   });
 
-  // Production mutation caught: presenting an aggregate brokerage gain as exact long-term gain invents holding-period and California-basis precision that the account does not contain.
-  test("returns a structured calculation error when taxable lot character is unavailable", () => {
+  // Production mutation caught: presenting aggregate basis as exact lot character invents precision; rejecting it entirely makes persisted brokerage balances unusable.
+  test("discloses conservative aggregate-basis treatment when exact lots are unavailable", () => {
     const result = calculateRetirementProjection({
       snapshot: {
         ...financialSnapshot,
@@ -1002,11 +1002,104 @@ describe("calculateRetirementProjection", () => {
     });
     const year = result.keepHomes.years[0];
 
-    expect(year.endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
-    expect(year.warnings).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: "unsupported-tax-character", year: 2027, entityId: "taxable-1" }),
-      expect.objectContaining({ code: "calculation-error", year: 2027 }),
-    ]));
+    expect(result.keepHomes.available).toBe(true);
+    expect(year.endingBalances.accounts["taxable-1"]).toBeGreaterThan(0);
+    expect(year.withdrawalSources).toContainEqual(expect.objectContaining({
+      accountId: "taxable-1",
+      taxEstimateMethod: "conservative-aggregate-basis",
+    }));
+    expect(year.warnings).toContainEqual(expect.objectContaining({
+      code: "conservative-taxable-basis",
+      entityId: "taxable-1",
+    }));
+  });
+
+  // Production mutation caught: defaulting an absent Roth contribution basis to
+  // zero invents an exact taxable-earnings amount for an unqualified distribution.
+  test("makes the series unavailable when an unqualified Roth draw has unknown contribution basis", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [
+          exactTaxableAccount(0),
+          {
+            id: "roth-1",
+            name: "Roth IRA",
+            kind: "retirement",
+            subtype: "roth-ira",
+            balanceCents: 100_000_000,
+            annualReturnBps: 0,
+            liquid: false,
+            ownerPersonId: "person-1",
+            rothContributionBasisCents: null,
+            rothOpeningYear: 2020,
+          },
+        ],
+      },
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        withdrawalRateBps: 10_000,
+        horizonYears: 1,
+        withdrawalAccountOrder: ["roth-1", "taxable-1"],
+      },
+    });
+
+    expect(result.keepHomes.available).toBe(false);
+    if (result.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({
+      code: "unsupported-tax-character",
+      entityId: "roth-1",
+    }));
+  });
+
+  test("does not require contribution basis for an otherwise qualified Roth draw", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        household: {
+          ...financialSnapshot.household,
+          people: [{ id: "person-1", name: "Morgan", birthDate: "1960-06-15" }],
+        },
+        accounts: [
+          exactTaxableAccount(0),
+          {
+            id: "roth-1",
+            name: "Roth IRA",
+            kind: "retirement",
+            subtype: "roth-ira",
+            balanceCents: 100_000_000,
+            annualReturnBps: 0,
+            liquid: false,
+            ownerPersonId: "person-1",
+            rothContributionBasisCents: null,
+            rothOpeningYear: 2020,
+          },
+        ],
+      },
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        withdrawalRateBps: 10_000,
+        horizonYears: 1,
+        withdrawalAccountOrder: ["roth-1", "taxable-1"],
+      },
+    });
+
+    expect(result.keepHomes.available).toBe(true);
+    if (!result.keepHomes.available) throw new Error("expected Keep homes to be available");
+    expect(result.keepHomes.years[0].withdrawalSources).toContainEqual(
+      expect.objectContaining({
+        accountId: "roth-1",
+        taxEstimateMethod: "qualified-roth",
+        taxCharacterSupported: true,
+      }),
+    );
   });
 
   // Production mutation caught: treating a pre-retirement contribution as market growth rescales a stale lot to the cutoff balance and invents exact gain character.
@@ -1030,8 +1123,10 @@ describe("calculateRetirementProjection", () => {
       settings: { ...settings, retirementMonth: "2027-01", withdrawalRateBps: 1, horizonYears: 1 },
     });
 
-    expect(result.keepHomes.years[0].endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
-    expect(result.keepHomes.years[0].warnings).toContainEqual(expect.objectContaining({
+    expect(result.keepHomes.available).toBe(false);
+    if (result.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({
       code: "unsupported-tax-character",
       entityId: "taxable-1",
     }));
@@ -1064,8 +1159,10 @@ describe("calculateRetirementProjection", () => {
       settings: { ...settings, retirementMonth: "2027-01", withdrawalRateBps: 1, horizonYears: 1 },
     });
 
-    expect(result.keepHomes.years[0].endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
-    expect(result.keepHomes.years[0].warnings).toContainEqual(expect.objectContaining({
+    expect(result.keepHomes.available).toBe(false);
+    if (result.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({
       code: "unsupported-tax-character",
       entityId: "taxable-1",
     }));
@@ -1086,14 +1183,17 @@ describe("calculateRetirementProjection", () => {
       settings: { ...settings, retirementMonth: "2027-01", withdrawalRateBps: 1, horizonYears: 1 },
     });
 
-    expect(result.keepHomes.years[0].warnings).toContainEqual(expect.objectContaining({
+    expect(result.keepHomes.available).toBe(false);
+    if (result.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({
       code: "unsupported-tax-character",
       entityId: "taxable-1",
     }));
   });
 
-  // Production mutation caught: reducing taxable lots for a Plan transfer without reporting its sale character silently treats a taxable disposition as tax-free.
-  test("returns structured unsupported tax for a post-retirement taxable Plan outflow", () => {
+  // Production mutation caught: reducing aggregate basis for a Plan transfer without a disclosed conservative sale method presents false precision.
+  test("discloses conservative tax for a post-retirement taxable Plan outflow", () => {
     const result = calculateRetirementProjection({
       snapshot: {
         ...financialSnapshot,
@@ -1115,9 +1215,10 @@ describe("calculateRetirementProjection", () => {
       settings: { ...settings, retirementMonth: "2027-01", withdrawalRateBps: 1, horizonYears: 1, withdrawalAccountOrder: ["cash-1", "taxable-1"] },
     });
 
-    expect(result.keepHomes.years[0].endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
+    expect(result.keepHomes.available).toBe(true);
+    expect(result.keepHomes.years[0].endingBalances.accounts["cash-1"]).toBeGreaterThan(100_000_000);
     expect(result.keepHomes.years[0].warnings).toContainEqual(expect.objectContaining({
-      code: "unsupported-tax-character",
+      code: "conservative-taxable-basis",
       entityId: "taxable-1",
     }));
   });
@@ -1263,11 +1364,11 @@ describe("calculateRetirementProjection", () => {
       asOfDate: "2026-12-15",
       settings: { ...settings, retirementMonth: "2027-01", horizonYears: 1 },
     });
-    const failedYear = failed.keepHomes.years[0];
-
     expect(prior.keepHomes.years[0].endingBalances.accounts).not.toEqual({});
-    expect(failedYear.endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
-    expect(failedYear.warnings).toContainEqual(expect.objectContaining({
+    expect(failed.keepHomes.available).toBe(false);
+    if (failed.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(failed.keepHomes.years).toEqual([]);
+    expect(failed.keepHomes.warnings).toContainEqual(expect.objectContaining({
       code: "calculation-error",
       year: 2027,
     }));
@@ -1277,8 +1378,8 @@ describe("calculateRetirementProjection", () => {
     }));
   });
 
-  // Production mutation caught: allowing an upfront Plan validation exception to escape prevents either retirement scenario from returning structured errors.
-  test("isolates an upfront Plan exception into calculation-error scenario rows", () => {
+  // Production mutation caught: allowing an upfront Plan validation exception to escape or returning numeric rows masquerades as a usable calculation.
+  test("isolates an upfront Plan exception into unavailable scenarios", () => {
     const invalidPlan: Scenario = {
       ...scenario,
       horizon: { start: "2026-12", months: 12 },
@@ -1298,12 +1399,11 @@ describe("calculateRetirementProjection", () => {
       settings: { ...settings, retirementMonth: "2027-01", horizonYears: 2 },
     });
 
-    expect(result.keepHomes.years).toHaveLength(2);
-    expect(result.keepHomes.years.every((year) =>
-      year.warnings.some((warning) => warning.code === "calculation-error"))).toBe(true);
+    expect(result.keepHomes.available).toBe(false);
     expect(result.sellHomes.available).toBe(false);
-    if (result.sellHomes.available) throw new Error("expected Sell homes to be unavailable");
-    expect(result.sellHomes.warnings).toContainEqual(expect.objectContaining({
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.sellHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({
       code: "calculation-error",
     }));
   });
@@ -1344,8 +1444,8 @@ describe("calculateRetirementProjection", () => {
     }));
   });
 
-  // Production mutation caught: one invalid second-year Plan event aborts the eager projection, erases the valid first row, or lets later rows reuse stale balances.
-  test("preserves prior rows and clears the failing and later years after a later Plan exception", () => {
+  // Production mutation caught: retaining partial financial rows after a later Plan exception presents a stale series as usable.
+  test("makes the whole scenario unavailable after a later Plan exception", () => {
     const result = calculateRetirementProjection({
       snapshot: {
         ...financialSnapshot,
@@ -1376,12 +1476,10 @@ describe("calculateRetirementProjection", () => {
       settings: { ...settings, retirementMonth: "2027-01", horizonYears: 3 },
     });
 
-    expect(result.keepHomes.years[0].endingBalances.accounts["taxable-1"]).toBeGreaterThan(0);
-    expect(result.keepHomes.years[0].warnings).not.toContainEqual(expect.objectContaining({ code: "calculation-error" }));
-    expect(result.keepHomes.years[1].endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
-    expect(result.keepHomes.years[1].warnings).toContainEqual(expect.objectContaining({ code: "calculation-error", year: 2028 }));
-    expect(result.keepHomes.years[2].endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
-    expect(result.keepHomes.years[2].warnings).toContainEqual(expect.objectContaining({ code: "calculation-error", year: 2029 }));
+    expect(result.keepHomes.available).toBe(false);
+    if (result.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({ code: "calculation-error", year: 2028 }));
   });
 
   // Production mutation caught: sharing Keep's unfiltered Plan failure with Sell clears Sell for an invalid event that targets a home Sell removed at retirement.
@@ -1421,14 +1519,17 @@ describe("calculateRetirementProjection", () => {
     expect(result.sellHomes.available).toBe(true);
     if (!result.sellHomes.available) throw new Error("expected Sell homes to be available");
 
-    expect(result.keepHomes.years[1].warnings).toContainEqual(expect.objectContaining({ code: "calculation-error", year: 2028 }));
+    expect(result.keepHomes.available).toBe(false);
+    if (result.keepHomes.available) throw new Error("expected Keep homes to be unavailable");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.keepHomes.warnings).toContainEqual(expect.objectContaining({ code: "calculation-error", year: 2028 }));
     expect(result.sellHomes.years).toHaveLength(3);
     expect(result.sellHomes.years.flatMap((year) => year.warnings.filter((warning) =>
       warning.code === "calculation-error"))).toEqual([]);
     expect(result.sellHomes.years[2].endingBalances.accounts["taxable-1"]).toBe(150_000_000);
   });
 
-  // Production mutation caught: extending the horizon before structural protection lets malformed or far-past retirement months throw instead of returning stable error rows.
+  // Production mutation caught: extending the horizon before structural protection lets malformed or far-past retirement months throw instead of returning a stable unavailable result.
   test.each(["not-a-month", "2020-01"])("returns structured setup errors for retirement month %s", (retirementMonth) => {
     let result: ReturnType<typeof calculateRetirementProjection> | undefined;
     expect(() => {
@@ -1441,9 +1542,317 @@ describe("calculateRetirementProjection", () => {
     }).not.toThrow();
 
     expect(result?.retirementMonth).toBe(retirementMonth);
-    expect(result?.keepHomes.years).toHaveLength(2);
-    expect(result?.keepHomes.years.every((year) =>
-      year.warnings.some((warning) => warning.code === "calculation-error"))).toBe(true);
+    expect(result?.netWorthCents).toBeNull();
+    expect(result?.keepHomes.available).toBe(false);
+    expect(result?.keepHomes.years).toEqual([]);
+    expect(result?.keepHomes.warnings).toContainEqual(expect.objectContaining({
+      code: "calculation-error",
+    }));
     expect(result?.sellHomes.available).toBe(false);
+  });
+
+  // Production mutations caught: allowing zero/no-account or ambiguous/no-selection
+  // settings through creates available rows whose destination balance is a fake zero.
+  test("makes both scenarios unavailable when the taxable destination is unresolved", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [
+          exactTaxableAccount(60_000_000),
+          { ...exactTaxableAccount(40_000_000), id: "taxable-2", name: "Second brokerage" },
+        ],
+      },
+      scenario,
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        horizonYears: 1,
+        taxableDestinationAccountId: null,
+      },
+    });
+
+    expect(result.netWorthCents).toBeNull();
+    expect(result.keepHomes).toMatchObject({
+      available: false,
+      warnings: [expect.objectContaining({ code: "missing-destination" })],
+    });
+    expect(result.keepHomes).not.toHaveProperty("summary");
+    expect(result.keepHomes.years).toEqual([]);
+    expect(result.sellHomes).toMatchObject({
+      available: false,
+      warnings: [expect.objectContaining({ code: "missing-destination" })],
+    });
+  });
+
+  // Production mutation caught: deriving the withdrawal base from all assets and
+  // liabilities treats an illiquid asset as spendable retirement capital.
+  test("uses only drawable account balances for the starting eligible portfolio", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [
+          exactTaxableAccount(100_000_000),
+          {
+            id: "card",
+            name: "Credit card",
+            kind: "credit",
+            balanceCents: -20_000_000,
+            annualReturnBps: 0,
+            liquid: false,
+          },
+        ],
+        assets: [{
+          id: "collectible",
+          name: "Illiquid collection",
+          valueCents: 900_000_000,
+          annualGrowthBps: 0,
+        }],
+      },
+      scenario,
+      asOfDate: "2026-12-15",
+      settings: { ...settings, retirementMonth: "2027-01", horizonYears: 1 },
+    });
+
+    expect(result.keepHomes.available).toBe(true);
+    if (!result.keepHomes.available) throw new Error("expected Keep homes to be available");
+    expect(result.keepHomes.years[0].startingPortfolioCents).toBe(100_000_000);
+    expect(result.keepHomes.years[0].withdrawalTargetCents).toBe(3_000_000);
+    expect(result.keepHomes.years[0].endingNetWorthCents).toBeGreaterThan(900_000_000);
+  });
+
+  // Production mutation caught: adopting Plan contribution asset/debt changes and
+  // also depositing Retirement surplus duplicates the same outside cash flow.
+  test("suppresses Plan surplus allocations so outside income enters net worth once", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        recurring: [{
+          id: "pension",
+          name: "Pension",
+          kind: "income",
+          incomeTaxCategory: "nontaxable",
+          amountCents: 100_000,
+          frequency: "monthly",
+          startDate: "2027-01-01",
+          endDate: "2027-12-31",
+          taxTreatment: "none",
+        }],
+        assets: [{
+          id: "funded-asset",
+          name: "Funded asset",
+          valueCents: 0,
+          annualGrowthBps: 0,
+        }],
+      },
+      scenario: {
+        ...scenario,
+        defaultContributionAccountId: "taxable-1",
+        contributions: [{
+          id: "allocate-surplus",
+          destinationType: "asset",
+          destinationId: "funded-asset",
+          percentBps: 10_000,
+          frequency: "monthly",
+        }],
+      },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        horizonYears: 1,
+        withdrawalRateBps: 1,
+      },
+    });
+
+    expect(result.keepHomes.available).toBe(true);
+    if (!result.keepHomes.available) throw new Error("expected Keep homes to be available");
+    const year = result.keepHomes.years[0];
+    expect(year.otherPreTaxIncomeCents).toBe(1_200_000);
+    expect(year.endingBalances.assets["funded-asset"]).toBe(0);
+    expect(year.endingBalances.accounts["taxable-1"]).toBe(101_200_000);
+    expect(year.endingNetWorthCents).toBe(101_200_000);
+  });
+
+  // Production mutations caught: applying a pre-tax transfer as a raw balance delta
+  // skips distribution tax; applying both sides inconsistently creates or destroys wealth.
+  test("taxes and conserves an account-specific pre-tax Plan transition exactly once", () => {
+    const pretax = {
+      id: "pretax",
+      name: "Traditional IRA",
+      kind: "retirement" as const,
+      subtype: "traditional-ira" as const,
+      ownerPersonId: "person-1",
+      balanceCents: 100_000_000,
+      annualReturnBps: 0,
+      liquid: false,
+    };
+    const destination = {
+      ...exactTaxableAccount(0),
+      taxableCostBasisCents: 0,
+      taxLots: undefined,
+    };
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        household: {
+          ...financialSnapshot.household,
+          people: [{ id: "person-1", name: "Morgan", birthDate: "1960-01-01" }],
+        },
+        accounts: [destination, pretax],
+      },
+      scenario: {
+        ...scenario,
+        events: [{
+          id: "distribution",
+          date: "2027-06-15",
+          type: "account-transfer",
+          fromAccountId: "pretax",
+          toAccountId: "taxable-1",
+          amountCents: 10_000_000,
+        }],
+      },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        horizonYears: 1,
+        withdrawalRateBps: 1,
+      },
+    });
+
+    expect(result.keepHomes.available).toBe(true);
+    if (!result.keepHomes.available) throw new Error("expected Keep homes to be available");
+    const year = result.keepHomes.years[0];
+    expect(year.estimatedTaxCents).toBeGreaterThan(0);
+    expect(year.earlyPenaltyCents).toBe(0);
+    expect(year.withdrawalSources).toContainEqual(expect.objectContaining({
+      accountId: "pretax",
+      ordinaryIncomeCents: 10_000_000,
+      taxYear: 2027,
+    }));
+    expect(year.endingNetWorthCents).toBe(100_000_000 - year.estimatedTaxCents);
+  });
+
+  // Production mutations caught: drawing after twelve months with the period-start
+  // date assigns tax to the wrong calendar year and applies the younger age bucket.
+  test("dates annual withdrawals at period end for owner age and calendar-year tax character", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        household: {
+          ...financialSnapshot.household,
+          people: [{ id: "person-1", name: "Morgan", birthDate: "1971-06-01" }],
+        },
+        accounts: [
+          { ...exactTaxableAccount(0), taxableCostBasisCents: 0, taxLots: undefined },
+          {
+            id: "pretax",
+            name: "Traditional IRA",
+            kind: "retirement",
+            subtype: "traditional-ira",
+            ownerPersonId: "person-1",
+            balanceCents: 100_000_000,
+            annualReturnBps: 0,
+            liquid: false,
+          },
+        ],
+      },
+      scenario,
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2030-09",
+        horizonYears: 1,
+        withdrawalRateBps: 300,
+      },
+    });
+
+    expect(result.keepHomes.available).toBe(true);
+    if (!result.keepHomes.available) throw new Error("expected Keep homes to be available");
+    const source = result.keepHomes.years[0].withdrawalSources.find(
+      (item) => item.accountId === "pretax",
+    );
+    expect(source).toMatchObject({ taxYear: 2031, earlyPenaltyCents: 0 });
+  });
+
+  // Production mutations caught: a zero-balance destination without an initialized
+  // lot collection loses the exact date/basis of later cash deposits and falls back
+  // to aggregate treatment on the next year's sale.
+  test("creates exact dated lots for new deposits into an empty taxable destination", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [{
+          ...exactTaxableAccount(0),
+          annualReturnBps: 1_200,
+          taxableCostBasisCents: 0,
+          taxLots: undefined,
+        }],
+        recurring: [{
+          id: "one-year-pension",
+          name: "One-year pension",
+          kind: "income",
+          incomeTaxCategory: "nontaxable",
+          amountCents: 100_000,
+          frequency: "monthly",
+          startDate: "2027-01-01",
+          endDate: "2027-12-31",
+          taxTreatment: "none",
+        }],
+      },
+      scenario,
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        horizonYears: 2,
+        withdrawalRateBps: 10_000,
+      },
+    });
+
+    expect(result.keepHomes.available).toBe(true);
+    if (!result.keepHomes.available) throw new Error("expected Keep homes to be available");
+    const source = result.keepHomes.years[1].withdrawalSources[0];
+    expect(source).toMatchObject({
+      accountId: "taxable-1",
+      taxYear: 2028,
+      taxEstimateMethod: "exact-tax-lots",
+      taxCharacterSupported: true,
+    });
+    expect(source.federalLongTermGainCents).toBeGreaterThan(0);
+  });
+
+  // Production mutations caught: independently recomputing the overview from the
+  // opening snapshot drops non-employment income and can show an unfunded target.
+  test("derives overview income from the first funded annual row", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        recurring: [{
+          id: "annuity",
+          name: "Annuity",
+          kind: "income",
+          incomeTaxCategory: "nontaxable",
+          amountCents: 120_000,
+          frequency: "monthly",
+          startDate: "2027-01-01",
+          endDate: "2027-06-30",
+          taxTreatment: "none",
+        }],
+      },
+      scenario,
+      asOfDate: "2026-12-15",
+      settings: { ...settings, retirementMonth: "2027-01", horizonYears: 1 },
+    });
+
+    expect(result.keepHomes.available).toBe(true);
+    if (!result.keepHomes.available) throw new Error("expected Keep homes to be available");
+    const first = result.keepHomes.years[0];
+    expect(first.otherPreTaxIncomeCents).toBe(720_000);
+    expect(result.keepHomes.summary.annualPreTaxIncomeCents).toBe(
+      first.withdrawalFundedCents + first.otherPreTaxIncomeCents + first.rentalIncomeCents,
+    );
+    expect(result.keepHomes.summary.withdrawalIncomeCents).toBe(first.withdrawalFundedCents);
   });
 });

@@ -110,6 +110,10 @@ const initial: RetirementSettingsRecord = {
   householdId: "household",
   retirementMonth: "2042-01",
   withdrawalRateBps: 300,
+  horizonYears: 30,
+  taxableDestinationAccountId: null,
+  withdrawalAccountOrder: [],
+  selectedScenario: "keep-homes",
   revision: 1,
 };
 
@@ -240,6 +244,7 @@ describe("RetirementView settings and autosave", () => {
     expect(calculateRetirementSnapshot).toHaveBeenCalledTimes(1);
   });
 
+  // Break caught: editing the legacy controls would drop normalized migration settings from the persisted plan update.
   it("serializes autosaves with the latest revision and reports the saved record", async () => {
     let finishFirst: ((record: RetirementSettingsRecord) => void) | undefined;
     const updateRetirementPlan = vi
@@ -273,6 +278,10 @@ describe("RetirementView settings and autosave", () => {
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2042-09",
       withdrawalRateBps: 300,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       expectedRevision: 1,
     });
 
@@ -291,6 +300,10 @@ describe("RetirementView settings and autosave", () => {
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2042-09",
       withdrawalRateBps: 350,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       expectedRevision: 2,
     });
     expect(buildRetirementCutoff).toHaveBeenLastCalledWith(
@@ -314,6 +327,10 @@ describe("RetirementView settings and autosave", () => {
       householdId: "household",
       retirementMonth: "2050-06",
       withdrawalRateBps: 425,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       revision: 11,
     };
     const updateRetirementPlan = vi
@@ -356,6 +373,10 @@ describe("RetirementView settings and autosave", () => {
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2050-06",
       withdrawalRateBps: 450,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       expectedRevision: 11,
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();
@@ -381,6 +402,10 @@ describe("RetirementView settings and autosave", () => {
       householdId: "household",
       retirementMonth: "2050-06",
       withdrawalRateBps: 425,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       revision: 11,
     };
     const updateRetirementPlan = vi
@@ -419,6 +444,10 @@ describe("RetirementView settings and autosave", () => {
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2051-07",
       withdrawalRateBps: 425,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       expectedRevision: 11,
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();
@@ -448,6 +477,10 @@ describe("RetirementView settings and autosave", () => {
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2042-01",
       withdrawalRateBps: 1,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       expectedRevision: 1,
     });
     fireEvent.click(retry);
@@ -455,6 +488,10 @@ describe("RetirementView settings and autosave", () => {
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2042-01",
       withdrawalRateBps: 1,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       expectedRevision: 1,
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();
@@ -466,6 +503,10 @@ describe("RetirementView settings and autosave", () => {
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2042-01",
       withdrawalRateBps: 10_000,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       expectedRevision: 2,
     });
   });
@@ -522,6 +563,10 @@ describe("RetirementView settings and autosave", () => {
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2042-09",
       withdrawalRateBps: 350,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       expectedRevision: 1,
     });
   });
@@ -572,6 +617,10 @@ describe("RetirementView settings and autosave", () => {
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2043-03",
       withdrawalRateBps: 350,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       expectedRevision: 1,
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();

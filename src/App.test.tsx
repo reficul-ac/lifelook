@@ -659,6 +659,10 @@ describe("LifeLook shell", () => {
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2042-09",
       withdrawalRateBps: 300,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       expectedRevision: 1,
     });
 
@@ -675,12 +679,20 @@ describe("LifeLook shell", () => {
       householdId: "test",
       retirementMonth: "2042-09",
       withdrawalRateBps: 300,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       revision: 2,
     });
     await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(2));
     expect(updateRetirementPlan).toHaveBeenLastCalledWith({
       retirementMonth: "2042-09",
       withdrawalRateBps: 350,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       expectedRevision: 2,
     });
     expect(screen.getByLabelText("Retirement month")).toHaveValue("2042-09");
@@ -691,6 +703,10 @@ describe("LifeLook shell", () => {
       householdId: "test",
       retirementMonth: "2042-09",
       withdrawalRateBps: 350,
+      horizonYears: 30,
+      taxableDestinationAccountId: null,
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
       revision: 3,
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();

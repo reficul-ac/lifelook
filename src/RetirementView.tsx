@@ -68,10 +68,20 @@ const draftFromSettings = (
   withdrawalRate: String(settings.withdrawalRateBps / 100),
 });
 
-const saveValuesFromDraft = (draft: SettingsDraft): SaveValues | null => {
+const saveValuesFromDraft = (
+  draft: SettingsDraft,
+  settings: SaveValues,
+): SaveValues | null => {
   const withdrawalRateBps = parseWithdrawalRate(draft.withdrawalRate);
   return validRetirementMonth(draft.retirementMonth) && withdrawalRateBps !== null
-    ? { retirementMonth: draft.retirementMonth, withdrawalRateBps }
+    ? {
+        retirementMonth: draft.retirementMonth,
+        withdrawalRateBps,
+        horizonYears: settings.horizonYears,
+        taxableDestinationAccountId: settings.taxableDestinationAccountId,
+        withdrawalAccountOrder: settings.withdrawalAccountOrder,
+        selectedScenario: settings.selectedScenario,
+      }
     : null;
 };
 
@@ -213,7 +223,10 @@ export function RetirementView(props: RetirementViewProps) {
           }
         } catch {
           if (generation.current !== saveGeneration) return;
-          failed.current = saveValuesFromDraft(draftRef.current);
+          failed.current = saveValuesFromDraft(
+            draftRef.current,
+            settingsRef.current,
+          );
           pending.current = null;
           saving.current = false;
           if (mounted.current) {
@@ -225,7 +238,11 @@ export function RetirementView(props: RetirementViewProps) {
       if (generation.current !== saveGeneration) return;
       saving.current = false;
       if (mounted.current) {
-        setSaveState(saveValuesFromDraft(draftRef.current) ? "saved" : "idle");
+        setSaveState(
+          saveValuesFromDraft(draftRef.current, settingsRef.current)
+            ? "saved"
+            : "idle",
+        );
       }
     })();
   }, []);
@@ -237,6 +254,10 @@ export function RetirementView(props: RetirementViewProps) {
     queueSave({
       retirementMonth: updated.retirementMonth,
       withdrawalRateBps: clampBasisPoints(updated.withdrawalRateBps),
+      horizonYears: updated.horizonYears,
+      taxableDestinationAccountId: updated.taxableDestinationAccountId,
+      withdrawalAccountOrder: updated.withdrawalAccountOrder,
+      selectedScenario: updated.selectedScenario,
     });
   };
 
@@ -244,7 +265,7 @@ export function RetirementView(props: RetirementViewProps) {
     const updated = { ...draftRef.current, ...next };
     draftRef.current = updated;
     setDraft(updated);
-    const values = saveValuesFromDraft(updated);
+    const values = saveValuesFromDraft(updated, settingsRef.current);
     if (values === null) {
       pending.current = null;
       failed.current = null;
@@ -294,7 +315,7 @@ export function RetirementView(props: RetirementViewProps) {
   ]);
 
   const retry = () => {
-    const values = saveValuesFromDraft(draftRef.current);
+    const values = saveValuesFromDraft(draftRef.current, settingsRef.current);
     if (values === null) {
       failed.current = null;
       setSaveState("idle");

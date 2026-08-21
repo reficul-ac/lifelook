@@ -30,6 +30,7 @@ import {
   RetirementHomeSaleDetails,
   type HomeSaleSourcePatch,
 } from "./RetirementHomeSaleDetails";
+import { RetirementProjectionTable } from "./RetirementProjectionTable";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type SaveValues = Omit<RetirementSettingsInput, "expectedRevision">;
@@ -692,6 +693,15 @@ export function RetirementView(props: RetirementViewProps) {
                 ) : null}
             </RetirementStory>
           </section>
+          <RetirementProjectionTable
+            selectedScenario={draft.selectedScenario}
+            projection={draft.selectedScenario === "keep-homes"
+              ? calculation.result.keepHomes
+              : calculation.result.sellHomes}
+            accountNames={Object.fromEntries(
+              bootstrap.accounts.map((account) => [account.id, account.name]),
+            )}
+          />
         </>
       )}
     </div>

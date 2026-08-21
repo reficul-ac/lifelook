@@ -8,6 +8,7 @@ import {
   type FinancialSnapshot,
   type RetirementCutoff,
   type RetirementProjectionResult,
+  type RetirementProjectionYear,
   type RetirementSnapshotResult,
   type Scenario,
 } from "./domain";
@@ -141,6 +142,36 @@ const availableProjection: RetirementProjectionResult = {
   effectiveWithdrawalOrder: [],
   warnings: [],
 };
+
+const annualProjectionRow = {
+  year: 2042,
+  ages: [{ personId: "person", name: "Person", age: 62 }],
+  startingPortfolioCents: 1_260_000_00,
+  withdrawalTargetCents: 37_800_00,
+  withdrawalFundedCents: 37_800_00,
+  otherPreTaxIncomeCents: 0,
+  rentalIncomeCents: 20_500_00,
+  estimatedTaxCents: 8_000_00,
+  earlyPenaltyCents: 0,
+  afterTaxIncomeCents: 50_300_00,
+  planExpenseCents: 40_000_00,
+  housingExpenseCents: 8_000_00,
+  surplusCents: 2_300_00,
+  shortfallCents: 0,
+  destinationBalanceCents: 2_300_00,
+  endingNetWorthCents: 1_270_000_00,
+  endingBalances: { accounts: {}, assets: {}, liabilities: {} },
+  housing: {
+    principalCents: 3_000_00,
+    interestCents: 3_000_00,
+    propertyTaxCents: 1_000_00,
+    insuranceCents: 500_00,
+    hoaCents: 300_00,
+    maintenanceCents: 200_00,
+  },
+  withdrawalSources: [],
+  warnings: [],
+} satisfies RetirementProjectionYear;
 
 const initial: RetirementSettingsRecord = {
   householdId: "household",
@@ -1765,5 +1796,69 @@ describe("RetirementView snapshot stories", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Missing projection balances for 2042-08");
     expect(screen.queryByText(/\$[\d,]+/)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Retirement month")).toBeInTheDocument();
+  });
+
+  // Production mutation caught: always passing Keep data to the annual table makes unavailable Sell appear funded and hides its per-home issues.
+  it("shows unavailable Sell issues in the annual table region while Keep remains selectable and populated", () => {
+    vi.mocked(calculateRetirementProjection).mockReturnValue({
+      ...availableProjection,
+      keepHomes: { ...availableProjection.keepHomes, years: [annualProjectionRow] },
+      sellHomes: {
+        available: false,
+        issues: [{
+          assetId: "oak",
+          assetName: "Oak Street",
+          field: "purchaseDate",
+          message: "Add a purchase date for Oak Street.",
+        }],
+        warnings: [],
+      },
+    });
+
+    render(
+      <RetirementView
+        initial={initial}
+        repository={repository()}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    expect(screen.getByRole("table", { name: "Keep homes annual projection" })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /2042.*Person.*62/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Select Sell all homes scenario" }));
+    expect(screen.getByRole("region", { name: "Sell all homes annual projection" })).toHaveTextContent("Add a purchase date for Oak Street.");
+    fireEvent.click(screen.getByRole("button", { name: "Select Keep homes scenario" }));
+    expect(screen.getByRole("table", { name: "Keep homes annual projection" })).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /2042.*Person.*62/ })).toBeInTheDocument();
+  });
+
+  // Production mutation caught: retaining a prior projection after calculateRetirementProjection throws presents stale annual rows beside an error alert.
+  it("clears prior annual rows when a new projection throws and shows a page-level alert", () => {
+    vi.mocked(calculateRetirementProjection).mockReturnValue({
+      ...availableProjection,
+      keepHomes: { ...availableProjection.keepHomes, years: [annualProjectionRow] },
+    });
+    render(
+      <RetirementView
+        initial={initial}
+        repository={repository()}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+    expect(screen.getByRole("row", { name: /2042.*Person.*62/ })).toBeInTheDocument();
+
+    vi.mocked(calculateRetirementProjection).mockImplementation(() => {
+      throw new RangeError("Missing projection balances for 2042-08");
+    });
+    fireEvent.change(screen.getByLabelText("Retirement month"), {
+      target: { value: "2042-09" },
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Missing projection balances for 2042-08");
+    expect(screen.queryByRole("row", { name: /2042.*Person.*62/ })).not.toBeInTheDocument();
   });
 });

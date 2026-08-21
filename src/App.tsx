@@ -72,7 +72,11 @@ import {
 import { ScenarioPlanningDialog } from "./ScenarioPlanningDialog";
 import { InvestmentView } from "./InvestmentView";
 import { RetirementView } from "./RetirementView";
-import type { HomeSaleSourcePatch } from "./RetirementHomeSaleDetails";
+import {
+  HomeSaleReloadError,
+  type HomeSaleSourcePatch,
+} from "./RetirementHomeSaleDetails";
+import { parseMoney } from "./money";
 import { type RetirementSettingsRecord } from "./domain";
 import {
   buildSearchIndex,
@@ -682,6 +686,13 @@ function Workspace({
     () => setRetirementSettings(bootstrap.retirementPlan ?? null),
     [bootstrap.retirementPlan],
   );
+  const reloadRetirementHomeSource = async () => {
+    try {
+      await onRefresh();
+    } catch {
+      throw new HomeSaleReloadError(onRefresh);
+    }
+  };
   const updateRetirementCurrentHome = async (
     assetId: string,
     patch: HomeSaleSourcePatch,
@@ -710,10 +721,16 @@ function Workspace({
       ...(asset.rentalBuildingBasisCents !== undefined
         ? { rentalBuildingBasisCents: asset.rentalBuildingBasisCents }
         : {}),
-      ...patch,
+      ...(asset.purchaseDate == null
+        ? { purchaseDate: patch.purchaseDate }
+        : {}),
+      ...(asset.purchasePriceCents == null
+        ? { purchasePriceCents: patch.purchasePriceCents }
+        : {}),
+      homeSaleAssumptions: patch.homeSaleAssumptions,
       expectedRevision: asset.revision,
     });
-    await onRefresh();
+    await reloadRetirementHomeSource();
   };
   const updateRetirementPlannedHome = async (
     eventId: string,
@@ -754,7 +771,7 @@ function Workspace({
       withdrawals: record.withdrawals,
       expectedRevision: record.revision,
     });
-    await onRefresh();
+    await reloadRetirementHomeSource();
   };
   return (
     <div
@@ -4098,14 +4115,6 @@ const newAccount = (householdId: string): AccountDraft => ({
 const updateAt = <T,>(items: T[], index: number, patch: Partial<T>) =>
   items.map((item, i) => (i === index ? { ...item, ...patch } : item));
 const validMoney = (value: string) => parseMoney(value) !== undefined;
-function parseMoney(value: string): number | undefined {
-  const match = /^(-?)(\d{1,12})(?:\.(\d{1,2}))?$/.exec(value.trim());
-  if (!match) return undefined;
-  const cents =
-    BigInt(match[2]) * 100n + BigInt((match[3] ?? "").padEnd(2, "0"));
-  if (cents > 99_999_999_999_999n) return undefined;
-  return Number(match[1] ? -cents : cents);
-}
 function parsePercent(value: string): number | undefined {
   const match = /^(-?)(\d{1,4})(?:\.(\d{1,2}))?$/.exec(value.trim());
   if (!match) return undefined;

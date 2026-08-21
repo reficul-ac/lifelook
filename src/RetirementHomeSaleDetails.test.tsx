@@ -34,8 +34,8 @@ const completeHome: ResolvedRetirementHome = {
   assumptions: {
     sellingCostBps: 500,
     primaryResidenceExclusionEligible: true,
-    accumulatedFederalDepreciationCents: 0,
-    accumulatedCaliforniaDepreciationCents: 0,
+    accumulatedFederalDepreciationCents: 12_000_00,
+    accumulatedCaliforniaDepreciationCents: 9_000_00,
   },
   mortgageCents: 225_000_00,
   use: "personal",
@@ -110,6 +110,18 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
     expect(within(home).getByText("March 15, 2018")).toBeInTheDocument();
     expect(within(home).getByText("$500,000")).toBeInTheDocument();
     expect(within(home).getByText("5%")).toBeInTheDocument();
+    expect(
+      within(home).getByText("Primary-home gain exclusion"),
+    ).toBeInTheDocument();
+    expect(within(home).getByText("Eligible")).toBeInTheDocument();
+    expect(
+      within(home).getByText("Federal depreciation claimed"),
+    ).toBeInTheDocument();
+    expect(within(home).getByText("$12,000")).toBeInTheDocument();
+    expect(
+      within(home).getByText("California depreciation claimed"),
+    ).toBeInTheDocument();
+    expect(within(home).getByText("$9,000")).toBeInTheDocument();
     expect(within(home).getByText("$825,000")).toBeInTheDocument();
     expect(within(home).getByText("Plan-derived projected sale value")).toBeInTheDocument();
     expect(within(home).getByText("Plan-derived appreciation")).toBeInTheDocument();
@@ -196,6 +208,125 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
     fireEvent.click(within(home).getByRole("button", { name: "Retry save" }));
     await waitFor(() => expect(onUpdateCurrentHome).toHaveBeenCalledTimes(2));
     expect(onUpdateCurrentHome.mock.calls[1]).toEqual(onUpdateCurrentHome.mock.calls[0]);
+  });
+
+  // Break caught: rejecting the repository's exact maximum prevents a valid authoritative purchase basis from being repaired.
+  it("accepts the exact shared maximum money value", async () => {
+    const onUpdateCurrentHome = vi.fn().mockResolvedValue(undefined);
+    render(
+      <RetirementHomeSaleDetails
+        homes={[{ ...completeHome, taxBasisCents: null }]}
+        issues={[
+          {
+            assetId: "complete-home",
+            assetName: "Complete home",
+            field: "taxBasis",
+            message: "Add a tax basis for Complete home.",
+          },
+        ]}
+        scenario={scenario}
+        retirementDate="2042-01-01"
+        onUpdateCurrentHome={onUpdateCurrentHome}
+        onUpdatePlannedHome={vi.fn()}
+      />,
+    );
+
+    const home = screen.getByRole("article", {
+      name: "Complete home sale details",
+    });
+    fireEvent.click(within(home).getByText("Edit sale details"));
+    fireEvent.change(within(home).getByLabelText("Purchase price"), {
+      target: { value: "999999999999.99" },
+    });
+    fireEvent.click(
+      within(home).getByRole("button", { name: "Save sale details" }),
+    );
+
+    await waitFor(() =>
+      expect(onUpdateCurrentHome).toHaveBeenCalledWith(
+        "complete-home",
+        expect.objectContaining({ purchasePriceCents: 99_999_999_999_999 }),
+      ),
+    );
+  });
+
+  // Break caught: accepting one cent beyond the repository ceiling defers a known validation failure until persistence.
+  it("rejects money above the shared maximum before persistence", async () => {
+    const onUpdateCurrentHome = vi.fn();
+    render(
+      <RetirementHomeSaleDetails
+        homes={[{ ...completeHome, taxBasisCents: null }]}
+        issues={[
+          {
+            assetId: "complete-home",
+            assetName: "Complete home",
+            field: "taxBasis",
+            message: "Add a tax basis for Complete home.",
+          },
+        ]}
+        scenario={scenario}
+        retirementDate="2042-01-01"
+        onUpdateCurrentHome={onUpdateCurrentHome}
+        onUpdatePlannedHome={vi.fn()}
+      />,
+    );
+
+    const home = screen.getByRole("article", {
+      name: "Complete home sale details",
+    });
+    fireEvent.click(within(home).getByText("Edit sale details"));
+    fireEvent.change(within(home).getByLabelText("Purchase price"), {
+      target: { value: "1000000000000.00" },
+    });
+    fireEvent.click(
+      within(home).getByRole("button", { name: "Save sale details" }),
+    );
+
+    expect(await within(home).findByRole("alert")).toHaveTextContent(
+      "exact positive purchase price",
+    );
+    expect(onUpdateCurrentHome).not.toHaveBeenCalled();
+  });
+
+  // Break caught: reusing App's signed money parser without an editor guard allows negative accumulated depreciation into the repository payload.
+  it("keeps accumulated depreciation non-negative with the shared parser", async () => {
+    const onUpdateCurrentHome = vi.fn();
+    render(
+      <RetirementHomeSaleDetails
+        homes={[completeHome]}
+        issues={[
+          {
+            assetId: "complete-home",
+            assetName: "Complete home",
+            field: "federalDepreciation",
+            message: "Add federal depreciation for Complete home.",
+          },
+        ]}
+        scenario={scenario}
+        retirementDate="2042-01-01"
+        onUpdateCurrentHome={onUpdateCurrentHome}
+        onUpdatePlannedHome={vi.fn()}
+      />,
+    );
+
+    const home = screen.getByRole("article", {
+      name: "Complete home sale details",
+    });
+    fireEvent.click(within(home).getByText("Edit sale details"));
+    fireEvent.change(
+      within(home).getByLabelText("Federal depreciation claimed"),
+      {
+        target: { value: "-1" },
+      },
+    );
+    fireEvent.click(
+      within(home).getByRole("button", { name: "Save sale details" }),
+    );
+
+    expect(await within(home).findByRole("alert")).toHaveTextContent(
+      "non-negative accumulated depreciation",
+    );
+    expect(onUpdateCurrentHome).not.toHaveBeenCalled();
   });
 });
 
@@ -381,6 +512,183 @@ describe("RetirementHomeSaleDetails planned-home editing", () => {
           }),
         }),
       ),
+    );
+  });
+
+  // Break caught: reusing one asset-keyed draft after a sale and repurchase writes the first purchase's facts into the newly resolved purchase event.
+  it("resets a rejected draft when the resolved planned purchase identity changes", async () => {
+    const firstPurchase = {
+      ...purchase,
+      id: "buy-first-home",
+      date: "2030-01-01",
+      valueCents: 500_000_00,
+      propertyDetails: {
+        ...purchase.propertyDetails,
+        primaryResidence: false,
+      },
+    };
+    const sale = {
+      id: "sell-first-home",
+      date: "2035-01-01",
+      type: "asset-sale" as const,
+      assetId: "planned-home",
+      proceedsCents: 700_000_00,
+      costsCents: 40_000_00,
+      destinationAccountId: "cash",
+    };
+    const secondPurchase = {
+      ...firstPurchase,
+      id: "buy-second-home",
+      date: "2038-01-01",
+      valueCents: 900_000_00,
+    };
+    const repurchaseScenario: Scenario = {
+      ...scenario,
+      events: [firstPurchase, sale, secondPurchase],
+    };
+    const onUpdatePlannedHome = vi.fn()
+      .mockRejectedValueOnce(new Error("write unavailable"))
+      .mockResolvedValueOnce(undefined);
+    const { rerender } = render(
+      <RetirementHomeSaleDetails
+        homes={[
+          {
+            ...plannedHome,
+            purchaseDate: firstPurchase.date,
+            taxBasisCents: firstPurchase.valueCents,
+          },
+        ]}
+        issues={plannedIssues}
+        scenario={repurchaseScenario}
+        retirementDate="2034-01-01"
+        onUpdateCurrentHome={vi.fn()}
+        onUpdatePlannedHome={onUpdatePlannedHome}
+      />,
+    );
+
+    let home = screen.getByRole("article", { name: "Planned home sale details" });
+    fireEvent.click(within(home).getByText("Edit sale details"));
+    fireEvent.change(within(home).getByLabelText("Selling costs (%)"), {
+      target: { value: "7" },
+    });
+    fireEvent.click(
+      within(home).getByRole("button", { name: "Save sale details" }),
+    );
+    expect(await within(home).findByRole("alert")).toBeInTheDocument();
+    expect(onUpdatePlannedHome).toHaveBeenLastCalledWith(
+      "buy-first-home",
+      expect.objectContaining({
+        purchaseDate: "2030-01-01",
+        purchasePriceCents: 500_000_00,
+      }),
+    );
+
+    rerender(
+      <RetirementHomeSaleDetails
+        homes={[
+          {
+            ...plannedHome,
+            purchaseDate: secondPurchase.date,
+            taxBasisCents: secondPurchase.valueCents,
+          },
+        ]}
+        issues={plannedIssues}
+        scenario={repurchaseScenario}
+        retirementDate="2042-01-01"
+        onUpdateCurrentHome={vi.fn()}
+        onUpdatePlannedHome={onUpdatePlannedHome}
+      />,
+    );
+
+    home = screen.getByRole("article", { name: "Planned home sale details" });
+    expect(within(home).queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.click(within(home).getByText("Edit sale details"));
+    expect(within(home).getByLabelText("Selling costs (%)")).toHaveValue("");
+    fireEvent.change(within(home).getByLabelText("Selling costs (%)"), {
+      target: { value: "6" },
+    });
+    fireEvent.click(
+      within(home).getByRole("button", { name: "Save sale details" }),
+    );
+
+    await waitFor(() => expect(onUpdatePlannedHome).toHaveBeenCalledTimes(2));
+    expect(onUpdatePlannedHome).toHaveBeenLastCalledWith(
+      "buy-second-home",
+      expect.objectContaining({
+        purchaseDate: "2038-01-01",
+        purchasePriceCents: 900_000_00,
+        homeSaleAssumptions: expect.objectContaining({ sellingCostBps: 600 }),
+      }),
+    );
+  });
+
+  // Break caught: retaining a hidden false checkbox value after a retirement-month change persists stale eligibility even when current Plan history proves true.
+  it("resets changed inference and derives the hidden eligibility from current props on submit", async () => {
+    const inferenceScenario: Scenario = {
+      ...scenario,
+      events: [purchase],
+    };
+    const onUpdatePlannedHome = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("write unavailable"))
+      .mockResolvedValueOnce(undefined);
+    const renderDetails = (retirementDate: string) => (
+      <RetirementHomeSaleDetails
+        homes={[plannedHome]}
+        issues={plannedIssues}
+        scenario={inferenceScenario}
+        retirementDate={retirementDate}
+        onUpdateCurrentHome={vi.fn()}
+        onUpdatePlannedHome={onUpdatePlannedHome}
+      />
+    );
+    const { rerender } = render(renderDetails("2036-01-01"));
+
+    let home = screen.getByRole("article", { name: "Planned home sale details" });
+    expect(
+      within(home).getByText("Not eligible (inferred from Plan)"),
+    ).toBeInTheDocument();
+    fireEvent.click(within(home).getByText("Edit sale details"));
+    fireEvent.change(within(home).getByLabelText("Selling costs (%)"), {
+      target: { value: "7" },
+    });
+    fireEvent.click(
+      within(home).getByRole("button", { name: "Save sale details" }),
+    );
+    expect(await within(home).findByRole("alert")).toBeInTheDocument();
+    expect(onUpdatePlannedHome).toHaveBeenLastCalledWith(
+      "buy-planned-home",
+      expect.objectContaining({
+        homeSaleAssumptions: expect.objectContaining({
+          primaryResidenceExclusionEligible: false,
+        }),
+      }),
+    );
+
+    rerender(renderDetails("2042-01-01"));
+    home = screen.getByRole("article", { name: "Planned home sale details" });
+    expect(
+      within(home).getByText("Eligible (inferred from Plan)"),
+    ).toBeInTheDocument();
+    expect(within(home).queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.click(within(home).getByText("Edit sale details"));
+    expect(within(home).getByLabelText("Selling costs (%)")).toHaveValue("");
+    fireEvent.change(within(home).getByLabelText("Selling costs (%)"), {
+      target: { value: "6" },
+    });
+    fireEvent.click(
+      within(home).getByRole("button", { name: "Save sale details" }),
+    );
+
+    await waitFor(() => expect(onUpdatePlannedHome).toHaveBeenCalledTimes(2));
+    expect(onUpdatePlannedHome).toHaveBeenLastCalledWith(
+      "buy-planned-home",
+      expect.objectContaining({
+        homeSaleAssumptions: expect.objectContaining({
+          sellingCostBps: 600,
+          primaryResidenceExclusionEligible: true,
+        }),
+      }),
     );
   });
 });

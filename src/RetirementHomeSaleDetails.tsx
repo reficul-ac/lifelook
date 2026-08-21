@@ -7,11 +7,19 @@ import {
   type RetirementMissingData,
   type Scenario,
 } from "./domain";
+import { parseMoney } from "./money";
 
 export interface HomeSaleSourcePatch {
   purchaseDate: string;
   purchasePriceCents: Cents;
   homeSaleAssumptions: HomeSaleAssumptions;
+}
+
+export class HomeSaleReloadError extends Error {
+  constructor(readonly retryReload: () => Promise<void>) {
+    super("Home sale details were saved, but refreshed data could not be loaded.");
+    this.name = "HomeSaleReloadError";
+  }
 }
 
 export interface RetirementHomeSaleDetailsProps {
@@ -52,12 +60,6 @@ const date = (value: string) =>
     day: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${value}T00:00:00Z`));
-
-const parseMoney = (value: string) => {
-  if (!/^(?:\d+)(?:\.\d{1,2})?$/.test(value.trim())) return null;
-  const cents = Math.round(Number(value) * 100);
-  return Number.isSafeInteger(cents) && cents >= 0 ? cents : null;
-};
 
 const parsePercent = (value: string) => {
   if (!/^(?:\d+)(?:\.\d{1,2})?$/.test(value.trim())) return null;
@@ -126,6 +128,35 @@ const inferredPlannedEligibility = (
   return addUtcYears(residenceStart, 2) <= residenceEnd;
 };
 
+const homeSourceFingerprint = (
+  home: ResolvedRetirementHome,
+  scenario: Scenario,
+  retirementDate: string,
+) => {
+  if (home.property.source === "current") {
+    return JSON.stringify([
+      "current",
+      home.property.assetId,
+      home.purchaseDate,
+      home.taxBasisCents,
+      home.assumptions,
+    ]);
+  }
+  const purchase = latestOwnedPlannedPurchase(
+    scenario,
+    home.property.assetId,
+    retirementDate,
+  );
+  return JSON.stringify([
+    "planned",
+    purchase?.id,
+    purchase?.date ?? home.purchaseDate,
+    purchase?.valueCents ?? home.taxBasisCents,
+    purchase?.propertyDetails?.homeSaleAssumptions ?? home.assumptions,
+    inferredPlannedEligibility(home, scenario, retirementDate),
+  ]);
+};
+
 export function RetirementHomeSaleDetails({
   homes,
   issues,
@@ -139,7 +170,7 @@ export function RetirementHomeSaleDetails({
       <h3>Home sale details</h3>
       {homes.map((home) => (
         <HomeDetails
-          key={`${home.property.source}-${home.property.assetId}`}
+          key={homeSourceFingerprint(home, scenario, retirementDate)}
           home={home}
           issues={issues.filter(
             (issue) => issue.assetId === home.property.assetId,
@@ -183,6 +214,9 @@ function HomeDetails({
     };
   });
   const [error, setError] = useState("");
+  const [retryReload, setRetryReload] = useState<(() => Promise<void>) | null>(
+    null,
+  );
   const [saving, setSaving] = useState(false);
   const missing = new Set(issues.map((issue) => issue.field));
 
@@ -200,21 +234,27 @@ function HomeDetails({
       draft.californiaDepreciation,
     );
     if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.purchaseDate)) {
+      setRetryReload(null);
       setError("Enter a valid purchase date.");
       return;
     }
     if (purchasePriceCents == null || purchasePriceCents <= 0) {
+      setRetryReload(null);
       setError("Enter an exact positive purchase price.");
       return;
     }
     if (sellingCostBps == null) {
+      setRetryReload(null);
       setError("Enter selling costs from 0–100 percent.");
       return;
     }
     if (
       accumulatedFederalDepreciationCents == null ||
-      accumulatedCaliforniaDepreciationCents == null
+      accumulatedCaliforniaDepreciationCents == null ||
+      accumulatedFederalDepreciationCents < 0 ||
+      accumulatedCaliforniaDepreciationCents < 0
     ) {
+      setRetryReload(null);
       setError("Enter exact non-negative accumulated depreciation amounts.");
       return;
     }
@@ -223,7 +263,7 @@ function HomeDetails({
       purchasePriceCents,
       homeSaleAssumptions: {
         sellingCostBps,
-        primaryResidenceExclusionEligible:
+        primaryResidenceExclusionEligible: inferredEligibility ??
           draft.primaryResidenceExclusionEligible,
         accumulatedFederalDepreciationCents,
         accumulatedCaliforniaDepreciationCents,
@@ -231,6 +271,7 @@ function HomeDetails({
     };
     setSaving(true);
     setError("");
+    setRetryReload(null);
     try {
       if (home.property.source === "current") {
         await onUpdateCurrentHome(home.property.assetId, patch);
@@ -243,8 +284,27 @@ function HomeDetails({
         if (purchase == null) throw new Error("Planned home purchase not found");
         await onUpdatePlannedHome(purchase.id, patch);
       }
+    } catch (saveError) {
+      if (saveError instanceof HomeSaleReloadError) {
+        setError(saveError.message);
+        setRetryReload(() => saveError.retryReload);
+      } else {
+        setError("Sale details could not be saved. Retry when ready.");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function reload() {
+    if (retryReload == null) return;
+    setSaving(true);
+    try {
+      await retryReload();
+      setError("");
+      setRetryReload(null);
     } catch {
-      setError("Sale details could not be saved. Retry when ready.");
+      setError("Home sale details were saved, but refreshed data could not be loaded.");
     } finally {
       setSaving(false);
     }
@@ -274,6 +334,24 @@ function HomeDetails({
           <>
             <dt>Selling costs</dt>
             <dd>{home.assumptions.sellingCostBps / 100}%</dd>
+            <dt>Primary-home gain exclusion</dt>
+            <dd>
+              {home.assumptions.primaryResidenceExclusionEligible
+                ? "Eligible"
+                : "Not eligible"}
+            </dd>
+            <dt>Federal depreciation claimed</dt>
+            <dd>
+              {money(
+                home.assumptions.accumulatedFederalDepreciationCents,
+              )}
+            </dd>
+            <dt>California depreciation claimed</dt>
+            <dd>
+              {money(
+                home.assumptions.accumulatedCaliforniaDepreciationCents,
+              )}
+            </dd>
           </>
         )}
         <dt>Plan-derived projected sale value</dt>
@@ -358,8 +436,18 @@ function HomeDetails({
             </label>
           )}
           {error && <p role="alert">{error}</p>}
-          <button type="submit" disabled={saving}>
-            {saving ? "Saving…" : error ? "Retry save" : "Save sale details"}
+          <button
+            type={retryReload == null ? "submit" : "button"}
+            disabled={saving}
+            onClick={retryReload == null ? undefined : reload}
+          >
+            {saving
+              ? "Saving…"
+              : retryReload
+                ? "Reload failed — retry"
+                : error
+                  ? "Retry save"
+                  : "Save sale details"}
           </button>
         </form>
       </details>

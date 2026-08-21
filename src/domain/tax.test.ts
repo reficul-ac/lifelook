@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateHouseholdTax, estimateTax, progressiveTax, TAX_RULES_2025, TAX_RULES_2026 } from "./tax";
+import { calculateIncrementalHouseholdIncomeTax, estimateHouseholdTax, estimateTax, progressiveTax, TAX_RULES_2025, TAX_RULES_2026 } from "./tax";
 import type { FilingStatus, TaxBracket, TaxRulePack } from "./types";
 
 const input = (
@@ -102,4 +102,38 @@ it("exposes federal and modified AGI for incremental tax stacking",()=>{
     federalAgiCents:expectedAgi,
     modifiedAgiCents:expectedAgi,
   }));
+});
+
+// Production mutation caught: applying full personal mortgage interest or uncapped property tax bypasses the shared household deduction limits in retirement tax.
+it("applies household mortgage and SALT limits to incremental personal housing deductions",()=>{
+  const result=calculateIncrementalHouseholdIncomeTax({
+    year:2026,
+    status:"single",
+    thresholdInflationBps:250,
+    baseline:{
+      federalAgiCents:0,
+      modifiedAgiCents:0,
+      federalTaxableCents:0,
+      californiaTaxableCents:0,
+      federalCents:0,
+      californiaCents:0,
+      federalStandardCents:TAX_RULES_2026.federal.single.standardDeductionCents,
+      federalItemizedCents:0,
+      californiaStandardCents:TAX_RULES_2026.california.single.standardDeductionCents,
+      californiaItemizedCents:0,
+    },
+    federalOrdinaryIncomeCents:10_000_000,
+    californiaOrdinaryIncomeCents:7_000_000,
+    federalShortTermGainCents:0,
+    federalLongTermGainCents:0,
+    californiaCapitalGainCents:0,
+    federalInvestmentIncomeCents:0,
+    personalHousing:{mortgageInterestCents:2_000_000,mortgageDebtCents:150_000_000,propertyTaxCents:5_000_000},
+  });
+
+  expect(result.federalDeductionCents).toBe(5_040_000);
+  expect(result.californiaDeductionCents).toBe(7_000_000);
+  expect(result.federalIncomeTaxCents).toBe(570_400);
+  expect(result.californiaIncomeTaxCents).toBe(0);
+  expect(result.totalIncrementalTaxCents).toBe(570_400);
 });

@@ -1,4 +1,4 @@
-import type { Account, Cents, FinancialSnapshot, Person } from "./types";
+import type { Account, Cents, FinancialSnapshot, Person, TaxLotRecord } from "./types";
 
 export type WithdrawalClass =
   | "taxable"
@@ -129,6 +129,7 @@ export interface RetirementDrawInput {
   balances: Readonly<Record<string, Cents>>;
   people?: readonly Person[];
   taxableBasis?: Readonly<Record<string, Cents>>;
+  taxableLots?: Readonly<Record<string, readonly TaxLotRecord[]>>;
   rothContributionBasis?: Readonly<Record<string, Cents>>;
 }
 
@@ -139,6 +140,10 @@ export interface RetirementDrawSource {
   ordinaryIncomeCents: Cents;
   rothTaxableCents: Cents;
   earlyPenaltyCents: Cents;
+  federalShortTermGainCents: Cents;
+  federalLongTermGainCents: Cents;
+  californiaGainCents: Cents;
+  taxCharacterSupported: boolean;
 }
 
 export interface RetirementDrawResult {
@@ -146,12 +151,17 @@ export interface RetirementDrawResult {
   unfundedCents: Cents;
   balances: Readonly<Record<string, Cents>>;
   taxableBasis: Readonly<Record<string, Cents>>;
+  taxableLots: Readonly<Record<string, readonly TaxLotRecord[]>>;
   rothContributionBasis: Readonly<Record<string, Cents>>;
   sources: readonly RetirementDrawSource[];
   taxableGainCents: Cents;
   ordinaryIncomeCents: Cents;
   rothTaxableCents: Cents;
   earlyPenaltyCents: Cents;
+  federalShortTermGainCents: Cents;
+  federalLongTermGainCents: Cents;
+  californiaGainCents: Cents;
+  taxCharacterSupported: boolean;
 }
 
 const initialBasis = (
@@ -163,6 +173,8 @@ const initialBasis = (
 export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawResult => {
   const balances = { ...input.balances };
   const taxableBasis = { ...input.taxableBasis };
+  const taxableLots = Object.fromEntries(Object.entries(input.taxableLots ?? {}).map(([accountId, lots]) =>
+    [accountId, lots.map((lot) => ({ ...lot }))])) as Record<string, TaxLotRecord[]>;
   const rothContributionBasis = { ...input.rothContributionBasis };
   const accountsById = new Map(input.accounts.map((account) => [account.id, account]));
 
@@ -204,13 +216,64 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
     let ordinaryIncomeCents = 0;
     let rothTaxableCents = 0;
     let earlyPenaltyCents = 0;
+    let federalShortTermGainCents = 0;
+    let federalLongTermGainCents = 0;
+    let californiaGainCents = 0;
+    let taxCharacterSupported = true;
     const withdrawalClass = classifyWithdrawal(account, input.date, input.people ?? []);
 
     if (withdrawalClass === "taxable") {
-      const basisCents = Math.max(0, taxableBasis[accountId] ?? 0);
-      const basisSoldCents = Math.min(basisCents, Math.round(basisCents * amountCents / availableCents));
-      taxableBasis[accountId] = basisCents - basisSoldCents;
-      taxableGainCents = amountCents - basisSoldCents;
+      const lots = taxableLots[accountId];
+      const completeLots = lots != null && lots.length > 0 && lots.every((lot) =>
+        lot.acquiredOn != null && Number.isSafeInteger(lot.marketValueCents) && lot.marketValueCents >= 0 &&
+        Number.isSafeInteger(lot.federalBasisCents) && lot.federalBasisCents >= 0 &&
+        Number.isSafeInteger(lot.californiaBasisCents) && lot.californiaBasisCents >= 0) &&
+        lots.reduce((sum, lot) => sum + lot.marketValueCents, 0) === availableCents;
+      if (completeLots) {
+        let remainingDraw = amountCents;
+        const remainingLots:TaxLotRecord[]=[];
+        for (const lot of [...lots].sort((left, right) =>
+          left.acquiredOn!.localeCompare(right.acquiredOn!) || left.id.localeCompare(right.id))) {
+          const soldValue = Math.min(remainingDraw, lot.marketValueCents);
+          const federalBasisSold = lot.marketValueCents === 0 ? 0 : Math.min(
+            lot.federalBasisCents,
+            Math.round(lot.federalBasisCents * soldValue / lot.marketValueCents),
+          );
+          const californiaBasisSold = lot.marketValueCents === 0 ? 0 : Math.min(
+            lot.californiaBasisCents,
+            Math.round(lot.californiaBasisCents * soldValue / lot.marketValueCents),
+          );
+          const federalGain = soldValue - federalBasisSold;
+          const californiaGain = soldValue - californiaBasisSold;
+          const acquired = parseDate(lot.acquiredOn!);
+          const disposed = parseDate(input.date);
+          const shortTerm = acquired == null || disposed == null || compareDateParts(
+            disposed,
+            addCalendarMonths(acquired, 12),
+          ) <= 0;
+          if (shortTerm) federalShortTermGainCents += federalGain;
+          else federalLongTermGainCents += federalGain;
+          californiaGainCents += californiaGain;
+          remainingDraw -= soldValue;
+          if (soldValue < lot.marketValueCents) remainingLots.push({
+            ...lot,
+            marketValueCents: lot.marketValueCents - soldValue,
+            federalBasisCents: lot.federalBasisCents - federalBasisSold,
+            californiaBasisCents: lot.californiaBasisCents - californiaBasisSold,
+          });
+        }
+        taxableLots[accountId] = remainingLots;
+        taxableBasis[accountId] = remainingLots.reduce((sum, lot) => sum + lot.federalBasisCents, 0);
+        taxableGainCents = federalShortTermGainCents + federalLongTermGainCents;
+        taxCharacterSupported = federalShortTermGainCents >= 0 &&
+          federalLongTermGainCents >= 0 && californiaGainCents >= 0;
+      } else {
+        const basisCents = Math.max(0, taxableBasis[accountId] ?? 0);
+        const basisSoldCents = Math.min(basisCents, Math.round(basisCents * amountCents / availableCents));
+        taxableBasis[accountId] = basisCents - basisSoldCents;
+        taxableGainCents = amountCents - basisSoldCents;
+        taxCharacterSupported = taxableGainCents === 0;
+      }
     } else if (withdrawalClass === "eligible-pre-tax" || withdrawalClass === "penalty-pre-tax") {
       ordinaryIncomeCents = amountCents;
       if (withdrawalClass === "penalty-pre-tax") {
@@ -233,6 +296,10 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
       ordinaryIncomeCents,
       rothTaxableCents,
       earlyPenaltyCents,
+      federalShortTermGainCents,
+      federalLongTermGainCents,
+      californiaGainCents,
+      taxCharacterSupported,
     });
   }
 
@@ -242,11 +309,16 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
     unfundedCents: remainingCents,
     balances,
     taxableBasis,
+    taxableLots,
     rothContributionBasis,
     sources,
     taxableGainCents: sources.reduce((total, source) => total + source.taxableGainCents, 0),
     ordinaryIncomeCents: sources.reduce((total, source) => total + source.ordinaryIncomeCents, 0),
     rothTaxableCents: sources.reduce((total, source) => total + source.rothTaxableCents, 0),
     earlyPenaltyCents: sources.reduce((total, source) => total + source.earlyPenaltyCents, 0),
+    federalShortTermGainCents: sources.reduce((total, source) => total + source.federalShortTermGainCents, 0),
+    federalLongTermGainCents: sources.reduce((total, source) => total + source.federalLongTermGainCents, 0),
+    californiaGainCents: sources.reduce((total, source) => total + source.californiaGainCents, 0),
+    taxCharacterSupported: sources.every((source) => source.taxCharacterSupported),
   };
 };

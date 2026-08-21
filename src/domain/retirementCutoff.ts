@@ -96,7 +96,7 @@ export function buildRetirementCutoff(input:RetirementCutoffInput):RetirementCut
   const balanceMonth=monthKey(balanceDate);
   const asOfMonth=input.asOfDate.slice(0,7),asOfMonthDate=parseMonth(asOfMonth);
   const projectionMonths=(balanceDate.getUTCFullYear()-asOfMonthDate.getUTCFullYear())*12+balanceDate.getUTCMonth()-asOfMonthDate.getUTCMonth()+1;
-  if(projectionMonths<1||projectionMonths>1200)throw new RangeError(`Missing projection balances for ${balanceMonth}`);
+  if(projectionMonths<1||!Number.isSafeInteger(projectionMonths))throw new RangeError(`Missing projection balances for ${balanceMonth}`);
 
   const scenario={...input.scenario,horizon:{start:asOfMonth,months:projectionMonths},retirementExtension:true} as Scenario&{retirementExtension:true};
   const projections=ProjectionEngine.calculate(input.snapshot,scenario,input.asOfDate,{stopEmploymentMonth:input.retirementMonth});

@@ -282,6 +282,47 @@ describe("age-aware retirement withdrawal ordering", () => {
 });
 
 describe("retirement fund draws", () => {
+  // Production mutation caught: collapsing lots into one aggregate basis reports every brokerage gain as exact long-term gain and loses California basis differences.
+  it("returns FIFO holding-period and jurisdiction character with the remaining lots", () => {
+    const brokerage = account({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+      subtype: "taxable-brokerage",
+      balanceCents: 100_000,
+      taxLots: [
+        { id: "recent", acquiredOn: "2029-12-01", marketValueCents: 50_000, federalBasisCents: 25_000, californiaBasisCents: 30_000 },
+        { id: "old", acquiredOn: "2020-01-01", marketValueCents: 50_000, federalBasisCents: 40_000, californiaBasisCents: 35_000 },
+      ],
+    });
+
+    const result = drawRetirementFunds({
+      amountCents: 75_000,
+      date: "2030-01-02",
+      order: ["brokerage"],
+      accounts: [brokerage],
+      balances: { brokerage: 100_000 },
+      taxableLots: { brokerage: brokerage.taxLots! },
+    });
+
+    expect(result.sources[0]).toMatchObject({
+      taxableGainCents: 22_500,
+      federalShortTermGainCents: 12_500,
+      federalLongTermGainCents: 10_000,
+      californiaGainCents: 25_000,
+      taxCharacterSupported: true,
+    });
+    expect(result.taxableLots).toEqual({
+      brokerage: [{
+        id: "recent",
+        acquiredOn: "2029-12-01",
+        marketValueCents: 25_000,
+        federalBasisCents: 12_500,
+        californiaBasisCents: 15_000,
+      }],
+    });
+  });
+
   // Break caught: subtracting the full taxable cost basis on a partial sale would understate the taxable gain and leave the remaining basis wrong.
   it("depletes a taxable account partially and reduces its cost basis proportionally", () => {
     const brokerage = account({

@@ -136,6 +136,31 @@ describe("retirement employment cutoff",()=>{
 });
 
 describe("ProjectionEngine",()=>{
+  // Production mutation caught: omitting a Plan-side account event, or exporting automatic surplus as an event transition, creates or double-counts retirement value.
+  it("exports source-tagged account event transitions without automatic cash-flow allocation",()=>{
+    const financial:FinancialSnapshot={...snapshot,recurring:[],accounts:[
+      {...snapshot.accounts[0],id:"a",balanceCents:1_000_00},
+      {...snapshot.accounts[0],id:"b",balanceCents:0},
+    ],liabilities:[]};
+    const plan:Scenario={...scenario,defaultContributionAccountId:"b",events:[
+      {id:"income",date:"2025-01-01",type:"one-time-income",amountCents:50_00,incomeTaxCategory:"nontaxable"},
+      {id:"contribution",date:"2025-01-01",type:"account-contribution",accountId:"a",amountCents:100_00},
+      {id:"transfer",date:"2025-01-01",type:"account-transfer",fromAccountId:"a",toAccountId:"b",amountCents:200_00},
+      {id:"origination",date:"2025-01-01",type:"debt-origination",liabilityId:"loan",name:"Loan",principalCents:300_00,annualRateBps:0,minimumPaymentCents:0,accountId:"b"},
+      {id:"payoff",date:"2025-02-01",type:"debt-payoff",liabilityId:"loan",accountId:"b",amountCents:100_00},
+    ],horizon:{start:"2025-01",months:2}};
+    const months=calculate(financial,plan)[0].months;
+
+    expect(months[0].accountTransitions).toEqual([
+      {accountId:"a",amountCents:100_00,source:"account-contribution",eventId:"contribution"},
+      {accountId:"b",amountCents:300_00,source:"debt-origination",eventId:"origination"},
+      {accountId:"a",amountCents:-200_00,source:"account-transfer",eventId:"transfer"},
+      {accountId:"b",amountCents:200_00,source:"account-transfer",eventId:"transfer"},
+    ]);
+    expect(months[1].accountTransitions).toEqual([
+      {accountId:"b",amountCents:-100_00,source:"debt-payoff",eventId:"payoff"},
+    ]);
+  });
   it("projects a funded planned property as an asset, mortgage, rent, costs, and tracker record",()=>{
     const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:5_000_00}]};
     const purchase={id:"buy-home",date:"2025-01-01",type:"asset-purchase" as const,assetId:"future-home",name:"Future home",valueCents:10_000_00,annualGrowthBps:0,fundingAccountId:"a",fundingSources:[{accountId:"a"}],downPaymentCents:2_000_00,costsCents:500_00,housingCosts:{propertyTaxRateBps:120,insuranceMonthlyCents:10_00,insuranceAnnualGrowthBps:0,hoaMonthlyCents:5_00,hoaAnnualGrowthBps:0},financing:{liabilityId:"future-mortgage",name:"Future mortgage",principalCents:8_000_00,annualRateBps:0,minimumPaymentCents:100_00,termMonths:120},propertyDetails:{maintenanceBps:120,monthlyRentalIncomeCents:200_00,rentalIncomeGrowthBps:0,primaryResidence:false,rentalUseBps:10000,rentalTaxModelingEnabled:true}};

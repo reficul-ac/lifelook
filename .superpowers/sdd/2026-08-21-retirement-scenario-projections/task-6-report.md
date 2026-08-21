@@ -79,3 +79,24 @@ Each new test names the production mutation it catches. Coverage asserts rendere
 - `git diff --check`: PASS.
 - Mutation review confirmed the new tests fail for removing account fingerprinting, losing implicit-versus-persisted provenance, skipping destination/order filtering, replacing the full draft, reconstructing retry from stale values, or restoring a deleted destination to projection settings.
 - No blocking concern found. Vite retains its existing non-blocking advisory for the main minified chunk over 500 kB, and unrelated `.superpowers/brainstorm/` content remains untouched and unstaged.
+
+## Fix Round 2: In-Flight Account Save Race
+
+- Added an account-derived payload generation independent of authoritative replacement generations.
+- An account change now marks the dispatched payload stale and replaces any queued work with values rebuilt from the current visible draft.
+- A stale successful request contributes only its returned revision for optimistic concurrency. Its record is not adopted, fingerprinted as an own-save echo, or emitted through `onSettingsChange`; the serialized loop follows with a valid reconciled save at that revision.
+- If the reconciled draft is unresolved, the loop stops idle without adopting stale IDs; the next completed user edit saves against the stale request's returned revision. A stale failed request similarly yields to the latest valid reconciled draft rather than surfacing an error for obsolete IDs.
+
+### Fix Round 2 TDD Evidence
+
+- RED: `npm test -- --run src/RetirementView.test.tsx`
+- Result: 1 expected failure and 26 passes. After deleting the selected/ordered accounts during a deferred save, only the stale request completed and no revision-correct reconciliation request was made.
+- GREEN: the same command passed 1 file and 27 tests after account-generation invalidation and serialized reconciliation were implemented.
+- The regression independently asserts the first stale payload, the second filtered payload and `expectedRevision: 2`, preserved retirement-month draft, reconciled projection settings, and exactly one outward notification containing only the valid record.
+
+### Fix Round 2 Verification
+
+- `npm test -- --run src/RetirementView.test.tsx src/App.test.tsx && npm run build`: PASS, 2 files and 83 tests; TypeScript and Vite production build passed.
+- `npm test`: PASS, 16 files and 345 tests.
+- `git diff --check`: PASS.
+- Vite retains its existing non-blocking advisory for the main minified chunk over 500 kB.

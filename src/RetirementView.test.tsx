@@ -1138,6 +1138,116 @@ describe("RetirementView settings and autosave", () => {
       }),
     );
   });
+
+  // Break caught: adopting a save dispatched before an account deletion would echo stale IDs and skip the revision-correct reconciliation save.
+  it("ignores a stale in-flight account payload and saves the reconciled draft at its returned revision", async () => {
+    const brokerage = bootstrapAccount({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+    });
+    const ira = bootstrapAccount({
+      id: "ira",
+      name: "Traditional IRA",
+      kind: "retirement",
+      subtype: "traditional-ira",
+    });
+    const joint = bootstrapAccount({
+      id: "joint",
+      name: "Joint investing",
+      kind: "investment",
+    });
+    const checking = bootstrapAccount({ id: "checking", name: "Checking", kind: "checking" });
+    const persisted = {
+      ...initial,
+      taxableDestinationAccountId: "brokerage",
+      withdrawalAccountOrder: ["ira", "brokerage"],
+    };
+    let finishStaleSave: ((record: RetirementSettingsRecord) => void) | undefined;
+    const updateRetirementPlan = vi
+      .fn()
+      .mockImplementationOnce(
+        () => new Promise<RetirementSettingsRecord>((resolve) => {
+          finishStaleSave = resolve;
+        }),
+      )
+      .mockResolvedValueOnce({
+        ...persisted,
+        retirementMonth: "2042-09",
+        taxableDestinationAccountId: "joint",
+        withdrawalAccountOrder: [],
+        revision: 3,
+      });
+    const onSettingsChange = vi.fn();
+    const view = (accounts: readonly BootstrapAccount[]) => {
+      const values = withAccounts(accounts);
+      return (
+        <RetirementView
+          initial={persisted}
+          repository={repository(updateRetirementPlan)}
+          bootstrap={values.bootstrap}
+          snapshot={values.snapshot}
+          scenario={activeScenario}
+          onSettingsChange={onSettingsChange}
+        />
+      );
+    };
+    const { rerender } = render(view([brokerage, ira]));
+    fireEvent.change(screen.getByLabelText("Retirement month"), {
+      target: { value: "2042-09" },
+    });
+    expect(updateRetirementPlan).toHaveBeenCalledTimes(1);
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        taxableDestinationAccountId: "brokerage",
+        withdrawalAccountOrder: ["ira", "brokerage"],
+        expectedRevision: 1,
+      }),
+    );
+
+    rerender(view([joint, checking]));
+    expect(screen.getByText(/Joint investing is the taxable destination/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Retirement month")).toHaveValue("2042-09");
+    expect(onSettingsChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      finishStaleSave?.({
+        ...persisted,
+        retirementMonth: "2042-09",
+        revision: 2,
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledTimes(2));
+    expect(updateRetirementPlan).toHaveBeenLastCalledWith({
+      retirementMonth: "2042-09",
+      withdrawalRateBps: 300,
+      horizonYears: 30,
+      taxableDestinationAccountId: "joint",
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
+      expectedRevision: 2,
+    });
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+    expect(onSettingsChange).toHaveBeenCalledTimes(1);
+    expect(onSettingsChange).toHaveBeenCalledWith({
+      ...persisted,
+      retirementMonth: "2042-09",
+      taxableDestinationAccountId: "joint",
+      withdrawalAccountOrder: [],
+      revision: 3,
+    });
+    expect(calculateRetirementProjection).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          retirementMonth: "2042-09",
+          taxableDestinationAccountId: "joint",
+          withdrawalAccountOrder: [],
+        }),
+      }),
+    );
+  });
 });
 
 describe("RetirementView snapshot stories", () => {

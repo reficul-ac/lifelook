@@ -225,6 +225,7 @@ export function RetirementView(props: RetirementViewProps) {
   const pending = useRef<SaveValues | null>(null);
   const failed = useRef<SaveValues | null>(null);
   const generation = useRef(0);
+  const accountGeneration = useRef(0);
   const ownSaveFingerprints = useRef(new Set<string>());
   const seenInitialFingerprint = useRef(recordFingerprint(initial));
   const seenBootstrapFingerprint = useRef(
@@ -315,6 +316,7 @@ export function RetirementView(props: RetirementViewProps) {
       return;
     }
     if (!accountsChanged) return;
+    accountGeneration.current += 1;
 
     const normalizedAuthoritative = settingsFromRecord(
       authoritativeRecord.current,
@@ -359,7 +361,9 @@ export function RetirementView(props: RetirementViewProps) {
       nextDraft,
       requiresTaxableDestination,
     );
-    if (pending.current !== null) pending.current = reconciledSaveValues;
+    if (saving.current || pending.current !== null) {
+      pending.current = reconciledSaveValues;
+    }
     if (hadFailedSave) failed.current = reconciledSaveValues;
     settingsRef.current = nextSettings;
     draftRef.current = nextDraft;
@@ -387,6 +391,7 @@ export function RetirementView(props: RetirementViewProps) {
     void (async () => {
       while (generation.current === saveGeneration && pending.current) {
         const next = pending.current;
+        const dispatchedAccountGeneration = accountGeneration.current;
         pending.current = null;
         try {
           const saved = await repositoryRef.current.updateRetirementPlan!({
@@ -395,6 +400,16 @@ export function RetirementView(props: RetirementViewProps) {
           });
           if (generation.current !== saveGeneration) return;
           revision.current = saved.revision;
+          if (accountGeneration.current !== dispatchedAccountGeneration) {
+            pending.current = saveValuesFromDraft(
+              draftRef.current,
+              requiresTaxableDestinationRef.current,
+            );
+            if (pending.current !== null) continue;
+            saving.current = false;
+            if (mounted.current) setSaveState("idle");
+            return;
+          }
           authoritativeRecord.current = saved;
           implicitDestinationAccountId.current = implicitDestinationFromRecord(
             saved,
@@ -412,6 +427,16 @@ export function RetirementView(props: RetirementViewProps) {
           }
         } catch {
           if (generation.current !== saveGeneration) return;
+          if (accountGeneration.current !== dispatchedAccountGeneration) {
+            pending.current = saveValuesFromDraft(
+              draftRef.current,
+              requiresTaxableDestinationRef.current,
+            );
+            if (pending.current !== null) continue;
+            saving.current = false;
+            if (mounted.current) setSaveState("idle");
+            return;
+          }
           failed.current = saveValuesFromDraft(
             draftRef.current,
             requiresTaxableDestinationRef.current,

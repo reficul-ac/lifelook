@@ -1,12 +1,15 @@
-import { projectGrowth, ProjectionEngine } from "./projection";
+import { calculateRetirementPlan, projectGrowth, ProjectionEngine } from "./projection";
 import { buildRetirementCutoff } from "./retirementCutoff";
 import { calculateIncrementalHouseholdIncomeTax } from "./tax";
 import { calculateIncrementalHomeSaleTax, type HomeSaleTaxItem } from "./homeSaleTax";
 import {
+  calculateRetirementKeepSnapshot,
   calculateRetirementSnapshot,
   resolveRetirementHomeSales,
   type RetirementMissingData,
+  type RetirementKeepSnapshotResult,
   type RetirementSnapshotResult,
+  type ResolvedRetirementHomeSales,
   type SellHomesResult,
 } from "./retirementSnapshot";
 import {
@@ -125,18 +128,18 @@ export const extendScenarioHorizon = (
   scenario: Scenario,
   retirementMonth: string,
   horizonYears: number,
+  projectionStartMonth: string = scenario.horizon.start,
 ): Scenario => {
   if (!Number.isInteger(horizonYears) || horizonYears < 1 || horizonYears > 60) {
     throw new RangeError("horizonYears must be an integer from 1 to 60");
   }
   const finalRetirementMonth = addMonths(retirementMonth, horizonYears * 12 - 1);
-  const months = monthsInclusive(scenario.horizon.start, finalRetirementMonth);
+  const months = monthsInclusive(projectionStartMonth, finalRetirementMonth);
   if (months < 1) throw new RangeError("Retirement horizon cannot end before the scenario starts");
   return {
     ...scenario,
-    horizon: { start: scenario.horizon.start, months },
-    retirementExtension: true,
-  } as Scenario & { retirementExtension: true };
+    horizon: { start: projectionStartMonth, months },
+  };
 };
 
 interface RetirementYearState {
@@ -145,6 +148,7 @@ interface RetirementYearState {
   liabilities: Record<string, Cents>;
   taxableBasis: Record<string, Cents>;
   taxableLots: Record<string, TaxLotRecord[]>;
+  unsupportedTaxCharacter?: Record<string, true>;
   rothContributionBasis: Record<string, Cents>;
 }
 
@@ -198,7 +202,7 @@ const calculateIncomeTax = (
     const taxableNonWage=months.reduce((sum,month)=>sum+month.taxableNonWageIncomeCents,0);
     const federalRental= includedProperties.reduce((sum,property)=>sum+property.federalAllowedRentalCents,0);
     const californiaRental=includedProperties.reduce((sum,property)=>sum+property.californiaAllowedRentalCents,0);
-    const calendarSources=calendarYear===startYear?sources:[];
+    const calendarSources=sources.filter((source)=>source.taxYear===calendarYear);
     const federalShort=sumSources(calendarSources,"federalShortTermGainCents");
     const federalLong=sumSources(calendarSources,"federalLongTermGainCents");
     const californiaGain=sumSources(calendarSources,"californiaGainCents");
@@ -258,7 +262,14 @@ const initialState = (
 ): RetirementYearState => {
   const taxableBasis: Record<string, Cents> = {};
   const taxableLots: Record<string, TaxLotRecord[]> = {};
+  const unsupportedTaxCharacter: Record<string, true> = {};
   const rothContributionBasis: Record<string, Cents> = {};
+  const cutoffGrowthMonths = monthsInclusive(input.asOfDate.slice(0, 7), cutoff.balanceMonth);
+  const canonicalDate = (value: string | null | undefined) => {
+    if (value == null || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const date = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
+  };
   for (const account of input.snapshot.accounts) {
     const balance = Math.max(0, cutoff.accounts[account.id] ?? 0);
     if (account.subtype === "taxable-brokerage" ||
@@ -266,9 +277,23 @@ const initialState = (
       const recordedBasis = account.taxableCostBasisCents ??
         account.taxLots?.reduce((sum, lot) => sum + lot.federalBasisCents, 0) ?? 0;
       taxableBasis[account.id] = Math.min(balance, Math.max(0, recordedBasis));
-      if (account.taxLots?.length && account.taxLots.every((lot) => lot.acquiredOn != null)) {
+      if (account.taxLots?.length) {
         const marketTotal = account.taxLots.reduce((sum, lot) => sum + lot.marketValueCents, 0);
-        if (marketTotal > 0) {
+        const federalBasisTotal = account.taxLots.reduce((sum, lot) => sum + lot.federalBasisCents, 0);
+        let growthOnlyBalance = account.balanceCents;
+        for (let month = 0; month < cutoffGrowthMonths; month++) {
+          growthOnlyBalance = projectGrowth(growthOnlyBalance, account.annualReturnBps, 1);
+        }
+        const ids = new Set(account.taxLots.map((lot) => lot.id));
+        const validLots = ids.size === account.taxLots.length && account.taxLots.every((lot) =>
+          canonicalDate(lot.acquiredOn) &&
+          Number.isSafeInteger(lot.marketValueCents) && lot.marketValueCents >= 0 &&
+          Number.isSafeInteger(lot.federalBasisCents) && lot.federalBasisCents >= 0 &&
+          Number.isSafeInteger(lot.californiaBasisCents) && lot.californiaBasisCents >= 0) &&
+          marketTotal === account.balanceCents &&
+          (account.taxableCostBasisCents == null || account.taxableCostBasisCents === federalBasisTotal) &&
+          growthOnlyBalance === balance;
+        if (validLots && marketTotal > 0) {
           let allocated = 0;
           taxableLots[account.id] = account.taxLots.map((lot, index) => {
             const marketValueCents = index === account.taxLots!.length - 1
@@ -279,6 +304,8 @@ const initialState = (
           });
           taxableBasis[account.id] = taxableLots[account.id]
             .reduce((sum, lot) => sum + lot.federalBasisCents, 0);
+        } else {
+          unsupportedTaxCharacter[account.id] = true;
         }
       }
     }
@@ -295,6 +322,7 @@ const initialState = (
     liabilities: { ...cutoff.liabilities },
     taxableBasis,
     taxableLots,
+    unsupportedTaxCharacter,
     rothContributionBasis,
   };
 };
@@ -382,32 +410,6 @@ const reconcileLotMarketValue = (
   }
 };
 
-const removeLotValue = (lots: TaxLotRecord[], amountCents: Cents) => {
-  let remaining = amountCents;
-  const ordered = [...lots].sort((left, right) =>
-    (left.acquiredOn ?? "").localeCompare(right.acquiredOn ?? "") || left.id.localeCompare(right.id));
-  const result: TaxLotRecord[] = [];
-  for (const lot of ordered) {
-    const removed = Math.min(remaining, lot.marketValueCents);
-    const federalBasisRemoved = lot.marketValueCents === 0 ? 0 : Math.min(
-      lot.federalBasisCents,
-      Math.round(lot.federalBasisCents * removed / lot.marketValueCents),
-    );
-    const californiaBasisRemoved = lot.marketValueCents === 0 ? 0 : Math.min(
-      lot.californiaBasisCents,
-      Math.round(lot.californiaBasisCents * removed / lot.marketValueCents),
-    );
-    remaining -= removed;
-    if (removed < lot.marketValueCents) result.push({
-      ...lot,
-      marketValueCents: lot.marketValueCents - removed,
-      federalBasisCents: lot.federalBasisCents - federalBasisRemoved,
-      californiaBasisCents: lot.californiaBasisCents - californiaBasisRemoved,
-    });
-  }
-  return result;
-};
-
 const addCashLot = (
   state: RetirementYearState,
   accountId: string,
@@ -443,6 +445,7 @@ const runRetirementScenario = (
   taxLedgers: ReadonlyMap<number, TaxLedger>,
   initialOrder: readonly string[],
   homeSale?: RetirementHomeSaleRollForward,
+  planFailure?: { yearIndex: number; message: string },
 ): readonly RetirementProjectionYear[] => {
   let state = initialState(input, cutoff);
   let calculationFailure: string | undefined;
@@ -472,9 +475,17 @@ const runRetirementScenario = (
   }
   const monthsByKey = new Map(planMonths.map((month) => [month.month, month]));
   const accountById = new Map(input.snapshot.accounts.map((account) => [account.id, account]));
+  const eventById = new Map(input.scenario.events.map((event) => [event.id, event]));
+  const assetSaleByEventId = new Map(input.scenario.events.flatMap((event) =>
+    event.type === "asset-sale" ? [[event.id, event] as const] : []));
 
   return Array.from({ length: input.settings.horizonYears }, (_, index) => {
     const periodStart = addMonths(input.settings.retirementMonth, index * 12);
+    if (planFailure != null && index >= planFailure.yearIndex) {
+      calculationFailure ??= planFailure.message;
+      state = { accounts: {}, assets: {}, liabilities: {}, taxableBasis: {}, taxableLots: {}, rothContributionBasis: {} };
+      return calculationErrorYear(input, periodStart, calculationFailure);
+    }
     if (calculationFailure != null) {
       return calculationErrorYear(input, periodStart, calculationFailure);
     }
@@ -502,6 +513,9 @@ const runRetirementScenario = (
       startingPortfolioCents * input.settings.withdrawalRateBps / 10_000,
     );
 
+    const soldDuringPeriod = new Set<string>();
+    let unsupportedPlanOutflowAccountId: string | undefined;
+    const planDispositionSources: RetirementDrawSource[] = [];
     for (const month of periodMonths) {
       for (const [accountId, balance] of Object.entries(state.accounts)) {
         const account = accountById.get(accountId);
@@ -512,26 +526,62 @@ const runRetirementScenario = (
         }
       }
       for (const transition of month.accountTransitions) {
+        const saleEvent = transition.source === "asset-sale" && transition.eventId != null
+          ? assetSaleByEventId.get(transition.eventId)
+          : undefined;
+        if (saleEvent != null && homeSale?.assetIds.includes(saleEvent.assetId)) continue;
         const account = accountById.get(transition.accountId);
         if (account == null || state.accounts[transition.accountId] == null) continue;
         const priorBalance = state.accounts[transition.accountId];
         const priorBasis = state.taxableBasis[transition.accountId] ?? 0;
-        state.accounts[transition.accountId] = priorBalance + transition.amountCents;
         if (isTaxableInvestmentAccount(account)) {
           if (transition.amountCents >= 0) {
+            state.accounts[transition.accountId] = priorBalance + transition.amountCents;
             state.taxableBasis[transition.accountId] = priorBasis + transition.amountCents;
             addCashLot(state, transition.accountId, transition.amountCents, `${month.month}-01`, `${transition.eventId ?? transition.recurringId ?? transition.source}:${month.month}`);
           } else {
-            const valueRemoved = Math.min(priorBalance, -transition.amountCents);
-            const basisRemoved = priorBalance <= 0
-              ? 0
-              : Math.min(priorBasis, Math.round(priorBasis * valueRemoved / priorBalance));
-            state.taxableBasis[transition.accountId] = priorBasis - basisRemoved;
-            const lots = state.taxableLots[transition.accountId];
-            if (lots) state.taxableLots[transition.accountId] = removeLotValue(lots, valueRemoved);
+            const disposition = drawRetirementFunds({
+              amountCents: -transition.amountCents,
+              date: transition.eventId == null
+                ? `${month.month}-01`
+                : eventById.get(transition.eventId)?.date ?? `${month.month}-01`,
+              order: [transition.accountId],
+              accounts: input.snapshot.accounts,
+              balances: state.accounts,
+              people: input.snapshot.household.people,
+              taxableBasis: state.taxableBasis,
+              taxableLots: state.taxableLots,
+              unsupportedTaxCharacterAccountIds: Object.keys(state.unsupportedTaxCharacter ?? {}),
+              rothContributionBasis: state.rothContributionBasis,
+            });
+            state = {
+              ...state,
+              accounts: { ...disposition.balances },
+              taxableBasis: { ...disposition.taxableBasis },
+              taxableLots: Object.fromEntries(Object.entries(disposition.taxableLots).map(([accountId, lots]) => [accountId, lots.map((lot) => ({ ...lot }))])),
+              rothContributionBasis: { ...disposition.rothContributionBasis },
+            };
+            planDispositionSources.push(...disposition.sources);
+            if (disposition.unfundedCents > 0 || !disposition.taxCharacterSupported) {
+              unsupportedPlanOutflowAccountId ??= transition.accountId;
+            }
           }
+        } else {
+          state.accounts[transition.accountId] = priorBalance + transition.amountCents;
         }
+        if (saleEvent != null) soldDuringPeriod.add(saleEvent.assetId);
       }
+    }
+    if (unsupportedPlanOutflowAccountId != null) {
+      calculationFailure = `Exact taxable gain treatment is unavailable for ${accountById.get(unsupportedPlanOutflowAccountId)?.name ?? unsupportedPlanOutflowAccountId}.`;
+      const warning: RetirementProjectionWarning = {
+        code: "unsupported-tax-character",
+        year,
+        entityId: unsupportedPlanOutflowAccountId,
+        message: calculationFailure,
+      };
+      state = { accounts: {}, assets: {}, liabilities: {}, taxableBasis: {}, taxableLots: {}, rothContributionBasis: {} };
+      return calculationErrorYear(input, periodStart, calculationFailure, [warning]);
     }
     const accountReturnStateError = invalidStateMessage(state);
     if (accountReturnStateError != null) {
@@ -552,11 +602,15 @@ const runRetirementScenario = (
         for (const liabilityId of homeSale.liabilityIds) delete state.liabilities[liabilityId];
       }
     }
+    if (soldDuringPeriod.size > 0) {
+      homes = homes.filter((home) => !soldDuringPeriod.has(home.assetId));
+    }
     const homeIds = new Set(homes.map((home) => home.assetId));
     for (const property of periodMonths.flatMap((month) => month.properties)) {
       if ((property.status === "active" || property.status === "owner-occupied") &&
         state.assets[property.assetId] != null &&
         !homeIds.has(property.assetId) &&
+        !soldDuringPeriod.has(property.assetId) &&
         !(homeSale?.assetIds.includes(property.assetId) ?? false)) {
         homes.push({ assetId: property.assetId, liabilityId: property.liabilityId });
         homeIds.add(property.assetId);
@@ -661,6 +715,7 @@ const runRetirementScenario = (
       people: input.snapshot.household.people,
       taxableBasis: state.taxableBasis,
       taxableLots: state.taxableLots,
+      unsupportedTaxCharacterAccountIds: Object.keys(state.unsupportedTaxCharacter ?? {}),
       rothContributionBasis: state.rothContributionBasis,
     });
     let targetDraw=makeTargetDraw(withdrawalTargetCents);
@@ -670,7 +725,7 @@ const runRetirementScenario = (
         startingPortfolioCents=Math.max(0,provisionalStartingPortfolioCents-(anticipatedSaleTaxCents-homeSale.incrementalSaleTaxCents));
         withdrawalTargetCents=Math.round(startingPortfolioCents*input.settings.withdrawalRateBps/10_000);
         targetDraw=makeTargetDraw(withdrawalTargetCents);
-        const nextSaleTaxCents=calculateIncomeTax(input,periodStart,periodMonths,taxLedgers,targetDraw.sources,homeSale).saleTaxCents;
+        const nextSaleTaxCents=calculateIncomeTax(input,periodStart,periodMonths,taxLedgers,[...planDispositionSources,...targetDraw.sources],homeSale).saleTaxCents;
         if(nextSaleTaxCents===anticipatedSaleTaxCents)break;
         anticipatedSaleTaxCents=nextSaleTaxCents;
       }
@@ -700,7 +755,7 @@ const runRetirementScenario = (
       periodStart,
       periodMonths,
       taxLedgers,
-      withdrawalSources,
+      [...planDispositionSources, ...withdrawalSources],
       homeSale,
     );
     let estimatedTaxCents = taxCalculation.retirementTaxCents;
@@ -766,20 +821,22 @@ const runRetirementScenario = (
           people: input.snapshot.household.people,
           taxableBasis: state.taxableBasis,
           taxableLots: state.taxableLots,
+          unsupportedTaxCharacterAccountIds: Object.keys(state.unsupportedTaxCharacter ?? {}),
           rothContributionBasis: state.rothContributionBasis,
         });
         const combined = combineSources(withdrawalSources, draw.sources);
+        const combinedTaxSources = [...planDispositionSources, ...combined];
         const updatedTax = calculateIncomeTax(
           input,
           periodStart,
           periodMonths,
           taxLedgers,
-          combined,
+          combinedTaxSources,
           homeSale,
         );
         const updatedTaxCents=updatedTax.retirementTaxCents;
         const updatedSaleTaxCents=index===0?updatedTax.saleTaxCents:0;
-        const updatedPenaltyCents = sumSources(combined, "earlyPenaltyCents");
+        const updatedPenaltyCents = sumSources(combinedTaxSources, "earlyPenaltyCents");
         const addedTaxAndPenalty = Math.max(
           0,
           updatedTaxCents + updatedSaleTaxCents + updatedPenaltyCents -
@@ -902,6 +959,42 @@ const runRetirementScenario = (
   });
 };
 
+const errorMessage = (error: unknown) => error instanceof Error
+  ? error.message
+  : "Unknown retirement projection error.";
+
+const setupFailureResult = (
+  input: RetirementProjectionInput,
+  message: string,
+): RetirementProjectionResult => {
+  const years = Array.from({ length: input.settings.horizonYears }, (_, index) =>
+    calculationErrorYear(input, addMonths(input.settings.retirementMonth, index * 12), message));
+  const warning: RetirementProjectionWarning = { code: "calculation-error", message };
+  return {
+    retirementMonth: input.settings.retirementMonth,
+    withdrawalRateBps: input.settings.withdrawalRateBps,
+    netWorthCents: 0,
+    keepHomes: {
+      available: true,
+      summary: {
+        homeEquityCents: 0,
+        nonHomeNetWorthCents: 0,
+        withdrawalIncomeCents: 0,
+        grossRentalIncomeCents: 0,
+        annualPreTaxIncomeCents: 0,
+      },
+      years,
+    },
+    sellHomes: { available: false, issues: [], warnings: [warning] },
+    effectiveWithdrawalOrder: resolveRetirementAccountOrder(
+      input.snapshot,
+      `${input.settings.retirementMonth}-01`,
+      input.settings.withdrawalAccountOrder,
+    ),
+    warnings: uniqueWarnings([...years.flatMap((year) => year.warnings), warning]),
+  };
+};
+
 export function calculateRetirementProjection(
   input: RetirementProjectionInput,
 ): RetirementProjectionResult {
@@ -909,31 +1002,77 @@ export function calculateRetirementProjection(
     input.scenario,
     input.settings.retirementMonth,
     input.settings.horizonYears,
+    input.asOfDate.slice(0, 7),
   );
-  const cutoff = buildRetirementCutoff({
+  const setupInput = {
     snapshot: input.snapshot,
     scenario: input.scenario,
     retirementMonth: input.settings.retirementMonth,
     asOfDate: input.asOfDate,
-  });
-  const retirementSnapshot = calculateRetirementSnapshot({
+  };
+  let cutoff: ReturnType<typeof buildRetirementCutoff>;
+  try {
+    cutoff = buildRetirementCutoff(setupInput);
+  } catch (error) {
+    return setupFailureResult(input, errorMessage(error));
+  }
+
+  const snapshotInput = {
     cutoff,
     snapshot: input.snapshot,
     scenario: input.scenario,
     withdrawalRateBps: input.settings.withdrawalRateBps,
-  });
-  const resolvedHomeSales = resolveRetirementHomeSales({
-    cutoff,
-    snapshot: input.snapshot,
-    scenario: input.scenario,
-    withdrawalRateBps: input.settings.withdrawalRateBps,
-  });
-  const projections = ProjectionEngine.calculate(
-    input.snapshot,
-    scenario,
-    input.asOfDate,
-    { stopEmploymentMonth: input.settings.retirementMonth },
-  );
+  };
+  let keepSnapshot: RetirementKeepSnapshotResult;
+  let retirementSnapshot: RetirementSnapshotResult | undefined;
+  let resolvedHomeSales: ResolvedRetirementHomeSales | undefined;
+  let sellSetupError: string | undefined;
+  try {
+    retirementSnapshot = calculateRetirementSnapshot(snapshotInput);
+    keepSnapshot = retirementSnapshot;
+    if (retirementSnapshot.sellHomes.available) {
+      resolvedHomeSales = resolveRetirementHomeSales(snapshotInput);
+    }
+  } catch (error) {
+    sellSetupError = errorMessage(error);
+    try {
+      keepSnapshot = calculateRetirementKeepSnapshot(snapshotInput);
+    } catch (keepError) {
+      return setupFailureResult(input, errorMessage(keepError));
+    }
+  }
+
+  let projections: ReturnType<typeof calculateRetirementPlan> = [];
+  let planFailure: { yearIndex: number; message: string } | undefined;
+  try {
+    projections = calculateRetirementPlan(
+      input.snapshot,
+      scenario,
+      input.asOfDate,
+      { stopEmploymentMonth: input.settings.retirementMonth },
+    );
+  } catch (fullProjectionError) {
+    for (let yearIndex = 0; yearIndex < input.settings.horizonYears; yearIndex++) {
+      try {
+        const prefixScenario = extendScenarioHorizon(
+          input.scenario,
+          input.settings.retirementMonth,
+          yearIndex + 1,
+          input.asOfDate.slice(0, 7),
+        );
+        projections = calculateRetirementPlan(
+          input.snapshot,
+          prefixScenario,
+          input.asOfDate,
+          { stopEmploymentMonth: input.settings.retirementMonth },
+        );
+      } catch (error) {
+        planFailure = { yearIndex, message: errorMessage(error) };
+        break;
+      }
+    }
+    planFailure ??= { yearIndex: 0, message: errorMessage(fullProjectionError) };
+  }
   const effectiveWithdrawalOrder = resolveRetirementAccountOrder(
     input.snapshot,
     `${input.settings.retirementMonth}-01`,
@@ -948,8 +1087,13 @@ export function calculateRetirementProjection(
     planMonths,
     taxLedgers,
     effectiveWithdrawalOrder,
+    undefined,
+    planFailure,
   );
-  const sellYears = retirementSnapshot.sellHomes.available
+  const sellAvailable = sellSetupError == null &&
+    retirementSnapshot?.sellHomes.available === true &&
+    resolvedHomeSales != null;
+  const sellYears = sellAvailable
     ? runRetirementScenario(
       input,
       cutoff,
@@ -957,55 +1101,58 @@ export function calculateRetirementProjection(
       taxLedgers,
       effectiveWithdrawalOrder,
       {
-        assetIds: resolvedHomeSales.homes.map((home) => home.property.assetId),
-        liabilityIds: resolvedHomeSales.homes.flatMap((home) =>
+        assetIds: resolvedHomeSales!.homes.map((home) => home.property.assetId),
+        liabilityIds: resolvedHomeSales!.homes.flatMap((home) =>
           home.liabilityId == null ? [] : [home.liabilityId]),
-        grossSaleValueCents: resolvedHomeSales.sales.reduce(
+        grossSaleValueCents: resolvedHomeSales!.sales.reduce(
           (sum, sale) => sum + sale.salePriceCents,
           0,
         ),
-        sellingCostsCents: retirementSnapshot.sellHomes.sellingCostsCents,
-        mortgagePayoffCents: resolvedHomeSales.homes.reduce(
+        sellingCostsCents: retirementSnapshot!.sellHomes.available ? retirementSnapshot!.sellHomes.sellingCostsCents : 0,
+        mortgagePayoffCents: resolvedHomeSales!.homes.reduce(
           (sum, home) => sum + home.mortgageCents,
           0,
         ),
-        incrementalSaleTaxCents: retirementSnapshot.sellHomes.incrementalSaleTaxCents,
-        netProceedsCents: retirementSnapshot.sellHomes.netHomeProceedsCents,
-        sales: resolvedHomeSales.sales,
+        incrementalSaleTaxCents: retirementSnapshot!.sellHomes.available ? retirementSnapshot!.sellHomes.incrementalSaleTaxCents : 0,
+        netProceedsCents: retirementSnapshot!.sellHomes.available ? retirementSnapshot!.sellHomes.netHomeProceedsCents : 0,
+        sales: resolvedHomeSales!.sales,
       },
+      planFailure,
     )
     : undefined;
-  const unavailableSellWarnings = retirementSnapshot.sellHomes.available
-    ? []
-    : retirementSnapshot.sellHomes.issues.map((issue): RetirementProjectionWarning => ({
+  const unavailableSellWarnings: readonly RetirementProjectionWarning[] = sellSetupError != null
+    ? [{ code: "calculation-error", message: sellSetupError }]
+    : retirementSnapshot?.sellHomes.available === false
+      ? retirementSnapshot.sellHomes.issues.map((issue): RetirementProjectionWarning => ({
       code: "missing-home-data",
       entityId: issue.assetId,
       message: issue.message,
-    }));
+      }))
+      : [];
   const resultWarnings = uniqueWarnings([
     ...keepYears.flatMap((year) => year.warnings),
     ...(sellYears?.flatMap((year) => year.warnings) ?? unavailableSellWarnings),
   ]);
-  const sellSummary=retirementSnapshot.sellHomes.available&&sellYears?.[0].homeSale!=null
+  const sellSummary=sellAvailable&&sellYears?.[0].homeSale!=null
     ?{
-      ...retirementSnapshot.sellHomes,
+      ...retirementSnapshot!.sellHomes,
       incrementalSaleTaxCents:sellYears[0].homeSale.incrementalSaleTaxCents,
       netHomeProceedsCents:sellYears[0].homeSale.netProceedsCents,
-      liquidNetWorthCents:retirementSnapshot.keepHomes.nonHomeNetWorthCents+sellYears[0].homeSale.netProceedsCents,
-      annualPreTaxIncomeCents:Math.round(Math.max(0,retirementSnapshot.keepHomes.nonHomeNetWorthCents+sellYears[0].homeSale.netProceedsCents)*input.settings.withdrawalRateBps/10_000),
+      liquidNetWorthCents:keepSnapshot.keepHomes.nonHomeNetWorthCents+sellYears[0].homeSale.netProceedsCents,
+      annualPreTaxIncomeCents:Math.round(Math.max(0,keepSnapshot.keepHomes.nonHomeNetWorthCents+sellYears[0].homeSale.netProceedsCents)*input.settings.withdrawalRateBps/10_000),
     }
-    :retirementSnapshot.sellHomes;
+    :retirementSnapshot?.sellHomes;
 
   return {
-    retirementMonth: retirementSnapshot.retirementMonth,
-    withdrawalRateBps: retirementSnapshot.withdrawalRateBps,
-    netWorthCents: retirementSnapshot.netWorthCents,
-    keepHomes: { available: true, summary: retirementSnapshot.keepHomes, years: keepYears },
-    sellHomes: retirementSnapshot.sellHomes.available
+    retirementMonth: keepSnapshot.retirementMonth,
+    withdrawalRateBps: keepSnapshot.withdrawalRateBps,
+    netWorthCents: keepSnapshot.netWorthCents,
+    keepHomes: { available: true, summary: keepSnapshot.keepHomes, years: keepYears },
+    sellHomes: sellAvailable
       ? { available: true, summary: sellSummary as Extract<SellHomesResult,{available:true}>, years: sellYears! }
       : {
         available: false,
-        issues: retirementSnapshot.sellHomes.issues,
+        issues: retirementSnapshot?.sellHomes.available === false ? retirementSnapshot.sellHomes.issues : [],
         warnings: unavailableSellWarnings,
       },
     effectiveWithdrawalOrder,

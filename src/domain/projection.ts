@@ -88,9 +88,9 @@ function calculateProjection(
   asOfDate: string,
   options: ProjectionOptions,
   taxableRentalByMonth: ReadonlyMap<string, Cents>,
+  allowExtendedHorizon: boolean,
 ): readonly AnnualProjection[] {
-    const retirementExtension=(scenario as Scenario&{retirementExtension?:boolean}).retirementExtension===true;
-    if (scenario.horizon.months < 1 || !Number.isSafeInteger(scenario.horizon.months) || (!retirementExtension && scenario.horizon.months > 480)) throw new RangeError("Projection horizon must be between 1 and 480 months");
+    if (scenario.horizon.months < 1 || !Number.isSafeInteger(scenario.horizon.months) || (!allowExtendedHorizon && scenario.horizon.months > 480)) throw new RangeError("Projection horizon must be between 1 and 480 months");
     const asOf = isoDate(asOfDate), asOfMonth = monthKey(asOf);
     const start = new Date(`${asOfMonth}-01T00:00:00Z`);
     const employmentActive=(month:string)=>!options.stopEmploymentMonth||month<options.stopEmploymentMonth;
@@ -304,9 +304,14 @@ function calculateProjection(
     return [...grouped].map(([year, items]) => {const income=sum(items,"incomeCents"),surplus=sum(items,"surplusCents"),properties=[...new Set([...propertyEvents.map(event=>event.assetId),...currentPropertyIds])].map(assetId=>aggregateProperty(year,assetId,items));return ({ year, incomeCents:income,actualIncomeCents:sum(items,"actualIncomeCents"),actualExpenseCents:sum(items,"actualExpenseCents"), expenseCents: sum(items, "expenseCents"), taxCents: sum(items, "taxCents"),cashTaxCents:sum(items,"cashTaxCents"),rsuSellToCoverTaxCents:sum(items,"rsuSellToCoverTaxCents"),taxLedger:taxLedgerByYear.get(year), savingsRateBps:income?Math.round(Math.max(0,surplus)*10000/income):0,surplusCents:surplus,contributionCents:sum(items,"contributionCents"),contributionResults:items.flatMap(x=>x.contributionResults), liquidWorthCents: items.at(-1)!.liquidWorthCents, endingNetWorthCents: items.at(-1)!.netWorthCents, debtCents: items.at(-1)!.debtCents, debtPayoffMonth:items.find(x=>x.debtCents===0)?.month, unfundedDeficitCents: sum(items, "unfundedDeficitCents"),properties, warnings: items.flatMap(x => x.warnings), months: items });});
 }
 
-export const ProjectionEngine = {
-  calculate(snapshot: FinancialSnapshot, scenario: Scenario, asOfDate: string, options: ProjectionOptions = {}): readonly AnnualProjection[] {
-    const beforeRentalTax=calculateProjection(snapshot,scenario,asOfDate,options,new Map());
+function calculateWithHorizonAuthority(
+  snapshot: FinancialSnapshot,
+  scenario: Scenario,
+  asOfDate: string,
+  options: ProjectionOptions,
+  allowExtendedHorizon: boolean,
+): readonly AnnualProjection[] {
+    const beforeRentalTax=calculateProjection(snapshot,scenario,asOfDate,options,new Map(),allowExtendedHorizon);
     const taxableRentalByMonth=new Map<string,Cents>();
     for(const month of beforeRentalTax.flatMap(year=>year.months)){
       if(options.stopEmploymentMonth&&month.month>=options.stopEmploymentMonth)continue;
@@ -314,10 +319,25 @@ export const ProjectionEngine = {
       if(taxableRentalCents)taxableRentalByMonth.set(month.month,taxableRentalCents);
     }
     return taxableRentalByMonth.size
-      ? calculateProjection(snapshot,scenario,asOfDate,options,taxableRentalByMonth)
+      ? calculateProjection(snapshot,scenario,asOfDate,options,taxableRentalByMonth,allowExtendedHorizon)
       : beforeRentalTax;
+}
+
+export const ProjectionEngine = {
+  calculate(snapshot: FinancialSnapshot, scenario: Scenario, asOfDate: string, options: ProjectionOptions = {}): readonly AnnualProjection[] {
+    return calculateWithHorizonAuthority(snapshot,scenario,asOfDate,options,false);
   },
 } as const;
+
+/** Retirement-only boundary for horizons that include lead time plus sixty retirement years. */
+export function calculateRetirementPlan(
+  snapshot: FinancialSnapshot,
+  scenario: Scenario,
+  asOfDate: string,
+  options: ProjectionOptions = {},
+): readonly AnnualProjection[] {
+  return calculateWithHorizonAuthority(snapshot,scenario,asOfDate,options,true);
+}
 
 function sum(items: MonthlyProjection[], key: "incomeCents" | "expenseCents" | "actualIncomeCents" | "actualExpenseCents" | "taxCents"|"cashTaxCents"|"rsuSellToCoverTaxCents" | "surplusCents" | "unfundedDeficitCents"|"contributionCents") { return items.reduce((total, item) => total + item[key], 0); }
 function accountKind(snapshot:FinancialSnapshot,id:string){return snapshot.accounts.find(x=>x.id===id)?.kind;}

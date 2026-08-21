@@ -196,3 +196,89 @@ Rental treatment:
 - No blocking concern remains.
 - Deliberate conservative boundary: passive rental losses/carryforwards and taxable brokerage gains without complete positive-gain lot character produce structured calculation-error rows. This is preferable to displaying false precision; adding full loss carry ledgers can make those cases available later without changing the warning contract.
 - The `.superpowers` tree was otherwise left untouched.
+
+---
+
+## Review Fix Round 2
+
+### Status
+
+All four remaining Important/spec findings were reproduced with targeted tests, fixed, self-reviewed, and verified. The review fix is committed with message `fix: isolate retirement projection failures and tax provenance` on top of `cb0e98c`.
+
+### Result
+
+- Removed the caller-spoofable `Scenario.retirementExtension` escape hatch. Ordinary `ProjectionEngine.calculate` always enforces 480 months; the retirement boundary and cutoff use the explicit `calculateRetirementPlan` API for validated lead-time-plus-60-year projections.
+- Anchored retirement extension months to the engine's actual `asOfDate` month rather than `Scenario.horizon.start`, so differing valid starts still reach the final requested retirement month.
+- Isolated cutoff/setup exceptions into structured cleared `calculation-error` years instead of throwing. Refactored the snapshot boundary so a Sell-only tax setup failure returns Sell unavailable while Keep retains its valid summary and annual rows.
+- When eager Plan projection fails, retirement retries only successful annual prefixes to identify the first failing retirement year. Earlier rows remain valid; the failing and subsequent rows are cleared and cannot reuse stale state.
+- Processes later Plan home sales once, removes the sold property from the dynamic home-equity set, retains any surviving debt as a liability, and suppresses a later sale transition for an ID already sold in the retirement-month Sell scenario.
+- Validates cutoff lot IDs, calendar acquisition dates, federal/California cents, original market totals, aggregate federal basis, and growth-only reconciliation. Account activity that cannot be reconciled to exact lot provenance is carried as unsupported rather than rescaled into stale lots.
+- Added a draw-level unsupported-provenance capability and canonical-date validation. Taxable Plan outflows use the same FIFO draw primitive when exact facts exist, carry their disposition year into the correct calendar-year tax stack, and return structured `unsupported-tax-character` rows when exact treatment is unavailable.
+
+### Review TDD Evidence
+
+Horizon authority and anchoring:
+
+- Mutations named: trust an untyped `retirementExtension: true` field on an ordinary Scenario; size extension from `Scenario.horizon.start` rather than the engine's as-of month.
+- RED: `npx vitest run src/domain/projection.test.ts src/domain/retirementProjection.test.ts -t "caller-spoofed|anchors the extended"`
+- Failures: the spoofed 481-month Plan did not throw; the differing-start retirement returned `Missing monthly Plan data for retirement year 2028.`
+- GREEN: both selected tests passed. Ordinary Plan remained capped and the retirement rows were exactly `[2027, 2028]` without a calculation error.
+
+Setup and later-year failure isolation:
+
+- Mutations named: let an upfront Plan validation escape; calculate malformed Sell tax before Keep; eagerly abort all rows on a second-year Plan exception.
+- RED: `npx vitest run src/domain/retirementProjection.test.ts -t "upfront Plan exception|Keep available when Sell setup fails|prior rows and clears"`
+- Failures: uncaught invalid-contribution, excessive-selling-cost, and invalid-ADU exceptions escaped from `ProjectionEngine`, home-sale tax, and the eager retirement Plan calculation.
+- GREEN: all three selected tests passed. Upfront failure produced two cleared rows plus Sell unavailable; Sell-only failure preserved the Keep home balance; the 2027 row remained populated while 2028 and 2029 were cleared.
+
+Later home sales:
+
+- Mutations named: retain a later-sold home in eligible-home state; replay a Plan sale credit for a home sold at retirement.
+- RED: `npx vitest run src/domain/retirementProjection.test.ts -t "kept home's later sale|does not replay"`
+- Failures: the next-year eligible portfolio was `60,000,000` instead of the liability-aware `40,000,000`; Sell deposited `110,000,000` instead of `60,000,000`.
+- GREEN: both selected tests passed with the literal balances above and exact-once proceeds.
+
+Tax-lot provenance and Plan dispositions:
+
+- Mutations named: rescale a stale lot after cutoff account activity; normalize mismatched totals or an invalid date; silently reduce basis for a taxable Plan outflow without disposition tax.
+- RED: `npx vitest run src/domain/retirementProjection.test.ts -t "stale lots|rejects mismatched|rejects invalid|post-retirement taxable Plan outflow"`
+- Failures: the evolved account retained `110,000,000`; mismatched/invalid lots returned no warning; the taxable transfer retained populated `90,000,000`/`10,000,000` account balances.
+- GREEN: all four selected cases passed with `unsupported-tax-character` and cleared financial maps when provenance was unavailable.
+- During the GREEN integration, the existing later-home purchase test correctly exposed that exact zero-gain Plan funding must remain supported. The implementation was refined to send exact Plan dispositions through FIFO tax sources rather than rejecting every taxable outflow; the unsupported regression now uses intentionally incomplete aggregate basis while the exact purchase case remains available.
+
+Calendar placement of exact Plan dispositions:
+
+- Mutation named: omit the disposition year from draw sources, making a second-calendar-year Plan sale stack under the retirement row's first-year rules.
+- RED: `npx vitest run src/domain/retirementWithdrawals.test.ts -t "FIFO holding-period"`
+- Failure: the exact source omitted literal `taxYear: 2030`.
+- GREEN: the selected test passed; retirement tax now filters all draw/disposition sources by their carried calendar year.
+
+### Final Fresh Verification
+
+- Brief command: `npm test -- --run src/domain/retirementProjection.test.ts src/domain/retirementSnapshot.test.ts src/domain/projection.test.ts src/domain/tax.test.ts src/domain/homeSaleTax.test.ts && npm run build`
+- PASS: 5 files, 185 tests; TypeScript project build and Vite production build passed, exit 0.
+- Affected withdrawal/cutoff command: `npm test -- --run src/domain/retirementWithdrawals.test.ts src/domain/retirementCutoff.test.ts`
+- PASS: 2 files, 26 tests.
+- Full suite: `npm test -- --run`
+- PASS: 15 files, 309 tests.
+- `git diff --check`
+- PASS: no whitespace errors.
+
+### Review-Fix Files
+
+- `src/domain/projection.ts`
+- `src/domain/projection.test.ts`
+- `src/domain/retirementCutoff.ts`
+- `src/domain/retirementProjection.ts`
+- `src/domain/retirementProjection.test.ts`
+- `src/domain/retirementSnapshot.ts`
+- `src/domain/retirementWithdrawals.ts`
+- `src/domain/retirementWithdrawals.test.ts`
+- `.superpowers/sdd/2026-08-21-retirement-scenario-projections/task-4-report.md`
+
+### Review-Fix Concerns
+
+- No blocking concern remains.
+- Deliberate conservative boundary: cutoff account activity is not recharacterized as market growth. If complete lot provenance cannot be reconciled, an affected taxable draw/Plan outflow is unavailable rather than presenting estimated holding-period or jurisdiction precision.
+- The exceptional Plan retry path is bounded by the validated 60 retirement years and runs only after the normal one-pass projection throws.
+- The unrelated untracked `.superpowers/brainstorm/` directory was preserved and excluded from the commit.

@@ -230,6 +230,11 @@ describe("ProjectionEngine",()=>{
   it("applies mid-year events only from their date",()=>{ const changed={...scenario,events:[{id:"x",type:"income-change" as const,date:"2025-07-01",entryId:"i",amountCents:2000_00}]}; const [year]=calculate(snapshot,changed); expect(year.months[5].incomeCents).toBe(1000_00); expect(year.months[6].incomeCents).toBe(2000_00); });
   it("sorts recurring changes deterministically rather than trusting payload order",()=>{ const events=[{id:"later",type:"income-change" as const,date:"2025-07-02",entryId:"i",amountCents:3000_00},{id:"earlier",type:"income-change" as const,date:"2025-07-01",entryId:"i",amountCents:2000_00}]; const [year]=calculate(snapshot,{...scenario,events}); expect(year.months[6].incomeCents).toBe(3000_00); });
   it("rejects horizons beyond forty years",()=>expect(()=>calculate(snapshot,{...scenario,horizon:{start:"2025-01",months:481}})).toThrow(/480/));
+  // Production mutation caught: trusting an untyped Scenario flag lets ordinary Plan callers spoof retirement authority and bypass the 480-month cap.
+  it("rejects a caller-spoofed retirement extension on an ordinary Plan",()=>{
+    const spoofed={...scenario,horizon:{start:"2025-01",months:481},retirementExtension:true} as Scenario&{retirementExtension:true};
+    expect(()=>calculate(snapshot,spoofed)).toThrow(/480/);
+  });
   it("does not mutate its inputs",()=>{ const before=JSON.stringify(snapshot); calculate(); expect(JSON.stringify(snapshot)).toBe(before); });
   it("amortizes liabilities independently and includes actual payments in cash flow",()=>{
     const financial={...snapshot,liabilities:[

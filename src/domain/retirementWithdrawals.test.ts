@@ -306,6 +306,7 @@ describe("retirement fund draws", () => {
     });
 
     expect(result.sources[0]).toMatchObject({
+      taxYear: 2030,
       taxableGainCents: 22_500,
       federalShortTermGainCents: 12_500,
       federalLongTermGainCents: 10_000,

@@ -130,11 +130,13 @@ export interface RetirementDrawInput {
   people?: readonly Person[];
   taxableBasis?: Readonly<Record<string, Cents>>;
   taxableLots?: Readonly<Record<string, readonly TaxLotRecord[]>>;
+  unsupportedTaxCharacterAccountIds?: readonly string[];
   rothContributionBasis?: Readonly<Record<string, Cents>>;
 }
 
 export interface RetirementDrawSource {
   accountId: string;
+  taxYear: number;
   amountCents: Cents;
   taxableGainCents: Cents;
   ordinaryIncomeCents: Cents;
@@ -177,6 +179,7 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
     [accountId, lots.map((lot) => ({ ...lot }))])) as Record<string, TaxLotRecord[]>;
   const rothContributionBasis = { ...input.rothContributionBasis };
   const accountsById = new Map(input.accounts.map((account) => [account.id, account]));
+  const unsupportedTaxCharacterAccountIds = new Set(input.unsupportedTaxCharacterAccountIds ?? []);
 
   for (const account of input.accounts) {
     const withdrawalClass = classifyWithdrawal(account, input.date, input.people ?? []);
@@ -224,8 +227,9 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
 
     if (withdrawalClass === "taxable") {
       const lots = taxableLots[accountId];
+      const providedLots = lots != null && lots.length > 0;
       const completeLots = lots != null && lots.length > 0 && lots.every((lot) =>
-        lot.acquiredOn != null && Number.isSafeInteger(lot.marketValueCents) && lot.marketValueCents >= 0 &&
+        parseDate(lot.acquiredOn ?? undefined) != null && Number.isSafeInteger(lot.marketValueCents) && lot.marketValueCents >= 0 &&
         Number.isSafeInteger(lot.federalBasisCents) && lot.federalBasisCents >= 0 &&
         Number.isSafeInteger(lot.californiaBasisCents) && lot.californiaBasisCents >= 0) &&
         lots.reduce((sum, lot) => sum + lot.marketValueCents, 0) === availableCents;
@@ -272,8 +276,9 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
         const basisSoldCents = Math.min(basisCents, Math.round(basisCents * amountCents / availableCents));
         taxableBasis[accountId] = basisCents - basisSoldCents;
         taxableGainCents = amountCents - basisSoldCents;
-        taxCharacterSupported = taxableGainCents === 0;
+        taxCharacterSupported = !providedLots && taxableGainCents === 0;
       }
+      if (unsupportedTaxCharacterAccountIds.has(accountId)) taxCharacterSupported = false;
     } else if (withdrawalClass === "eligible-pre-tax" || withdrawalClass === "penalty-pre-tax") {
       ordinaryIncomeCents = amountCents;
       if (withdrawalClass === "penalty-pre-tax") {
@@ -291,6 +296,7 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
 
     sources.push({
       accountId,
+      taxYear: Number(input.date.slice(0, 4)),
       amountCents,
       taxableGainCents,
       ordinaryIncomeCents,

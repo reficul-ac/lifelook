@@ -41,6 +41,8 @@ export interface RetirementSnapshotResult {
   sellHomes: SellHomesResult;
 }
 
+export type RetirementKeepSnapshotResult = Omit<RetirementSnapshotResult, "sellHomes">;
+
 export interface ResolvedRetirementHome {
   property: RetirementCutoffProperty;
   purchaseDate?: string | null;
@@ -304,7 +306,7 @@ export function resolveRetirementHomeSales(
   return { homes, issues, sales };
 }
 
-export function calculateRetirementSnapshot(input: RetirementSnapshotInput): RetirementSnapshotResult {
+const calculateRetirementSnapshotBase = (input: RetirementSnapshotInput) => {
   validateWithdrawalRate(input.withdrawalRateBps);
   const resolvedHomeSales = resolveRetirementHomeSales(input);
 
@@ -333,14 +335,31 @@ export function calculateRetirementSnapshot(input: RetirementSnapshotInput): Ret
     annualPreTaxIncomeCents: withdrawalIncomeCents + grossRentalIncomeCents,
   };
 
-  const issues = resolvedHomeSales.issues;
-
-  if (issues.length > 0) {
-    return {
+  return {
+    keep: {
       retirementMonth: input.cutoff.retirementMonth,
       withdrawalRateBps: input.withdrawalRateBps,
       netWorthCents,
       keepHomes,
+    } satisfies RetirementKeepSnapshotResult,
+    resolvedHomeSales,
+  };
+};
+
+export function calculateRetirementKeepSnapshot(
+  input: RetirementSnapshotInput,
+): RetirementKeepSnapshotResult {
+  return calculateRetirementSnapshotBase(input).keep;
+}
+
+export function calculateRetirementSnapshot(input: RetirementSnapshotInput): RetirementSnapshotResult {
+  const { keep, resolvedHomeSales } = calculateRetirementSnapshotBase(input);
+
+  const issues = resolvedHomeSales.issues;
+
+  if (issues.length > 0) {
+    return {
+      ...keep,
       sellHomes: { available: false, issues },
     };
   }
@@ -354,19 +373,16 @@ export function calculateRetirementSnapshot(input: RetirementSnapshotInput): Ret
     sales,
   });
   const sellingCostsCents = sales.reduce((sum, sale) => sum + sale.sellingCostCents, 0);
-  const grossHomeEquityCents = homeEquityCents;
+  const grossHomeEquityCents = keep.keepHomes.homeEquityCents;
   const incrementalSaleTaxCents = tax.totalIncrementalTaxCents;
   const netHomeProceedsCents = grossHomeEquityCents - sellingCostsCents - incrementalSaleTaxCents;
-  const liquidNetWorthCents = nonHomeNetWorthCents + netHomeProceedsCents;
+  const liquidNetWorthCents = keep.keepHomes.nonHomeNetWorthCents + netHomeProceedsCents;
   const annualPreTaxIncomeCents = Math.round(
     Math.max(0, liquidNetWorthCents) * input.withdrawalRateBps / 10_000,
   );
 
   return {
-    retirementMonth: input.cutoff.retirementMonth,
-    withdrawalRateBps: input.withdrawalRateBps,
-    netWorthCents,
-    keepHomes,
+    ...keep,
     sellHomes: {
       available: true,
       grossHomeEquityCents,

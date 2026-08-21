@@ -1,4 +1,4 @@
-import { ProjectionEngine } from "./projection";
+import { calculateRetirementPlan } from "./projection";
 import type { BasisPoints, Cents, FinancialSnapshot, Scenario, TaxLedger } from "./types";
 
 export type PlannedPropertyPurchase = Extract<Scenario["events"][number], { type: "asset-purchase" }>;
@@ -98,15 +98,15 @@ export function buildRetirementCutoff(input:RetirementCutoffInput):RetirementCut
   const projectionMonths=(balanceDate.getUTCFullYear()-asOfMonthDate.getUTCFullYear())*12+balanceDate.getUTCMonth()-asOfMonthDate.getUTCMonth()+1;
   if(projectionMonths<1||!Number.isSafeInteger(projectionMonths))throw new RangeError(`Missing projection balances for ${balanceMonth}`);
 
-  const scenario={...input.scenario,horizon:{start:asOfMonth,months:projectionMonths},retirementExtension:true} as Scenario&{retirementExtension:true};
-  const projections=ProjectionEngine.calculate(input.snapshot,scenario,input.asOfDate,{stopEmploymentMonth:input.retirementMonth});
+  const scenario={...input.scenario,horizon:{start:asOfMonth,months:projectionMonths}};
+  const projections=calculateRetirementPlan(input.snapshot,scenario,input.asOfDate,{stopEmploymentMonth:input.retirementMonth});
   const balanceRow=projections.flatMap(year=>year.months).find(month=>month.month===balanceMonth);
   if(!balanceRow?.balances)throw new RangeError(`Missing projection balances for ${balanceMonth}`);
   const retirementYear=retirementDate.getUTCFullYear();
   let taxLedger=projections.find(year=>year.year===retirementYear)?.taxLedger;
   if(!taxLedger&&retirementYear!==balanceDate.getUTCFullYear()){
-    const retirementScenario={...input.scenario,horizon:{start:input.retirementMonth,months:1},retirementExtension:true} as Scenario&{retirementExtension:true};
-    taxLedger=ProjectionEngine.calculate(input.snapshot,retirementScenario,`${input.retirementMonth}-01`,{stopEmploymentMonth:input.retirementMonth}).find(year=>year.year===retirementYear)?.taxLedger;
+    const retirementScenario={...input.scenario,horizon:{start:input.retirementMonth,months:1}};
+    taxLedger=calculateRetirementPlan(input.snapshot,retirementScenario,`${input.retirementMonth}-01`,{stopEmploymentMonth:input.retirementMonth}).find(year=>year.year===retirementYear)?.taxLedger;
   }
   if(!taxLedger)throw new RangeError(`Missing tax ledger for ${balanceMonth}`);
 

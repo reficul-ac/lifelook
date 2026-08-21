@@ -1,0 +1,669 @@
+import { describe, expect, test } from "vitest";
+import { calculateRetirementProjection } from "./retirementProjection";
+import type { FinancialSnapshot, Scenario } from "./types";
+import type { NormalizedRetirementSettings } from "./retirementSettings";
+
+const financialSnapshot: FinancialSnapshot = {
+  household: {
+    id: "household-1",
+    name: "Morgan household",
+    state: "CA",
+    people: [{ id: "person-1", name: "Morgan", birthDate: "1980-06-15" }],
+  },
+  taxProfile: {
+    filingStatus: "single",
+    state: "CA",
+    taxYear: 2026,
+    thresholdInflationBps: 250,
+    taxUnit: {
+      id: "tax-unit-1",
+      filingStatus: "single",
+      memberPersonIds: ["person-1"],
+    },
+  },
+  accounts: [{
+    id: "taxable-1",
+    name: "Taxable brokerage",
+    kind: "investment",
+    subtype: "taxable-brokerage",
+    balanceCents: 1_000_000_00,
+    taxableCostBasisCents: 1_000_000_00,
+    annualReturnBps: 0,
+    liquid: true,
+  }],
+  recurring: [],
+  assets: [],
+  liabilities: [],
+};
+
+const scenario: Scenario = {
+  id: "scenario-1",
+  name: "Short display plan",
+  assumptions: { inflationBps: 250, thresholdInflationBps: 250 },
+  assumptionsInherited: false,
+  events: [],
+  defaultContributionAccountId: "taxable-1",
+  contributions: [],
+  withdrawals: [],
+  horizon: { start: "2026-01", months: 12 },
+};
+
+const settings: NormalizedRetirementSettings = {
+  retirementMonth: "2042-01",
+  withdrawalRateBps: 300,
+  horizonYears: 30,
+  taxableDestinationAccountId: "taxable-1",
+  withdrawalAccountOrder: [],
+  selectedScenario: "keep-homes",
+  revision: 1,
+};
+
+describe("calculateRetirementProjection", () => {
+  // Production mutation caught: dropping either snapshot-derived scenario summary leaves the overview without its shared source of truth.
+  test("returns both retirement scenario summaries with annual rows", () => {
+    const result = calculateRetirementProjection({
+      snapshot: financialSnapshot,
+      scenario,
+      asOfDate: "2026-01-15",
+      settings,
+    });
+
+    expect(result.keepHomes.summary).toEqual({
+      homeEquityCents: 0,
+      nonHomeNetWorthCents: 1_000_000_00,
+      withdrawalIncomeCents: 3_000_000,
+      grossRentalIncomeCents: 0,
+      annualPreTaxIncomeCents: 3_000_000,
+    });
+    expect(result.sellHomes.available).toBe(true);
+    if (!result.sellHomes.available) throw new Error("expected Sell homes to be available");
+    expect(result.sellHomes.summary).toEqual({
+      available: true,
+      grossHomeEquityCents: 0,
+      sellingCostsCents: 0,
+      incrementalSaleTaxCents: 0,
+      netHomeProceedsCents: 0,
+      liquidNetWorthCents: 1_000_000_00,
+      annualPreTaxIncomeCents: 3_000_000,
+    });
+    expect(result.keepHomes.years).toHaveLength(30);
+    expect(result.sellHomes.years).toHaveLength(30);
+  });
+
+  // Production mutation caught: using or mutating the Plan's 12-month display horizon truncates the independent 30-year retirement series.
+  test("extends the horizon to complete retirement years without mutating the scenario", () => {
+    const before = JSON.stringify(scenario);
+
+    const result = calculateRetirementProjection({
+      snapshot: financialSnapshot,
+      scenario,
+      asOfDate: "2026-01-15",
+      settings,
+    });
+
+    expect(result.keepHomes.years[0].year).toBe(2042);
+    expect(result.keepHomes.years.at(-1)?.year).toBe(2071);
+    expect(JSON.stringify(scenario)).toBe(before);
+  });
+
+  // Production mutation caught: reusing year one's target or failing to add surplus deposits to taxable basis makes year two's target or realized gain wrong.
+  test("recalculates the annual target and deposits surplus with matching taxable basis", () => {
+    const snapshotWithCashFlow: FinancialSnapshot = {
+      ...financialSnapshot,
+      recurring: [
+        {
+          id: "pension-1",
+          name: "Pension",
+          amountCents: 200_000,
+          kind: "income",
+          incomeTaxCategory: "nontaxable",
+          startDate: "2027-01-01",
+          frequency: "monthly",
+          annualGrowthBps: 0,
+          taxTreatment: "none",
+        },
+        {
+          id: "expense-1",
+          name: "Living expenses",
+          amountCents: 100_000,
+          kind: "expense",
+          startDate: "2027-01-01",
+          frequency: "monthly",
+          annualGrowthBps: 0,
+          taxTreatment: "none",
+        },
+      ],
+    };
+    const result = calculateRetirementProjection({
+      snapshot: snapshotWithCashFlow,
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        withdrawalRateBps: 100,
+        horizonYears: 2,
+      },
+    });
+    const [first, second] = result.keepHomes.years;
+
+    expect(first.startingPortfolioCents).toBe(100_000_000);
+    expect(first.withdrawalTargetCents).toBe(1_000_000);
+    expect(first.otherPreTaxIncomeCents).toBe(2_400_000);
+    expect(first.planExpenseCents).toBe(1_200_000);
+    expect(first.surplusCents).toBe(2_200_000);
+    expect(first.destinationBalanceCents).toBe(101_200_000);
+    expect(second.startingPortfolioCents).toBe(101_200_000);
+    expect(second.withdrawalTargetCents).toBe(1_012_000);
+    expect(second.surplusCents).toBe(2_212_000);
+    expect(second.destinationBalanceCents).toBe(102_400_000);
+    expect(second.withdrawalSources[0].taxableGainCents).toBe(0);
+  });
+
+  // Production mutation caught: applying no return or a simple annual addition instead of the Plan's monthly compounding changes the exact ending account value.
+  test("applies configured account returns before the annual withdrawal", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [{
+          ...financialSnapshot.accounts[0],
+          annualReturnBps: 10_000,
+        }],
+      },
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        withdrawalRateBps: 100,
+        horizonYears: 1,
+      },
+    });
+    const year = result.keepHomes.years[0];
+
+    expect(year.startingPortfolioCents).toBe(105_946_309);
+    expect(year.withdrawalTargetCents).toBe(1_059_463);
+    expect(year.withdrawalSources[0].taxableGainCents).toBe(559_463);
+    expect(year.endingBalances.accounts["taxable-1"]).toBe(211_892_616);
+  });
+
+  // Production mutation caught: omitting rent, a housing-cost component, or mortgage amortization breaks the literal annual cash flow and balance-sheet reconciliation.
+  test("rolls forward kept-home rent, full housing costs, mortgage, and net worth", () => {
+    const propertyScenario: Scenario = {
+      ...scenario,
+      horizon: { start: "2026-12", months: 12 },
+      events: [{
+        id: "purchase-1",
+        date: "2026-12-01",
+        type: "asset-purchase",
+        assetId: "rental-1",
+        name: "Rental home",
+        valueCents: 12_000_000,
+        annualGrowthBps: 0,
+        housingCosts: {
+          propertyTaxRateBps: 1_200,
+          insuranceMonthlyCents: 10_000,
+          insuranceAnnualGrowthBps: 0,
+          hoaMonthlyCents: 5_000,
+          hoaAnnualGrowthBps: 0,
+        },
+        fundingAccountId: "taxable-1",
+        downPaymentCents: 2_000_000,
+        costsCents: 0,
+        propertyDetails: {
+          primaryResidence: false,
+          monthlyRentalIncomeCents: 100_000,
+          rentalIncomeGrowthBps: 0,
+          maintenanceBps: 100,
+          rentalUseBps: 10_000,
+          rentalTaxModelingEnabled: true,
+          rentalType: "long-term",
+          buildingBasisCents: 12_000_000,
+        },
+        financing: {
+          liabilityId: "mortgage-1",
+          name: "Rental mortgage",
+          principalCents: 10_000_000,
+          annualRateBps: 1_200,
+          minimumPaymentCents: 200_000,
+          termMonths: 360,
+        },
+      }],
+    };
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [{
+          ...financialSnapshot.accounts[0],
+          balanceCents: 20_000_000,
+          taxableCostBasisCents: 20_000_000,
+        }],
+        recurring: [{
+          id: "expense-1",
+          name: "Living expenses",
+          amountCents: 50_000,
+          kind: "expense",
+          startDate: "2027-01-01",
+          frequency: "monthly",
+          annualGrowthBps: 0,
+          taxTreatment: "none",
+        }],
+      },
+      scenario: propertyScenario,
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        horizonYears: 1,
+      },
+    });
+    const year = result.keepHomes.years[0];
+
+    expect(year.startingPortfolioCents).toBe(18_000_000);
+    expect(year.withdrawalTargetCents).toBe(540_000);
+    expect(year.rentalIncomeCents).toBe(1_200_000);
+    expect(year.planExpenseCents).toBe(600_000);
+    expect(year.housing).toEqual({
+      principalCents: 1_280_934,
+      interestCents: 1_119_066,
+      propertyTaxCents: 1_455_554,
+      insuranceCents: 120_000,
+      hoaCents: 60_000,
+      maintenanceCents: 120_000,
+    });
+    expect(year.housingExpenseCents).toBe(4_155_554);
+    expect(year.shortfallCents).toBe(3_015_554);
+    expect(year.endingBalances.accounts["taxable-1"]).toBe(14_444_446);
+    expect(year.endingBalances.assets["rental-1"]).toBe(12_000_000);
+    expect(year.endingBalances.liabilities["mortgage-1"]).toBe(8_619_066);
+    expect(year.endingNetWorthCents).toBe(17_825_380);
+    expect(year.endingNetWorthCents).toBe(
+      Object.values(year.endingBalances.accounts).reduce((sum, value) => sum + value, 0) +
+      Object.values(year.endingBalances.assets).reduce((sum, value) => sum + value, 0) -
+      Object.values(year.endingBalances.liabilities).reduce((sum, value) => sum + value, 0),
+    );
+  });
+
+  // Production mutation caught: honoring the override before the selected taxable destination on a shortfall drains the fallback cash account first.
+  test("funds a shortfall from the taxable destination before forced fallback", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [
+          {
+            ...financialSnapshot.accounts[0],
+            balanceCents: 500_000,
+            taxableCostBasisCents: 500_000,
+          },
+          {
+            id: "cash-1",
+            name: "Cash reserve",
+            kind: "checking",
+            subtype: "cash",
+            balanceCents: 2_000_000,
+            annualReturnBps: 0,
+            liquid: true,
+          },
+        ],
+        recurring: [{
+          id: "expense-1",
+          name: "Living expenses",
+          amountCents: 100_000,
+          kind: "expense",
+          startDate: "2027-01-01",
+          frequency: "monthly",
+          annualGrowthBps: 0,
+          taxTreatment: "none",
+        }],
+      },
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        withdrawalRateBps: 1,
+        horizonYears: 1,
+        withdrawalAccountOrder: ["cash-1", "taxable-1"],
+      },
+    });
+    const year = result.keepHomes.years[0];
+
+    expect(year.withdrawalTargetCents).toBe(250);
+    expect(year.shortfallCents).toBe(1_199_750);
+    expect(year.withdrawalSources.map((source) => [source.accountId, source.amountCents])).toEqual([
+      ["cash-1", 250],
+      ["taxable-1", 500_000],
+      ["cash-1", 699_750],
+    ]);
+    expect(year.endingBalances.accounts).toEqual({
+      "taxable-1": 0,
+      "cash-1": 1_300_000,
+    });
+  });
+
+  // Production mutation caught: sequential sale tax or a missing cost, payoff, proceeds deposit, or basis deposit changes the exact sale result and first withdrawal character.
+  test("sells all homes together at retirement and deposits exact net proceeds with basis", () => {
+    const homeSnapshot: FinancialSnapshot = {
+      ...financialSnapshot,
+      accounts: [{
+        ...financialSnapshot.accounts[0],
+        balanceCents: 5_000_000,
+        taxableCostBasisCents: 5_000_000,
+      }],
+      assets: [
+        {
+          id: "rental-1",
+          name: "Rental home",
+          valueCents: 10_000_000,
+          annualGrowthBps: 0,
+          purchasePriceCents: 5_000_000,
+          purchaseDate: "2020-01-01",
+          rentalTaxBasisCents: 5_000_000,
+          housingCosts: {
+            propertyTaxRateBps: 0,
+            insuranceMonthlyCents: 0,
+            insuranceAnnualGrowthBps: 0,
+            hoaMonthlyCents: 0,
+            hoaAnnualGrowthBps: 0,
+          },
+          homeSaleAssumptions: {
+            sellingCostBps: 500,
+            primaryResidenceExclusionEligible: false,
+            accumulatedFederalDepreciationCents: 0,
+            accumulatedCaliforniaDepreciationCents: 0,
+          },
+        },
+        {
+          id: "home-2",
+          name: "Primary home",
+          valueCents: 20_000_000,
+          annualGrowthBps: 0,
+          purchasePriceCents: 10_000_000,
+          purchaseDate: "2020-01-01",
+          housingStartDate: "2020-01-01",
+          homeSaleAssumptions: {
+            sellingCostBps: 500,
+            primaryResidenceExclusionEligible: true,
+            accumulatedFederalDepreciationCents: 0,
+            accumulatedCaliforniaDepreciationCents: 0,
+          },
+        },
+      ],
+      liabilities: [{
+        id: "mortgage-1",
+        name: "Rental mortgage",
+        balanceCents: 3_000_000,
+        annualRateBps: 0,
+        minimumPaymentCents: 0,
+        mortgage: {
+          originalPrincipalCents: 3_000_000,
+          termMonths: 360,
+          startDate: "2020-01-01",
+          assetId: "rental-1",
+        },
+      }],
+    };
+    const result = calculateRetirementProjection({
+      snapshot: homeSnapshot,
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        horizonYears: 2,
+      },
+    });
+
+    expect(result.sellHomes.available).toBe(true);
+    if (!result.sellHomes.available) throw new Error("expected Sell homes to be available");
+    const [saleYear, nextYear] = result.sellHomes.years;
+    expect(saleYear.startingPortfolioCents).toBe(30_383_930);
+    expect(saleYear.withdrawalTargetCents).toBe(911_518);
+    expect(saleYear.homeSale).toEqual({
+      grossSaleValueCents: 30_000_000,
+      sellingCostsCents: 1_500_000,
+      mortgagePayoffCents: 3_000_000,
+      incrementalSaleTaxCents: 116_070,
+      netProceedsCents: 25_383_930,
+    });
+    expect(saleYear.withdrawalSources[0].taxableGainCents).toBe(0);
+    expect(saleYear.destinationBalanceCents).toBe(30_383_930);
+    for (const year of [saleYear, nextYear]) {
+      expect(year.endingBalances.assets).toEqual({});
+      expect(year.endingBalances.liabilities).toEqual({});
+      expect(year.rentalIncomeCents).toBe(0);
+      expect(year.housingExpenseCents).toBe(0);
+      expect(year.housing).toEqual({
+        principalCents: 0,
+        interestCents: 0,
+        propertyTaxCents: 0,
+        insuranceCents: 0,
+        hoaCents: 0,
+        maintenanceCents: 0,
+      });
+    }
+    expect(nextYear.homeSale).toBeUndefined();
+  });
+
+  // Production mutation caught: making missing sale metadata invalidate both scenarios hides a complete Keep projection instead of scoping the issue to Sell.
+  test("keeps the Keep scenario available when Sell home data is incomplete", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        assets: [{
+          id: "home-1",
+          name: "Incomplete home",
+          valueCents: 20_000_000,
+          annualGrowthBps: 0,
+          housingStartDate: "2020-01-01",
+        }],
+      },
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        horizonYears: 1,
+      },
+    });
+
+    expect(result.keepHomes.available).toBe(true);
+    expect(result.keepHomes.years).toHaveLength(1);
+    expect(result.sellHomes).toMatchObject({
+      available: false,
+      issues: expect.arrayContaining([
+        expect.objectContaining({ assetId: "home-1", field: "purchaseDate" }),
+      ]),
+    });
+  });
+
+  // Production mutation caught: accepting a missing taxable destination silently drops surplus and home-sale proceeds without an actionable result warning.
+  test("warns when the taxable destination is missing", () => {
+    const result = calculateRetirementProjection({
+      snapshot: financialSnapshot,
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        horizonYears: 1,
+        taxableDestinationAccountId: null,
+      },
+    });
+
+    expect(result.warnings).toContainEqual(expect.objectContaining({
+      code: "missing-destination",
+      year: 2027,
+    }));
+    expect(result.keepHomes.years[0].warnings).toContainEqual(expect.objectContaining({
+      code: "missing-destination",
+    }));
+  });
+
+  // Production mutation caught: omitting household people from the draw classifies a young owner's IRA as penalty-free and can hide that the account was exhausted.
+  test("reports owner-specific early withdrawal and account depletion", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        household: {
+          ...financialSnapshot.household,
+          people: [{ id: "person-1", name: "Morgan", birthDate: "2000-06-15" }],
+        },
+        accounts: [
+          {
+            ...financialSnapshot.accounts[0],
+            balanceCents: 0,
+            taxableCostBasisCents: 0,
+          },
+          {
+            id: "ira-1",
+            name: "Morgan IRA",
+            kind: "retirement",
+            subtype: "traditional-ira",
+            ownerPersonId: "person-1",
+            balanceCents: 1_000_000,
+            annualReturnBps: 0,
+            liquid: true,
+          },
+        ],
+      },
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        withdrawalRateBps: 10_000,
+        horizonYears: 1,
+        withdrawalAccountOrder: ["ira-1", "taxable-1"],
+      },
+    });
+    const year = result.keepHomes.years[0];
+
+    expect(year.earlyPenaltyCents).toBe(100_000);
+    expect(year.estimatedTaxCents).toBe(4_005);
+    expect(year.withdrawalSources[0]).toMatchObject({
+      accountId: "ira-1",
+      amountCents: 1_000_000,
+      ordinaryIncomeCents: 1_000_000,
+      earlyPenaltyCents: 100_000,
+    });
+    expect(year.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "early-withdrawal", year: 2027 }),
+      expect.objectContaining({ code: "account-depleted", year: 2027, entityId: "ira-1" }),
+    ]));
+  });
+
+  // Production mutation caught: discarding the final unfunded draw amount presents a depleted portfolio as if all spending were covered.
+  test("warns when spending remains unfunded after every account is depleted", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [{
+          ...financialSnapshot.accounts[0],
+          balanceCents: 100_000,
+          taxableCostBasisCents: 100_000,
+        }],
+        recurring: [{
+          id: "expense-1",
+          name: "Living expenses",
+          amountCents: 100_000,
+          kind: "expense",
+          startDate: "2027-01-01",
+          frequency: "monthly",
+          annualGrowthBps: 0,
+          taxTreatment: "none",
+        }],
+      },
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        withdrawalRateBps: 1,
+        horizonYears: 1,
+      },
+    });
+    const year = result.keepHomes.years[0];
+
+    expect(year.shortfallCents).toBe(1_199_990);
+    expect(year.endingBalances.accounts["taxable-1"]).toBe(0);
+    expect(year.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "account-depleted", entityId: "taxable-1" }),
+      expect.objectContaining({ code: "unfunded-spending", year: 2027 }),
+    ]));
+  });
+
+  // Production mutation caught: extending an explicit end date invents pension payments after June and removes the activity-ended disclosure.
+  test("preserves explicit recurring end dates and warns in the ending year", () => {
+    const endingSnapshot: FinancialSnapshot = {
+      ...financialSnapshot,
+      recurring: [{
+        id: "pension-1",
+        name: "Bridge pension",
+        amountCents: 100_000,
+        kind: "income",
+        incomeTaxCategory: "nontaxable",
+        startDate: "2027-01-01",
+        endDate: "2027-06-30",
+        frequency: "monthly",
+        annualGrowthBps: 0,
+        taxTreatment: "none",
+      }],
+    };
+    const before = JSON.stringify(endingSnapshot.recurring);
+    const result = calculateRetirementProjection({
+      snapshot: endingSnapshot,
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: {
+        ...settings,
+        retirementMonth: "2027-01",
+        withdrawalRateBps: 1,
+        horizonYears: 2,
+      },
+    });
+
+    expect(result.keepHomes.years[0].otherPreTaxIncomeCents).toBe(600_000);
+    expect(result.keepHomes.years[1].otherPreTaxIncomeCents).toBe(0);
+    expect(result.keepHomes.years[0].warnings).toContainEqual(expect.objectContaining({
+      code: "activity-ended",
+      year: 2027,
+      entityId: "pension-1",
+    }));
+    expect(JSON.stringify(endingSnapshot.recurring)).toBe(before);
+  });
+
+  // Production mutation caught: reusing the prior successful result after unsafe account growth displays stale balances instead of a year-scoped calculation error.
+  test("clears financial rows on a year-specific calculation error", () => {
+    const prior = calculateRetirementProjection({
+      snapshot: financialSnapshot,
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: { ...settings, retirementMonth: "2027-01", horizonYears: 1 },
+    });
+    const failed = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        accounts: [{
+          ...financialSnapshot.accounts[0],
+          annualReturnBps: 1_000_000_000_000,
+        }],
+      },
+      scenario: { ...scenario, horizon: { start: "2026-12", months: 12 } },
+      asOfDate: "2026-12-15",
+      settings: { ...settings, retirementMonth: "2027-01", horizonYears: 1 },
+    });
+    const failedYear = failed.keepHomes.years[0];
+
+    expect(prior.keepHomes.years[0].endingBalances.accounts).not.toEqual({});
+    expect(failedYear.endingBalances).toEqual({ accounts: {}, assets: {}, liabilities: {} });
+    expect(failedYear.warnings).toContainEqual(expect.objectContaining({
+      code: "calculation-error",
+      year: 2027,
+    }));
+    expect(failed.warnings).toContainEqual(expect.objectContaining({
+      code: "calculation-error",
+      year: 2027,
+    }));
+  });
+});

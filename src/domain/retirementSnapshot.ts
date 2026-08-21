@@ -41,7 +41,7 @@ export interface RetirementSnapshotResult {
   sellHomes: SellHomesResult;
 }
 
-interface ResolvedHome {
+export interface ResolvedRetirementHome {
   property: RetirementCutoffProperty;
   purchaseDate?: string | null;
   taxBasisCents?: Cents | null;
@@ -190,7 +190,7 @@ const resolveHomeUse = (
   return rentalEvidence ? "rental" : "personal";
 };
 
-const resolveHomes = (input: RetirementSnapshotInput) => input.cutoff.properties.map((property): ResolvedHome => {
+const resolveHomes = (input: RetirementSnapshotInput) => input.cutoff.properties.map((property): ResolvedRetirementHome => {
   const current = property.source === "current"
     ? input.snapshot.assets.find((asset) => asset.id === property.assetId)
     : undefined;
@@ -227,35 +227,17 @@ const validateWithdrawalRate = (withdrawalRateBps: BasisPoints) => {
   }
 };
 
-export function calculateRetirementSnapshot(input: RetirementSnapshotInput): RetirementSnapshotResult {
-  validateWithdrawalRate(input.withdrawalRateBps);
+export interface ResolvedRetirementHomeSales {
+  homes: readonly ResolvedRetirementHome[];
+  issues: readonly RetirementMissingData[];
+  sales: readonly HomeSaleTaxItem[];
+}
+
+export function resolveRetirementHomeSales(
+  input: RetirementSnapshotInput,
+): ResolvedRetirementHomeSales {
   validatePropertyRows(input);
-
-  const accountTotal = Object.values(input.cutoff.accounts).reduce((sum, value) => sum + value, 0);
-  const assetTotal = Object.values(input.cutoff.assets).reduce((sum, value) => sum + value, 0);
-  const liabilityTotal = Object.values(input.cutoff.liabilities).reduce((sum, value) => sum + value, 0);
-  const netWorthCents = accountTotal + assetTotal - liabilityTotal;
   const homes = resolveHomes(input);
-  const homeEquityCents = homes.reduce(
-    (sum, home) => sum + home.property.valueCents - home.mortgageCents,
-    0,
-  );
-  const nonHomeNetWorthCents = netWorthCents - homeEquityCents;
-  const withdrawalIncomeCents = Math.round(
-    Math.max(0, nonHomeNetWorthCents) * input.withdrawalRateBps / 10_000,
-  );
-  const grossRentalIncomeCents = homes.reduce(
-    (sum, home) => sum + home.property.monthlyGrossRentCents * 12,
-    0,
-  );
-  const keepHomes = {
-    homeEquityCents,
-    nonHomeNetWorthCents,
-    withdrawalIncomeCents,
-    grossRentalIncomeCents,
-    annualPreTaxIncomeCents: withdrawalIncomeCents + grossRentalIncomeCents,
-  };
-
   const issues: RetirementMissingData[] = [];
   for (const home of homes) {
     const { property, assumptions } = home;
@@ -288,7 +270,6 @@ export function calculateRetirementSnapshot(input: RetirementSnapshotInput): Ret
     if (!mortgageReconciles) addIssue(issues, property, "mortgageBalance");
 
     if (home.use == null) addIssue(issues, property, "rentalUse");
-
     if (typeof assumptions?.primaryResidenceExclusionEligible !== "boolean") {
       addIssue(issues, property, "primaryResidenceEligibility");
     }
@@ -300,17 +281,7 @@ export function calculateRetirementSnapshot(input: RetirementSnapshotInput): Ret
     }
   }
 
-  if (issues.length > 0) {
-    return {
-      retirementMonth: input.cutoff.retirementMonth,
-      withdrawalRateBps: input.withdrawalRateBps,
-      netWorthCents,
-      keepHomes,
-      sellHomes: { available: false, issues },
-    };
-  }
-
-  const sales: HomeSaleTaxItem[] = homes.map((home) => {
+  const sales = issues.length === 0 ? homes.map((home): HomeSaleTaxItem => {
     const assumptions = home.assumptions!;
     return {
       id: home.property.assetId,
@@ -328,7 +299,53 @@ export function calculateRetirementSnapshot(input: RetirementSnapshotInput): Ret
         assumptions.accumulatedCaliforniaDepreciationCents + home.property.projectedDepreciationCents,
       primaryResidenceExclusionEligible: assumptions.primaryResidenceExclusionEligible,
     };
-  });
+  }) : [];
+
+  return { homes, issues, sales };
+}
+
+export function calculateRetirementSnapshot(input: RetirementSnapshotInput): RetirementSnapshotResult {
+  validateWithdrawalRate(input.withdrawalRateBps);
+  const resolvedHomeSales = resolveRetirementHomeSales(input);
+
+  const accountTotal = Object.values(input.cutoff.accounts).reduce((sum, value) => sum + value, 0);
+  const assetTotal = Object.values(input.cutoff.assets).reduce((sum, value) => sum + value, 0);
+  const liabilityTotal = Object.values(input.cutoff.liabilities).reduce((sum, value) => sum + value, 0);
+  const netWorthCents = accountTotal + assetTotal - liabilityTotal;
+  const homes = resolvedHomeSales.homes;
+  const homeEquityCents = homes.reduce(
+    (sum, home) => sum + home.property.valueCents - home.mortgageCents,
+    0,
+  );
+  const nonHomeNetWorthCents = netWorthCents - homeEquityCents;
+  const withdrawalIncomeCents = Math.round(
+    Math.max(0, nonHomeNetWorthCents) * input.withdrawalRateBps / 10_000,
+  );
+  const grossRentalIncomeCents = homes.reduce(
+    (sum, home) => sum + home.property.monthlyGrossRentCents * 12,
+    0,
+  );
+  const keepHomes = {
+    homeEquityCents,
+    nonHomeNetWorthCents,
+    withdrawalIncomeCents,
+    grossRentalIncomeCents,
+    annualPreTaxIncomeCents: withdrawalIncomeCents + grossRentalIncomeCents,
+  };
+
+  const issues = resolvedHomeSales.issues;
+
+  if (issues.length > 0) {
+    return {
+      retirementMonth: input.cutoff.retirementMonth,
+      withdrawalRateBps: input.withdrawalRateBps,
+      netWorthCents,
+      keepHomes,
+      sellHomes: { available: false, issues },
+    };
+  }
+
+  const sales = resolvedHomeSales.sales;
   const tax = calculateIncrementalHomeSaleTax({
     year: Number(input.cutoff.retirementMonth.slice(0, 4)),
     filingStatus: input.snapshot.taxProfile.filingStatus,

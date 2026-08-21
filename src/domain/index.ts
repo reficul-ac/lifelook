@@ -8,3 +8,4 @@ export * from "./retirementSettings";
 export * from "./retirementCutoff";
 export * from "./retirementSnapshot";
 export * from "./retirementWithdrawals";
+export * from "./retirementProjection";

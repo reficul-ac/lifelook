@@ -4,7 +4,9 @@ import type { AnnualProjection, Cents, ContributionResult, ContributionRule, Fin
 
 const monthKey = (date: Date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 const monthEndDate=(month:string)=>{const date=isoDate(`${month}-01`);return new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,0)).toISOString().slice(0,10);};
-const grow = (cents: number, bps: number, months: number) => Math.round(cents * Math.pow(1 + bps / 10_000, months / 12));
+export const projectGrowth = (cents: number, bps: number, months: number) =>
+  Math.round(cents * Math.pow(1 + bps / 10_000, months / 12));
+const grow = projectGrowth;
 const monthsBetween=(from:string,to:string)=>Math.max(0,(Number(to.slice(0,4))-Number(from.slice(0,4)))*12+Number(to.slice(5,7))-Number(from.slice(5,7)));
 export const californiaAssessedValue=(asset:Pick<import("./types").Asset,"valueCents"|"purchasePriceCents"|"purchaseDate">,date:string,fallbackStart=date)=>grow(asset.purchasePriceCents??asset.valueCents,200,monthsBetween(asset.purchaseDate??fallbackStart,date));
 export const appreciationRateForYear=(asset:Pick<import("./types").Asset,"annualGrowthBps"|"appreciationCurve">,year:number)=>{const curve=asset.appreciationCurve;if(!curve)return asset.annualGrowthBps;if(year<=curve.startYear)return curve.startRateBps;if(year>=curve.endYear)return curve.endRateBps;return Math.round(curve.startRateBps+(curve.endRateBps-curve.startRateBps)*(year-curve.startYear)/(curve.endYear-curve.startYear));};
@@ -156,7 +158,7 @@ function calculateProjection(
       const actual = snapshot.actuals?.filter(x => x.date.slice(0, 7) === key) ?? [];
       const income = actual.filter(x => x.kind === "income").reduce((s, x) => s + Math.abs(x.amountCents), 0);
       const expense = actual.filter(x => x.kind === "expense").reduce((s, x) => s + Math.abs(x.amountCents), 0);
-      months.push({month:key,status:"actual",incomeCents:income,expenseCents:expense,actualIncomeCents:income,actualExpenseCents:expense,incomeVarianceCents:0,expenseVarianceCents:0,taxCents:0,cashTaxCents:0,rsuSellToCoverTaxCents:0,surplusCents:income-expense,liquidWorthCents:null,netWorthCents:null,debtCents:null,balances:null,unfundedDeficitCents:0,contributionCents:0,contributionResults:[],principalAndInterestCents:0,housingCostCents:0,properties:[],warnings:[]});
+      months.push({month:key,status:"actual",incomeCents:income,taxableNonWageIncomeCents:0,nontaxableIncomeCents:income,expenseCents:expense,actualIncomeCents:income,actualExpenseCents:expense,incomeVarianceCents:0,expenseVarianceCents:0,taxCents:0,cashTaxCents:0,rsuSellToCoverTaxCents:0,surplusCents:income-expense,liquidWorthCents:null,netWorthCents:null,debtCents:null,balances:null,unfundedDeficitCents:0,contributionCents:0,contributionResults:[],principalAndInterestCents:0,housingCostCents:0,housing:{principalCents:0,interestCents:0,propertyTaxCents:0,insuranceCents:0,hoaCents:0,maintenanceCents:0},properties:[],warnings:[]});
     }
     let cumulativeDeficit = 0;
     for (let index = 0; index < scenario.horizon.months; index++) {
@@ -166,14 +168,14 @@ function calculateProjection(
       const debt = (id: string) => { const value = debts.get(id); if (!value) throw new RangeError(`Unknown liability: ${id}`); return value; };
       for (const account of accounts.values()) account.balance = grow(account.balance, account.annualReturnBps, 1);
       for (const asset of assets.values()) { const rate=appreciationRateForYear(asset,date.getUTCFullYear());asset.value = grow(asset.value,rate,1);asset.withheld=grow(asset.withheld,rate,1); }
-      let income = 0, expense = 0;
+      let income = 0, taxableNonWageIncomeCents = 0, nontaxableIncomeCents = 0, expense = 0;
       for (const entry of snapshot.recurring) {
         const count = occurrences(entry, key);
         if (!count) continue;
         const changes = events.filter(e => (e.type === "recurring-change" || e.type === "income-change") && e.entryId === entry.id && e.date.slice(0, 7) <= key);
         const base = changes.length ? (changes.at(-1)! as { amountCents: number }).amountCents : entry.amountCents;
         const value = recurringAmount(entry,base,key,entry.annualGrowthBps ?? (entry.kind === "expense" ? scenario.assumptions.inflationBps : 0),index,count);
-        if (entry.kind === "income") {if(!isEmploymentIncome(entry)||employmentActive(key))income += value;} else {expense += value;if(entry.taxTreatment==="pretax"){if(!entry.accountId||accountKind(snapshot,entry.accountId)!=="retirement")throw new RangeError("Pre-tax contributions require a retirement destination account");account(entry.accountId).balance+=value;}}
+        if (entry.kind === "income") {if(!isEmploymentIncome(entry)||employmentActive(key)){income += value;const category=entry.incomeTaxCategory??(entry.incomeType==="salary"?"wages":"taxable-nonwage");if(category==="taxable-nonwage")taxableNonWageIncomeCents+=value;else if(category==="nontaxable")nontaxableIncomeCents+=value;}} else {expense += value;if(entry.taxTreatment==="pretax"){if(!entry.accountId||accountKind(snapshot,entry.accountId)!=="retirement")throw new RangeError("Pre-tax contributions require a retirement destination account");account(entry.accountId).balance+=value;}}
       }
       const currentEvents = events.filter(e => e.date.slice(0, 7) === key);
       const fundEvent=(event:{id:string;fundingAccountId:string;fundingSources?:readonly {accountId:string;capCents?:number|null}[]},needed:number)=>{
@@ -183,7 +185,7 @@ function calculateProjection(
         let remaining=needed;for(const source of sources){const target=account(source.accountId),draw=Math.min(remaining,Math.max(0,target.balance),source.capCents??Number.POSITIVE_INFINITY);target.balance-=draw;remaining-=draw;if(!remaining)break}return true;
       };
       for (const event of currentEvents) {
-        if (event.type === "one-time-income") {if(event.incomeTaxCategory!=="wages"||employmentActive(key))income += event.amountCents;}
+        if (event.type === "one-time-income") {if(event.incomeTaxCategory!=="wages"||employmentActive(key)){income += event.amountCents;const category=event.incomeTaxCategory??"taxable-nonwage";if(category==="taxable-nonwage")taxableNonWageIncomeCents+=event.amountCents;else if(category==="nontaxable")nontaxableIncomeCents+=event.amountCents;}}
         else if (event.type === "one-time-expense") expense += event.amountCents;
         else if (event.type === "account-contribution") account(event.accountId).balance += event.amountCents;
         else if (event.type === "account-transfer") { account(event.fromAccountId).balance -= event.amountCents; account(event.toAccountId).balance += event.amountCents; }
@@ -243,6 +245,14 @@ function calculateProjection(
         const taxEnabled=event?.rentalTaxModelingEnabled??false;
         properties.push({assetId,liabilityId:loan?.id,name:event?.name??asset.name,month:key,status:converted?"active":"owner-occupied",executionShortfallCents:0,assetValueCents:asset.value,mortgageBalanceCents:loan?.balance??0,equityCents:asset.value-(loan?.balance??0),purchaseCashCents:0,rentCents:rent,principalCents:mortgage.principalCents,interestCents:mortgage.interestCents,...cost,aduCostCents:aduBuild?.costCents??0,aduAddedValueCents:aduBuild?.addedValueCents??0,aduIncomeCents:aduIncome,depreciationCents:depreciation,taxableRentalCents:taxable,federalAllowedRentalCents:taxable,californiaAllowedRentalCents:taxable,federalPassiveCarryforwardCents:0,californiaPassiveCarryforwardCents:0,estimatedTaxEffectCents:0,rentalTaxModelingEnabled:taxEnabled,warnings:taxEnabled?[]:["Rental tax modeling not included"]});
       }
+      const housing={
+        principalCents:[...mortgageParts.values()].reduce((sum,item)=>sum+item.principalCents,0),
+        interestCents:[...mortgageParts.values()].reduce((sum,item)=>sum+item.interestCents,0),
+        propertyTaxCents:[...propertyCosts.values()].reduce((sum,item)=>sum+item.propertyTaxCents,0),
+        insuranceCents:[...propertyCosts.values()].reduce((sum,item)=>sum+item.insuranceCents,0),
+        hoaCents:[...propertyCosts.values()].reduce((sum,item)=>sum+item.hoaCents,0),
+        maintenanceCents:[...propertyCosts.values()].reduce((sum,item)=>sum+item.maintenanceCents,0),
+      };
       const tax = taxByMonth.get(key)??0,stockTax=stockTaxByMonth.get(key)??0;
       let coveredStockTax=0;
       if(stockTax){const taxable=[...assets.values()].filter(item=>item.privateStock?.taxOnVest||item.equityHolding),weights=taxable.map(item=>item.equityHolding?item.equityHolding.grants.flatMap(grant=>grant.vestEvents).filter(event=>event.date.slice(0,7)===key).reduce((sum,event)=>sum+vestValue(item.equityHolding!,event),0):(()=>{const previous=vestedBpsAtDate(item,monthKey(addMonths(date,-1))+"-01"),current=vestedBpsAtDate(item,`${key}-01`);return Math.max(0,Math.round(item.value*(current-previous)/10000));})()),total=weights.reduce((sum,value)=>sum+value,0);let assigned=0;taxable.forEach((item,i)=>{const amount=i===taxable.length-1?stockTax-assigned:(total?Math.floor(stockTax*weights[i]/total):0),sellToCover=item.equityHolding?.sellToCover??item.privateStock?.taxOnVest??false;if(sellToCover){item.withheld+=amount;coveredStockTax+=amount;}assigned+=amount;});}
@@ -281,7 +291,7 @@ function calculateProjection(
         privateStock:Object.fromEntries([...assets].filter(([,item])=>item.privateStock||item.equityHolding).map(([id,item])=>{const grossVested=item.equityHolding?vestedEquityValue(item,vestingDate):vestedAssetValue(item,vestingDate),total=item.equityHolding?item.equityHolding.grants.reduce((sum,grant)=>sum+valueForUnits(grant.unitsMicros,projectedSharePrice(item.equityHolding!,balanceDate)),0):item.value,vestedCents=Math.max(0,grossVested-item.withheld);return [id,{vestedCents,unvestedCents:Math.max(0,total-grossVested)}];})),
         liabilities:Object.fromEntries([...debts].map(([id,item])=>[id,Math.max(0,item.balance)])),
       };
-      months.push({ month: key, status, incomeCents: income, expenseCents: expense, actualIncomeCents:actualIncome,actualExpenseCents:actualExpense,incomeVarianceCents:actualIncome-income,expenseVarianceCents:actualExpense-expense,taxCents: tax,cashTaxCents:tax-coveredStockTax,rsuSellToCoverTaxCents:coveredStockTax, surplusCents: surplus, contributionCents,contributionResults, liquidWorthCents: liquid, netWorthCents: accountTotal + assetTotal - debtTotal - cumulativeDeficit, debtCents: debtTotal, balances, unfundedDeficitCents: unfunded,principalAndInterestCents,housingCostCents,properties,warnings });
+      months.push({ month: key, status, incomeCents: income,taxableNonWageIncomeCents,nontaxableIncomeCents, expenseCents: expense, actualIncomeCents:actualIncome,actualExpenseCents:actualExpense,incomeVarianceCents:actualIncome-income,expenseVarianceCents:actualExpense-expense,taxCents: tax,cashTaxCents:tax-coveredStockTax,rsuSellToCoverTaxCents:coveredStockTax, surplusCents: surplus, contributionCents,contributionResults, liquidWorthCents: liquid, netWorthCents: accountTotal + assetTotal - debtTotal - cumulativeDeficit, debtCents: debtTotal, balances, unfundedDeficitCents: unfunded,principalAndInterestCents,housingCostCents,housing,properties,warnings });
     }
     const grouped = new Map<number, MonthlyProjection[]>();
     for (const month of months) { const year = Number(month.month.slice(0, 4)); grouped.set(year, [...(grouped.get(year) ?? []), month]); }

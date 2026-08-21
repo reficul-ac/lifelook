@@ -67,10 +67,39 @@ describe("age-aware retirement withdrawal ordering", () => {
     expect(ageOnDate("1970-07-02", "2030-01-01")).toBe(59);
   });
 
+  // Break caught: using a strictly-before birthday comparison would leave display age one year too low on the person's actual birthday.
+  it("increments display age on the actual birthday", () => {
+    expect(ageOnDate("1970-07-02", "2030-07-02")).toBe(60);
+  });
+
+  // Break caught: silently normalizing a February 29 birthday to February 28 would increment display age before the calendar anniversary exists in a non-leap year.
+  it("keeps February 29 display age below the next year until March 1 in a non-leap year", () => {
+    expect(ageOnDate("1964-02-29", "2023-02-28")).toBe(58);
+    expect(ageOnDate("1964-02-29", "2023-03-01")).toBe(59);
+  });
+
   // Break caught: treating the day before the half-birthday as eligible would remove the early-distribution penalty classification too soon.
   it("makes pre-tax distributions eligible only on the exact 59-and-a-half date", () => {
     expect(isAtLeastAge59AndHalf("1970-07-02", "2030-01-01")).toBe(false);
     expect(isAtLeastAge59AndHalf("1970-07-02", "2030-01-02")).toBe(true);
+  });
+
+  // Break caught: letting native month arithmetic overflow August 29-31 half-birthdays into March would delay eligibility past February's final calendar day.
+  it("clamps August 29-31 half-birthdays to February's last day in leap and non-leap years", () => {
+    const cases = [
+      ["1970-08-29", "2030-02-27", "2030-02-28", "2030-03-01"],
+      ["1970-08-30", "2030-02-27", "2030-02-28", "2030-03-01"],
+      ["1970-08-31", "2030-02-27", "2030-02-28", "2030-03-01"],
+      ["1972-08-29", "2032-02-28", "2032-02-29", "2032-03-01"],
+      ["1972-08-30", "2032-02-28", "2032-02-29", "2032-03-01"],
+      ["1972-08-31", "2032-02-28", "2032-02-29", "2032-03-01"],
+    ] as const;
+
+    for (const [birthDate, before, on, after] of cases) {
+      expect(isAtLeastAge59AndHalf(birthDate, before)).toBe(false);
+      expect(isAtLeastAge59AndHalf(birthDate, on)).toBe(true);
+      expect(isAtLeastAge59AndHalf(birthDate, after)).toBe(true);
+    }
   });
 
   // Break caught: placing penalty-sensitive retirement accounts before taxable or cash accounts would cause premature early distributions.
@@ -129,6 +158,51 @@ describe("age-aware retirement withdrawal ordering", () => {
       "roth",
     ]);
   });
+
+  // Break caught: consulting account kind after an explicit subtype would classify taxable brokerage balances as cash or penalty-sensitive pre-tax solely because of a conflicting legacy kind.
+  it("uses explicit subtype before account kind in both ordering and draw tax treatment", () => {
+    const retirementTaxable = account({
+      id: "retirement-taxable",
+      name: "Taxable retirement-kind account",
+      kind: "retirement",
+      subtype: "taxable-brokerage",
+      taxableCostBasisCents: 60_000,
+    });
+    const checkingTaxable = account({
+      id: "checking-taxable",
+      name: "Taxable checking-kind account",
+      kind: "checking",
+      subtype: "taxable-brokerage",
+      taxableCostBasisCents: 25_000,
+    });
+    const cash = account({ id: "cash", name: "Cash", kind: "checking", subtype: "cash" });
+    const conflictedAccounts = [retirementTaxable, checkingTaxable, cash];
+
+    expect(defaultRetirementAccountOrder(snapshot(conflictedAccounts), "2030-01-01")).toEqual([
+      "retirement-taxable",
+      "checking-taxable",
+      "cash",
+    ]);
+    expect(drawRetirementFunds({
+      amountCents: 150_000,
+      date: "2030-01-01",
+      order: ["retirement-taxable", "checking-taxable", "cash"],
+      accounts: conflictedAccounts,
+      balances: {
+        "retirement-taxable": 100_000,
+        "checking-taxable": 100_000,
+        cash: 100_000,
+      },
+    })).toMatchObject({
+      taxableGainCents: 77_500,
+      ordinaryIncomeCents: 0,
+      earlyPenaltyCents: 0,
+      taxableBasis: {
+        "retirement-taxable": 0,
+        "checking-taxable": 12_500,
+      },
+    });
+  });
 });
 
 describe("retirement fund draws", () => {
@@ -162,6 +236,72 @@ describe("retirement fund draws", () => {
         rothTaxableCents: 0,
         earlyPenaltyCents: 0,
       }],
+    });
+  });
+
+  // Break caught: mutating caller-owned balance or basis records while drawing would corrupt the projection state that supplied this pure calculation.
+  it("returns updated draw state without mutating retained input records", () => {
+    const brokerage = account({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+      subtype: "taxable-brokerage",
+      taxableCostBasisCents: 67,
+    });
+    const balances = { brokerage: 101 };
+    const taxableBasis = { brokerage: 67 };
+
+    const result = drawRetirementFunds({
+      amountCents: 50,
+      date: "2030-01-01",
+      order: ["brokerage"],
+      accounts: [brokerage],
+      balances,
+      taxableBasis,
+    });
+
+    expect(balances).toEqual({ brokerage: 101 });
+    expect(taxableBasis).toEqual({ brokerage: 67 });
+    expect(result).toMatchObject({
+      balances: { brokerage: 51 },
+      taxableBasis: { brokerage: 34 },
+      taxableGainCents: 17,
+    });
+  });
+
+  // Break caught: using truncation for odd-cent proportional basis sales or retaining a residual basis after full depletion would misstate taxable gain in later projection years.
+  it("rounds odd-cent proportional taxable basis and clears it on full depletion", () => {
+    const brokerage = account({
+      id: "brokerage",
+      name: "Brokerage",
+      kind: "investment",
+      subtype: "taxable-brokerage",
+      taxableCostBasisCents: 67,
+    });
+    const partial = drawRetirementFunds({
+      amountCents: 50,
+      date: "2030-01-01",
+      order: ["brokerage"],
+      accounts: [brokerage],
+      balances: { brokerage: 101 },
+    });
+
+    expect(partial).toMatchObject({
+      balances: { brokerage: 51 },
+      taxableBasis: { brokerage: 34 },
+      taxableGainCents: 17,
+    });
+    expect(drawRetirementFunds({
+      amountCents: 51,
+      date: "2030-01-01",
+      order: ["brokerage"],
+      accounts: [brokerage],
+      balances: partial.balances,
+      taxableBasis: partial.taxableBasis,
+    })).toMatchObject({
+      balances: { brokerage: 0 },
+      taxableBasis: { brokerage: 0 },
+      taxableGainCents: 17,
     });
   });
 
@@ -274,6 +414,43 @@ describe("retirement fund draws", () => {
     })).toMatchObject({
       ordinaryIncomeCents: 50_000,
       earlyPenaltyCents: 0,
+    });
+  });
+
+  // Break caught: applying one household age to every account would omit the younger owner's penalty or add one for the older owner's eligible distribution.
+  it("uses each pre-tax account's own owner's age for the early penalty", () => {
+    const olderPreTax = account({
+      id: "older-401k",
+      name: "Older owner's 401(k)",
+      kind: "retirement",
+      subtype: "employer-pre-tax",
+      ownerPersonId: "older",
+    });
+    const youngerPreTax = account({
+      id: "younger-401k",
+      name: "Younger owner's 401(k)",
+      kind: "retirement",
+      subtype: "employer-pre-tax",
+      ownerPersonId: "younger",
+    });
+
+    expect(drawRetirementFunds({
+      amountCents: 200_000,
+      date: "2030-01-01",
+      order: ["older-401k", "younger-401k"],
+      accounts: [olderPreTax, youngerPreTax],
+      balances: { "older-401k": 100_000, "younger-401k": 100_000 },
+      people: [
+        { id: "older", name: "Older", birthDate: "1969-01-01" },
+        { id: "younger", name: "Younger", birthDate: "1970-07-02" },
+      ],
+    })).toMatchObject({
+      ordinaryIncomeCents: 200_000,
+      earlyPenaltyCents: 10_000,
+      sources: [
+        expect.objectContaining({ accountId: "older-401k", earlyPenaltyCents: 0 }),
+        expect.objectContaining({ accountId: "younger-401k", earlyPenaltyCents: 10_000 }),
+      ],
     });
   });
 });

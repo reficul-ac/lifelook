@@ -27,6 +27,14 @@ const parseDate = (value: string | undefined): DateParts | null => {
 const compareDateParts = (left: DateParts, right: DateParts) =>
   left.year - right.year || left.month - right.month || left.day - right.day;
 
+const addCalendarMonths = (date: DateParts, months: number): DateParts => {
+  const targetMonthIndex = date.month - 1 + months;
+  const year = date.year + Math.floor(targetMonthIndex / 12);
+  const month = targetMonthIndex % 12 + 1;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return { year, month, day: Math.min(date.day, lastDay) };
+};
+
 export const ageOnDate = (birthDate: string | undefined, date: string): number | null => {
   const birth = parseDate(birthDate);
   const onDate = parseDate(date);
@@ -42,30 +50,43 @@ export const isAtLeastAge59AndHalf = (birthDate: string | undefined, date: strin
   const birth = parseDate(birthDate);
   const onDate = parseDate(date);
   if (birth == null || onDate == null) return false;
-  const halfBirthday = new Date(Date.UTC(birth.year + 59, birth.month - 1 + 6, birth.day));
-  return compareDateParts(onDate, {
-    year: halfBirthday.getUTCFullYear(),
-    month: halfBirthday.getUTCMonth() + 1,
-    day: halfBirthday.getUTCDate(),
-  }) >= 0;
+  return compareDateParts(onDate, addCalendarMonths(birth, 59 * 12 + 6)) >= 0;
 };
 
-const ownerBirthDate = (snapshot: FinancialSnapshot, account: Account) =>
-  snapshot.household.people.find((person) => person.id === account.ownerPersonId)?.birthDate;
+const ownerBirthDate = (people: readonly Person[], account: Account) =>
+  people.find((person) => person.id === account.ownerPersonId)?.birthDate;
+
+const preTaxWithdrawalClass = (account: Account, date: string, people: readonly Person[]): WithdrawalClass =>
+  isAtLeastAge59AndHalf(ownerBirthDate(people, account), date)
+    ? "eligible-pre-tax"
+    : "penalty-pre-tax";
+
+const classifyWithdrawal = (
+  account: Account,
+  date: string,
+  people: readonly Person[],
+): WithdrawalClass => {
+  if (account.subtype != null) {
+    switch (account.subtype) {
+      case "taxable-brokerage": return "taxable";
+      case "cash": return "cash";
+      case "traditional-ira":
+      case "employer-pre-tax": return preTaxWithdrawalClass(account, date, people);
+      case "roth-ira":
+      case "employer-roth": return "roth";
+    }
+  }
+  if (account.kind === "checking" || account.kind === "savings") return "cash";
+  if (account.kind === "retirement") return preTaxWithdrawalClass(account, date, people);
+  return "taxable";
+};
 
 export const retirementWithdrawalClass = (
   snapshot: FinancialSnapshot,
   account: Account,
   date: string,
 ): WithdrawalClass => {
-  if (account.subtype === "roth-ira" || account.subtype === "employer-roth") return "roth";
-  if (account.subtype === "traditional-ira" || account.subtype === "employer-pre-tax" || account.kind === "retirement") {
-    return isAtLeastAge59AndHalf(ownerBirthDate(snapshot, account), date)
-      ? "eligible-pre-tax"
-      : "penalty-pre-tax";
-  }
-  if (account.kind === "checking" || account.kind === "savings" || account.subtype === "cash") return "cash";
-  return "taxable";
+  return classifyWithdrawal(account, date, snapshot.household.people);
 };
 
 const withdrawalClassOrder: readonly WithdrawalClass[] = [
@@ -133,21 +154,6 @@ export interface RetirementDrawResult {
   earlyPenaltyCents: Cents;
 }
 
-const isRoth = (account: Account) =>
-  account.subtype === "roth-ira" || account.subtype === "employer-roth";
-
-const isPreTax = (account: Account) =>
-  !isRoth(account) && (
-    account.subtype === "traditional-ira" ||
-    account.subtype === "employer-pre-tax" ||
-    account.kind === "retirement"
-  );
-
-const isTaxable = (account: Account) =>
-  !isPreTax(account) && !isRoth(account) && !(
-    account.kind === "checking" || account.kind === "savings" || account.subtype === "cash"
-  );
-
 const initialBasis = (
   values: Readonly<Record<string, Cents>> | undefined,
   accountId: string,
@@ -161,14 +167,15 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
   const accountsById = new Map(input.accounts.map((account) => [account.id, account]));
 
   for (const account of input.accounts) {
-    if (isTaxable(account)) {
+    const withdrawalClass = classifyWithdrawal(account, input.date, input.people ?? []);
+    if (withdrawalClass === "taxable") {
       taxableBasis[account.id] = initialBasis(
         input.taxableBasis,
         account.id,
         account.taxableCostBasisCents,
       );
     }
-    if (isRoth(account)) {
+    if (withdrawalClass === "roth") {
       rothContributionBasis[account.id] = initialBasis(
         input.rothContributionBasis,
         account.id,
@@ -197,25 +204,24 @@ export const drawRetirementFunds = (input: RetirementDrawInput): RetirementDrawR
     let ordinaryIncomeCents = 0;
     let rothTaxableCents = 0;
     let earlyPenaltyCents = 0;
+    const withdrawalClass = classifyWithdrawal(account, input.date, input.people ?? []);
 
-    if (isTaxable(account)) {
+    if (withdrawalClass === "taxable") {
       const basisCents = Math.max(0, taxableBasis[accountId] ?? 0);
       const basisSoldCents = Math.min(basisCents, Math.round(basisCents * amountCents / availableCents));
       taxableBasis[accountId] = basisCents - basisSoldCents;
       taxableGainCents = amountCents - basisSoldCents;
-    } else if (isPreTax(account)) {
+    } else if (withdrawalClass === "eligible-pre-tax" || withdrawalClass === "penalty-pre-tax") {
       ordinaryIncomeCents = amountCents;
-      const birthDate = input.people?.find((person) => person.id === account.ownerPersonId)?.birthDate;
-      if (!isAtLeastAge59AndHalf(birthDate, input.date)) {
+      if (withdrawalClass === "penalty-pre-tax") {
         earlyPenaltyCents = Math.round(amountCents * 1_000 / 10_000);
       }
-    } else if (isRoth(account)) {
+    } else if (withdrawalClass === "roth") {
       const basisCents = Math.max(0, rothContributionBasis[accountId] ?? 0);
       const contributionDistributionCents = Math.min(amountCents, basisCents);
       rothContributionBasis[accountId] = basisCents - contributionDistributionCents;
       rothTaxableCents = amountCents - contributionDistributionCents;
-      const birthDate = input.people?.find((person) => person.id === account.ownerPersonId)?.birthDate;
-      if (rothTaxableCents > 0 && !isAtLeastAge59AndHalf(birthDate, input.date)) {
+      if (rothTaxableCents > 0 && !isAtLeastAge59AndHalf(ownerBirthDate(input.people ?? [], account), input.date)) {
         earlyPenaltyCents = Math.round(rothTaxableCents * 1_000 / 10_000);
       }
     }

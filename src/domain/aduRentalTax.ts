@@ -1,4 +1,5 @@
-import type { AduBuildEvent, BasisPoints, Cents } from "./types";
+import { MAX_MONEY_CENTS } from "../money";
+import type { AduBuildEvent, AduRentalTaxDetails, BasisPoints, Cents } from "./types";
 
 export interface ResolvedAduRentalTax {
   enabled: boolean;
@@ -28,13 +29,34 @@ function validateBaseEvent(event: AduBuildEvent): void {
 export function resolveAduRentalTax(event: AduBuildEvent): ResolvedAduRentalTax {
   validateBaseEvent(event);
 
-  const details = event.rentalTaxDetails;
-  const enabled = details?.rentalTaxModelingEnabled === true;
+  const rawDetails: unknown = event.rentalTaxDetails;
+  let details: AduRentalTaxDetails | undefined;
+  if (rawDetails !== undefined) {
+    if (rawDetails === null || typeof rawDetails !== "object" || Array.isArray(rawDetails)) {
+      throw new RangeError("ADU rental tax details must be an object");
+    }
+    const candidate = rawDetails as AduRentalTaxDetails;
+    if (typeof candidate.rentalTaxModelingEnabled !== "boolean") {
+      throw new RangeError("ADU rental tax modeling enabled flag must be a boolean");
+    }
+    if (candidate.rentalType !== "long-term" && candidate.rentalType !== "short-term") {
+      throw new RangeError("ADU rental type must be long-term or short-term");
+    }
+    if (candidate.rentalUseBpsOverride != null &&
+      (!Number.isSafeInteger(candidate.rentalUseBpsOverride) || candidate.rentalUseBpsOverride < 1 || candidate.rentalUseBpsOverride > 10_000)) {
+      throw new RangeError("ADU rental-use override must be an integer from 1 to 10000 basis points");
+    }
+    if (candidate.buildingBasisCentsOverride != null &&
+      (!isNonNegativeSafeInteger(candidate.buildingBasisCentsOverride) || candidate.buildingBasisCentsOverride > MAX_MONEY_CENTS)) {
+      throw new RangeError("ADU building-basis override must be a non-negative safe integer number of cents within the supported money range");
+    }
+    details = candidate;
+  }
   const rentalType = details?.rentalType ?? "long-term";
   const defaultNumerator = event.aduSquareFeet;
   const defaultDenominator = event.homeSquareFeet + event.aduSquareFeet;
 
-  if (!enabled) {
+  if (!details || !details.rentalTaxModelingEnabled) {
     return {
       enabled: false,
       allocationNumerator: defaultNumerator,
@@ -50,18 +72,8 @@ export function resolveAduRentalTax(event: AduBuildEvent): ResolvedAduRentalTax 
   if (!isNonNegativeSafeInteger(event.monthlyRentalIncomeCents ?? -1) || event.monthlyRentalIncomeCents === 0) {
     throw new RangeError("ADU tax modeling requires positive monthly rental income");
   }
-  if (details.rentalType !== "long-term" && details.rentalType !== "short-term") {
-    throw new RangeError("ADU rental type must be long-term or short-term");
-  }
-
   const override = details.rentalUseBpsOverride;
-  if (override != null && (!Number.isSafeInteger(override) || override < 1 || override > 10_000)) {
-    throw new RangeError("ADU rental-use override must be an integer from 1 to 10000 basis points");
-  }
   const basis = details.buildingBasisCentsOverride ?? event.costCents;
-  if (!isNonNegativeSafeInteger(basis)) {
-    throw new RangeError("ADU building-basis override must be a non-negative safe integer number of cents");
-  }
 
   let nonPassive: boolean;
   if (details.rentalType === "short-term") {

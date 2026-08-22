@@ -89,6 +89,22 @@ describe("ADU rental tax assumptions", () => {
     expect(resolved.nonPassive).toBe(false);
   });
 
+  test("validates present rental tax details structurally when modeling is disabled", () => {
+    const invalidDetails: readonly (readonly [string, unknown, string])[] = [
+      ["non-object details", null, "ADU rental tax details must be an object"],
+      ["non-boolean enable flag", { rentalTaxModelingEnabled: "false", rentalType: "long-term" }, "ADU rental tax modeling enabled flag must be a boolean"],
+      ["invalid rental type", { rentalTaxModelingEnabled: false, rentalType: "vacation" }, "ADU rental type must be long-term or short-term"],
+      ["non-numeric rental-use override", { rentalTaxModelingEnabled: false, rentalType: "long-term", rentalUseBpsOverride: "3000" }, "ADU rental-use override must be an integer from 1 to 10000 basis points"],
+      ["basis above the supported money range", { rentalTaxModelingEnabled: false, rentalType: "long-term", buildingBasisCentsOverride: 100_000_000_000_000 }, "ADU building-basis override must be a non-negative safe integer number of cents within the supported money range"],
+    ];
+    for (const [name, rentalTaxDetails, message] of invalidDetails) {
+      expect(() => resolveAduRentalTax({
+        ...event,
+        rentalTaxDetails,
+      } as unknown as AduBuildEvent), name).toThrow(message);
+    }
+  });
+
   test("requires positive rent when tax modeling is enabled", () => {
     expect(() => resolveAduRentalTax({
       ...event,

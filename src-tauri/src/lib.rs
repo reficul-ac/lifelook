@@ -2233,6 +2233,11 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
                 !positive(key)
             }
         }) {
+            if kind == "adu-build" {
+                return Err(AppError::Validation(
+                    "adu-build costCents must be a nonnegative money value".into(),
+                ));
+            }
             return Err(AppError::Validation(format!(
                 "{kind} requires exact positive money values"
             )));
@@ -6666,6 +6671,21 @@ mod tests {
             .as_object_mut()
             .unwrap()
             .remove("shortTermMaterialParticipation");
+        let mut non_object_details = event.clone();
+        non_object_details["rentalTaxDetails"] = serde_json::json!("not an object");
+        let mut non_boolean_enable_flag = event.clone();
+        non_boolean_enable_flag["rentalTaxDetails"]["rentalTaxModelingEnabled"] =
+            serde_json::json!("true");
+        let mut invalid_rental_type = event.clone();
+        invalid_rental_type["rentalTaxDetails"]["rentalType"] = serde_json::json!("vacation");
+        let mut non_integer_override = event.clone();
+        non_integer_override["rentalTaxDetails"]["rentalUseBpsOverride"] =
+            serde_json::json!("3000");
+        let mut basis_above_money_limit = event.clone();
+        basis_above_money_limit["rentalTaxDetails"]["buildingBasisCentsOverride"] =
+            serde_json::json!(MAX_MONEY_CENTS + 1);
+        let mut negative_cost = event.clone();
+        negative_cost["costCents"] = serde_json::json!(-1);
 
         for (name, rejected_event, expected_message) in [
             (
@@ -6697,6 +6717,36 @@ mod tests {
                 "short-term ADU without material participation",
                 missing_short_term_participation,
                 "rentalTaxDetails shortTermMaterialParticipation must be a boolean when enabled",
+            ),
+            (
+                "non-object rental tax details",
+                non_object_details,
+                "rentalTaxDetails must be an object",
+            ),
+            (
+                "non-boolean modeling flag",
+                non_boolean_enable_flag,
+                "rentalTaxDetails rentalTaxModelingEnabled must be a boolean",
+            ),
+            (
+                "invalid rental type",
+                invalid_rental_type,
+                "rentalTaxDetails rentalType is invalid",
+            ),
+            (
+                "non-integer rental-use override",
+                non_integer_override,
+                "rentalTaxDetails rentalUseBpsOverride is invalid",
+            ),
+            (
+                "basis above the money limit",
+                basis_above_money_limit,
+                "rentalTaxDetails buildingBasisCentsOverride is invalid",
+            ),
+            (
+                "negative ADU cost",
+                negative_cost,
+                "adu-build costCents must be a nonnegative money value",
             ),
         ] {
             match store_scenario(&mut c, input(vec![rejected_event], 3)).unwrap_err() {

@@ -101,5 +101,6 @@ export function combinedRentalUseExceedsFullUse(
   wholeHomeRentalUseBps: BasisPoints,
   resolved: ResolvedAduRentalTax,
 ): boolean {
-  return wholeHomeRentalUseBps + resolved.allocationBps > 10_000;
+  return wholeHomeRentalUseBps / 10_000 +
+    resolved.allocationNumerator / resolved.allocationDenominator > 1;
 }

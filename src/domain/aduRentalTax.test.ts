@@ -60,6 +60,16 @@ describe("ADU rental tax assumptions", () => {
       .toBe(true);
   });
 
+  test("detects combined use above 100 percent from the exact allocation fraction", () => {
+    const resolved = resolveAduRentalTax({
+      ...event,
+      homeSquareFeet: 833_351,
+      aduSquareFeet: 166_649,
+    });
+    expect(resolved.allocationBps).toBe(1_666);
+    expect(combinedRentalUseExceedsFullUse(8_334, resolved)).toBe(true);
+  });
+
   test("requires the participation answer for the selected rental type", () => {
     expect(() => resolveAduRentalTax({
       ...event,

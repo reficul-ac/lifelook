@@ -182,10 +182,37 @@ describe("ProjectionEngine",()=>{
     const months=calculate(financial,{...scenario,events:[transition,adu],horizon:{start:"2025-01",months:3}})[0].months;
     expect(months[0].properties[0].status).toBe("owner-occupied");expect(months[0].properties[0].rentCents).toBe(0);expect(months[1].properties[0].status).toBe("active");expect(months[1].incomeCents).toBe(3_000_00);expect(months[2].properties[0].aduAddedValueCents).toBe(200_000_00);expect(months[2].incomeCents).toBe(5_000_00);expect(Object.keys(months[2].balances!.assets)).toEqual(["owned-home"]);
   });
-  it("tracks ADU rent and value for a current home without requiring a whole-home rental conversion",()=>{
+  it("tax-models an ADU without converting the primary home",()=>{
+    const financial:FinancialSnapshot={...snapshot,household:{...snapshot.household,people:[{id:"owner",name:"Owner"}]},taxProfile:{...snapshot.taxProfile,taxUnit:{id:"owner",filingStatus:"single",memberPersonIds:["owner"]}},recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:100_000_00}],assets:[{id:"home",name:"Home",valueCents:450_000_00,purchasePriceCents:600_000_00,annualGrowthBps:0,maintenanceBps:30,housingCosts:{propertyTaxRateBps:100,insuranceMonthlyCents:100_00,insuranceAnnualGrowthBps:0,hoaMonthlyCents:50_00,hoaAnnualGrowthBps:0}}],liabilities:[{id:"mortgage",name:"Mortgage",balanceCents:120_000_00,annualRateBps:1000,minimumPaymentCents:1_500_00,mortgage:{originalPrincipalCents:120_000_00,termMonths:360,startDate:"2025-01-01",assetId:"home"}}]};
+    const adu={id:"garage-adu",date:"2025-01-01",type:"adu-build" as const,assetId:"home",name:"Garage ADU",costCents:60_000_00,homeSquareFeet:1500,aduSquareFeet:500,fundingAccountId:"a",monthlyRentalIncomeCents:2_000_00,rentalIncomeGrowthBps:0,rentalTaxDetails:{rentalTaxModelingEnabled:true,rentalType:"long-term" as const,longTermRealEstateProfessional:true,longTermMaterialParticipation:true}};
+    const year=calculate(financial,{...scenario,events:[adu],horizon:{start:"2025-01",months:1}})[0],month=year.months[0],property=month.properties[0];
+
+    expect(property.status).toBe("owner-occupied");
+    expect(property.aduIncomeCents).toBe(2_000_00);
+    expect(property.rentalUseBps).toBe(2_500);
+    expect(property.depreciationCents).toBe(18_182);
+    expect(property.taxableRentalCents).toBe(136_818);
+    expect(property.rentalTaxModelingEnabled).toBe(true);
+    expect(property.rentalTaxTreatment).toEqual({sourceEventId:"garage-adu",sourceName:"Garage ADU",rentalType:"long-term",nonPassive:true});
+    expect(month.housing).toEqual({principalCents:expect.any(Number),interestCents:1_000_00,propertyTaxCents:500_00,insuranceCents:100_00,hoaCents:50_00,maintenanceCents:150_00});
+    expect(month.expenseCents).toBe(2_300_00);
+    expect(year.taxLedger!.federalAgiCents).toBe(136_818);
+  });
+  it("starts current-home ADU rent and depreciation in its placed-in-service month",()=>{
+    const financial:FinancialSnapshot={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:100_000_00}],assets:[{id:"home",name:"Home",valueCents:600_000_00,annualGrowthBps:0,housingCosts:{propertyTaxRateBps:0,insuranceMonthlyCents:0,insuranceAnnualGrowthBps:0,hoaMonthlyCents:0,hoaAnnualGrowthBps:0}}]};
+    const adu={id:"placed-adu",date:"2025-02-01",type:"adu-build" as const,assetId:"home",name:"Placed ADU",costCents:60_000_00,homeSquareFeet:1500,aduSquareFeet:500,fundingAccountId:"a",monthlyRentalIncomeCents:2_000_00,rentalIncomeGrowthBps:1200,rentalTaxDetails:{rentalTaxModelingEnabled:true,rentalType:"long-term" as const,longTermRealEstateProfessional:false,longTermMaterialParticipation:true}};
+    const properties=calculate(financial,{...scenario,events:[adu],horizon:{start:"2025-01",months:3}})[0].months.map(month=>month.properties[0]);
+
+    expect(properties[0]).toMatchObject({month:"2025-01",aduIncomeCents:0,depreciationCents:0});
+    expect(properties[1]).toMatchObject({month:"2025-02",aduIncomeCents:2_000_00,depreciationCents:18_182});
+    expect(properties[2]).toMatchObject({month:"2025-03",aduIncomeCents:2_018_98,depreciationCents:18_182});
+  });
+  it("keeps legacy current-home ADU rent visible and reports one rental tax setup issue",()=>{
     const financial={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:100_000_00}],assets:[{id:"home",name:"Home",valueCents:600_000_00,annualGrowthBps:0,housingCosts:{propertyTaxRateBps:0,insuranceMonthlyCents:0,insuranceAnnualGrowthBps:0,hoaMonthlyCents:0,hoaAnnualGrowthBps:0}}]},adu={id:"adu",date:"2025-02-01",type:"adu-build" as const,assetId:"home",name:"Garage ADU",costCents:60_000_00,homeSquareFeet:1500,aduSquareFeet:500,fundingAccountId:"a",monthlyRentalIncomeCents:2_000_00,rentalIncomeGrowthBps:0};
     const result=calculate(financial,{...scenario,events:[adu],horizon:{start:"2025-01",months:2}})[0],february=result.months[1].properties[0];
     expect(february.status).toBe("owner-occupied");expect(february.aduAddedValueCents).toBe(200_000_00);expect(february.aduIncomeCents).toBe(2_000_00);expect(february.assetValueCents).toBe(800_000_00);expect(result.properties[0].aduIncomeCents).toBe(2_000_00);
+    expect(result.months.flatMap(month=>month.properties).filter(property=>property.rentalTaxSetupIssue)).toHaveLength(1);
+    expect(february.rentalTaxSetupIssue).toEqual({sourceEventId:"adu",sourceName:"Garage ADU",message:"Complete rental tax assumptions for Garage ADU."});
   });
   it("combines fixed amounts and remaining-surplus percentages for the displayed assignment",()=>{
     expect(effectiveContributionBps([{id:"fixed",destinationType:"account",destinationId:"a",monthlyAmountCents:1250_00,frequency:"monthly"}],7090_00)).toBe(1763);

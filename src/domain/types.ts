@@ -53,6 +53,31 @@ export interface PlannedPropertyDetails {
   longTermMaterialParticipation?: boolean;
   adu?: { planned: boolean; buildDate?: string; costCents: Cents; homeSquareFeet?: number; squareFeet?: number; monthlyRentalIncomeCents?: Cents; rentalIncomeGrowthBps?: BasisPoints };
 }
+export interface AduRentalTaxDetails {
+  rentalTaxModelingEnabled: boolean;
+  rentalType: "long-term" | "short-term";
+  rentalUseBpsOverride?: BasisPoints | null;
+  buildingBasisCentsOverride?: Cents | null;
+  mfsLivedApartAllYear?: boolean;
+  shortTermMaterialParticipation?: boolean;
+  longTermRealEstateProfessional?: boolean;
+  longTermMaterialParticipation?: boolean;
+}
+export type AduBuildEvent = {
+  id: string;
+  date: string;
+  type: "adu-build";
+  assetId: string;
+  name: string;
+  costCents: Cents;
+  homeSquareFeet: number;
+  aduSquareFeet: number;
+  fundingAccountId: string;
+  fundingSources?: readonly EventFundingSource[];
+  monthlyRentalIncomeCents?: Cents;
+  rentalIncomeGrowthBps?: BasisPoints;
+  rentalTaxDetails?: AduRentalTaxDetails;
+};
 export interface ProjectionHorizon { start: string; months: number }
 export interface ProjectionOptions { stopEmploymentMonth?: string }
 export type ScenarioEvent =
@@ -62,7 +87,7 @@ export type ScenarioEvent =
   | { id: string; date: string; type: "account-transfer"; fromAccountId: string; toAccountId: string; amountCents: Cents }
   | { id: string; date: string; type: "account-contribution"; accountId: string; amountCents: Cents }
   | { id: string; date: string; type: "asset-purchase"; assetId: string; name: string; valueCents: Cents; annualGrowthBps: BasisPoints; housingCosts?: HousingCosts; fundingAccountId: string; fundingSources?:readonly EventFundingSource[]; downPaymentCents: Cents; costsCents: Cents; monthlyRentalIncomeCents?:Cents; rentalIncomeGrowthBps?:BasisPoints; maintenanceBps?:BasisPoints; propertyDetails?:PlannedPropertyDetails; financing?: { liabilityId: string; name: string; principalCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; termMonths?:number } }
-  | { id:string; date:string; type:"adu-build"; assetId:string; name:string; costCents:Cents; homeSquareFeet:number; aduSquareFeet:number; fundingAccountId:string; fundingSources?:readonly EventFundingSource[]; monthlyRentalIncomeCents?:Cents; rentalIncomeGrowthBps?:BasisPoints }
+  | AduBuildEvent
   | { id:string; date:string; type:"property-rental-start"; assetId:string; name:string; monthlyRentalIncomeCents:Cents; rentalIncomeGrowthBps:BasisPoints; rentalUseBps:BasisPoints; rentalTaxModelingEnabled:boolean; rentalType:"long-term"|"short-term"; mfsLivedApartAllYear?:boolean; shortTermMaterialParticipation?:boolean; longTermRealEstateProfessional?:boolean; longTermMaterialParticipation?:boolean; propertyTaxBasisCents?:Cents|null; buildingBasisCents?:Cents|null }
   | { id: string; date: string; type: "asset-sale"; assetId: string; proceedsCents: Cents; costsCents: Cents; destinationAccountId: string; payoff?: { liabilityId: string; mode: "none" | "partial" | "full"; amountCents?: Cents } }
   | { id: string; date: string; type: "debt-origination"; liabilityId: string; name: string; principalCents: Cents; annualRateBps: BasisPoints; minimumPaymentCents: Cents; accountId: string }
@@ -82,7 +107,7 @@ export interface ContributionResult { ruleId: string; destinationType: Contribut
 export type AccountTransitionSource="pretax-contribution"|"account-contribution"|"account-transfer"|"asset-purchase"|"adu-build"|"debt-origination"|"debt-payoff"|"asset-sale";
 export interface AccountBalanceTransition { accountId:string; amountCents:Cents; source:AccountTransitionSource; eventId?:string; recurringId?:string }
 export type PropertyProjectionStatus="planned"|"owner-occupied"|"unfunded"|"active"|"sold";
-export interface PropertyProjectionResult { assetId:string; liabilityId?:string; name:string; month?:string; year?:number; status:PropertyProjectionStatus; executionShortfallCents:Cents; assetValueCents:Cents|null; mortgageBalanceCents:Cents|null; equityCents:Cents|null; purchaseCashCents:Cents; rentCents:Cents; principalCents:Cents; interestCents:Cents; propertyTaxCents:Cents; insuranceCents:Cents; hoaCents:Cents; maintenanceCents:Cents; aduCostCents:Cents; aduAddedValueCents:Cents; aduIncomeCents:Cents; depreciationCents:Cents; taxableRentalCents:Cents; federalAllowedRentalCents:Cents; californiaAllowedRentalCents:Cents; federalPassiveCarryforwardCents:Cents; californiaPassiveCarryforwardCents:Cents; estimatedTaxEffectCents:Cents; rentalUseBps:BasisPoints; mortgageDebtCents:Cents; rentalTaxModelingEnabled:boolean; warnings:readonly string[] }
+export interface PropertyProjectionResult { assetId:string; liabilityId?:string; name:string; month?:string; year?:number; status:PropertyProjectionStatus; executionShortfallCents:Cents; assetValueCents:Cents|null; mortgageBalanceCents:Cents|null; equityCents:Cents|null; purchaseCashCents:Cents; rentCents:Cents; principalCents:Cents; interestCents:Cents; propertyTaxCents:Cents; insuranceCents:Cents; hoaCents:Cents; maintenanceCents:Cents; aduCostCents:Cents; aduAddedValueCents:Cents; aduIncomeCents:Cents; depreciationCents:Cents; taxableRentalCents:Cents; federalAllowedRentalCents:Cents; californiaAllowedRentalCents:Cents; federalPassiveCarryforwardCents:Cents; californiaPassiveCarryforwardCents:Cents; estimatedTaxEffectCents:Cents; rentalUseBps:BasisPoints; mortgageDebtCents:Cents; rentalTaxModelingEnabled:boolean; rentalTaxTreatment?:{sourceEventId:string;sourceName:string;rentalType:"long-term"|"short-term";nonPassive:boolean}; rentalTaxSetupIssue?:{sourceEventId:string;sourceName:string;message:string}; warnings:readonly string[] }
 export interface ProjectionHousingCashFlow { principalCents:Cents; interestCents:Cents; propertyTaxCents:Cents; insuranceCents:Cents; hoaCents:Cents; maintenanceCents:Cents }
 export interface MonthlyProjection { month: string; status: ProjectionStatus; incomeCents: Cents; taxableNonWageIncomeCents:Cents; nontaxableIncomeCents:Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; incomeVarianceCents: Cents; expenseVarianceCents: Cents; taxCents: Cents; cashTaxCents:Cents; rsuSellToCoverTaxCents:Cents; surplusCents: Cents; liquidWorthCents: Cents | null; netWorthCents: Cents | null; debtCents: Cents | null; balances: ProjectionBalances | null; unfundedDeficitCents: Cents; contributionCents: Cents; contributionResults:readonly ContributionResult[]; accountTransitions:readonly AccountBalanceTransition[]; principalAndInterestCents: Cents; housingCostCents: Cents; housing:ProjectionHousingCashFlow; properties:readonly PropertyProjectionResult[]; warnings: readonly ProjectionWarning[] }
 export interface AnnualProjection { year: number; incomeCents: Cents; expenseCents: Cents; actualIncomeCents: Cents; actualExpenseCents: Cents; taxCents: Cents; cashTaxCents:Cents; rsuSellToCoverTaxCents:Cents; taxLedger?:TaxLedger; savingsRateBps: BasisPoints; surplusCents: Cents; contributionCents: Cents; contributionResults:readonly ContributionResult[]; liquidWorthCents: Cents | null; endingNetWorthCents: Cents | null; debtCents: Cents | null; debtPayoffMonth?: string; unfundedDeficitCents: Cents; properties:readonly PropertyProjectionResult[]; warnings: readonly ProjectionWarning[]; months: readonly MonthlyProjection[] }

@@ -2210,6 +2210,8 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
         }
         let positive =
             |key: &str| json_i64(event, key).is_some_and(|x| (1..=MAX_MONEY_CENTS).contains(&x));
+        let nonnegative =
+            |key: &str| json_i64(event, key).is_some_and(|x| (0..=MAX_MONEY_CENTS).contains(&x));
         let required_money: &[&str] = match kind {
             "recurring-change"
             | "income-change"
@@ -2224,7 +2226,13 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
             "debt-origination" => &["principalCents", "minimumPaymentCents"],
             _ => &[],
         };
-        if required_money.iter().any(|key| !positive(key)) {
+        if required_money.iter().any(|key| {
+            if kind == "adu-build" && *key == "costCents" {
+                !nonnegative(key)
+            } else {
+                !positive(key)
+            }
+        }) {
             return Err(AppError::Validation(format!(
                 "{kind} requires exact positive money values"
             )));
@@ -2343,6 +2351,75 @@ fn validate_scenario_update(input: &ScenarioUpdateInput) -> Result<(), AppError>
                     )));
                 }
             }
+            if let Some(details) = event.get("rentalTaxDetails") {
+                let details = details.as_object().ok_or_else(|| {
+                    AppError::Validation("rentalTaxDetails must be an object".into())
+                })?;
+                let enabled = details
+                    .get("rentalTaxModelingEnabled")
+                    .and_then(|value| value.as_bool())
+                    .ok_or_else(|| {
+                        AppError::Validation(
+                            "rentalTaxDetails rentalTaxModelingEnabled must be a boolean".into(),
+                        )
+                    })?;
+                let rental_type = details
+                    .get("rentalType")
+                    .and_then(|value| value.as_str())
+                    .filter(|value| matches!(*value, "long-term" | "short-term"))
+                    .ok_or_else(|| {
+                        AppError::Validation("rentalTaxDetails rentalType is invalid".into())
+                    })?;
+                for (key, minimum, maximum) in [
+                    ("rentalUseBpsOverride", 1, 10_000),
+                    ("buildingBasisCentsOverride", 0, MAX_MONEY_CENTS),
+                ] {
+                    if let Some(value) = details.get(key).filter(|value| !value.is_null()) {
+                        if !value
+                            .as_i64()
+                            .is_some_and(|value| (minimum..=maximum).contains(&value))
+                        {
+                            return Err(AppError::Validation(format!(
+                                "rentalTaxDetails {key} is invalid"
+                            )));
+                        }
+                    }
+                }
+                if enabled
+                    && !json_i64(event, "monthlyRentalIncomeCents")
+                        .is_some_and(|value| (1..=MAX_MONEY_CENTS).contains(&value))
+                {
+                    return Err(AppError::Validation(
+                        "rentalTaxDetails requires positive monthlyRentalIncomeCents when enabled"
+                            .into(),
+                    ));
+                }
+                if enabled && rental_type == "long-term" {
+                    for key in [
+                        "longTermRealEstateProfessional",
+                        "longTermMaterialParticipation",
+                    ] {
+                        if details.get(key).and_then(|value| value.as_bool()).is_none() {
+                            return Err(AppError::Validation(
+                                "rentalTaxDetails long-term participation answers must be booleans when enabled"
+                                    .into(),
+                            ));
+                        }
+                    }
+                }
+                if enabled
+                    && rental_type == "short-term"
+                    && details
+                        .get("shortTermMaterialParticipation")
+                        .and_then(|value| value.as_bool())
+                        .is_none()
+                {
+                    return Err(AppError::Validation(
+                        "rentalTaxDetails shortTermMaterialParticipation must be a boolean when enabled"
+                            .into(),
+                    ));
+                }
+            }
         }
         if kind == "property-rental-start" {
             let rental_use = json_i64(event, "rentalUseBps")
@@ -2446,152 +2523,144 @@ fn update_scenario(
     input: ScenarioUpdateInput,
     database: tauri::State<Database>,
 ) -> Result<(), AppError> {
-    with_db(&database, |db| {
-        let name = scenario_name(&input.name)?;
-        validate_scenario_update(&input)?;
-        let tx = db.transaction()?;
-        let (baseline, household_id): (bool, String) = tx
-            .query_row(
-                "SELECT is_baseline,household_id FROM scenarios WHERE id=?",
-                [&input.id],
-                |r| Ok((r.get::<_, i64>(0)? != 0, r.get(1)?)),
-            )
-            .map_err(|_| AppError::Conflict)?;
-        if baseline && name != "Baseline" {
-            return Err(AppError::Validation(
-                "the baseline scenario cannot be renamed".into(),
-            ));
-        }
-        let duplicate: bool = tx.query_row(
+    with_db(&database, |db| store_scenario(db, input))
+}
+
+fn store_scenario(db: &mut Connection, input: ScenarioUpdateInput) -> Result<(), AppError> {
+    let name = scenario_name(&input.name)?;
+    validate_scenario_update(&input)?;
+    let tx = db.transaction()?;
+    let (baseline, household_id): (bool, String) = tx
+        .query_row(
+            "SELECT is_baseline,household_id FROM scenarios WHERE id=?",
+            [&input.id],
+            |r| Ok((r.get::<_, i64>(0)? != 0, r.get(1)?)),
+        )
+        .map_err(|_| AppError::Conflict)?;
+    if baseline && name != "Baseline" {
+        return Err(AppError::Validation(
+            "the baseline scenario cannot be renamed".into(),
+        ));
+    }
+    let duplicate: bool = tx.query_row(
             "SELECT EXISTS(SELECT 1 FROM scenarios current JOIN scenarios other ON other.household_id=current.household_id WHERE current.id=?1 AND other.id<>current.id AND other.name=?2 COLLATE NOCASE)",
             params![input.id, name],
             |r| r.get(0),
         )?;
-        if duplicate {
+    if duplicate {
+        return Err(AppError::Validation(
+            "a scenario with this name already exists".into(),
+        ));
+    }
+    let owns = |table: &str, id: &str| -> Result<bool, AppError> {
+        if !["accounts", "recurring_entries", "assets", "liabilities"].contains(&table) {
+            return Ok(false);
+        }
+        Ok(tx.query_row(
+            &format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE id=?1 AND household_id=?2)"),
+            params![id, household_id],
+            |r| r.get(0),
+        )?)
+    };
+    let mut ordered = input.events.iter().collect::<Vec<_>>();
+    ordered.sort_by_key(|e| {
+        (
+            e.get("date").and_then(|x| x.as_str()).unwrap_or(""),
+            e.get("id").and_then(|x| x.as_str()).unwrap_or(""),
+        )
+    });
+    let mut created_assets: HashMap<&str, &str> = HashMap::new();
+    let mut created_debts: HashMap<&str, &str> = HashMap::new();
+    for event in ordered {
+        let date = event["date"].as_str().unwrap();
+        let in_horizon:bool=tx.query_row("SELECT date(?1)>=date('now','start of month') AND date(?1)<date('now','start of month',?2)",params![date,format!("+{} months",input.horizon_months)],|r|r.get(0))?;
+        if !in_horizon {
             return Err(AppError::Validation(
-                "a scenario with this name already exists".into(),
+                "event date must be within the active projection horizon".into(),
             ));
         }
-        let owns = |table: &str, id: &str| -> Result<bool, AppError> {
-            if !["accounts", "recurring_entries", "assets", "liabilities"].contains(&table) {
-                return Ok(false);
-            }
-            Ok(tx.query_row(
-                &format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE id=?1 AND household_id=?2)"),
-                params![id, household_id],
-                |r| r.get(0),
-            )?)
+        let kind = event["type"].as_str().unwrap();
+        let account_keys: &[&str] = match kind {
+            "account-transfer" => &["fromAccountId", "toAccountId"],
+            "account-contribution" => &["accountId"],
+            "asset-purchase" | "adu-build" => &["fundingAccountId"],
+            "asset-sale" => &["destinationAccountId"],
+            "debt-origination" | "debt-payoff" => &["accountId"],
+            _ => &[],
         };
-        let mut ordered = input.events.iter().collect::<Vec<_>>();
-        ordered.sort_by_key(|e| {
-            (
-                e.get("date").and_then(|x| x.as_str()).unwrap_or(""),
-                e.get("id").and_then(|x| x.as_str()).unwrap_or(""),
-            )
-        });
-        let mut created_assets: HashMap<&str, &str> = HashMap::new();
-        let mut created_debts: HashMap<&str, &str> = HashMap::new();
-        for event in ordered {
-            let date = event["date"].as_str().unwrap();
-            let in_horizon:bool=tx.query_row("SELECT date(?1)>=date('now','start of month') AND date(?1)<date('now','start of month',?2)",params![date,format!("+{} months",input.horizon_months)],|r|r.get(0))?;
-            if !in_horizon {
+        for key in account_keys {
+            let id = event.get(key).and_then(|x| x.as_str()).unwrap_or("");
+            if !owns("accounts", id)? {
+                return Err(AppError::Validation(format!(
+                    "{key} does not belong to this household"
+                )));
+            }
+        }
+        if matches!(kind, "recurring-change" | "income-change") {
+            let id = event.get("entryId").and_then(|x| x.as_str()).unwrap_or("");
+            if !owns("recurring_entries", id)? {
                 return Err(AppError::Validation(
-                    "event date must be within the active projection horizon".into(),
+                    "recurring entry does not belong to this household".into(),
                 ));
             }
-            let kind = event["type"].as_str().unwrap();
-            let account_keys: &[&str] = match kind {
-                "account-transfer" => &["fromAccountId", "toAccountId"],
-                "account-contribution" => &["accountId"],
-                "asset-purchase" | "adu-build" => &["fundingAccountId"],
-                "asset-sale" => &["destinationAccountId"],
-                "debt-origination" | "debt-payoff" => &["accountId"],
-                _ => &[],
-            };
-            for key in account_keys {
-                let id = event.get(key).and_then(|x| x.as_str()).unwrap_or("");
-                if !owns("accounts", id)? {
-                    return Err(AppError::Validation(format!(
-                        "{key} does not belong to this household"
-                    )));
-                }
+        }
+        if kind == "asset-sale" {
+            let id = event.get("assetId").and_then(|x| x.as_str()).unwrap_or("");
+            if !created_assets
+                .get(id)
+                .is_some_and(|created| *created < date)
+                && !owns("assets", id)?
+            {
+                return Err(AppError::Validation(
+                    "asset sale must reference an existing asset or a strictly earlier purchase"
+                        .into(),
+                ));
             }
-            if matches!(kind, "recurring-change" | "income-change") {
-                let id = event.get("entryId").and_then(|x| x.as_str()).unwrap_or("");
-                if !owns("recurring_entries", id)? {
-                    return Err(AppError::Validation(
-                        "recurring entry does not belong to this household".into(),
-                    ));
-                }
-            }
-            if kind == "asset-sale" {
-                let id = event.get("assetId").and_then(|x| x.as_str()).unwrap_or("");
-                if !created_assets
-                    .get(id)
-                    .is_some_and(|created| *created < date)
-                    && !owns("assets", id)?
-                {
-                    return Err(AppError::Validation("asset sale must reference an existing asset or a strictly earlier purchase".into()));
-                }
-                if let Some(payoff) = event
-                    .get("payoff")
-                    .filter(|x| x.get("mode").and_then(|v| v.as_str()) != Some("none"))
-                {
-                    let liability_id = payoff
-                        .get("liabilityId")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("");
-                    if !created_debts
-                        .get(liability_id)
-                        .is_some_and(|created| *created < date)
-                        && !owns("liabilities", liability_id)?
-                    {
-                        return Err(AppError::Validation("sale payoff must reference an existing liability or a strictly earlier origination".into()));
-                    }
-                }
-            }
-            if kind == "adu-build" || kind == "property-rental-start" {
-                let id = event.get("assetId").and_then(|x| x.as_str()).unwrap_or("");
-                if !created_assets
-                    .get(id)
-                    .is_some_and(|created| *created < date)
-                    && !owns("assets", id)?
-                {
-                    return Err(AppError::Validation("property event must reference an owned property or a strictly earlier purchase".into()));
-                }
-            }
-            if kind == "debt-payoff" {
-                let id = event
+            if let Some(payoff) = event
+                .get("payoff")
+                .filter(|x| x.get("mode").and_then(|v| v.as_str()) != Some("none"))
+            {
+                let liability_id = payoff
                     .get("liabilityId")
                     .and_then(|x| x.as_str())
                     .unwrap_or("");
-                if !created_debts.get(id).is_some_and(|created| *created < date)
-                    && !owns("liabilities", id)?
+                if !created_debts
+                    .get(liability_id)
+                    .is_some_and(|created| *created < date)
+                    && !owns("liabilities", liability_id)?
                 {
-                    return Err(AppError::Validation("debt payoff must reference an existing liability or a strictly earlier origination".into()));
+                    return Err(AppError::Validation("sale payoff must reference an existing liability or a strictly earlier origination".into()));
                 }
             }
-            if kind == "asset-purchase" {
-                let id = event.get("assetId").and_then(|x| x.as_str()).unwrap_or("");
-                if id.is_empty() || owns("assets", id)? || created_assets.insert(id, date).is_some()
-                {
-                    return Err(AppError::Validation("asset ids must be unique".into()));
-                }
-                if let Some(financing) = event.get("financing") {
-                    let id = financing
-                        .get("liabilityId")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("");
-                    if id.is_empty()
-                        || owns("liabilities", id)?
-                        || created_debts.insert(id, date).is_some()
-                    {
-                        return Err(AppError::Validation("liability ids must be unique".into()));
-                    }
-                }
+        }
+        if kind == "adu-build" || kind == "property-rental-start" {
+            let id = event.get("assetId").and_then(|x| x.as_str()).unwrap_or("");
+            if !created_assets
+                .get(id)
+                .is_some_and(|created| *created < date)
+                && !owns("assets", id)?
+            {
+                return Err(AppError::Validation("property event must reference an owned property or a strictly earlier purchase".into()));
             }
-            if kind == "debt-origination" {
-                let id = event
+        }
+        if kind == "debt-payoff" {
+            let id = event
+                .get("liabilityId")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
+            if !created_debts.get(id).is_some_and(|created| *created < date)
+                && !owns("liabilities", id)?
+            {
+                return Err(AppError::Validation("debt payoff must reference an existing liability or a strictly earlier origination".into()));
+            }
+        }
+        if kind == "asset-purchase" {
+            let id = event.get("assetId").and_then(|x| x.as_str()).unwrap_or("");
+            if id.is_empty() || owns("assets", id)? || created_assets.insert(id, date).is_some() {
+                return Err(AppError::Validation("asset ids must be unique".into()));
+            }
+            if let Some(financing) = event.get("financing") {
+                let id = financing
                     .get("liabilityId")
                     .and_then(|x| x.as_str())
                     .unwrap_or("");
@@ -2603,102 +2672,115 @@ fn update_scenario(
                 }
             }
         }
-        let fallback = input
-            .default_contribution_account_id
-            .as_deref()
-            .ok_or_else(|| {
-                AppError::Validation("default contribution cash account is required".into())
-            })?;
-        let owns_fallback:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND household_id=?2 AND liquid=1 AND kind IN ('checking','savings'))",params![fallback,household_id],|r|r.get(0))?;
-        if !owns_fallback {
+        if kind == "debt-origination" {
+            let id = event
+                .get("liabilityId")
+                .and_then(|x| x.as_str())
+                .unwrap_or("");
+            if id.is_empty() || owns("liabilities", id)? || created_debts.insert(id, date).is_some()
+            {
+                return Err(AppError::Validation("liability ids must be unique".into()));
+            }
+        }
+    }
+    let fallback = input
+        .default_contribution_account_id
+        .as_deref()
+        .ok_or_else(|| {
+            AppError::Validation("default contribution cash account is required".into())
+        })?;
+    let owns_fallback:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND household_id=?2 AND liquid=1 AND kind IN ('checking','savings'))",params![fallback,household_id],|r|r.get(0))?;
+    if !owns_fallback {
+        return Err(AppError::Validation(
+            "default contribution account must be household checking or savings".into(),
+        ));
+    }
+    let n=tx.execute("UPDATE scenarios SET name=?2,assumptions_json=?3,horizon_months=?4,default_contribution_account_id=?6,revision=revision+1 WHERE id=?1 AND revision=?5",params![input.id,name,serde_json::to_string(&input.assumptions)?,input.horizon_months,input.expected_revision,fallback])?;
+    if n == 0 {
+        return Err(AppError::Conflict);
+    }
+    tx.execute(
+        "DELETE FROM scenario_events WHERE scenario_id=?",
+        [&input.id],
+    )?;
+    for event in input.events {
+        let id = event
+            .get("id")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| AppError::Validation("event id is required".into()))?;
+        let date = event
+            .get("date")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| AppError::Validation("event date is required".into()))?;
+        let kind = event
+            .get("type")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| AppError::Validation("event type is required".into()))?;
+        if !valid_iso_date(date) {
+            return Err(AppError::Validation("event date is invalid".into()));
+        }
+        tx.execute("INSERT INTO scenario_events(id,scenario_id,event_date,kind,payload_json) VALUES(?1,?2,?3,?4,?5)",params![id,input.id,date,kind,serde_json::to_string(&event)?])?;
+    }
+    tx.execute(
+        "DELETE FROM scenario_contributions WHERE scenario_id=?",
+        [&input.id],
+    )?;
+    for rule in &input.contributions {
+        let id = rule.get("id").and_then(|x| x.as_str()).unwrap();
+        let kind = rule
+            .get("destinationType")
+            .and_then(|x| x.as_str())
+            .unwrap();
+        let destination = rule.get("destinationId").and_then(|x| x.as_str()).unwrap();
+        let percent = json_i64(rule, "percentBps");
+        let monthly_amount = json_i64(rule, "monthlyAmountCents");
+        let frequency = rule.get("frequency").and_then(|x| x.as_str()).unwrap();
+        let target = json_i64(rule, "targetBalanceCents");
+        let overflow_type = rule.get("overflowDestinationType").and_then(|x| x.as_str());
+        let overflow_id = rule.get("overflowDestinationId").and_then(|x| x.as_str());
+        let eligible:bool=match kind{"account"=>tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND household_id=?2)",params![destination,household_id],|r|r.get(0))?,"asset"=>tx.query_row("SELECT EXISTS(SELECT 1 FROM assets WHERE id=?1 AND household_id=?2 AND private_stock_json IS NULL AND json_extract(housing_costs_json,'$.purchasePriceCents') IS NULL AND COALESCE(json_extract(housing_costs_json,'$.propertyTaxRateBps'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.insuranceMonthlyCents'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.hoaMonthlyCents'),0)=0)",params![destination,household_id],|r|r.get(0))?,"mortgage"=>tx.query_row("SELECT EXISTS(SELECT 1 FROM liabilities WHERE id=?1 AND household_id=?2 AND mortgage_json IS NOT NULL)",params![destination,household_id],|r|r.get(0))?,_=>false};
+        if !eligible {
             return Err(AppError::Validation(
-                "default contribution account must be household checking or savings".into(),
+                "contribution destination is missing, ineligible, or belongs to another household"
+                    .into(),
             ));
         }
-        let n=tx.execute("UPDATE scenarios SET name=?2,assumptions_json=?3,horizon_months=?4,default_contribution_account_id=?6,revision=revision+1 WHERE id=?1 AND revision=?5",params![input.id,name,serde_json::to_string(&input.assumptions)?,input.horizon_months,input.expected_revision,fallback])?;
-        if n == 0 {
-            return Err(AppError::Conflict);
-        }
-        tx.execute(
-            "DELETE FROM scenario_events WHERE scenario_id=?",
-            [&input.id],
-        )?;
-        for event in input.events {
-            let id = event
-                .get("id")
-                .and_then(|x| x.as_str())
-                .ok_or_else(|| AppError::Validation("event id is required".into()))?;
-            let date = event
-                .get("date")
-                .and_then(|x| x.as_str())
-                .ok_or_else(|| AppError::Validation("event date is required".into()))?;
-            let kind = event
-                .get("type")
-                .and_then(|x| x.as_str())
-                .ok_or_else(|| AppError::Validation("event type is required".into()))?;
-            if !valid_iso_date(date) {
-                return Err(AppError::Validation("event date is invalid".into()));
-            }
-            tx.execute("INSERT INTO scenario_events(id,scenario_id,event_date,kind,payload_json) VALUES(?1,?2,?3,?4,?5)",params![id,input.id,date,kind,serde_json::to_string(&event)?])?;
-        }
-        tx.execute(
-            "DELETE FROM scenario_contributions WHERE scenario_id=?",
-            [&input.id],
-        )?;
-        for rule in &input.contributions {
-            let id = rule.get("id").and_then(|x| x.as_str()).unwrap();
-            let kind = rule
-                .get("destinationType")
-                .and_then(|x| x.as_str())
-                .unwrap();
-            let destination = rule.get("destinationId").and_then(|x| x.as_str()).unwrap();
-            let percent = json_i64(rule, "percentBps");
-            let monthly_amount = json_i64(rule, "monthlyAmountCents");
-            let frequency = rule.get("frequency").and_then(|x| x.as_str()).unwrap();
-            let target = json_i64(rule, "targetBalanceCents");
-            let overflow_type = rule.get("overflowDestinationType").and_then(|x| x.as_str());
-            let overflow_id = rule.get("overflowDestinationId").and_then(|x| x.as_str());
-            let eligible:bool=match kind{"account"=>tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND household_id=?2)",params![destination,household_id],|r|r.get(0))?,"asset"=>tx.query_row("SELECT EXISTS(SELECT 1 FROM assets WHERE id=?1 AND household_id=?2 AND private_stock_json IS NULL AND json_extract(housing_costs_json,'$.purchasePriceCents') IS NULL AND COALESCE(json_extract(housing_costs_json,'$.propertyTaxRateBps'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.insuranceMonthlyCents'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.hoaMonthlyCents'),0)=0)",params![destination,household_id],|r|r.get(0))?,"mortgage"=>tx.query_row("SELECT EXISTS(SELECT 1 FROM liabilities WHERE id=?1 AND household_id=?2 AND mortgage_json IS NOT NULL)",params![destination,household_id],|r|r.get(0))?,_=>false};
-            if !eligible {
-                return Err(AppError::Validation("contribution destination is missing, ineligible, or belongs to another household".into()));
-            }
-            if let (Some(okind), Some(oid)) = (overflow_type, overflow_id) {
-                let valid: bool = if okind == "account" {
-                    tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND household_id=?2 AND kind IN ('investment','retirement'))",params![oid,household_id],|r|r.get(0))?
-                } else {
-                    tx.query_row("SELECT EXISTS(SELECT 1 FROM assets WHERE id=?1 AND household_id=?2 AND private_stock_json IS NULL AND json_extract(housing_costs_json,'$.purchasePriceCents') IS NULL AND COALESCE(json_extract(housing_costs_json,'$.propertyTaxRateBps'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.insuranceMonthlyCents'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.hoaMonthlyCents'),0)=0)",params![oid,household_id],|r|r.get(0))?
-                };
-                if !valid {
-                    return Err(AppError::Validation(
-                        "overflow destination is missing or ineligible".into(),
-                    ));
-                }
-            }
-            tx.execute("INSERT INTO scenario_contributions(id,household_id,scenario_id,destination_type,destination_id,percent_bps,monthly_amount_cents,frequency,target_balance_cents,overflow_destination_type,overflow_destination_id) VALUES(?1,?11,?2,?3,?4,?5,?6,?7,?8,?9,?10)",params![id,input.id,kind,destination,percent,monthly_amount,frequency,target,overflow_type,overflow_id,household_id])?;
-        }
-        tx.execute(
-            "DELETE FROM withdrawal_rules WHERE scenario_id=?",
-            [&input.id],
-        )?;
-        for (index, rule) in input.withdrawals.iter().enumerate() {
-            let account = rule
-                .get("accountId")
-                .and_then(|x| x.as_str())
-                .ok_or_else(|| AppError::Validation("withdrawal account is required".into()))?;
-            let priority = json_i64(rule, "priority").unwrap_or(index as i64 + 1);
-            if priority < 1 {
-                return Err(AppError::Validation("invalid withdrawal priority".into()));
-            }
-            let inserted=tx.execute("INSERT INTO withdrawal_rules(id,scenario_id,account_id,priority) SELECT ?1,?2,?3,?4 WHERE EXISTS(SELECT 1 FROM accounts a JOIN scenarios s ON s.household_id=a.household_id WHERE a.id=?3 AND a.liquid=1 AND s.id=?2)",params![rule.get("id").and_then(|x|x.as_str()).map(str::to_owned).unwrap_or_else(||format!("withdraw-{}-{index}",input.id)),input.id,account,priority])?;
-            if inserted != 1 {
+        if let (Some(okind), Some(oid)) = (overflow_type, overflow_id) {
+            let valid: bool = if okind == "account" {
+                tx.query_row("SELECT EXISTS(SELECT 1 FROM accounts WHERE id=?1 AND household_id=?2 AND kind IN ('investment','retirement'))",params![oid,household_id],|r|r.get(0))?
+            } else {
+                tx.query_row("SELECT EXISTS(SELECT 1 FROM assets WHERE id=?1 AND household_id=?2 AND private_stock_json IS NULL AND json_extract(housing_costs_json,'$.purchasePriceCents') IS NULL AND COALESCE(json_extract(housing_costs_json,'$.propertyTaxRateBps'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.insuranceMonthlyCents'),0)=0 AND COALESCE(json_extract(housing_costs_json,'$.hoaMonthlyCents'),0)=0)",params![oid,household_id],|r|r.get(0))?
+            };
+            if !valid {
                 return Err(AppError::Validation(
-                    "withdrawal account must be a liquid household account".into(),
+                    "overflow destination is missing or ineligible".into(),
                 ));
             }
         }
-        tx.commit()?;
-        Ok(())
-    })
+        tx.execute("INSERT INTO scenario_contributions(id,household_id,scenario_id,destination_type,destination_id,percent_bps,monthly_amount_cents,frequency,target_balance_cents,overflow_destination_type,overflow_destination_id) VALUES(?1,?11,?2,?3,?4,?5,?6,?7,?8,?9,?10)",params![id,input.id,kind,destination,percent,monthly_amount,frequency,target,overflow_type,overflow_id,household_id])?;
+    }
+    tx.execute(
+        "DELETE FROM withdrawal_rules WHERE scenario_id=?",
+        [&input.id],
+    )?;
+    for (index, rule) in input.withdrawals.iter().enumerate() {
+        let account = rule
+            .get("accountId")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| AppError::Validation("withdrawal account is required".into()))?;
+        let priority = json_i64(rule, "priority").unwrap_or(index as i64 + 1);
+        if priority < 1 {
+            return Err(AppError::Validation("invalid withdrawal priority".into()));
+        }
+        let inserted=tx.execute("INSERT INTO withdrawal_rules(id,scenario_id,account_id,priority) SELECT ?1,?2,?3,?4 WHERE EXISTS(SELECT 1 FROM accounts a JOIN scenarios s ON s.household_id=a.household_id WHERE a.id=?3 AND a.liquid=1 AND s.id=?2)",params![rule.get("id").and_then(|x|x.as_str()).map(str::to_owned).unwrap_or_else(||format!("withdraw-{}-{index}",input.id)),input.id,account,priority])?;
+        if inserted != 1 {
+            return Err(AppError::Validation(
+                "withdrawal account must be a liquid household account".into(),
+            ));
+        }
+    }
+    tx.commit()?;
+    Ok(())
 }
 #[tauri::command]
 fn delete_scenario(input: DeleteInput, database: tauri::State<Database>) -> Result<(), AppError> {
@@ -6489,6 +6571,143 @@ mod tests {
             validate_scenario_update(&input),
             Err(AppError::Validation(_))
         ));
+    }
+
+    #[test]
+    fn scenario_adu_rental_tax_details_round_trip_and_validate() {
+        // Break caught: persisting ADU rental tax details without validating their tax-specific
+        // fields can silently corrupt a scenario or drop the setup during bootstrap.
+        let mut c = seeded();
+        c.execute(
+            "INSERT INTO assets(id,household_id,name,value_cents,annual_growth_bps) VALUES('home','h','Home',50000000,300)",
+            [],
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO scenarios(id,household_id,name,is_baseline,assumptions_json,horizon_months,default_contribution_account_id) VALUES('scenario','h','Plan',0,'{\"inflationBps\":250,\"thresholdInflationBps\":250}',120,'a')",
+            [],
+        )
+        .unwrap();
+        let date: String = c
+            .query_row(
+                "SELECT date('now','start of month','+1 month')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let input = |events, expected_revision| ScenarioUpdateInput {
+            id: "scenario".into(),
+            name: "Plan".into(),
+            assumptions: serde_json::json!({"inflationBps":250,"thresholdInflationBps":250}),
+            horizon_months: 120,
+            events,
+            default_contribution_account_id: Some("a".into()),
+            contributions: vec![],
+            withdrawals: vec![],
+            expected_revision,
+        };
+        let event = serde_json::json!({
+            "id": "adu",
+            "date": date,
+            "type": "adu-build",
+            "assetId": "home",
+            "fundingAccountId": "a",
+            "costCents": 15000000,
+            "homeSquareFeet": 1500,
+            "aduSquareFeet": 500,
+            "monthlyRentalIncomeCents": 250000,
+            "rentalTaxDetails": {
+                "rentalTaxModelingEnabled": true,
+                "rentalType": "long-term",
+                "rentalUseBpsOverride": 3000,
+                "buildingBasisCentsOverride": 7500000,
+                "longTermRealEstateProfessional": true,
+                "longTermMaterialParticipation": true
+            }
+        });
+
+        store_scenario(&mut c, input(vec![event.clone()], 1)).unwrap();
+        let snapshot = bootstrap(&c).unwrap();
+        assert_eq!(
+            snapshot.scenarios[0].events[0]["rentalTaxDetails"],
+            event["rentalTaxDetails"]
+        );
+
+        let mut legacy_event = event.clone();
+        legacy_event
+            .as_object_mut()
+            .unwrap()
+            .remove("rentalTaxDetails");
+        store_scenario(&mut c, input(vec![legacy_event.clone()], 2)).unwrap();
+        let snapshot = bootstrap(&c).unwrap();
+        assert_eq!(snapshot.scenarios[0].events[0], legacy_event);
+
+        let mut override_zero = event.clone();
+        override_zero["rentalTaxDetails"]["rentalUseBpsOverride"] = serde_json::json!(0);
+        let mut override_too_large = event.clone();
+        override_too_large["rentalTaxDetails"]["rentalUseBpsOverride"] = serde_json::json!(10001);
+        let mut negative_basis = event.clone();
+        negative_basis["rentalTaxDetails"]["buildingBasisCentsOverride"] = serde_json::json!(-1);
+        let mut enabled_zero_rent = event.clone();
+        enabled_zero_rent["monthlyRentalIncomeCents"] = serde_json::json!(0);
+        let mut missing_long_term_answers = event.clone();
+        missing_long_term_answers["rentalTaxDetails"]
+            .as_object_mut()
+            .unwrap()
+            .remove("longTermRealEstateProfessional");
+        missing_long_term_answers["rentalTaxDetails"]
+            .as_object_mut()
+            .unwrap()
+            .remove("longTermMaterialParticipation");
+        let mut missing_short_term_participation = event.clone();
+        missing_short_term_participation["rentalTaxDetails"]["rentalType"] =
+            serde_json::json!("short-term");
+        missing_short_term_participation["rentalTaxDetails"]
+            .as_object_mut()
+            .unwrap()
+            .remove("shortTermMaterialParticipation");
+
+        for (name, rejected_event, expected_message) in [
+            (
+                "zero rental-use override",
+                override_zero,
+                "rentalTaxDetails rentalUseBpsOverride is invalid",
+            ),
+            (
+                "too-large rental-use override",
+                override_too_large,
+                "rentalTaxDetails rentalUseBpsOverride is invalid",
+            ),
+            (
+                "negative building basis override",
+                negative_basis,
+                "rentalTaxDetails buildingBasisCentsOverride is invalid",
+            ),
+            (
+                "enabled ADU with zero rent",
+                enabled_zero_rent,
+                "rentalTaxDetails requires positive monthlyRentalIncomeCents when enabled",
+            ),
+            (
+                "long-term ADU without participation answers",
+                missing_long_term_answers,
+                "rentalTaxDetails long-term participation answers must be booleans when enabled",
+            ),
+            (
+                "short-term ADU without material participation",
+                missing_short_term_participation,
+                "rentalTaxDetails shortTermMaterialParticipation must be a boolean when enabled",
+            ),
+        ] {
+            match store_scenario(&mut c, input(vec![rejected_event], 3)).unwrap_err() {
+                AppError::Validation(message) => assert_eq!(message, expected_message, "{name}"),
+                error => panic!("{name} returned {error:?}"),
+            }
+        }
+
+        let mut zero_cost_event = event;
+        zero_cost_event["costCents"] = serde_json::json!(0);
+        store_scenario(&mut c, input(vec![zero_cost_event], 3)).unwrap();
     }
 
     #[test]

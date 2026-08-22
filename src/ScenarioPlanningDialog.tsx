@@ -1043,14 +1043,19 @@ function EventEditor({
         const monthlyRentalIncomeCents = m("monthlyRentalIncomeCents", true);
         const hasRentalTaxDraft = Object.keys(fields).some((key) => key.startsWith("adu."));
         const rentalType = (f("adu.rentalType") || "long-term") as "long-term" | "short-term";
+        const rentalTaxModelingEnabled = checked("adu.rentalTaxModelingEnabled");
+        const mfsLivedApartAllYear = answered("adu.mfsLivedApartAllYear");
+        if ((monthlyRentalIncomeCents ?? 0) > 0 && hasRentalTaxDraft && rentalTaxModelingEnabled &&
+            bootstrap.taxProfile?.filingStatus === "married-separate" && mfsLivedApartAllYear === undefined)
+          throw new Error("ADU tax modeling requires a lived-apart answer for married-filing-separately households.");
         const rentalTaxDetails: AduRentalTaxDetails | undefined =
           (monthlyRentalIncomeCents ?? 0) > 0 && hasRentalTaxDraft
             ? {
-                rentalTaxModelingEnabled: checked("adu.rentalTaxModelingEnabled"),
+                rentalTaxModelingEnabled,
                 rentalType,
                 rentalUseBpsOverride: nullableRate("adu.rentalUseBpsOverride"),
                 buildingBasisCentsOverride: nullableMoney("adu.buildingBasisCentsOverride"),
-                mfsLivedApartAllYear: answered("adu.mfsLivedApartAllYear") ?? false,
+                mfsLivedApartAllYear: mfsLivedApartAllYear ?? false,
                 ...(rentalType === "short-term"
                   ? answered("adu.shortTermMaterialParticipation") === undefined
                     ? {}

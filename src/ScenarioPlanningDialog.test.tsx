@@ -48,6 +48,28 @@ describe("ScenarioPlanningDialog",()=>{
    })],
   })));
  });
+ it("requires an explicit MFS lived-apart answer before saving enabled ADU tax details",async()=>{
+  const data=await testRepository.bootstrap() as Bootstrap;
+  data.taxProfile={filingStatus:"married-separate",state:"CA",taxYear:2026,thresholdInflationBps:250,revision:1};
+  data.assets=[{id:"home",householdId:"test",name:"Current home",valueCents:600_000_00,annualGrowthBps:300,housingCosts:{propertyTaxRateBps:100,insuranceMonthlyCents:200_00,insuranceAnnualGrowthBps:200,hoaMonthlyCents:0,hoaAnnualGrowthBps:0},revision:1}];
+  const date=new Date();date.setUTCMonth(date.getUTCMonth()+1);const eventDate=date.toISOString().slice(0,10);
+  const record:ScenarioRecord={id:"plan",householdId:"test",name:"Plan",isBaseline:false,assumptions:{inflationBps:250,thresholdInflationBps:250},horizonMonths:12,revision:4,events:[{id:"garage-adu",date:eventDate,type:"adu-build",assetId:"home",name:"Garage ADU",costCents:60_000_00,homeSquareFeet:1_500,aduSquareFeet:500,fundingAccountId:"cash",monthlyRentalIncomeCents:2_000_00,rentalIncomeGrowthBps:500}],defaultContributionAccountId:"cash",contributions:[],withdrawals:[]};
+  const updateScenario=vi.fn();
+  render(<ScenarioPlanningDialog record={record} bootstrap={data} repository={{...testRepository,updateScenario}} focusedEventId="garage-adu" close={vi.fn()} refresh={vi.fn()}/>);
+
+  fireEvent.click(screen.getByLabelText("Include ADU rental income taxes, deductions, and depreciation"));
+  fireEvent.change(screen.getByLabelText("ADU rental type"),{target:{value:"short-term"}});
+  fireEvent.change(screen.getByLabelText("Materially participate in the ADU rental"),{target:{value:"false"}});
+  expect(screen.getByLabelText("Lived apart from spouse all year")).toHaveValue("");
+  fireEvent.click(screen.getByRole("button",{name:"Save event"}));
+  expect(screen.getByRole("alert")).toHaveTextContent("ADU tax modeling requires a lived-apart answer for married-filing-separately households");
+
+  fireEvent.change(screen.getByLabelText("Lived apart from spouse all year"),{target:{value:"false"}});
+  fireEvent.click(screen.getByRole("button",{name:"Save event"}));
+  fireEvent.click(screen.getByRole("button",{name:"Save plan"}));
+  await waitFor(()=>expect(updateScenario).toHaveBeenCalled());
+  expect(updateScenario.mock.calls[0][0].events[0].rentalTaxDetails.mfsLivedApartAllYear).toBe(false);
+ });
  it("loads existing ADU rental tax answers and preserves blank overrides",async()=>{
   const data=await testRepository.bootstrap() as Bootstrap;
   data.assets=[{id:"home",householdId:"test",name:"Current home",valueCents:600_000_00,annualGrowthBps:300,housingCosts:{propertyTaxRateBps:100,insuranceMonthlyCents:200_00,insuranceAnnualGrowthBps:200,hoaMonthlyCents:0,hoaAnnualGrowthBps:0},revision:1}];

@@ -1,9 +1,11 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  AduRentalTaxDetails,
   ContributionRule,
   ScenarioEvent,
   WithdrawalRule,
 } from "./domain/types";
+import { resolveAduRentalTax } from "./domain/aduRentalTax";
 import { effectiveContributionBps } from "./domain/projection";
 import type { Bootstrap, Repository, ScenarioRecord } from "./repository";
 import { ActionButton, OverflowMenu } from "./ui";
@@ -106,6 +108,15 @@ function eventFields(value: ScenarioEvent | null, bootstrap?:Bootstrap) {
     result["property.accumulatedFederalDepreciationCents"]=dollars(sale?.accumulatedFederalDepreciationCents??0);
     result["property.accumulatedCaliforniaDepreciationCents"]=dollars(sale?.accumulatedCaliforniaDepreciationCents??0);
     for(const key of ["mfsLivedApartAllYear","shortTermMaterialParticipation","longTermRealEstateProfessional","longTermMaterialParticipation"] as const)result[`property.${key}`]=String(details?.[key]??investment?.[key]??false);
+  }
+  if (value.type === "adu-build" && value.rentalTaxDetails) {
+    const details = value.rentalTaxDetails;
+    result["adu.rentalTaxModelingEnabled"] = String(details.rentalTaxModelingEnabled);
+    result["adu.rentalType"] = details.rentalType;
+    result["adu.rentalUseBpsOverride"] = rate(details.rentalUseBpsOverride ?? undefined);
+    result["adu.buildingBasisCentsOverride"] = dollars(details.buildingBasisCentsOverride ?? undefined);
+    for (const key of ["mfsLivedApartAllYear", "shortTermMaterialParticipation", "longTermRealEstateProfessional", "longTermMaterialParticipation"] as const)
+      result[`adu.${key}`] = typeof details[key] === "boolean" ? String(details[key]) : "";
   }
   if (value.type === "asset-sale" && value.payoff)
     for (const [key, item] of Object.entries(value.payoff))
@@ -855,6 +866,29 @@ function EventEditor({
   ];
   const f = (name: string) => fields[name] ?? "",
     set = (name: string, v: string) => setFields((x) => ({ ...x, [name]: v }));
+  const aduTaxDefaults = (() => {
+    if (kind !== "adu-build") return null;
+    const homeSquareFeet = Number(f("homeSquareFeet"));
+    const aduSquareFeet = Number(f("aduSquareFeet"));
+    const costCents = cents(f("costCents"));
+    const monthlyRentalIncomeCents = cents(f("monthlyRentalIncomeCents"));
+    if (monthlyRentalIncomeCents === null || monthlyRentalIncomeCents <= 0 ||
+        !Number.isInteger(homeSquareFeet) || homeSquareFeet <= 0 ||
+        !Number.isInteger(aduSquareFeet) || aduSquareFeet <= 0 || costCents === null)
+      return null;
+    return resolveAduRentalTax({
+      id: value?.id ?? "adu-draft",
+      date,
+      type: "adu-build",
+      assetId: f("assetId"),
+      name: f("name"),
+      costCents,
+      homeSquareFeet,
+      aduSquareFeet,
+      fundingAccountId: f("fundingAccountId"),
+      monthlyRentalIncomeCents,
+    });
+  })();
   const account = (name: string, label: string) => (
     <label>
       {label}
@@ -917,8 +951,10 @@ function EventEditor({
       return n;
     };
     const nullableMoney=(k:string)=>f(k).trim()?nonnegativeMoney(k):null;
+    const nullableRate=(k:string)=>f(k).trim()?r(k):null;
     const optionalRate=(k:string,fallback=0)=>f(k).trim()?r(k):fallback;
     const checked=(k:string)=>f(k)==="true";
+    const answered=(k:string)=>f(k)==="true"?true:f(k)==="false"?false:undefined;
     try {
       let event: ScenarioEvent;
       const base = { id: value?.id ?? crypto.randomUUID(), date };
@@ -1003,19 +1039,47 @@ function EventEditor({
               : undefined,
         };
       }
-      else if (kind === "adu-build")
-        event = {
+      else if (kind === "adu-build") {
+        const monthlyRentalIncomeCents = m("monthlyRentalIncomeCents", true);
+        const hasRentalTaxDraft = Object.keys(fields).some((key) => key.startsWith("adu."));
+        const rentalType = (f("adu.rentalType") || "long-term") as "long-term" | "short-term";
+        const rentalTaxDetails: AduRentalTaxDetails | undefined =
+          (monthlyRentalIncomeCents ?? 0) > 0 && hasRentalTaxDraft
+            ? {
+                rentalTaxModelingEnabled: checked("adu.rentalTaxModelingEnabled"),
+                rentalType,
+                rentalUseBpsOverride: nullableRate("adu.rentalUseBpsOverride"),
+                buildingBasisCentsOverride: nullableMoney("adu.buildingBasisCentsOverride"),
+                mfsLivedApartAllYear: answered("adu.mfsLivedApartAllYear") ?? false,
+                ...(rentalType === "short-term"
+                  ? answered("adu.shortTermMaterialParticipation") === undefined
+                    ? {}
+                    : { shortTermMaterialParticipation: answered("adu.shortTermMaterialParticipation") }
+                  : {
+                      ...(answered("adu.longTermRealEstateProfessional") === undefined ? {} : { longTermRealEstateProfessional: answered("adu.longTermRealEstateProfessional") }),
+                      ...(answered("adu.longTermMaterialParticipation") === undefined ? {} : { longTermMaterialParticipation: answered("adu.longTermMaterialParticipation") }),
+                    }),
+              }
+            : undefined;
+        const aduEvent: Extract<ScenarioEvent, { type: "adu-build" }> = {
           ...base,
           type: kind,
           assetId: f("assetId"),
           name: f("name").trim(),
-          costCents: m("costCents")!,
+          costCents: nonnegativeMoney("costCents"),
           homeSquareFeet: whole("homeSquareFeet"),
           aduSquareFeet: whole("aduSquareFeet"),
-          monthlyRentalIncomeCents: m("monthlyRentalIncomeCents", true),
+          monthlyRentalIncomeCents,
           rentalIncomeGrowthBps: r("rentalIncomeGrowthBps"),
           fundingAccountId: f("fundingAccountId"),
+          ...(value?.type === "adu-build" && value.fundingSources !== undefined
+            ? { fundingSources: value.fundingSources }
+            : {}),
+          ...(rentalTaxDetails ? { rentalTaxDetails } : {}),
         };
+        if (rentalTaxDetails) resolveAduRentalTax(aduEvent);
+        event = aduEvent;
+      }
       else if(kind==="property-rental-start")
         event={...base,type:kind,assetId:f("assetId"),name:f("name").trim(),monthlyRentalIncomeCents:nonnegativeMoney("monthlyRentalIncomeCents"),rentalIncomeGrowthBps:optionalRate("rentalIncomeGrowthBps"),rentalUseBps:optionalRate("rentalUseBps",10000),rentalTaxModelingEnabled:checked("rentalTaxModelingEnabled"),rentalType:(f("rentalType")||"long-term") as "long-term"|"short-term",mfsLivedApartAllYear:checked("mfsLivedApartAllYear"),shortTermMaterialParticipation:checked("shortTermMaterialParticipation"),longTermRealEstateProfessional:checked("longTermRealEstateProfessional"),longTermMaterialParticipation:checked("longTermMaterialParticipation"),propertyTaxBasisCents:nullableMoney("propertyTaxBasisCents"),buildingBasisCents:nullableMoney("buildingBasisCents")};
       else
@@ -1068,7 +1132,7 @@ function EventEditor({
         </select>
       </label>
       <label>
-        Event date
+        {kind === "adu-build" ? "Completed and ready to rent" : "Event date"}
         <input
           type="date"
           required
@@ -1231,6 +1295,25 @@ function EventEditor({
               onChange={(e) => set("rentalIncomeGrowthBps", e.target.value)}
             />
           </label>
+          {aduTaxDefaults && (
+            <fieldset>
+              <legend><span role="heading" aria-level={4}>Rental tax assumptions</span></legend>
+              <p>{`${Number((aduTaxDefaults.allocationNumerator * 100 / aduTaxDefaults.allocationDenominator).toFixed(2))}% automatic allocation`}</p>
+              {(value?.type !== "adu-build" || !value.rentalTaxDetails) && <p>Complete ADU tax assumptions to include rental activity in tax projections.</p>}
+              <label className="check"><input type="checkbox" checked={f("adu.rentalTaxModelingEnabled") === "true"} onChange={(e) => set("adu.rentalTaxModelingEnabled", String(e.target.checked))} /> Include ADU rental income taxes, deductions, and depreciation</label>
+              {f("adu.rentalTaxModelingEnabled") === "true" && <>
+                <label>ADU rental type<select value={f("adu.rentalType") || "long-term"} onChange={(e) => set("adu.rentalType", e.target.value)}><option value="long-term">Long-term rental</option><option value="short-term">Short-term rental</option></select></label>
+                {percent("adu.rentalUseBpsOverride", "Shared-expense allocation override (%)")}
+                <p>{`The ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(aduTaxDefaults.buildingBasisCents / 100)} construction cost is the default ADU depreciable basis.`}</p>
+                {money("adu.buildingBasisCentsOverride", "ADU depreciable basis override (USD)", true)}
+                {bootstrap.taxProfile?.filingStatus === "married-separate" && <label>Lived apart from spouse all year<select value={f("adu.mfsLivedApartAllYear")} onChange={(e) => set("adu.mfsLivedApartAllYear", e.target.value)}><option value="">Choose yes or no</option><option value="true">Yes</option><option value="false">No</option></select></label>}
+                {(f("adu.rentalType") || "long-term") === "short-term"
+                  ? <label>Materially participate in the ADU rental<select value={f("adu.shortTermMaterialParticipation")} onChange={(e) => set("adu.shortTermMaterialParticipation", e.target.value)}><option value="">Choose yes or no</option><option value="true">Yes</option><option value="false">No</option></select></label>
+                  : <><label>Qualify as a real-estate professional<select value={f("adu.longTermRealEstateProfessional")} onChange={(e) => set("adu.longTermRealEstateProfessional", e.target.value)}><option value="">Choose yes or no</option><option value="true">Yes</option><option value="false">No</option></select></label><label>Materially participate in the ADU rental<select value={f("adu.longTermMaterialParticipation")} onChange={(e) => set("adu.longTermMaterialParticipation", e.target.value)}><option value="">Choose yes or no</option><option value="true">Yes</option><option value="false">No</option></select></label></>}
+                <p>Planning estimate only. Confirm rental tax treatment and depreciable basis with a qualified tax professional.</p>
+              </>}
+            </fieldset>
+          )}
         </>
       )}
       {kind === "property-rental-start" && (

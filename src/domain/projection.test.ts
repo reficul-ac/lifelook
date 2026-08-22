@@ -207,12 +207,13 @@ describe("ProjectionEngine",()=>{
     expect(ledger.propertyTaxCents).toBe(5_875_00);
   });
   it("taxes current-home ADU income for legacy snapshots without a tax unit",()=>{
-    const financial:FinancialSnapshot={...snapshot,taxProfile:{...snapshot.taxProfile,taxUnit:undefined},recurring:[{id:"salary",name:"Salary",kind:"income",incomeType:"salary",amountCents:120_000_00,startDate:"2025-01-01",taxTreatment:"none"}],accounts:[{...snapshot.accounts[0],balanceCents:0}],assets:[{id:"home",name:"Home",valueCents:600_000_00,annualGrowthBps:0,housingCosts:{propertyTaxRateBps:0,insuranceMonthlyCents:0,insuranceAnnualGrowthBps:0,hoaMonthlyCents:0,hoaAnnualGrowthBps:0}}]};
+    const financial:FinancialSnapshot={...snapshot,taxProfile:{...snapshot.taxProfile,taxUnit:undefined},recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:0}],assets:[{id:"home",name:"Home",valueCents:600_000_00,annualGrowthBps:0,housingCosts:{propertyTaxRateBps:0,insuranceMonthlyCents:0,insuranceAnnualGrowthBps:0,hoaMonthlyCents:0,hoaAnnualGrowthBps:0}}]};
     const adu={id:"adu",date:"2025-01-01",type:"adu-build" as const,assetId:"home",name:"ADU",costCents:0,homeSquareFeet:1500,aduSquareFeet:500,fundingAccountId:"a",monthlyRentalIncomeCents:2_000_00,rentalIncomeGrowthBps:0,rentalTaxDetails:{rentalTaxModelingEnabled:true,rentalType:"long-term" as const,buildingBasisCentsOverride:0,longTermRealEstateProfessional:false,longTermMaterialParticipation:true}};
-    const plan={...scenario,events:[adu],horizon:{start:"2025-01",months:12}},modeled=calculate(financial,plan)[0],disabled=calculate(financial,{...plan,events:[{...adu,rentalTaxDetails:{rentalTaxModelingEnabled:false,rentalType:"long-term" as const}}]})[0];
+    const plan={...scenario,events:[adu],horizon:{start:"2025-01",months:12}},modeled=calculate(financial,plan)[0],disabled=calculate(financial,{...plan,events:[{...adu,rentalTaxDetails:{rentalTaxModelingEnabled:false,rentalType:"long-term" as const}}]})[0],expectedTax=estimateTax({grossWageIncomeCents:24_000_00,federalDeductionCents:0,californiaDeductionCents:0,ficaExemptWagesCents:0},"single",TAX_RULES_2025).totalCents;
 
     expect(modeled.properties[0].taxableRentalCents).toBe(24_000_00);
-    expect(modeled.taxCents).toBeGreaterThan(disabled.taxCents);
+    expect(modeled.taxCents).toBe(expectedTax);
+    expect(disabled.taxCents).toBe(0);
   });
   it("starts current-home ADU rent and depreciation in its placed-in-service month",()=>{
     const financial:FinancialSnapshot={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:100_000_00}],assets:[{id:"home",name:"Home",valueCents:600_000_00,annualGrowthBps:0,housingCosts:{propertyTaxRateBps:0,insuranceMonthlyCents:0,insuranceAnnualGrowthBps:0,hoaMonthlyCents:0,hoaAnnualGrowthBps:0}}]};

@@ -258,6 +258,32 @@ describe("ProjectionEngine",()=>{
     expect(property.rentalTaxTreatment?.sourceEventId).toBe("first-enabled");
     expect(property.rentalTaxSetupIssue).toEqual({sourceEventId:"needs-setup",sourceName:"Legacy ADU",message:"Complete rental tax assumptions for Legacy ADU."});
   });
+  it("tax-models a planned primary home ADU only after its funded build",()=>{
+    const financial:FinancialSnapshot={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:100_000_00}]};
+    const purchase={id:"buy-home",date:"2025-01-01",type:"asset-purchase" as const,assetId:"future-home",name:"Future home",valueCents:600_000_00,annualGrowthBps:0,fundingAccountId:"a",downPaymentCents:0,costsCents:0,housingCosts:{propertyTaxRateBps:100,insuranceMonthlyCents:100_00,insuranceAnnualGrowthBps:0,hoaMonthlyCents:50_00,hoaAnnualGrowthBps:0},propertyDetails:{primaryResidence:true,maintenanceBps:30},financing:{liabilityId:"future-mortgage",name:"Future mortgage",principalCents:120_000_00,annualRateBps:1000,minimumPaymentCents:1_500_00}};
+    const adu={id:"planned-primary-home-adu",date:"2025-02-01",type:"adu-build" as const,assetId:"future-home",name:"Future ADU",costCents:60_000_00,homeSquareFeet:1500,aduSquareFeet:500,fundingAccountId:"a",monthlyRentalIncomeCents:2_000_00,rentalIncomeGrowthBps:0,rentalTaxDetails:{rentalTaxModelingEnabled:true,rentalType:"long-term" as const,longTermRealEstateProfessional:true,longTermMaterialParticipation:true}};
+    const properties=calculate(financial,{...scenario,events:[purchase,adu],horizon:{start:"2025-01",months:2}})[0].months.map(month=>month.properties[0]);
+
+    expect(properties[0]).toMatchObject({status:"active",rentCents:0,aduIncomeCents:0,depreciationCents:0,taxableRentalCents:0,rentalUseBps:0});
+    expect(properties[1]).toMatchObject({status:"active",rentCents:0,aduIncomeCents:2_000_00,depreciationCents:18_182,taxableRentalCents:135_651,rentalUseBps:2_500,rentalTaxModelingEnabled:true});
+    expect(properties[1].rentalTaxTreatment).toEqual({sourceEventId:"planned-primary-home-adu",sourceName:"Future ADU",rentalType:"long-term",nonPassive:true});
+  });
+  it("does not double-count ADU rental use when whole-home and ADU activities compose",()=>{
+    const financial:FinancialSnapshot={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:100_000_00}],assets:[{id:"home",name:"Home",valueCents:600_000_00,purchasePriceCents:600_000_00,annualGrowthBps:0,housingCosts:{propertyTaxRateBps:100,insuranceMonthlyCents:100_00,insuranceAnnualGrowthBps:0,hoaMonthlyCents:0,hoaAnnualGrowthBps:0}}],liabilities:[{id:"mortgage",name:"Mortgage",balanceCents:120_000_00,annualRateBps:1000,minimumPaymentCents:1_500_00,mortgage:{originalPrincipalCents:120_000_00,termMonths:360,startDate:"2025-01-01",assetId:"home"}}]};
+    const transition={id:"rent-home",date:"2025-01-01",type:"property-rental-start" as const,assetId:"home",name:"Whole-home rental",monthlyRentalIncomeCents:3_000_00,rentalIncomeGrowthBps:0,rentalUseBps:7_500,rentalTaxModelingEnabled:true,rentalType:"long-term" as const,buildingBasisCents:330_000_00};
+    const adu={id:"home-adu",date:"2025-01-01",type:"adu-build" as const,assetId:"home",name:"Home ADU",costCents:60_000_00,homeSquareFeet:1500,aduSquareFeet:500,fundingAccountId:"a",monthlyRentalIncomeCents:2_000_00,rentalIncomeGrowthBps:0,rentalTaxDetails:{rentalTaxModelingEnabled:true,rentalType:"long-term" as const,longTermRealEstateProfessional:false,longTermMaterialParticipation:true}};
+    const month=calculate(financial,{...scenario,events:[transition,adu],horizon:{start:"2025-01",months:1}})[0].months[0],property=month.properties[0];
+
+    expect(property).toMatchObject({rentCents:3_000_00,aduIncomeCents:2_000_00,rentalUseBps:10_000,depreciationCents:93_182,taxableRentalCents:246_818});
+    expect(month.incomeCents).toBe(5_000_00);
+  });
+  it("does not double-count ADU rental use beyond one hundred percent",()=>{
+    const financial:FinancialSnapshot={...snapshot,recurring:[],accounts:[{...snapshot.accounts[0],balanceCents:100_000_00}],assets:[{id:"home",name:"Home",valueCents:600_000_00,annualGrowthBps:0}]};
+    const transition={id:"rent-home",date:"2025-01-01",type:"property-rental-start" as const,assetId:"home",name:"Whole-home rental",monthlyRentalIncomeCents:3_000_00,rentalIncomeGrowthBps:0,rentalUseBps:8_000,rentalTaxModelingEnabled:true,rentalType:"long-term" as const};
+    const adu={id:"home-adu",date:"2025-01-01",type:"adu-build" as const,assetId:"home",name:"Home ADU",costCents:0,homeSquareFeet:1500,aduSquareFeet:500,fundingAccountId:"a",monthlyRentalIncomeCents:2_000_00,rentalIncomeGrowthBps:0,rentalTaxDetails:{rentalTaxModelingEnabled:true,rentalType:"long-term" as const,longTermRealEstateProfessional:false,longTermMaterialParticipation:true}};
+
+    expect(()=>calculate(financial,{...scenario,events:[transition,adu],horizon:{start:"2025-01",months:1}})).toThrow("Combined rental-use allocation for Home exceeds 100%.");
+  });
   it("combines fixed amounts and remaining-surplus percentages for the displayed assignment",()=>{
     expect(effectiveContributionBps([{id:"fixed",destinationType:"account",destinationId:"a",monthlyAmountCents:1250_00,frequency:"monthly"}],7090_00)).toBe(1763);
     expect(effectiveContributionBps([{id:"fixed",destinationType:"account",destinationId:"a",monthlyAmountCents:2500,frequency:"monthly"},{id:"percent",destinationType:"account",destinationId:"b",percentBps:5000,frequency:"monthly"}],10000)).toBe(6250);

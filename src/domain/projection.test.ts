@@ -254,7 +254,7 @@ describe("ProjectionEngine",()=>{
     expect(property.aduIncomeCents).toBe(6_000_00);
     expect(property.depreciationCents).toBe(27_273);
     expect(property.taxableRentalCents).toBe(452_727);
-    expect(property.rentalUseBps).toBe(7_500);
+    expect(property.rentalUseBps).toBe(5_000);
     expect(property.rentalTaxTreatment?.sourceEventId).toBe("first-enabled");
     expect(property.rentalTaxSetupIssue).toEqual({sourceEventId:"needs-setup",sourceName:"Legacy ADU",message:"Complete rental tax assumptions for Legacy ADU."});
   });

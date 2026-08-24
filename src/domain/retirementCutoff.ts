@@ -160,7 +160,7 @@ export function buildRetirementCutoff(input:RetirementCutoffInput):RetirementCut
       mortgageCents:property?.mortgageBalanceCents??(liabilityId?balanceRow.balances!.liabilities[liabilityId]??0:0),
       monthlyGrossRentCents:(property?.rentCents??0)+(property?.aduIncomeCents??0),
       monthlyAduRentCents:property?.aduIncomeCents??0,
-      rentalUseBps:currentAssetIds.has(assetId)?rentalStart?.rentalUseBps:planned?.propertyDetails?.rentalUseBps,
+      rentalUseBps:property?.rentalUseBps??(currentAssetIds.has(assetId)?rentalStart?.rentalUseBps:planned?.propertyDetails?.rentalUseBps),
       projectedDepreciationCents:projectedMonths.reduce((sum,month)=>{if(planned&&month.month<planned.date.slice(0,7))return sum;const rows=month.properties.filter(row=>row.assetId===assetId),row=planned?.financing?rows.filter(item=>item.liabilityId===planned.financing!.liabilityId).at(-1)??rows.at(-1):rows.at(-1);return sum+(row?.depreciationCents??0)},0),
       source:currentAssetIds.has(assetId)?"current" as const:"planned" as const,
     };

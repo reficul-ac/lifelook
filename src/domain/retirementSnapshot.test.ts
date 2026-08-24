@@ -759,6 +759,20 @@ describe("calculateRetirementSnapshot sell-homes scenario", () => {
   );
 });
 
+it("uses an explicit linked sale-tax treatment for a mixed-use home", () => {
+  const value = fixture();
+  value.cutoff = {
+    ...value.cutoff,
+    properties: value.cutoff.properties.map((property) => ({
+      ...property,
+      rentalUseBps: 2_500,
+    })),
+  };
+  currentHome(value).homeSaleAssumptions = saleAssumptions({ saleUse: "personal" });
+
+  expect(calculate(value).sellHomes).toEqual(expect.objectContaining({ available: true }));
+});
+
 const issueMessages: Record<RetirementMissingData["field"], string> = {
   purchaseDate: "Add a purchase date for Home.",
   taxBasis: "Add a tax basis for Home.",

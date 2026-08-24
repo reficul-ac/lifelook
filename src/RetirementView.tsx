@@ -848,6 +848,8 @@ function RetirementStory({
   const available = projection.available;
   const keepSummary = result.keepHomes.available ? result.keepHomes.summary : null;
   const sellSummary = result.sellHomes.available ? result.sellHomes.summary : null;
+  const firstProjectionYear = projection.available ? projection.years[0] : undefined;
+  const privateStockSale = firstProjectionYear?.privateStockSale;
   const headlineNetWorth = !available
     ? "Unavailable"
     : kind === "keep"
@@ -858,6 +860,9 @@ function RetirementStory({
     : kind === "keep"
       ? money(keepSummary!.annualPreTaxIncomeCents)
       : money(sellSummary!.annualPreTaxIncomeCents);
+  const headlineAfterTaxIncome = !available
+    ? "Unavailable"
+    : money(firstProjectionYear?.typicalAfterTaxIncomeCents ?? 0);
   const scenarioName = kind === "keep" ? "Keep homes" : "Sell all homes";
 
   return (
@@ -887,13 +892,38 @@ function RetirementStory({
             <span>Estimated annual pre-tax income</span>
             <strong>{headlineIncome}</strong>
           </div>
+          <div>
+            <span>Typical annual after-tax income</span>
+            <strong>{headlineAfterTaxIncome}</strong>
+          </div>
         </div>
         <p className="retirement-story-note">
-          {kind === "keep"
-            ? "Pre-tax estimate. Rental income is gross revenue."
-            : "Only homes are sold. Retirement accounts remain at face value."}
+          {privateStockSale
+            ? "Annual income excludes one-time home and private-stock sale taxes; those taxes reduce net worth and sale proceeds."
+            : kind === "keep"
+              ? "Pre-tax estimate. Rental income is gross revenue."
+              : "Only homes are sold. Retirement accounts remain at face value."}
         </p>
       </div>
+      {kind === "keep" && !available &&
+        (projection.issues.length > 0 || projection.warnings.length > 0) ? (
+          <section className="retirement-details-needed" aria-label="Keep homes details needed">
+            <h3>Details needed</h3>
+            <p>Add or correct the following information to calculate this scenario.</p>
+            <ul>
+              {projection.issues.map((issue, index) => (
+                <li key={`issue-${issue.assetId}-${issue.field}-${index}`}>
+                  {issue.message}
+                </li>
+              ))}
+              {projection.warnings.map((warning, index) => (
+                <li key={`warning-${warning.code}-${warning.entityId ?? "household"}-${index}`}>
+                  {warning.message}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       <details className="retirement-calculation">
         <summary>View calculation</summary>
         {!available ? (
@@ -909,19 +939,47 @@ function RetirementStory({
           </div>
         ) : kind === "keep" ? (
           <dl>
+            {privateStockSale ? (
+              <>
+                <CalculationRow label="Vested private stock sold" value={money(privateStockSale.grossProceedsCents)} />
+                <CalculationRow label="Taxable stock gain" value={money(privateStockSale.taxableGainCents)} />
+                <CalculationRow label="Estimated stock-sale tax" value={`−${money(privateStockSale.estimatedTaxCents)}`} />
+                <CalculationRow label="Net stock proceeds" value={money(privateStockSale.netProceedsCents)} />
+              </>
+            ) : null}
             <CalculationRow label="Non-home net worth" value={money(keepSummary!.nonHomeNetWorthCents)} />
             <CalculationRow label="Withdrawal rate" value={rate(result.withdrawalRateBps)} />
             <CalculationRow label="Withdrawal income" value={money(keepSummary!.withdrawalIncomeCents)} />
             <CalculationRow label="Gross rental income" value={money(keepSummary!.grossRentalIncomeCents)} />
             <CalculationRow label="Annual pre-tax income" value={money(keepSummary!.annualPreTaxIncomeCents)} />
+            {firstProjectionYear ? (
+              <>
+                <CalculationRow label="Typical annual income tax" value={`−${money(firstProjectionYear.typicalYearTaxCents)}`} />
+                <CalculationRow label="After-tax income (typical year)" value={money(firstProjectionYear.typicalAfterTaxIncomeCents)} />
+              </>
+            ) : null}
           </dl>
         ) : (
           <dl>
+            {privateStockSale ? (
+              <>
+                <CalculationRow label="Vested private stock sold" value={money(privateStockSale.grossProceedsCents)} />
+                <CalculationRow label="Taxable stock gain" value={money(privateStockSale.taxableGainCents)} />
+                <CalculationRow label="Estimated stock-sale tax" value={`−${money(privateStockSale.estimatedTaxCents)}`} />
+                <CalculationRow label="Net stock proceeds" value={money(privateStockSale.netProceedsCents)} />
+              </>
+            ) : null}
             <CalculationRow label="Gross home equity" value={money(sellSummary!.grossHomeEquityCents)} />
             <CalculationRow label="Selling costs" value={`−${money(sellSummary!.sellingCostsCents)}`} />
             <CalculationRow label="Estimated incremental sale tax" value={`−${money(sellSummary!.incrementalSaleTaxCents)}`} />
             <CalculationRow label="Net home proceeds" value={money(sellSummary!.netHomeProceedsCents)} />
             <CalculationRow label="Liquid net worth" value={money(sellSummary!.liquidNetWorthCents)} />
+            {firstProjectionYear ? (
+              <>
+                <CalculationRow label="Typical annual income tax" value={`−${money(firstProjectionYear.typicalYearTaxCents)}`} />
+                <CalculationRow label="After-tax income (typical year)" value={money(firstProjectionYear.typicalAfterTaxIncomeCents)} />
+              </>
+            ) : null}
           </dl>
         )}
       </details>

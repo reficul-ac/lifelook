@@ -3439,6 +3439,7 @@ fn validate_home_sale_assumptions(
     let supported_fields = [
         "sellingCostBps",
         "primaryResidenceExclusionEligible",
+        "saleUse",
         "accumulatedFederalDepreciationCents",
         "accumulatedCaliforniaDepreciationCents",
     ];
@@ -3464,6 +3465,13 @@ fn validate_home_sale_assumptions(
         if !eligibility.is_null() && !eligibility.is_boolean() {
             return Err(AppError::Validation(
                 "primaryResidenceExclusionEligible must be a boolean or null".into(),
+            ));
+        }
+    }
+    if let Some(sale_use) = assumptions.get("saleUse") {
+        if !matches!(sale_use.as_str(), Some("personal" | "rental")) {
+            return Err(AppError::Validation(
+                "saleUse must be personal or rental".into(),
             ));
         }
     }

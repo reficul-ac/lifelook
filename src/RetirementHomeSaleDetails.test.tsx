@@ -94,6 +94,39 @@ const incompleteIssues: readonly RetirementMissingData[] = [
 ];
 
 describe("RetirementHomeSaleDetails current-home editing", () => {
+  it("resolves mixed-use sale tax treatment from the linked editor", async () => {
+    const onUpdateCurrentHome = vi.fn().mockResolvedValue(undefined);
+    const mixedUseHome = { ...completeHome, use: undefined };
+    render(
+      <RetirementHomeSaleDetails
+        homes={[mixedUseHome]}
+        issues={[{
+          assetId: completeHome.property.assetId,
+          assetName: completeHome.property.name,
+          field: "rentalUse",
+          message: "Review rental use for Complete home; mixed-use sale tax is not supported.",
+        }]}
+        scenario={scenario}
+        retirementDate="2042-01-01"
+        onUpdateCurrentHome={onUpdateCurrentHome}
+        onUpdatePlannedHome={vi.fn()}
+      />,
+    );
+
+    const home = screen.getByRole("article", { name: "Complete home sale details" });
+    expect(within(home).getByText("Needs selection")).toBeInTheDocument();
+    fireEvent.click(within(home).getByText("Edit sale details"));
+    fireEvent.change(within(home).getByLabelText("Sale tax treatment"), {
+      target: { value: "personal" },
+    });
+    fireEvent.click(within(home).getByRole("button", { name: "Save sale details" }));
+
+    await waitFor(() => expect(onUpdateCurrentHome).toHaveBeenCalledWith(
+      completeHome.property.assetId,
+      { homeSaleAssumptions: { ...completeHome.assumptions!, saleUse: "personal" } },
+    ));
+  });
+
   // Break caught: hiding authoritative values behind the disclosure or making Plan-derived values editable removes the no-interaction audit view.
   it("shows inherited and Plan-derived values before opening an editor", () => {
     render(
@@ -149,6 +182,9 @@ describe("RetirementHomeSaleDetails current-home editing", () => {
 
     const home = screen.getByRole("article", { name: "Current home sale details" });
     expect(within(home).getByText("Needs details")).toBeInTheDocument();
+    const missingDetails = within(home).getByRole("list", { name: "Current home missing sale details" });
+    expect(missingDetails).toHaveTextContent("Add a purchase date for Current home.");
+    expect(missingDetails).toHaveTextContent("Add selling costs for Current home.");
     fireEvent.click(within(home).getByText("Edit sale details"));
 
     expect(within(home).queryByLabelText("Purchase date")).not.toBeInTheDocument();

@@ -170,6 +170,10 @@ const resolveHomeUse = (
   current: FinancialSnapshot["assets"][number] | undefined,
   planned: PlannedPropertyPurchase | undefined,
 ): HomeSaleTaxItem["use"] | undefined => {
+  const saleUse = property.source === "current"
+    ? current?.homeSaleAssumptions?.saleUse
+    : planned?.propertyDetails?.homeSaleAssumptions?.saleUse;
+  if (saleUse != null) return saleUse;
   const rentalEvidence = property.source === "current"
     ? currentHomeIsRental(property, current)
     : plannedHomeIsRental(property, planned);
@@ -355,6 +359,7 @@ export function resolveRetirementHomeSales(
       accumulatedCaliforniaDepreciationCents:
         assumptions.accumulatedCaliforniaDepreciationCents + home.property.projectedDepreciationCents,
       primaryResidenceExclusionEligible: home.primaryResidenceEligibility.eligible,
+      rentalUseBps: home.property.rentalUseBps,
     };
   }) : [];
 

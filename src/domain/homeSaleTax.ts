@@ -14,6 +14,8 @@ export interface HomeSaleTaxItem {
   accumulatedFederalDepreciationCents: Cents;
   accumulatedCaliforniaDepreciationCents: Cents;
   primaryResidenceExclusionEligible: boolean;
+  /** Rental share for a mixed-use primary residence, including an ADU. */
+  rentalUseBps?: BasisPoints;
 }
 
 export interface HomeSaleTaxInput {
@@ -164,11 +166,12 @@ export function calculateIncrementalHomeSaleTax(input: HomeSaleTaxInput): HomeSa
       sale.accumulatedCaliforniaDepreciationCents,
       Math.max(0, californiaRawGain),
     );
+    const personalShare = 1 - Math.min(10_000, Math.max(0, sale.rentalUseBps ?? (sale.use === "rental" ? 10_000 : 0))) / 10_000;
     const exclusionCents = sale.primaryResidenceExclusionEligible
-      ? Math.min(remainingFederalExclusionCents, Math.max(0, federalRawGain - federalRecaptureForSale))
+      ? Math.min(remainingFederalExclusionCents, Math.round(Math.max(0, federalRawGain - federalRecaptureForSale) * personalShare))
       : 0;
     const californiaExclusionCents = sale.primaryResidenceExclusionEligible
-      ? Math.min(remainingCaliforniaExclusionCents, Math.max(0, californiaRawGain - californiaRecaptureForSale))
+      ? Math.min(remainingCaliforniaExclusionCents, Math.round(Math.max(0, californiaRawGain - californiaRecaptureForSale) * personalShare))
       : 0;
     remainingFederalExclusionCents -= exclusionCents;
     remainingCaliforniaExclusionCents -= californiaExclusionCents;

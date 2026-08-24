@@ -120,6 +120,29 @@ function YearDetails({
           </>
         ) : null}
       </dl>
+      <section className="retirement-tax-breakdown" aria-label={`Tax breakdown for ${year.year}`}>
+        <h4>Tax breakdown</h4>
+        <dl>
+          <div><dt>Ordinary retirement distributions</dt><dd><MoneyValue label="Ordinary retirement distributions" cents={year.taxBreakdown.ordinaryDistributionsCents} /></dd></div>
+          <div><dt>Short-term stock gains</dt><dd><MoneyValue label="Short-term stock gains" cents={year.taxBreakdown.shortTermGainsCents} /></dd></div>
+          <div><dt>Long-term stock gains</dt><dd><MoneyValue label="Long-term stock gains" cents={year.taxBreakdown.longTermGainsCents} /></dd></div>
+          <div><dt>Gross rental income</dt><dd><MoneyValue label="Gross rental income" cents={year.taxBreakdown.grossRentalIncomeCents} /></dd></div>
+          <div><dt>Federal rental deductions</dt><dd><MoneyValue label="Federal rental deductions" cents={year.taxBreakdown.federalRentalDeductionsCents} /></dd></div>
+          <div><dt>Federal taxable rental income</dt><dd><MoneyValue label="Federal taxable rental income" cents={year.taxBreakdown.federalTaxableRentalIncomeCents} /></dd></div>
+          <div><dt>California rental deductions</dt><dd><MoneyValue label="California rental deductions" cents={year.taxBreakdown.californiaRentalDeductionsCents} /></dd></div>
+          <div><dt>California taxable rental income</dt><dd><MoneyValue label="California taxable rental income" cents={year.taxBreakdown.californiaTaxableRentalIncomeCents} /></dd></div>
+          <div><dt>Federal deduction</dt><dd><MoneyValue label="Federal deduction" cents={year.taxBreakdown.federalDeductionCents} /></dd></div>
+          <div><dt>Federal taxable income</dt><dd><MoneyValue label="Federal taxable income" cents={year.taxBreakdown.federalTaxableIncomeCents} /></dd></div>
+          <div><dt>California deduction</dt><dd><MoneyValue label="California deduction" cents={year.taxBreakdown.californiaDeductionCents} /></dd></div>
+          <div><dt>California taxable income</dt><dd><MoneyValue label="California taxable income" cents={year.taxBreakdown.californiaTaxableIncomeCents} /></dd></div>
+          <div><dt>Federal income tax</dt><dd><MoneyValue label="Federal income tax" cents={year.taxBreakdown.federalIncomeTaxCents} /></dd></div>
+          <div><dt>California income tax</dt><dd><MoneyValue label="California income tax" cents={year.taxBreakdown.californiaIncomeTaxCents} /></dd></div>
+          <div><dt>Net investment income tax</dt><dd><MoneyValue label="Net investment income tax" cents={year.taxBreakdown.netInvestmentIncomeTaxCents} /></dd></div>
+          <div><dt>Home-sale tax</dt><dd><MoneyValue label="Home-sale tax" cents={year.taxBreakdown.homeSaleTaxCents} /></dd></div>
+          <div><dt>Early-withdrawal penalties</dt><dd><MoneyValue label="Early-withdrawal penalties" cents={year.earlyPenaltyCents} /></dd></div>
+          <div><dt>Total taxes</dt><dd><MoneyValue label="Total taxes" cents={year.totalTaxCents} /></dd></div>
+        </dl>
+      </section>
       {year.withdrawalSources.length > 0 ? (
         <section aria-label={`Withdrawal sources for ${year.year}`}>
           <h4>Withdrawal sources</h4>
@@ -207,22 +230,25 @@ export function RetirementProjectionTable({
           <caption>{label} annual projection — {projection.years.length}-year horizon</caption>
           <thead>
             <tr>
-              <th scope="col">Year and ages</th>
-              <th scope="col">Starting portfolio</th>
-              <th scope="col">Pre-tax withdrawal</th>
-              <th scope="col">Estimated taxes</th>
+              <th scope="col" rowSpan={2}>Year and ages</th>
+              <th scope="colgroup" colSpan={5}>Financial position</th>
+              <th scope="colgroup" colSpan={4}>Retirement income</th>
+            </tr>
+            <tr>
+              <th scope="col">Net worth</th>
+              <th scope="col">Liquid accounts</th>
+              <th scope="col">Retirement accounts</th>
+              <th scope="col">Home equity</th>
+              <th scope="col">Debt</th>
+              <th scope="col">Withdrawal amount</th>
+              <th scope="col">Rental income</th>
+              <th scope="col">Taxes</th>
               <th scope="col">After-tax income</th>
-              <th scope="col">Plan expenses</th>
-              <th scope="col">Housing expenses</th>
-              <th scope="col">Surplus / shortfall</th>
-              <th scope="col">Ending destination balance</th>
-              <th scope="col">Ending net worth</th>
             </tr>
           </thead>
           <tbody>
             {projection.years.map((year) => {
               const expanded = expandedYears.has(year.year);
-              const shortfall = year.shortfallCents > 0;
               return (
                 <Fragment key={year.year}>
                   <tr>
@@ -239,15 +265,15 @@ export function RetirementProjectionTable({
                         View year details
                       </button>
                     </th>
-                    <td><MoneyValue label="Starting portfolio" cents={year.startingPortfolioCents} /></td>
-                    <td><MoneyValue label="Pre-tax withdrawal" cents={year.withdrawalFundedCents} /></td>
-                    <td><MoneyValue label="Estimated taxes" cents={year.estimatedTaxCents} /></td>
+                    <td><MoneyValue label="Net worth" cents={year.endingNetWorthCents} /></td>
+                    <td><MoneyValue label="Liquid accounts" cents={year.endingLiquidAccountsCents} /></td>
+                    <td><MoneyValue label="Retirement accounts" cents={year.endingRetirementAccountsCents} /></td>
+                    <td><MoneyValue label="Home equity" cents={year.endingHomeEquityCents} /></td>
+                    <td><MoneyValue label="Debt" cents={year.endingDebtCents} /></td>
+                    <td><MoneyValue label="Withdrawal amount" cents={year.withdrawalFundedCents} /></td>
+                    <td><MoneyValue label="Rental income" cents={year.rentalIncomeCents} /></td>
+                    <td><MoneyValue label="Taxes" cents={year.totalTaxCents} /></td>
                     <td><MoneyValue label="After-tax income" cents={year.afterTaxIncomeCents} /></td>
-                    <td><MoneyValue label="Plan expenses" cents={year.planExpenseCents} /></td>
-                    <td><MoneyValue label="Housing expenses" cents={year.housingExpenseCents} /></td>
-                    <td><MoneyValue label={shortfall ? "Shortfall" : "Surplus"} cents={shortfall ? year.shortfallCents : year.surplusCents} negative={shortfall} /></td>
-                    <td><MoneyValue label="Ending destination balance" cents={year.destinationBalanceCents} /></td>
-                    <td><MoneyValue label="Ending net worth" cents={year.endingNetWorthCents} /></td>
                   </tr>
                   <tr hidden={!expanded}>
                       <td colSpan={10}>

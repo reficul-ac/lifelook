@@ -120,6 +120,11 @@ it("applies the primary-residence exclusion only to positive non-recapture gain"
   expect(result.unrecaptured1250GainCents).toBe(40_000_00);
 });
 
+it("limits the primary-home exclusion to the personal share of a mixed-use ADU property", () => {
+  const result=calculate([homeSale({use:"personal",salePriceCents:1_000_000_00,federalBasisCents:400_000_00,californiaBasisCents:400_000_00,accumulatedFederalDepreciationCents:50_000_00,accumulatedCaliforniaDepreciationCents:50_000_00,primaryResidenceExclusionEligible:true,rentalUseBps:2_500})],{filingStatus:"married-joint"});
+  expect(result.sales[0]).toEqual(expect.objectContaining({exclusionCents:450_000_00,federalGainCents:200_000_00,californiaGainCents:200_000_00}));
+});
+
 describe.each([
   {
     name: "treats a sale on the first anniversary as short-term ordinary income",

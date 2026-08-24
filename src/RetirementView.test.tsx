@@ -157,14 +157,32 @@ const annualProjectionRow = {
   otherPreTaxIncomeCents: 0,
   rentalIncomeCents: 20_500_00,
   estimatedTaxCents: 8_000_00,
+  totalTaxCents: 8_000_00,
+  typicalYearTaxCents: 6_000_00,
   earlyPenaltyCents: 0,
   afterTaxIncomeCents: 50_300_00,
+  typicalAfterTaxIncomeCents: 52_300_00,
   planExpenseCents: 40_000_00,
   housingExpenseCents: 8_000_00,
   surplusCents: 2_300_00,
   shortfallCents: 0,
   destinationBalanceCents: 2_300_00,
+  endingLiquidAccountsCents: 2_300_00,
+  endingRetirementAccountsCents: 967_700_00,
+  endingHomeEquityCents: 250_000_00,
+  endingDebtCents: 200_000_00,
+  endingOtherNetWorthCents: 50_000_00,
   endingNetWorthCents: 1_270_000_00,
+  taxBreakdown: {
+    ordinaryDistributionsCents: 37_800_00, shortTermGainsCents: 0,
+    longTermGainsCents: 0, grossRentalIncomeCents: 20_500_00,
+    federalTaxableRentalIncomeCents: 5_000_00, californiaTaxableRentalIncomeCents: 5_000_00,
+    federalRentalDeductionsCents: 15_500_00, californiaRentalDeductionsCents: 15_500_00,
+    federalDeductionCents: 30_000_00, californiaDeductionCents: 20_000_00,
+    federalTaxableIncomeCents: 12_800_00, californiaTaxableIncomeCents: 22_800_00,
+    federalIncomeTaxCents: 4_500_00, californiaIncomeTaxCents: 3_500_00,
+    netInvestmentIncomeTaxCents: 0, homeSaleTaxCents: 0,
+  },
   endingBalances: { accounts: {}, assets: {}, liabilities: {} },
   housing: {
     principalCents: 3_000_00,
@@ -1781,9 +1799,9 @@ describe("RetirementView snapshot stories", () => {
     expect(screen.getByRole("table", {
       name: "Keep homes annual projection",
     })).toBeInTheDocument();
-    expect(screen.getByLabelText("Pre-tax withdrawal: $35,400")).toBeInTheDocument();
+    expect(screen.getByLabelText("Withdrawal amount: $35,400")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "View 2042 year details" }));
-    expect(screen.getByLabelText("Rental income: $12,000")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Rental income: $12,000")).toHaveLength(2);
 
     fireEvent.click(screen.getByRole("button", {
       name: "Select Sell all homes scenario",
@@ -1794,11 +1812,11 @@ describe("RetirementView snapshot stories", () => {
     }).closest("article")!;
     expect(within(
       within(sellStory).getByText("Estimated annual pre-tax income").parentElement!,
-    ).getByText("$49,048")).toBeInTheDocument();
+    ).getByText("$48,211")).toBeInTheDocument();
     expect(screen.getByRole("table", {
       name: "Sell all homes annual projection",
     })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Pre-tax withdrawal: \$49,0/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Withdrawal amount: \$48,2/)).toBeInTheDocument();
     await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledWith(
       expect.objectContaining({ selectedScenario: "sell-all-homes" }),
     ));
@@ -1934,6 +1952,7 @@ describe("RetirementView snapshot stories", () => {
     expect(screen.getByRole("heading", { name: "If you sell all homes" })).toBeInTheDocument();
     expect(screen.getByText("Net worth at retirement")).toBeInTheDocument();
     expect(screen.getAllByText("Estimated annual pre-tax income")).toHaveLength(2);
+    expect(screen.getAllByText("Typical annual after-tax income")).toHaveLength(2);
     const sellStory = screen.getByRole("heading", { name: "If you sell all homes" }).closest("article")!;
     expect(sellStory.querySelector("header")).toBeNull();
     expect(within(sellStory).getAllByText("Liquid net worth")).toHaveLength(2);
@@ -2003,7 +2022,7 @@ describe("RetirementView snapshot stories", () => {
     const keepStory = screen.getByRole("heading", { name: "If you keep your homes" }).closest("article")!;
     expect(within(keepStory).getAllByText("$20,500")).toHaveLength(2);
     const sellStory = screen.getByRole("heading", { name: "If you sell all homes" }).closest("article")!;
-    expect(within(sellStory).getAllByText("Unavailable")).toHaveLength(2);
+    expect(within(sellStory).getAllByText("Unavailable")).toHaveLength(3);
     fireEvent.click(within(sellStory).getByText("View calculation"));
     expect(within(sellStory).getByText("Add a purchase date for Oak Street.")).toBeInTheDocument();
     expect(
@@ -2046,11 +2065,50 @@ describe("RetirementView snapshot stories", () => {
       />,
     );
 
-    expect(screen.getAllByText("Unavailable")).toHaveLength(4);
+    expect(screen.getAllByText("Unavailable")).toHaveLength(6);
     expect(screen.queryByText(/\$[\d,]+/)).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Projection warnings" }))
       .toHaveTextContent("Choose a taxable destination account");
+  });
+
+  // Regression: Keep failures are carried as warnings, not home-data issues. Hiding
+  // warnings behind the annual table leaves the Keep card's "Unavailable" unexplained.
+  it("calls out what is needed inside an unavailable Keep card", () => {
+    const warning = {
+      code: "unsupported-tax-character" as const,
+      message: "Add taxable cost basis for Brokerage before calculating withdrawals.",
+    };
+    vi.mocked(calculateRetirementProjection).mockReturnValue({
+      ...availableProjection,
+      netWorthCents: null,
+      keepHomes: {
+        available: false,
+        issues: [],
+        warnings: [warning],
+        years: [],
+      },
+      warnings: [warning],
+    });
+
+    render(
+      <RetirementView
+        initial={initial}
+        repository={repository()}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    const keepStory = screen.getByRole("heading", {
+      name: "If you keep your homes",
+    }).closest("article")!;
+    expect(within(keepStory).getByRole("heading", { name: "Details needed" }))
+      .toBeInTheDocument();
+    expect(keepStory).toHaveTextContent(
+      "Add taxable cost basis for Brokerage before calculating withdrawals.",
+    );
   });
 
   it("removes prior financial figures when projection calculation fails", () => {

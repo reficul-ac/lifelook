@@ -41,6 +41,7 @@ export interface RetirementHomeSaleDetailsProps {
 
 type Draft = {
   sellingCosts: string;
+  saleUse: "" | "personal" | "rental";
   primaryResidenceExclusionEligible: boolean;
   federalDepreciation: string;
   californiaDepreciation: string;
@@ -73,6 +74,7 @@ const draftFor = (home: ResolvedRetirementHome): Draft => ({
   sellingCosts: home.assumptions == null
     ? ""
     : String(home.assumptions.sellingCostBps / 100),
+  saleUse: home.assumptions?.saleUse ?? "",
   primaryResidenceExclusionEligible:
     home.primaryResidenceEligibility.source === "unknown"
       ? false
@@ -181,6 +183,11 @@ function HomeDetails({
     const accumulatedCaliforniaDepreciationCents = parseMoney(
       draft.californiaDepreciation,
     );
+    if (issues.some((issue) => issue.field === "rentalUse") && draft.saleUse === "") {
+      setRetryReload(null);
+      setError("Choose whether the home sale should be taxed as a personal home or rental property.");
+      return;
+    }
     if (sellingCostBps == null) {
       setRetryReload(null);
       setError("Enter selling costs from 0–100 percent.");
@@ -199,6 +206,7 @@ function HomeDetails({
     const patch: HomeSaleSourcePatch = {
       homeSaleAssumptions: {
         sellingCostBps,
+        ...(draft.saleUse === "" ? {} : { saleUse: draft.saleUse }),
         ...(home.primaryResidenceEligibility.source === "derived"
           ? {}
           : {
@@ -254,6 +262,13 @@ function HomeDetails({
     <article aria-label={`${home.property.name} sale details`}>
       <h4>{home.property.name}</h4>
       <p>{issues.length === 0 ? "Complete" : "Needs details"}</p>
+      {issues.length > 0 ? (
+        <ul className="retirement-home-sale-issues" aria-label={`${home.property.name} missing sale details`}>
+          {issues.map((issue, index) => (
+            <li key={`${issue.field}-${index}`}>{issue.message}</li>
+          ))}
+        </ul>
+      ) : null}
       {home.primaryResidenceEligibility.source === "derived" && (
         <p>{`${home.primaryResidenceEligibility.eligible ? "Eligible" : "Not eligible"} (derived from Plan)`}</p>
       )}
@@ -296,6 +311,8 @@ function HomeDetails({
               ? "Eligible"
               : "Not eligible"}
         </dd>
+        <dt>Sale tax treatment</dt>
+        <dd>{home.use === "personal" ? "Personal home" : home.use === "rental" ? "Rental property" : "Needs selection"}</dd>
         <dt>Plan-derived projected sale value</dt>
         <dd>{money(home.property.valueCents)}</dd>
         <dt>Plan-derived appreciation</dt>
@@ -328,6 +345,17 @@ function HomeDetails({
               value={draft.sellingCosts}
               onChange={(event) => set({ sellingCosts: event.target.value })}
             />
+          </label>
+          <label>
+            Sale tax treatment
+            <select
+              value={draft.saleUse}
+              onChange={(event) => set({ saleUse: event.target.value as Draft["saleUse"] })}
+            >
+              <option value="">Choose treatment</option>
+              <option value="personal">Personal home</option>
+              <option value="rental">Rental property</option>
+            </select>
           </label>
           {home.primaryResidenceEligibility.source !== "derived" && (
             <label className="check">

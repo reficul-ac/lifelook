@@ -2,6 +2,7 @@ import { calculateRetirementPlan, projectGrowth, ProjectionEngine } from "./proj
 import { buildRetirementCutoff } from "./retirementCutoff";
 import { calculateIncrementalHouseholdIncomeTax } from "./tax";
 import { calculateIncrementalHomeSaleTax, type HomeSaleTaxItem } from "./homeSaleTax";
+import { projectedSharePrice, valueForUnits } from "./equity";
 import {
   calculateRetirementKeepSnapshot,
   calculateRetirementSnapshot,
@@ -51,14 +52,46 @@ export interface RetirementProjectionYear {
   otherPreTaxIncomeCents: Cents;
   rentalIncomeCents: Cents;
   estimatedTaxCents: Cents;
+  totalTaxCents: Cents;
+  typicalYearTaxCents: Cents;
   earlyPenaltyCents: Cents;
   afterTaxIncomeCents: Cents;
+  typicalAfterTaxIncomeCents: Cents;
   planExpenseCents: Cents;
   housingExpenseCents: Cents;
   surplusCents: Cents;
   shortfallCents: Cents;
   destinationBalanceCents: Cents;
+  endingLiquidAccountsCents: Cents;
+  endingRetirementAccountsCents: Cents;
+  endingHomeEquityCents: Cents;
+  endingDebtCents: Cents;
+  endingOtherNetWorthCents: Cents;
   endingNetWorthCents: Cents;
+  taxBreakdown: {
+    ordinaryDistributionsCents: Cents;
+    shortTermGainsCents: Cents;
+    longTermGainsCents: Cents;
+    grossRentalIncomeCents: Cents;
+    federalTaxableRentalIncomeCents: Cents;
+    californiaTaxableRentalIncomeCents: Cents;
+    federalRentalDeductionsCents: Cents;
+    californiaRentalDeductionsCents: Cents;
+    federalDeductionCents: Cents;
+    californiaDeductionCents: Cents;
+    federalTaxableIncomeCents: Cents;
+    californiaTaxableIncomeCents: Cents;
+    federalIncomeTaxCents: Cents;
+    californiaIncomeTaxCents: Cents;
+    netInvestmentIncomeTaxCents: Cents;
+    homeSaleTaxCents: Cents;
+  };
+  privateStockSale?: {
+    grossProceedsCents: Cents;
+    taxableGainCents: Cents;
+    estimatedTaxCents: Cents;
+    netProceedsCents: Cents;
+  };
   endingBalances: {
     accounts: Readonly<Record<string, Cents>>;
     assets: Readonly<Record<string, Cents>>;
@@ -196,6 +229,11 @@ const calculateIncomeTax = (
 ) => {
   let retirementTaxCents=0;
   let saleTaxCents=0;
+  const breakdown={ordinaryDistributionsCents:0,shortTermGainsCents:0,longTermGainsCents:0,
+    grossRentalIncomeCents:0,federalTaxableRentalIncomeCents:0,californiaTaxableRentalIncomeCents:0,
+    federalRentalDeductionsCents:0,californiaRentalDeductionsCents:0,federalDeductionCents:0,
+    californiaDeductionCents:0,federalTaxableIncomeCents:0,californiaTaxableIncomeCents:0,
+    federalIncomeTaxCents:0,californiaIncomeTaxCents:0,netInvestmentIncomeTaxCents:0,homeSaleTaxCents:0};
   const startYear=Number(periodStart.slice(0,4));
   for(const calendarYear of [...new Set(periodMonths.map((month)=>Number(month.month.slice(0,4))))]){
     const baseline=taxLedgers.get(calendarYear);
@@ -206,6 +244,7 @@ const calculateIncomeTax = (
     const taxableNonWage=months.reduce((sum,month)=>sum+month.taxableNonWageIncomeCents,0);
     const federalRental= includedProperties.reduce((sum,property)=>sum+property.federalAllowedRentalCents,0);
     const californiaRental=includedProperties.reduce((sum,property)=>sum+property.californiaAllowedRentalCents,0);
+    const grossRental=includedProperties.reduce((sum,property)=>sum+property.rentCents+property.aduIncomeCents,0);
     const calendarSources=sources.filter((source)=>source.taxYear===calendarYear);
     const federalShort=sumSources(calendarSources,"federalShortTermGainCents");
     const federalLong=sumSources(calendarSources,"federalLongTermGainCents");
@@ -247,6 +286,21 @@ const calculateIncomeTax = (
       personalHousing:{...personalHousing,mortgageDebtCents:[...personalMortgageDebtByAsset.values()].reduce((sum,value)=>sum+value,0)},
     });
     retirementTaxCents+=incremental.totalIncrementalTaxCents;
+    breakdown.ordinaryDistributionsCents+=distributionOrdinary;
+    breakdown.shortTermGainsCents+=federalShort;
+    breakdown.longTermGainsCents+=federalLong;
+    breakdown.grossRentalIncomeCents+=grossRental;
+    breakdown.federalTaxableRentalIncomeCents+=federalRental;
+    breakdown.californiaTaxableRentalIncomeCents+=californiaRental;
+    breakdown.federalRentalDeductionsCents+=grossRental-federalRental;
+    breakdown.californiaRentalDeductionsCents+=grossRental-californiaRental;
+    breakdown.federalDeductionCents+=incremental.federalDeductionCents;
+    breakdown.californiaDeductionCents+=incremental.californiaDeductionCents;
+    breakdown.federalTaxableIncomeCents+=incremental.federalTaxableCents;
+    breakdown.californiaTaxableIncomeCents+=incremental.californiaTaxableCents;
+    breakdown.federalIncomeTaxCents+=incremental.federalIncomeTaxCents;
+    breakdown.californiaIncomeTaxCents+=incremental.californiaIncomeTaxCents;
+    breakdown.netInvestmentIncomeTaxCents+=incremental.niitCents;
     if(calendarYear===startYear&&homeSale?.sales.length){
       saleTaxCents=calculateIncrementalHomeSaleTax({
         year:calendarYear,
@@ -255,9 +309,10 @@ const calculateIncomeTax = (
         baseline:{federalTaxableCents:incremental.federalTaxableCents,californiaTaxableCents:incremental.californiaTaxableCents,modifiedAgiCents:incremental.modifiedAgiCents},
         sales:homeSale.sales,
       }).totalIncrementalTaxCents;
+      breakdown.homeSaleTaxCents=saleTaxCents;
     }
   }
-  return {retirementTaxCents,saleTaxCents};
+  return {retirementTaxCents,saleTaxCents,breakdown};
 };
 
 const initialState = (
@@ -408,14 +463,31 @@ const calculationErrorYear = (
     otherPreTaxIncomeCents: 0,
     rentalIncomeCents: 0,
     estimatedTaxCents: 0,
+    totalTaxCents: 0,
+    typicalYearTaxCents: 0,
     earlyPenaltyCents: 0,
     afterTaxIncomeCents: 0,
+    typicalAfterTaxIncomeCents: 0,
     planExpenseCents: 0,
     housingExpenseCents: 0,
     surplusCents: 0,
     shortfallCents: 0,
     destinationBalanceCents: 0,
+    endingLiquidAccountsCents: 0,
+    endingRetirementAccountsCents: 0,
+    endingHomeEquityCents: 0,
+    endingDebtCents: 0,
+    endingOtherNetWorthCents: 0,
     endingNetWorthCents: 0,
+    taxBreakdown: {
+      ordinaryDistributionsCents: 0, shortTermGainsCents: 0, longTermGainsCents: 0,
+      grossRentalIncomeCents: 0, federalTaxableRentalIncomeCents: 0,
+      californiaTaxableRentalIncomeCents: 0, federalRentalDeductionsCents: 0,
+      californiaRentalDeductionsCents: 0, federalDeductionCents: 0,
+      californiaDeductionCents: 0, federalTaxableIncomeCents: 0,
+      californiaTaxableIncomeCents: 0, federalIncomeTaxCents: 0,
+      californiaIncomeTaxCents: 0, netInvestmentIncomeTaxCents: 0, homeSaleTaxCents: 0,
+    },
     endingBalances: { accounts: {}, assets: {}, liabilities: {} },
     housing: {
       principalCents: 0,
@@ -511,6 +583,70 @@ const runRetirementScenario = (
       account.id === input.settings.taxableDestinationAccountId &&
       isTaxableInvestmentAccount(account));
   const destinationId = selectedDestination?.id;
+  const retirementSaleDate = `${input.settings.retirementMonth}-01`;
+  const privateStockTaxSources: RetirementDrawSource[] = [];
+  const privateStockIds = new Set(input.snapshot.assets
+    .filter((asset) => asset.privateStock != null || asset.equityHolding != null)
+    .map((asset) => asset.id));
+  if (destinationId != null && state.accounts[destinationId] != null) {
+    for (const asset of input.snapshot.assets) {
+      if (!privateStockIds.has(asset.id)) continue;
+      const proceedsCents = Math.max(0, state.assets[asset.id] ?? 0);
+      if (proceedsCents <= 0) {
+        delete state.assets[asset.id];
+        continue;
+      }
+      let shortTermGainCents = 0;
+      let longTermGainCents = 0;
+      let estimateMethod: RetirementDrawSource["taxEstimateMethod"] = "conservative-aggregate-basis";
+      if (asset.equityHolding != null) {
+        const vestedEvents = asset.equityHolding.grants.flatMap((grant) => grant.vestEvents)
+          .filter((event) => event.date < retirementSaleDate);
+        const currentPriceCents = projectedSharePrice(asset.equityHolding, retirementSaleDate);
+        const grossMarketCents = vestedEvents.reduce((sum, event) =>
+          sum + valueForUnits(event.unitsMicros, currentPriceCents), 0);
+        const scale = grossMarketCents > 0 ? proceedsCents / grossMarketCents : 0;
+        const oneYearBefore = new Date(`${retirementSaleDate}T00:00:00Z`);
+        oneYearBefore.setUTCFullYear(oneYearBefore.getUTCFullYear() - 1);
+        const longTermCutoff = oneYearBefore.toISOString().slice(0, 10);
+        for (const event of vestedEvents) {
+          const market = Math.round(valueForUnits(event.unitsMicros, currentPriceCents) * scale);
+          const basis = Math.round(valueForUnits(
+            event.unitsMicros,
+            event.actualFmvCents ?? projectedSharePrice(asset.equityHolding, event.date),
+          ) * scale);
+          const gain = Math.max(0, market - basis);
+          if (event.date < longTermCutoff) longTermGainCents += gain;
+          else shortTermGainCents += gain;
+        }
+        estimateMethod = "exact-tax-lots";
+      } else {
+        const recordedBasis = asset.taxableCostBasisCents ?? asset.taxLots?.reduce(
+          (sum, lot) => sum + lot.federalBasisCents, 0,
+        ) ?? proceedsCents;
+        longTermGainCents = Math.max(0, proceedsCents - recordedBasis);
+      }
+      const taxableGainCents = shortTermGainCents + longTermGainCents;
+      privateStockTaxSources.push({
+        accountId: asset.id,
+        taxYear: Number(input.settings.retirementMonth.slice(0, 4)),
+        amountCents: proceedsCents,
+        taxableGainCents,
+        ordinaryIncomeCents: 0,
+        rothTaxableCents: 0,
+        earlyPenaltyCents: 0,
+        federalShortTermGainCents: shortTermGainCents,
+        federalLongTermGainCents: longTermGainCents,
+        californiaGainCents: taxableGainCents,
+        taxEstimateMethod: estimateMethod,
+        taxCharacterSupported: true,
+      });
+      state.accounts[destinationId] += proceedsCents;
+      state.taxableBasis[destinationId] = (state.taxableBasis[destinationId] ?? 0) + proceedsCents;
+      addCashLot(state, destinationId, proceedsCents, retirementSaleDate, `retirement-private-stock-sale:${asset.id}`);
+      delete state.assets[asset.id];
+    }
+  }
   const closingShortfallCents = Math.max(0, -(homeSale?.netProceedsCents ?? 0));
   if (homeSale != null) {
     for (const assetId of homeSale.assetIds) delete state.assets[assetId];
@@ -569,6 +705,7 @@ const runRetirementScenario = (
     const soldDuringPeriod = new Set<string>();
     let unsupportedPlanOutflowAccountId: string | undefined;
     const planDispositionSources: RetirementDrawSource[] = [];
+    const privateSaleTaxSources = index === 0 ? privateStockTaxSources : [];
     for (const month of periodMonths) {
       for (const [accountId, balance] of Object.entries(state.accounts)) {
         const account = accountById.get(accountId);
@@ -663,8 +800,10 @@ const runRetirementScenario = (
       state.assets = {
         ...finalPlanMonth.balances.assets,
         ...Object.fromEntries(Object.entries(finalPlanMonth.balances.privateStock)
+          .filter(([assetId]) => !privateStockIds.has(assetId))
           .map(([assetId, value]) => [assetId, value.vestedCents])),
       };
+      for (const assetId of privateStockIds) delete state.assets[assetId];
       state.liabilities = { ...finalPlanMonth.balances.liabilities };
       if (homeSale != null) {
         for (const assetId of homeSale.assetIds) delete state.assets[assetId];
@@ -796,7 +935,7 @@ const runRetirementScenario = (
         startingPortfolioCents=Math.max(0,provisionalStartingPortfolioCents-(anticipatedSaleTaxCents-homeSale.incrementalSaleTaxCents));
         withdrawalTargetCents=Math.round(startingPortfolioCents*input.settings.withdrawalRateBps/10_000);
         targetDraw=makeTargetDraw(withdrawalTargetCents);
-        const nextSaleTaxCents=calculateIncomeTax(input,periodStart,periodMonths,taxLedgers,[...planDispositionSources,...targetDraw.sources],taxHomeSale).saleTaxCents;
+        const nextSaleTaxCents=calculateIncomeTax(input,periodStart,periodMonths,taxLedgers,[...planDispositionSources,...targetDraw.sources,...privateSaleTaxSources],taxHomeSale).saleTaxCents;
         if(nextSaleTaxCents===anticipatedSaleTaxCents)break;
         anticipatedSaleTaxCents=nextSaleTaxCents;
       }
@@ -826,7 +965,7 @@ const runRetirementScenario = (
       periodStart,
       periodMonths,
       taxLedgers,
-      [...planDispositionSources, ...withdrawalSources],
+      [...planDispositionSources, ...withdrawalSources, ...privateSaleTaxSources],
       taxHomeSale,
     );
     let estimatedTaxCents = taxCalculation.retirementTaxCents;
@@ -898,7 +1037,7 @@ const runRetirementScenario = (
           rothContributionBasis: state.rothContributionBasis,
         });
         const combined = combineSources(withdrawalSources, draw.sources);
-        const combinedTaxSources = [...planDispositionSources, ...combined];
+        const combinedTaxSources = [...planDispositionSources, ...combined, ...privateSaleTaxSources];
         const updatedTax = calculateIncomeTax(
           input,
           periodStart,
@@ -920,6 +1059,7 @@ const runRetirementScenario = (
           combined,
           updatedTaxCents,
           updatedSaleTaxCents,
+          updatedTaxBreakdown: updatedTax.breakdown,
           updatedPenaltyCents,
           addedTaxAndPenalty,
           netFundingCents: draw.fundedCents - addedTaxAndPenalty,
@@ -958,6 +1098,11 @@ const runRetirementScenario = (
       }
       estimatedTaxCents = selected.updatedTaxCents;
       saleTaxCents = selected.updatedSaleTaxCents;
+      taxCalculation = {
+        retirementTaxCents: selected.updatedTaxCents,
+        saleTaxCents: selected.updatedSaleTaxCents,
+        breakdown: selected.updatedTaxBreakdown,
+      };
       earlyPenaltyCents = selected.updatedPenaltyCents;
       shortfallCents += selected.addedTaxAndPenalty;
       unfundedSpendingCents = Math.max(0, cashShortfallCents - selected.netFundingCents);
@@ -994,8 +1139,59 @@ const runRetirementScenario = (
       year,
       message: `${unfundedSpendingCents} cents of spending could not be funded.`,
     });
+    const endingLiquidAccountsCents = input.snapshot.accounts.reduce((sum, account) =>
+      account.kind !== "retirement" && account.kind !== "credit"
+        ? sum + (state.accounts[account.id] ?? 0)
+        : sum, 0);
+    const endingRetirementAccountsCents = input.snapshot.accounts.reduce((sum, account) =>
+      account.kind === "retirement" ? sum + (state.accounts[account.id] ?? 0) : sum, 0);
+    const endingHomeIds = new Set(input.snapshot.assets
+      .filter((asset) => asset.housingCosts != null)
+      .map((asset) => asset.id));
+    const endingHomeEquityCents = [...endingHomeIds].reduce(
+      (sum, assetId) => sum + (state.assets[assetId] ?? 0), 0,
+    ) - input.snapshot.liabilities.reduce((sum, liability) =>
+      liability.mortgage?.assetId != null && endingHomeIds.has(liability.mortgage.assetId)
+        ? sum + (state.liabilities[liability.id] ?? 0)
+        : sum, 0);
     const endingNetWorthCents = sumRecord(state.accounts) + sumRecord(state.assets) -
       sumRecord(state.liabilities);
+    const endingDebtCents = sumRecord(state.liabilities);
+    const endingOtherNetWorthCents = endingNetWorthCents - endingLiquidAccountsCents -
+      endingRetirementAccountsCents - endingHomeEquityCents;
+    const taxWithoutPrivateStock = privateSaleTaxSources.length === 0
+      ? taxCalculation
+      : calculateIncomeTax(
+        input,
+        periodStart,
+        periodMonths,
+        taxLedgers,
+        [...planDispositionSources, ...withdrawalSources],
+        taxHomeSale,
+      );
+    const privateStockSaleTaxCents = Math.max(
+      0,
+      estimatedTaxCents + saleTaxCents -
+        taxWithoutPrivateStock.retirementTaxCents - taxWithoutPrivateStock.saleTaxCents,
+    );
+    const privateStockGrossProceedsCents = privateSaleTaxSources.reduce(
+      (sum, source) => sum + source.amountCents, 0,
+    );
+    const privateStockTaxableGainCents = privateSaleTaxSources.reduce(
+      (sum, source) => sum + source.taxableGainCents, 0,
+    );
+    const typicalTaxCalculation = calculateIncomeTax(
+      input,
+      periodStart,
+      periodMonths,
+      taxLedgers,
+      targetDraw.sources,
+      taxHomeSale == null ? undefined : { ...taxHomeSale, sales: [] },
+    );
+    const typicalEarlyPenaltyCents = sumSources(targetDraw.sources, "earlyPenaltyCents");
+    const typicalYearTaxCents = typicalTaxCalculation.retirementTaxCents;
+    const typicalAfterTaxIncomeCents = targetDraw.fundedCents + otherPreTaxIncomeCents +
+      rentalIncomeCents - typicalYearTaxCents - typicalEarlyPenaltyCents;
     return {
       year,
       ages: input.snapshot.household.people.map((person) => ({
@@ -1009,14 +1205,29 @@ const runRetirementScenario = (
       otherPreTaxIncomeCents,
       rentalIncomeCents,
       estimatedTaxCents,
+      totalTaxCents: estimatedTaxCents + saleTaxCents,
+      typicalYearTaxCents,
       earlyPenaltyCents,
       afterTaxIncomeCents,
+      typicalAfterTaxIncomeCents,
       planExpenseCents,
       housingExpenseCents,
       surplusCents,
       shortfallCents,
       destinationBalanceCents: destinationId == null ? 0 : state.accounts[destinationId] ?? 0,
+      endingLiquidAccountsCents,
+      endingRetirementAccountsCents,
+      endingHomeEquityCents,
+      endingDebtCents,
+      endingOtherNetWorthCents,
       endingNetWorthCents,
+      taxBreakdown: taxCalculation.breakdown,
+      ...(privateStockGrossProceedsCents > 0 ? { privateStockSale: {
+        grossProceedsCents: privateStockGrossProceedsCents,
+        taxableGainCents: privateStockTaxableGainCents,
+        estimatedTaxCents: privateStockSaleTaxCents,
+        netProceedsCents: privateStockGrossProceedsCents - privateStockSaleTaxCents,
+      } } : {}),
       endingBalances: {
         accounts: { ...state.accounts },
         assets: { ...state.assets },
@@ -1303,10 +1514,13 @@ export function calculateRetirementProjection(
     ...(sellAvailable ? sellYears!.flatMap((year) => year.warnings) : sellFailureWarnings),
   ]);
   const keepFirstYear = keepAvailable ? keepYears[0] : undefined;
+  const keepPrivateStockTaxCents = keepFirstYear?.privateStockSale?.estimatedTaxCents ?? 0;
   const keepSummary = keepFirstYear == null
     ? undefined
     : {
       ...keepSnapshot.keepHomes,
+      nonHomeNetWorthCents: keepSnapshot.keepHomes.nonHomeNetWorthCents -
+        keepPrivateStockTaxCents,
       withdrawalIncomeCents: keepFirstYear.withdrawalFundedCents,
       grossRentalIncomeCents: keepFirstYear.rentalIncomeCents,
       annualPreTaxIncomeCents: keepFirstYear.withdrawalFundedCents +
@@ -1317,7 +1531,8 @@ export function calculateRetirementProjection(
       ...retirementSnapshot!.sellHomes,
       incrementalSaleTaxCents:sellYears[0].homeSale.incrementalSaleTaxCents,
       netHomeProceedsCents:sellYears[0].homeSale.netProceedsCents,
-      liquidNetWorthCents:sellYears[0].startingPortfolioCents,
+      liquidNetWorthCents:sellYears[0].startingPortfolioCents-
+        (sellYears[0].privateStockSale?.estimatedTaxCents??0),
       annualPreTaxIncomeCents:sellYears[0].withdrawalFundedCents+
         sellYears[0].otherPreTaxIncomeCents+sellYears[0].rentalIncomeCents,
     }
@@ -1327,7 +1542,7 @@ export function calculateRetirementProjection(
     retirementMonth: keepSnapshot.retirementMonth,
     firstWithdrawalDate,
     withdrawalRateBps: keepSnapshot.withdrawalRateBps,
-    netWorthCents: keepSnapshot.netWorthCents,
+    netWorthCents: keepSnapshot.netWorthCents - keepPrivateStockTaxCents,
     keepHomes: keepAvailable
       ? {
         available: true,

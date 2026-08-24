@@ -1673,6 +1673,56 @@ describe("calculateRetirementProjection", () => {
     expect(result.keepHomes.years[0].endingNetWorthCents).toBeGreaterThan(900_000_000);
   });
 
+  test("sells vested private stock into the taxable destination at retirement", () => {
+    const result = calculateRetirementProjection({
+      snapshot: {
+        ...financialSnapshot,
+        assets: [{
+          id: "private-stock",
+          name: "PrivateCo",
+          valueCents: 10_000_000,
+          taxableCostBasisCents: 4_000_000,
+          annualGrowthBps: 0,
+          privateStock: {
+            vestedBps: 5_000,
+            vestingStartDate: "2026-01-01",
+            remainingVestingQuarters: 1,
+          },
+        }],
+      },
+      scenario,
+      asOfDate: "2026-12-15",
+      settings: { ...settings, retirementMonth: "2027-01", horizonYears: 1 },
+    });
+
+    expect(result.keepHomes.available).toBe(true);
+    if (!result.keepHomes.available) throw new Error("expected Keep homes to be available");
+    const year = result.keepHomes.years[0];
+    expect(year.startingPortfolioCents).toBe(110_000_000);
+    expect(year.endingBalances.assets).not.toHaveProperty("private-stock");
+    expect(year.taxBreakdown.longTermGainsCents).toBe(6_000_000);
+    expect(year.endingLiquidAccountsCents).toBe(year.endingNetWorthCents);
+    expect(year.privateStockSale).toEqual({
+      grossProceedsCents: 10_000_000,
+      taxableGainCents: 6_000_000,
+      estimatedTaxCents: expect.any(Number),
+      netProceedsCents: expect.any(Number),
+    });
+    expect(year.privateStockSale!.estimatedTaxCents).toBeGreaterThan(0);
+    expect(year.privateStockSale!.netProceedsCents).toBe(
+      10_000_000 - year.privateStockSale!.estimatedTaxCents,
+    );
+    expect(result.netWorthCents).toBe(110_000_000 - year.privateStockSale!.estimatedTaxCents);
+    expect(result.keepHomes.summary.nonHomeNetWorthCents).toBe(result.netWorthCents);
+    expect(result.sellHomes.available).toBe(true);
+    if (!result.sellHomes.available) throw new Error("expected Sell homes to be available");
+    expect(result.sellHomes.years[0].privateStockSale).toBeDefined();
+    expect(result.sellHomes.summary.liquidNetWorthCents).toBe(
+      result.sellHomes.years[0].startingPortfolioCents -
+        result.sellHomes.years[0].privateStockSale!.estimatedTaxCents,
+    );
+  });
+
   // Production mutation caught: adopting Plan contribution asset/debt changes and
   // also depositing Retirement surplus duplicates the same outside cash flow.
   test("suppresses Plan surplus allocations so outside income enters net worth once", () => {

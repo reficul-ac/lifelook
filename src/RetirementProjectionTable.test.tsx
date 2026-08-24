@@ -15,14 +15,32 @@ const firstYear = {
   otherPreTaxIncomeCents: 0,
   rentalIncomeCents: 18_000_00,
   estimatedTaxCents: 8_500_00,
+  totalTaxCents: 8_500_00,
+  typicalYearTaxCents: 6_500_00,
   earlyPenaltyCents: 0,
   afterTaxIncomeCents: 49_500_00,
+  typicalAfterTaxIncomeCents: 51_500_00,
   planExpenseCents: 36_000_00,
   housingExpenseCents: 12_000_00,
   surplusCents: 1_500_00,
   shortfallCents: 0,
   destinationBalanceCents: 13_500_00,
+  endingLiquidAccountsCents: 13_500_00,
+  endingRetirementAccountsCents: 607_500_00,
+  endingHomeEquityCents: 350_000_00,
+  endingDebtCents: 300_000_00,
+  endingOtherNetWorthCents: 50_000_00,
   endingNetWorthCents: 1_021_000_00,
+  taxBreakdown: {
+    ordinaryDistributionsCents: 40_000_00, shortTermGainsCents: 500_00,
+    longTermGainsCents: 2_500_00, grossRentalIncomeCents: 18_000_00,
+    federalTaxableRentalIncomeCents: 4_000_00, californiaTaxableRentalIncomeCents: 5_000_00,
+    federalRentalDeductionsCents: 14_000_00, californiaRentalDeductionsCents: 13_000_00,
+    federalDeductionCents: 30_000_00, californiaDeductionCents: 20_000_00,
+    federalTaxableIncomeCents: 17_000_00, californiaTaxableIncomeCents: 27_000_00,
+    federalIncomeTaxCents: 4_500_00, californiaIncomeTaxCents: 3_500_00,
+    netInvestmentIncomeTaxCents: 500_00, homeSaleTaxCents: 0,
+  },
   endingBalances: { accounts: {}, assets: {}, liabilities: {} },
   housing: {
     principalCents: 4_000_00,
@@ -71,14 +89,32 @@ const secondYear = {
   otherPreTaxIncomeCents: 0,
   rentalIncomeCents: 18_500_00,
   estimatedTaxCents: 9_000_00,
+  totalTaxCents: 9_000_00,
+  typicalYearTaxCents: 9_000_00,
   earlyPenaltyCents: 0,
   afterTaxIncomeCents: 51_500_00,
+  typicalAfterTaxIncomeCents: 51_500_00,
   planExpenseCents: 37_000_00,
   housingExpenseCents: 13_000_00,
   surplusCents: 0,
   shortfallCents: 2_500_00,
   destinationBalanceCents: 0,
+  endingLiquidAccountsCents: 10_000_00,
+  endingRetirementAccountsCents: 590_500_00,
+  endingHomeEquityCents: 340_000_00,
+  endingDebtCents: 290_000_00,
+  endingOtherNetWorthCents: 50_000_00,
   endingNetWorthCents: 990_500_00,
+  taxBreakdown: {
+    ordinaryDistributionsCents: 42_000_00, shortTermGainsCents: 0,
+    longTermGainsCents: 2_000_00, grossRentalIncomeCents: 18_500_00,
+    federalTaxableRentalIncomeCents: 4_500_00, californiaTaxableRentalIncomeCents: 5_500_00,
+    federalRentalDeductionsCents: 14_000_00, californiaRentalDeductionsCents: 13_000_00,
+    federalDeductionCents: 30_000_00, californiaDeductionCents: 20_000_00,
+    federalTaxableIncomeCents: 18_000_00, californiaTaxableIncomeCents: 28_000_00,
+    federalIncomeTaxCents: 5_000_00, californiaIncomeTaxCents: 4_000_00,
+    netInvestmentIncomeTaxCents: 0, homeSaleTaxCents: 0,
+  },
   endingBalances: { accounts: {}, assets: {}, liabilities: {} },
   housing: {
     principalCents: 4_200_00,
@@ -114,30 +150,32 @@ describe("RetirementProjectionTable", () => {
     expect(screen.getByText("Keep homes annual projection — 2-year horizon")).toBeInTheDocument();
     for (const heading of [
       "Year and ages",
-      "Starting portfolio",
-      "Pre-tax withdrawal",
-      "Estimated taxes",
+      "Net worth",
+      "Liquid accounts",
+      "Retirement accounts",
+      "Home equity",
+      "Debt",
+      "Withdrawal amount",
+      "Rental income",
+      "Taxes",
       "After-tax income",
-      "Plan expenses",
-      "Housing expenses",
-      "Surplus / shortfall",
-      "Ending destination balance",
-      "Ending net worth",
     ]) {
       expect(screen.getByRole("columnheader", { name: heading })).toHaveAttribute("scope", "col");
     }
+    expect(screen.getByRole("columnheader", { name: "Financial position" })).toHaveAttribute("scope", "colgroup");
+    expect(screen.getByRole("columnheader", { name: "Retirement income" })).toHaveAttribute("scope", "colgroup");
 
     const firstRow = screen.getByRole("row", { name: /2042.*Avery.*62/ });
     expect(within(firstRow).getByRole("rowheader", { name: /2042.*Avery.*62/ })).toHaveAttribute("scope", "row");
-    expect(within(firstRow).getByText("$1,000,000")).toBeInTheDocument();
+    expect(within(firstRow).getByText("$1,021,000")).toBeInTheDocument();
     expect(within(firstRow).getByText("$40,000")).toBeInTheDocument();
+    expect(within(firstRow).getByText("$18,000")).toBeInTheDocument();
     expect(within(firstRow).getByText("$8,500")).toBeInTheDocument();
     expect(within(firstRow).getByText("$49,500")).toBeInTheDocument();
-    expect(within(firstRow).getByText("$36,000")).toBeInTheDocument();
-    expect(within(firstRow).getByText("$12,000")).toBeInTheDocument();
-    expect(within(firstRow).getByText("$1,500")).toBeInTheDocument();
     expect(within(firstRow).getByText("$13,500")).toBeInTheDocument();
-    expect(within(firstRow).getByText("$1,021,000")).toBeInTheDocument();
+    expect(within(firstRow).getByText("$607,500")).toBeInTheDocument();
+    expect(within(firstRow).getByText("$350,000")).toBeInTheDocument();
+    expect(within(firstRow).getByText("$300,000")).toBeInTheDocument();
   });
 
   // Production mutation caught: unmounting collapsed detail rows leaves aria-controls pointing at IDs that do not exist, and indistinguishable controls force screen-reader users to guess the year.
@@ -166,8 +204,7 @@ describe("RetirementProjectionTable", () => {
     expect(controls[1]).toHaveAttribute("aria-expanded", "false");
   });
 
-  // Production mutation caught: removing the semantic sign label makes a deficit dependent on red styling alone.
-  it("gives a negative shortfall signed visible and accessible copy", () => {
+  it("uses the domain's total tax amount in the compact income columns", () => {
     render(
       <RetirementProjectionTable
         selectedScenario="keep-homes"
@@ -176,8 +213,8 @@ describe("RetirementProjectionTable", () => {
       />,
     );
 
-    const secondRow = screen.getByRole("row", { name: /2043.*Avery.*63/ });
-    expect(within(secondRow).getByLabelText("Shortfall: negative $2,500")).toHaveTextContent("−$2,500");
+    const firstRow = screen.getByRole("row", { name: /2042.*Avery.*62/ });
+    expect(within(firstRow).getByLabelText("Taxes: $8,500")).toBeInTheDocument();
   });
 
   // Production mutation caught: dropping the disclosure's rental or housing inputs leaves annual expenses unexplained.
@@ -200,6 +237,13 @@ describe("RetirementProjectionTable", () => {
     expect(within(details).getByText("Home insurance")).toBeInTheDocument();
     expect(within(details).getByText("HOA")).toBeInTheDocument();
     expect(within(details).getByText("Maintenance")).toBeInTheDocument();
+    const taxBreakdown = within(details).getByRole("region", { name: "Tax breakdown for 2042" });
+    expect(taxBreakdown).toHaveTextContent("Long-term stock gains$2,500");
+    expect(taxBreakdown).toHaveTextContent("Gross rental income$18,000");
+    expect(taxBreakdown).toHaveTextContent("Federal rental deductions$14,000");
+    expect(taxBreakdown).toHaveTextContent("Federal income tax$4,500");
+    expect(taxBreakdown).toHaveTextContent("California income tax$3,500");
+    expect(taxBreakdown).toHaveTextContent("Total taxes$8,500");
     expect(within(details).getByRole("region", { name: "Withdrawal sources for 2042" })).toHaveTextContent("Traditional IRA: $40,000");
     expect(details.closest("td")).toHaveAttribute("colspan", "10");
   });

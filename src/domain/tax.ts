@@ -88,15 +88,16 @@ export function estimateHouseholdTax(args:{year:number;status:FilingStatus;emplo
   if(status==="married-joint"&&new Set(employees.map(x=>x.personId)).size!==2)throw new RangeError("Married filing jointly requires two distinct employee/member owners");
   for(const employee of employees)for(const value of [employee.salaryCents,employee.rsuCents])if(!Number.isSafeInteger(value)||value<0)throw new RangeError("Employee wages must be non-negative safe integer cents");
   const pack=projectedTaxRules(year,args.thresholdInflationBps),wages=employees.reduce((sum,x)=>sum+x.salaryCents+x.rsuCents,0),nonWage=args.nonWageTaxableCents??0,d={traditionalRetirementCents:0,mortgageInterestCents:0,propertyTaxCents:0,...args.deductions};
-  const agi=Math.max(0,wages+nonWage-d.traditionalRetirementCents),debtRatio=Math.min(1,750_000_00/(d.mortgageDebtCents||750_000_00));
-  const federalMortgage=Math.round(d.mortgageInterestCents*debtRatio),federalSalt=Math.min(d.propertyTaxCents+(d.stateIncomeTaxCents??0),saltCap(year,agi,status)),federalItemized=federalMortgage+federalSalt;
-  const californiaItemized=d.mortgageInterestCents+d.propertyTaxCents;
+  const federalMortgageDebtLimit=status==="married-separate"?375_000_00:750_000_00,californiaMortgageDebtLimit=status==="married-separate"?500_000_00:1_000_000_00;
+  const agi=Math.max(0,wages+nonWage-d.traditionalRetirementCents),mortgageDebt=d.mortgageDebtCents||1;
+  const federalMortgage=Math.round(d.mortgageInterestCents*Math.min(1,federalMortgageDebtLimit/mortgageDebt)),californiaMortgage=Math.round(d.mortgageInterestCents*Math.min(1,californiaMortgageDebtLimit/mortgageDebt)),federalSalt=Math.min(d.propertyTaxCents+(d.stateIncomeTaxCents??0),saltCap(year,agi,status)),federalItemized=federalMortgage+federalSalt;
+  const californiaItemized=californiaMortgage+d.propertyTaxCents;
   const federalDeduction=Math.max(pack.federal[status].standardDeductionCents,federalItemized),californiaDeduction=Math.max(pack.california[status].standardDeductionCents,californiaItemized);
   const federalTaxable=Math.max(0,agi-federalDeduction),californiaTaxable=Math.max(0,agi-californiaDeduction);
   const federalCents=progressiveTax(federalTaxable,pack.federal[status].brackets),californiaCents=progressiveTax(californiaTaxable,pack.california[status].brackets);
   const payroll=employees.map(employee=>{const employeeWages=employee.salaryCents+employee.rsuCents;return {...employee,socialSecurityCents:Math.round(Math.min(employeeWages,pack.socialSecurityWageBaseCents)*620/10_000),medicareCents:Math.round(employeeWages*145/10_000),sdiCents:Math.round(employeeWages*130/10_000)}});
   const socialSecurityCents=payroll.reduce((s,x)=>s+x.socialSecurityCents,0),baseMedicare=payroll.reduce((s,x)=>s+x.medicareCents,0),additionalMedicareCents=Math.round(Math.max(0,wages-pack.additionalMedicareThresholdCents[status])*90/10_000),sdiCents=payroll.reduce((s,x)=>s+x.sdiCents,0),fullYearLiabilityCents=federalCents+californiaCents+socialSecurityCents+baseMedicare+additionalMedicareCents+sdiCents;
-  return {year,employees:payroll,grossIncomeCents:wages+nonWage,federalAgiCents:agi,modifiedAgiCents:agi,federalStandardCents:pack.federal[status].standardDeductionCents,federalItemizedCents:federalItemized,federalDeductionCents:federalDeduction,federalTaxableCents:federalTaxable,californiaStandardCents:pack.california[status].standardDeductionCents,californiaItemizedCents:californiaItemized,californiaDeductionCents:californiaDeduction,californiaTaxableCents:californiaTaxable,federalCents,californiaCents,socialSecurityCents,medicareCents:baseMedicare,additionalMedicareCents,sdiCents,fullYearLiabilityCents,futureCashFlowCents:Math.round(fullYearLiabilityCents*(args.futureCashFlowRatioBps??10_000)/10_000),refundOrBalanceDue:"unknown",sources:pack.sources,projected:year>2026||pack.sources.some(x=>x.status==="projected"),mortgageInterestCents:d.mortgageInterestCents,mortgageDebtCents:d.mortgageDebtCents??0,propertyTaxCents:d.propertyTaxCents,stateIncomeTaxDeductionCents:d.stateIncomeTaxCents??0,federalMortgageInterestDeductionCents:federalMortgage,federalSaltDeductionCents:federalSalt};
+  return {year,employees:payroll,grossIncomeCents:wages+nonWage,federalAgiCents:agi,modifiedAgiCents:agi,federalStandardCents:pack.federal[status].standardDeductionCents,federalItemizedCents:federalItemized,federalDeductionCents:federalDeduction,federalTaxableCents:federalTaxable,californiaStandardCents:pack.california[status].standardDeductionCents,californiaItemizedCents:californiaItemized,californiaDeductionCents:californiaDeduction,californiaTaxableCents:californiaTaxable,federalCents,californiaCents,socialSecurityCents,medicareCents:baseMedicare,additionalMedicareCents,sdiCents,fullYearLiabilityCents,futureCashFlowCents:Math.round(fullYearLiabilityCents*(args.futureCashFlowRatioBps??10_000)/10_000),refundOrBalanceDue:"unknown",sources:pack.sources,projected:year>2026||pack.sources.some(x=>x.status==="projected"),mortgageInterestCents:d.mortgageInterestCents,mortgageDebtCents:d.mortgageDebtCents??0,propertyTaxCents:d.propertyTaxCents,stateIncomeTaxDeductionCents:d.stateIncomeTaxCents??0,federalMortgageInterestDeductionCents:federalMortgage,californiaMortgageInterestDeductionCents:californiaMortgage,federalSaltDeductionCents:federalSalt};
 }
 
 export interface IncrementalHouseholdIncomeTaxInput {
@@ -120,6 +121,8 @@ export interface IncrementalHouseholdIncomeTaxResult {
   totalIncrementalTaxCents:Cents;
   federalDeductionCents:Cents;
   californiaDeductionCents:Cents;
+  federalMortgageInterestDeductionCents:Cents;
+  californiaMortgageInterestDeductionCents:Cents;
   federalTaxableCents:Cents;
   californiaTaxableCents:Cents;
   modifiedAgiCents:Cents;
@@ -132,9 +135,12 @@ export function calculateIncrementalHouseholdIncomeTax(
   const federalAgiCents=Math.max(0,baseline.federalAgiCents+input.federalOrdinaryIncomeCents+input.federalShortTermGainCents+input.federalLongTermGainCents);
   const combinedMortgageInterest=(baseline.mortgageInterestCents??0)+input.personalHousing.mortgageInterestCents;
   const combinedMortgageDebt=Math.max(baseline.mortgageDebtCents??0,input.personalHousing.mortgageDebtCents);
-  const federalMortgage=Math.round(combinedMortgageInterest*Math.min(1,750_000_00/(combinedMortgageDebt||750_000_00)));
+  const federalMortgageDebtLimit=input.status==="married-separate"?375_000_00:750_000_00;
+  const californiaMortgageDebtLimit=input.status==="married-separate"?500_000_00:1_000_000_00;
+  const federalMortgage=Math.round(combinedMortgageInterest*Math.min(1,federalMortgageDebtLimit/(combinedMortgageDebt||1)));
+  const californiaMortgage=Math.round(combinedMortgageInterest*Math.min(1,californiaMortgageDebtLimit/(combinedMortgageDebt||1)));
   const combinedPropertyTax=(baseline.propertyTaxCents??0)+input.personalHousing.propertyTaxCents;
-  const californiaItemized=combinedMortgageInterest+combinedPropertyTax;
+  const californiaItemized=californiaMortgage+combinedPropertyTax;
   const californiaDeductionCents=Math.max(pack.california[input.status].standardDeductionCents,californiaItemized);
   const californiaAgi=Math.max(0,baseline.federalAgiCents+input.californiaOrdinaryIncomeCents+input.californiaCapitalGainCents);
   const californiaTaxableCents=Math.max(0,californiaAgi-californiaDeductionCents);
@@ -151,5 +157,5 @@ export function calculateIncrementalHouseholdIncomeTax(
   const modifiedAgiCents=Math.max(0,baseline.modifiedAgiCents+additionalModifiedAgi);
   const niitBase=Math.min(Math.max(0,input.federalInvestmentIncomeCents),Math.max(0,modifiedAgiCents-pack.netInvestmentIncomeThresholdCents[input.status]));
   const niitCents=Math.round(niitBase*380/10_000);
-  return {federalIncomeTaxCents,californiaIncomeTaxCents,niitCents,totalIncrementalTaxCents:federalIncomeTaxCents+californiaIncomeTaxCents+niitCents,federalDeductionCents,californiaDeductionCents,federalTaxableCents,californiaTaxableCents,modifiedAgiCents};
+  return {federalIncomeTaxCents,californiaIncomeTaxCents,niitCents,totalIncrementalTaxCents:federalIncomeTaxCents+californiaIncomeTaxCents+niitCents,federalDeductionCents,californiaDeductionCents,federalMortgageInterestDeductionCents:federalMortgage,californiaMortgageInterestDeductionCents:californiaMortgage,federalTaxableCents,californiaTaxableCents,modifiedAgiCents};
 }

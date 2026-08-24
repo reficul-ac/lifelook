@@ -32,6 +32,7 @@ import {
   Umbrella,
   WalletCards,
 } from "lucide-react";
+import { PlanningTaxLedgerDeductions } from "./PlanningTaxLedgerDeductions";
 import {
   effectiveContributionBps,
   californiaAssessedValue,
@@ -7219,6 +7220,7 @@ function PlanView(props: PlanViewProps) {
                         {money(year.taxLedger.californiaTaxableCents)}; tax{" "}
                         {money(year.taxLedger.californiaCents)}.
                       </p>
+                      <PlanningTaxLedgerDeductions ledger={year.taxLedger}/>
                       <p>
                         Additional Medicare{" "}
                         {money(year.taxLedger.additionalMedicareCents)} · refund

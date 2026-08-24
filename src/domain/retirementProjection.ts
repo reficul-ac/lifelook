@@ -77,6 +77,8 @@ export interface RetirementProjectionYear {
     californiaTaxableRentalIncomeCents: Cents;
     federalRentalDeductionsCents: Cents;
     californiaRentalDeductionsCents: Cents;
+    federalMortgageInterestDeductionCents?: Cents;
+    californiaMortgageInterestDeductionCents?: Cents;
     federalDeductionCents: Cents;
     californiaDeductionCents: Cents;
     federalTaxableIncomeCents: Cents;
@@ -231,7 +233,8 @@ const calculateIncomeTax = (
   let saleTaxCents=0;
   const breakdown={ordinaryDistributionsCents:0,shortTermGainsCents:0,longTermGainsCents:0,
     grossRentalIncomeCents:0,federalTaxableRentalIncomeCents:0,californiaTaxableRentalIncomeCents:0,
-    federalRentalDeductionsCents:0,californiaRentalDeductionsCents:0,federalDeductionCents:0,
+    federalRentalDeductionsCents:0,californiaRentalDeductionsCents:0,federalMortgageInterestDeductionCents:0,
+    californiaMortgageInterestDeductionCents:0,federalDeductionCents:0,
     californiaDeductionCents:0,federalTaxableIncomeCents:0,californiaTaxableIncomeCents:0,
     federalIncomeTaxCents:0,californiaIncomeTaxCents:0,netInvestmentIncomeTaxCents:0,homeSaleTaxCents:0};
   const startYear=Number(periodStart.slice(0,4));
@@ -294,6 +297,8 @@ const calculateIncomeTax = (
     breakdown.californiaTaxableRentalIncomeCents+=californiaRental;
     breakdown.federalRentalDeductionsCents+=grossRental-federalRental;
     breakdown.californiaRentalDeductionsCents+=grossRental-californiaRental;
+    breakdown.federalMortgageInterestDeductionCents+=incremental.federalMortgageInterestDeductionCents;
+    breakdown.californiaMortgageInterestDeductionCents+=incremental.californiaMortgageInterestDeductionCents;
     breakdown.federalDeductionCents+=incremental.federalDeductionCents;
     breakdown.californiaDeductionCents+=incremental.californiaDeductionCents;
     breakdown.federalTaxableIncomeCents+=incremental.federalTaxableCents;
@@ -483,7 +488,8 @@ const calculationErrorYear = (
       ordinaryDistributionsCents: 0, shortTermGainsCents: 0, longTermGainsCents: 0,
       grossRentalIncomeCents: 0, federalTaxableRentalIncomeCents: 0,
       californiaTaxableRentalIncomeCents: 0, federalRentalDeductionsCents: 0,
-      californiaRentalDeductionsCents: 0, federalDeductionCents: 0,
+      californiaRentalDeductionsCents: 0, federalMortgageInterestDeductionCents: 0,
+      californiaMortgageInterestDeductionCents: 0, federalDeductionCents: 0,
       californiaDeductionCents: 0, federalTaxableIncomeCents: 0,
       californiaTaxableIncomeCents: 0, federalIncomeTaxCents: 0,
       californiaIncomeTaxCents: 0, netInvestmentIncomeTaxCents: 0, homeSaleTaxCents: 0,

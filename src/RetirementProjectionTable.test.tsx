@@ -36,6 +36,7 @@ const firstYear = {
     longTermGainsCents: 2_500_00, grossRentalIncomeCents: 18_000_00,
     federalTaxableRentalIncomeCents: 4_000_00, californiaTaxableRentalIncomeCents: 5_000_00,
     federalRentalDeductionsCents: 14_000_00, californiaRentalDeductionsCents: 13_000_00,
+    federalMortgageInterestDeductionCents: 3_750_00, californiaMortgageInterestDeductionCents: 5_000_00,
     federalDeductionCents: 30_000_00, californiaDeductionCents: 20_000_00,
     federalTaxableIncomeCents: 17_000_00, californiaTaxableIncomeCents: 27_000_00,
     federalIncomeTaxCents: 4_500_00, californiaIncomeTaxCents: 3_500_00,
@@ -241,6 +242,8 @@ describe("RetirementProjectionTable", () => {
     expect(taxBreakdown).toHaveTextContent("Long-term stock gains$2,500");
     expect(taxBreakdown).toHaveTextContent("Gross rental income$18,000");
     expect(taxBreakdown).toHaveTextContent("Federal rental deductions$14,000");
+    expect(taxBreakdown).toHaveTextContent("Federal deductible mortgage interest$3,750");
+    expect(taxBreakdown).toHaveTextContent("California deductible mortgage interest$5,000");
     expect(taxBreakdown).toHaveTextContent("Federal income tax$4,500");
     expect(taxBreakdown).toHaveTextContent("California income tax$3,500");
     expect(taxBreakdown).toHaveTextContent("Total taxes$8,500");

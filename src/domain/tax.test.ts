@@ -104,6 +104,30 @@ it("exposes federal and modified AGI for incremental tax stacking",()=>{
   }));
 });
 
+// Production mutation caught: using the federal debt ceiling for California,
+// or leaving California interest uncapped, produces the wrong jurisdictional deductions.
+it("caps federal and California mortgage interest at their filing-status debt limits",()=>{
+  const joint=estimateHouseholdTax({
+    year:2026,
+    status:"married-joint",
+    employees:[{personId:"a",salaryCents:100_000_00,rsuCents:0},{personId:"b",salaryCents:100_000_00,rsuCents:0}],
+    deductions:{mortgageInterestCents:24_000_00,mortgageDebtCents:1_500_000_00},
+    thresholdInflationBps:250,
+  });
+  expect(joint.federalMortgageInterestDeductionCents).toBe(12_000_00);
+  expect(joint.californiaMortgageInterestDeductionCents).toBe(16_000_00);
+
+  const separate=estimateHouseholdTax({
+    year:2026,
+    status:"married-separate",
+    employees:[],
+    deductions:{mortgageInterestCents:24_000_00,mortgageDebtCents:1_500_000_00},
+    thresholdInflationBps:250,
+  });
+  expect(separate.federalMortgageInterestDeductionCents).toBe(6_000_00);
+  expect(separate.californiaMortgageInterestDeductionCents).toBe(8_000_00);
+});
+
 // Production mutation caught: applying full personal mortgage interest or uncapped property tax bypasses the shared household deduction limits in retirement tax.
 it("applies household mortgage and SALT limits to incremental personal housing deductions",()=>{
   const result=calculateIncrementalHouseholdIncomeTax({
@@ -132,8 +156,9 @@ it("applies household mortgage and SALT limits to incremental personal housing d
   });
 
   expect(result.federalDeductionCents).toBe(5_040_000);
-  expect(result.californiaDeductionCents).toBe(7_000_000);
+  expect(result.californiaMortgageInterestDeductionCents).toBe(1_333_333);
+  expect(result.californiaDeductionCents).toBe(6_333_333);
   expect(result.federalIncomeTaxCents).toBe(570_400);
-  expect(result.californiaIncomeTaxCents).toBe(0);
-  expect(result.totalIncrementalTaxCents).toBe(570_400);
+  expect(result.californiaIncomeTaxCents).toBeGreaterThan(0);
+  expect(result.totalIncrementalTaxCents).toBe(result.federalIncomeTaxCents+result.californiaIncomeTaxCents);
 });

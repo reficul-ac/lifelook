@@ -131,6 +131,8 @@ function YearDetails({
           <div><dt>Federal taxable rental income</dt><dd><MoneyValue label="Federal taxable rental income" cents={year.taxBreakdown.federalTaxableRentalIncomeCents} /></dd></div>
           <div><dt>California rental deductions</dt><dd><MoneyValue label="California rental deductions" cents={year.taxBreakdown.californiaRentalDeductionsCents} /></dd></div>
           <div><dt>California taxable rental income</dt><dd><MoneyValue label="California taxable rental income" cents={year.taxBreakdown.californiaTaxableRentalIncomeCents} /></dd></div>
+          <div><dt>Federal deductible mortgage interest</dt><dd><MoneyValue label="Federal deductible mortgage interest" cents={year.taxBreakdown.federalMortgageInterestDeductionCents??0} /></dd></div>
+          <div><dt>California deductible mortgage interest</dt><dd><MoneyValue label="California deductible mortgage interest" cents={year.taxBreakdown.californiaMortgageInterestDeductionCents??0} /></dd></div>
           <div><dt>Federal deduction</dt><dd><MoneyValue label="Federal deduction" cents={year.taxBreakdown.federalDeductionCents} /></dd></div>
           <div><dt>Federal taxable income</dt><dd><MoneyValue label="Federal taxable income" cents={year.taxBreakdown.federalTaxableIncomeCents} /></dd></div>
           <div><dt>California deduction</dt><dd><MoneyValue label="California deduction" cents={year.taxBreakdown.californiaDeductionCents} /></dd></div>

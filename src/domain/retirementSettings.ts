@@ -1,6 +1,12 @@
-import type { Account, BasisPoints } from "./types";
+import type { Account, BasisPoints, Cents } from "./types";
 
 export type RetirementScenario = "keep-homes" | "sell-all-homes";
+
+export interface RetirementExpenseBucket {
+  id: string;
+  name: string;
+  annualAmountCents: Cents;
+}
 
 export interface RetirementSettingsRecord {
   householdId: string;
@@ -10,18 +16,20 @@ export interface RetirementSettingsRecord {
   taxableDestinationAccountId: string | null;
   withdrawalAccountOrder: readonly string[];
   selectedScenario: RetirementScenario;
+  expenseBuckets?: readonly RetirementExpenseBucket[];
   revision: number;
 }
 
 export type NormalizedRetirementSettings = Omit<
   RetirementSettingsRecord,
-  "householdId"
->;
+  "householdId" | "expenseBuckets"
+> & { expenseBuckets: readonly RetirementExpenseBucket[] };
 
 export type RetirementSettingsInput = Omit<
   RetirementSettingsRecord,
-  "householdId" | "revision"
+  "householdId" | "revision" | "expenseBuckets"
 > & {
+  expenseBuckets: readonly RetirementExpenseBucket[];
   expectedRevision: number;
 };
 
@@ -40,6 +48,7 @@ export const defaultRetirementSettings = (
   taxableDestinationAccountId: null,
   withdrawalAccountOrder: [],
   selectedScenario: "keep-homes",
+  expenseBuckets: [],
   revision: 1,
 });
 
@@ -68,6 +77,24 @@ export function normalizeRetirementSettings(
   const withdrawalAccountOrder = Array.isArray(row.withdrawalAccountOrder)
     ? row.withdrawalAccountOrder.filter(isKnownUniqueAccountId)
     : [];
+  const expenseBucketIds = new Set<string>();
+  const expenseBuckets = Array.isArray(row.expenseBuckets)
+    ? row.expenseBuckets.flatMap((candidate) => {
+        const bucket = candidate as Record<string, unknown>;
+        const id = typeof bucket.id === "string" ? bucket.id.trim() : "";
+        const name = typeof bucket.name === "string" ? bucket.name.trim() : "";
+        const annualAmountCents = Number(bucket.annualAmountCents);
+        if (
+          id === "" ||
+          name === "" ||
+          expenseBucketIds.has(id) ||
+          !Number.isSafeInteger(annualAmountCents) ||
+          annualAmountCents < 0
+        ) return [];
+        expenseBucketIds.add(id);
+        return [{ id, name, annualAmountCents }];
+      })
+    : [];
 
   return {
     retirementMonth:
@@ -95,6 +122,7 @@ export function normalizeRetirementSettings(
     withdrawalAccountOrder,
     selectedScenario:
       row.selectedScenario === "sell-all-homes" ? "sell-all-homes" : "keep-homes",
+    expenseBuckets,
     revision: Number.isInteger(row.revision) ? Number(row.revision) : 1,
   };
 }

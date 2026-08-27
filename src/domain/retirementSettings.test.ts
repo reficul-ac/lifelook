@@ -37,7 +37,32 @@ describe("retirement settings normalization", () => {
       taxableDestinationAccountId: "brokerage",
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
     });
+  });
+
+  // Break caught: malformed saved buckets could make retirement spending negative, unsafe, or impossible to edit reliably.
+  it("keeps valid expense buckets and removes malformed saved buckets", () => {
+    const record = {
+      householdId: "household",
+      retirementMonth: "2040-01",
+      withdrawalRateBps: 400,
+      horizonYears: 25,
+      taxableDestinationAccountId: "brokerage",
+      withdrawalAccountOrder: [],
+      selectedScenario: "keep-homes",
+      expenseBuckets: [
+        { id: "food", name: " Food ", annualAmountCents: 18_000_00 },
+        { id: "food", name: "Duplicate", annualAmountCents: 1_00 },
+        { id: "bad-name", name: "   ", annualAmountCents: 1_00 },
+        { id: "negative", name: "Travel", annualAmountCents: -1 },
+      ],
+      revision: 3,
+    } as RetirementSettingsRecord;
+
+    expect(normalizeRetirementSettings(record, [taxable]).expenseBuckets).toEqual([
+      { id: "food", name: "Food", annualAmountCents: 18_000_00 },
+    ]);
   });
 
   // Break caught: a legacy saved plan with no new fields would incorrectly choose between multiple taxable destinations instead of requiring an explicit choice.

@@ -663,6 +663,7 @@ describe("LifeLook shell", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 1,
     });
 
@@ -693,6 +694,7 @@ describe("LifeLook shell", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 2,
     });
     expect(screen.getByLabelText("Retirement month")).toHaveValue("2042-09");

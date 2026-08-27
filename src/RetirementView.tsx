@@ -39,6 +39,11 @@ type SettingsDraft = {
   taxableDestinationAccountId: string | null;
   withdrawalAccountOrder: readonly string[];
   selectedScenario: RetirementScenario;
+  expenseBuckets: readonly {
+    id: string;
+    name: string;
+    annualAmount: string;
+  }[];
 };
 
 export interface RetirementViewProps {
@@ -70,6 +75,9 @@ const money = (cents: number) =>
     maximumFractionDigits: 0,
   }).format(cents / 100);
 
+const signedMoney = (cents: number) =>
+  `${cents > 0 ? "+" : cents < 0 ? "−" : ""}${money(Math.abs(cents))}`;
+
 const rate = (basisPoints: number) =>
   `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(basisPoints / 100)}%`;
 
@@ -99,6 +107,12 @@ const parseHorizonYears = (value: string) => {
     : null;
 };
 
+const parseAnnualExpense = (value: string) => {
+  if (!/^\d+(\.\d{1,2})?$/.test(value.trim())) return null;
+  const cents = Math.round(Number(value) * 100);
+  return Number.isSafeInteger(cents) && cents >= 0 ? cents : null;
+};
+
 const settingsFromRecord = (
   value: RetirementSettingsRecord | null | undefined,
   accounts: readonly Account[],
@@ -119,6 +133,11 @@ const draftFromSettings = (
   taxableDestinationAccountId: settings.taxableDestinationAccountId,
   withdrawalAccountOrder: [...settings.withdrawalAccountOrder],
   selectedScenario: settings.selectedScenario,
+  expenseBuckets: settings.expenseBuckets.map((bucket) => ({
+    id: bucket.id,
+    name: bucket.name,
+    annualAmount: String(bucket.annualAmountCents / 100),
+  })),
 });
 
 const saveValuesFromDraft = (
@@ -127,10 +146,18 @@ const saveValuesFromDraft = (
 ): SaveValues | null => {
   const withdrawalRateBps = parseWithdrawalRate(draft.withdrawalRate);
   const horizonYears = parseHorizonYears(draft.horizonYears);
+  const expenseBuckets = draft.expenseBuckets.flatMap((bucket) => {
+    const annualAmountCents = parseAnnualExpense(bucket.annualAmount);
+    return bucket.id.trim() !== "" && bucket.name.trim() !== "" && annualAmountCents !== null
+      ? [{ id: bucket.id.trim(), name: bucket.name.trim(), annualAmountCents }]
+      : [];
+  });
   return validRetirementMonth(draft.retirementMonth) &&
     withdrawalRateBps !== null &&
     horizonYears !== null &&
-    (!requiresTaxableDestination || draft.taxableDestinationAccountId !== null)
+    (!requiresTaxableDestination || draft.taxableDestinationAccountId !== null) &&
+    expenseBuckets.length === draft.expenseBuckets.length &&
+    new Set(expenseBuckets.map((bucket) => bucket.id)).size === expenseBuckets.length
     ? {
         retirementMonth: draft.retirementMonth,
         withdrawalRateBps,
@@ -138,6 +165,7 @@ const saveValuesFromDraft = (
         taxableDestinationAccountId: draft.taxableDestinationAccountId,
         withdrawalAccountOrder: [...draft.withdrawalAccountOrder],
         selectedScenario: draft.selectedScenario,
+        expenseBuckets,
       }
     : null;
 };
@@ -152,6 +180,7 @@ const recordFingerprint = (value?: RetirementSettingsRecord | null) =>
         value.taxableDestinationAccountId,
         value.withdrawalAccountOrder,
         value.selectedScenario,
+        value.expenseBuckets,
         value.revision,
       ])
     : "null";
@@ -528,6 +557,7 @@ export function RetirementView(props: RetirementViewProps) {
     settings.taxableDestinationAccountId,
     settings.withdrawalAccountOrder,
     settings.selectedScenario,
+    settings.expenseBuckets,
     snapshot,
   ]);
 
@@ -641,6 +671,72 @@ export function RetirementView(props: RetirementViewProps) {
           projectedOrder={calculation?.result?.effectiveWithdrawalOrder}
           onChange={(withdrawalAccountOrder) => updateDraft({ withdrawalAccountOrder })}
         />
+      </section>
+
+      <section className="card retirement-expense-settings" aria-label="Retirement expenses">
+        <div className="retirement-expense-heading">
+          <div>
+            <h3>Annual retirement expenses</h3>
+            <p>Enter broad non-housing expenses in today’s dollars. They grow with the Plan inflation rate; modeled home costs are added automatically.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => updateDraft({
+              expenseBuckets: [...draft.expenseBuckets, {
+                id: `expense-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                name: "",
+                annualAmount: "",
+              }],
+            })}
+          >
+            Add expense bucket
+          </button>
+        </div>
+        {draft.expenseBuckets.length === 0 ? (
+          <p className="retirement-expense-empty">No non-housing retirement expenses added yet.</p>
+        ) : (
+          <div className="retirement-expense-buckets">
+            {draft.expenseBuckets.map((bucket, index) => (
+              <div className="retirement-expense-bucket" key={bucket.id}>
+                <label>
+                  <span>Bucket name</span>
+                  <input
+                    aria-label={bucket.name.trim() || "Expense bucket name"}
+                    value={bucket.name}
+                    onChange={(event) => updateDraft({
+                      expenseBuckets: draft.expenseBuckets.map((candidate, candidateIndex) =>
+                        candidateIndex === index ? { ...candidate, name: event.target.value } : candidate),
+                    })}
+                  />
+                </label>
+                <label>
+                  <span>Annual amount</span>
+                  <span className="input-affix">
+                    <i aria-hidden="true">$</i>
+                    <input
+                      aria-label={`${bucket.name.trim() || "Expense bucket"} annual expense`}
+                      inputMode="decimal"
+                      value={bucket.annualAmount}
+                      onChange={(event) => updateDraft({
+                        expenseBuckets: draft.expenseBuckets.map((candidate, candidateIndex) =>
+                          candidateIndex === index ? { ...candidate, annualAmount: event.target.value } : candidate),
+                      })}
+                    />
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  aria-label={`Remove ${bucket.name.trim() || "expense bucket"}`}
+                  onClick={() => updateDraft({
+                    expenseBuckets: draft.expenseBuckets.filter((_, candidateIndex) => candidateIndex !== index),
+                  })}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {calculation === null ? null : calculation.result === null ? (
@@ -863,6 +959,11 @@ function RetirementStory({
   const headlineAfterTaxIncome = !available
     ? "Unavailable"
     : money(firstProjectionYear?.typicalAfterTaxIncomeCents ?? 0);
+  const headlineExpenses = !available
+    ? "Unavailable"
+    : money(firstProjectionYear?.typicalExpenseCents ?? 0);
+  const typicalSurplusCents = firstProjectionYear?.typicalSurplusCents ?? 0;
+  const headlineSurplus = !available ? "Unavailable" : signedMoney(typicalSurplusCents);
   const scenarioName = kind === "keep" ? "Keep homes" : "Sell all homes";
 
   return (
@@ -895,6 +996,14 @@ function RetirementStory({
           <div>
             <span>Typical annual after-tax income</span>
             <strong>{headlineAfterTaxIncome}</strong>
+          </div>
+          <div>
+            <span>Typical annual expenses</span>
+            <strong>{headlineExpenses}</strong>
+          </div>
+          <div>
+            <span>{typicalSurplusCents < 0 ? "Typical annual shortfall" : "Typical annual surplus"}</span>
+            <strong className={typicalSurplusCents < 0 ? "retirement-negative-value" : undefined}>{headlineSurplus}</strong>
           </div>
         </div>
         <p className="retirement-story-note">
@@ -956,6 +1065,10 @@ function RetirementStory({
               <>
                 <CalculationRow label="Typical annual income tax" value={`−${money(firstProjectionYear.typicalYearTaxCents)}`} />
                 <CalculationRow label="After-tax income (typical year)" value={money(firstProjectionYear.typicalAfterTaxIncomeCents)} />
+                <CalculationRow label="Non-housing expenses" value={`−${money(firstProjectionYear.planExpenseCents)}`} />
+                <CalculationRow label="Housing expenses" value={`−${money(firstProjectionYear.housingExpenseCents)}`} />
+                <CalculationRow label="Total expenses (typical year)" value={`−${money(firstProjectionYear.typicalExpenseCents)}`} />
+                <CalculationRow label="Surplus / shortfall (typical year)" value={signedMoney(firstProjectionYear.typicalSurplusCents)} />
               </>
             ) : null}
           </dl>
@@ -978,6 +1091,10 @@ function RetirementStory({
               <>
                 <CalculationRow label="Typical annual income tax" value={`−${money(firstProjectionYear.typicalYearTaxCents)}`} />
                 <CalculationRow label="After-tax income (typical year)" value={money(firstProjectionYear.typicalAfterTaxIncomeCents)} />
+                <CalculationRow label="Non-housing expenses" value={`−${money(firstProjectionYear.planExpenseCents)}`} />
+                <CalculationRow label="Housing expenses" value={`−${money(firstProjectionYear.housingExpenseCents)}`} />
+                <CalculationRow label="Total expenses (typical year)" value={`−${money(firstProjectionYear.typicalExpenseCents)}`} />
+                <CalculationRow label="Surplus / shortfall (typical year)" value={signedMoney(firstProjectionYear.typicalSurplusCents)} />
               </>
             ) : null}
           </dl>

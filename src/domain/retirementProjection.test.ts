@@ -62,6 +62,7 @@ const settings: NormalizedRetirementSettings = {
   taxableDestinationAccountId: "taxable-1",
   withdrawalAccountOrder: [],
   selectedScenario: "keep-homes",
+  expenseBuckets: [],
   revision: 1,
 };
 
@@ -282,6 +283,7 @@ describe("calculateRetirementProjection", () => {
         retirementMonth: "2027-01",
         withdrawalRateBps: 100,
         horizonYears: 2,
+        expenseBuckets: [{ id: "living", name: "Living expenses", annualAmountCents: 1_200_000 }],
       },
     });
     const [first, second] = result.keepHomes.years;
@@ -294,8 +296,9 @@ describe("calculateRetirementProjection", () => {
     expect(first.destinationBalanceCents).toBe(101_200_000);
     expect(second.startingPortfolioCents).toBe(101_200_000);
     expect(second.withdrawalTargetCents).toBe(1_012_000);
-    expect(second.surplusCents).toBe(2_212_000);
-    expect(second.destinationBalanceCents).toBe(102_400_000);
+    expect(second.planExpenseCents).toBe(1_230_000);
+    expect(second.surplusCents).toBe(2_182_000);
+    expect(second.destinationBalanceCents).toBe(102_370_000);
     expect(second.withdrawalSources[0].taxableGainCents).toBe(0);
   });
 
@@ -551,6 +554,7 @@ describe("calculateRetirementProjection", () => {
         ...settings,
         retirementMonth: "2027-01",
         horizonYears: 1,
+        expenseBuckets: [{ id: "living", name: "Living expenses", annualAmountCents: 600_000 }],
       },
     });
     const year = result.keepHomes.years[0];
@@ -708,6 +712,7 @@ describe("calculateRetirementProjection", () => {
         withdrawalRateBps: 1,
         horizonYears: 1,
         withdrawalAccountOrder: ["cash-1", "taxable-1"],
+        expenseBuckets: [{ id: "living", name: "Living expenses", annualAmountCents: 1_200_000 }],
       },
     });
     const year = result.keepHomes.years[0];
@@ -1301,6 +1306,7 @@ describe("calculateRetirementProjection", () => {
         retirementMonth: "2027-01",
         withdrawalRateBps: 1,
         horizonYears: 1,
+        expenseBuckets: [{ id: "living", name: "Living expenses", annualAmountCents: 1_200_000 }],
       },
     });
     const year = result.keepHomes.years[0];
@@ -1345,6 +1351,7 @@ describe("calculateRetirementProjection", () => {
         withdrawalRateBps: 1,
         horizonYears: 1,
         withdrawalAccountOrder: ["ira-1", "taxable-1"],
+        expenseBuckets: [{ id: "living", name: "Living expenses", annualAmountCents: 120_000_000 }],
       },
     });
     const year = result.keepHomes.years[0];

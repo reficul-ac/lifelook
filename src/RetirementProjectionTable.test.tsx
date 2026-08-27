@@ -22,6 +22,10 @@ const firstYear = {
   typicalAfterTaxIncomeCents: 51_500_00,
   planExpenseCents: 36_000_00,
   housingExpenseCents: 12_000_00,
+  totalExpenseCents: 48_000_00,
+  typicalExpenseCents: 48_000_00,
+  netSurplusCents: 1_500_00,
+  typicalSurplusCents: 3_500_00,
   surplusCents: 1_500_00,
   shortfallCents: 0,
   destinationBalanceCents: 13_500_00,
@@ -97,6 +101,10 @@ const secondYear = {
   typicalAfterTaxIncomeCents: 51_500_00,
   planExpenseCents: 37_000_00,
   housingExpenseCents: 13_000_00,
+  totalExpenseCents: 54_000_00,
+  typicalExpenseCents: 50_000_00,
+  netSurplusCents: -2_500_00,
+  typicalSurplusCents: 1_500_00,
   surplusCents: 0,
   shortfallCents: 2_500_00,
   destinationBalanceCents: 0,
@@ -160,11 +168,13 @@ describe("RetirementProjectionTable", () => {
       "Rental income",
       "Taxes",
       "After-tax income",
+      "Expenses",
+      "Surplus / shortfall",
     ]) {
       expect(screen.getByRole("columnheader", { name: heading })).toHaveAttribute("scope", "col");
     }
     expect(screen.getByRole("columnheader", { name: "Financial position" })).toHaveAttribute("scope", "colgroup");
-    expect(screen.getByRole("columnheader", { name: "Retirement income" })).toHaveAttribute("scope", "colgroup");
+    expect(screen.getByRole("columnheader", { name: "Retirement cash flow" })).toHaveAttribute("scope", "colgroup");
 
     const firstRow = screen.getByRole("row", { name: /2042.*Avery.*62/ });
     expect(within(firstRow).getByRole("rowheader", { name: /2042.*Avery.*62/ })).toHaveAttribute("scope", "row");
@@ -173,10 +183,26 @@ describe("RetirementProjectionTable", () => {
     expect(within(firstRow).getByText("$18,000")).toBeInTheDocument();
     expect(within(firstRow).getByText("$8,500")).toBeInTheDocument();
     expect(within(firstRow).getByText("$49,500")).toBeInTheDocument();
+    expect(within(firstRow).getByText("$48,000")).toBeInTheDocument();
+    expect(within(firstRow).getByText("+$1,500")).toBeInTheDocument();
     expect(within(firstRow).getByText("$13,500")).toBeInTheDocument();
     expect(within(firstRow).getByText("$607,500")).toBeInTheDocument();
     expect(within(firstRow).getByText("$350,000")).toBeInTheDocument();
     expect(within(firstRow).getByText("$300,000")).toBeInTheDocument();
+  });
+
+  // Production mutation caught: clamping a deficit to zero hides that expenses exceed after-tax income.
+  it("renders annual deficits as signed negative values", () => {
+    render(
+      <RetirementProjectionTable
+        selectedScenario="keep-homes"
+        projection={projection}
+        accountNames={{}}
+      />,
+    );
+
+    const secondRow = screen.getByRole("row", { name: /2043.*Avery.*63/ });
+    expect(within(secondRow).getByText("−$2,500")).toHaveClass("retirement-negative-value");
   });
 
   // Production mutation caught: unmounting collapsed detail rows leaves aria-controls pointing at IDs that do not exist, and indistinguishable controls force screen-reader users to guess the year.
@@ -248,7 +274,7 @@ describe("RetirementProjectionTable", () => {
     expect(taxBreakdown).toHaveTextContent("California income tax$3,500");
     expect(taxBreakdown).toHaveTextContent("Total taxes$8,500");
     expect(within(details).getByRole("region", { name: "Withdrawal sources for 2042" })).toHaveTextContent("Traditional IRA: $40,000");
-    expect(details.closest("td")).toHaveAttribute("colspan", "10");
+    expect(details.closest("td")).toHaveAttribute("colspan", "12");
   });
 
   // Production mutation caught: rendering sale details from a derived total instead of the domain home-sale fields conceals sale costs and tax.

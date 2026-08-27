@@ -59,6 +59,10 @@ export interface RetirementProjectionYear {
   typicalAfterTaxIncomeCents: Cents;
   planExpenseCents: Cents;
   housingExpenseCents: Cents;
+  totalExpenseCents: Cents;
+  typicalExpenseCents: Cents;
+  netSurplusCents: Cents;
+  typicalSurplusCents: Cents;
   surplusCents: Cents;
   shortfallCents: Cents;
   destinationBalanceCents: Cents;
@@ -475,6 +479,10 @@ const calculationErrorYear = (
     typicalAfterTaxIncomeCents: 0,
     planExpenseCents: 0,
     housingExpenseCents: 0,
+    totalExpenseCents: 0,
+    typicalExpenseCents: 0,
+    netSurplusCents: 0,
+    typicalSurplusCents: 0,
     surplusCents: 0,
     shortfallCents: 0,
     destinationBalanceCents: 0,
@@ -905,12 +913,13 @@ const runRetirementScenario = (
       state={accounts:{},assets:{},liabilities:{},taxableBasis:{},taxableLots:{},rothContributionBasis:{}};
       return calculationErrorYear(input,periodStart,calculationFailure,[warning]);
     }
-    const planHousingExpenseCents = Object.values(planHousing)
-      .reduce((sum, value) => sum + value, 0);
-    const planExpenseCents = Math.max(
-      0,
-      periodMonths.reduce((sum, month) => sum + month.expenseCents, 0) -
-        planHousingExpenseCents,
+    const planExpenseCents = projectGrowth(
+      (input.settings.expenseBuckets ?? []).reduce(
+        (sum, bucket) => sum + bucket.annualAmountCents,
+        0,
+      ),
+      input.scenario.assumptions.inflationBps,
+      index * 12,
     );
 
     const periodEnd = addMonths(periodStart, 11);
@@ -993,6 +1002,8 @@ const runRetirementScenario = (
     }
     const expenses = planExpenseCents + housingExpenseCents +
       (index === 0 ? closingShortfallCents : 0) + Math.max(0, saleTaxAdjustmentCents);
+    const typicalExpenseCents = planExpenseCents + housingExpenseCents;
+    const netSurplusCents = afterTaxIncomeCents - expenses;
     const surplusCents = Math.max(0, afterTaxIncomeCents - expenses);
     let shortfallCents = Math.max(0, expenses - afterTaxIncomeCents);
     let unfundedSpendingCents = 0;
@@ -1198,6 +1209,7 @@ const runRetirementScenario = (
     const typicalYearTaxCents = typicalTaxCalculation.retirementTaxCents;
     const typicalAfterTaxIncomeCents = targetDraw.fundedCents + otherPreTaxIncomeCents +
       rentalIncomeCents - typicalYearTaxCents - typicalEarlyPenaltyCents;
+    const typicalSurplusCents = typicalAfterTaxIncomeCents - typicalExpenseCents;
     return {
       year,
       ages: input.snapshot.household.people.map((person) => ({
@@ -1218,6 +1230,10 @@ const runRetirementScenario = (
       typicalAfterTaxIncomeCents,
       planExpenseCents,
       housingExpenseCents,
+      totalExpenseCents: expenses,
+      typicalExpenseCents,
+      netSurplusCents,
+      typicalSurplusCents,
       surplusCents,
       shortfallCents,
       destinationBalanceCents: destinationId == null ? 0 : state.accounts[destinationId] ?? 0,

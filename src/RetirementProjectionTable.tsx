@@ -49,6 +49,20 @@ function MoneyValue({
   );
 }
 
+function SignedMoneyValue({ cents, label }: { cents: number; label: string }) {
+  const value = absoluteMoney(cents);
+  const negative = cents < 0;
+  const prefix = negative ? "−" : cents > 0 ? "+" : "";
+  return (
+    <span
+      className={negative ? "retirement-negative-value" : undefined}
+      aria-label={`${label}: ${negative ? "negative " : cents > 0 ? "positive " : ""}${value}`}
+    >
+      {prefix}{value}
+    </span>
+  );
+}
+
 const warningTitle: Record<RetirementProjectionWarning["code"], string> = {
   "missing-destination": "Destination needed",
   "missing-home-data": "Home details needed",
@@ -234,7 +248,7 @@ export function RetirementProjectionTable({
             <tr>
               <th scope="col" rowSpan={2}>Year and ages</th>
               <th scope="colgroup" colSpan={5}>Financial position</th>
-              <th scope="colgroup" colSpan={4}>Retirement income</th>
+              <th scope="colgroup" colSpan={6}>Retirement cash flow</th>
             </tr>
             <tr>
               <th scope="col">Net worth</th>
@@ -246,6 +260,8 @@ export function RetirementProjectionTable({
               <th scope="col">Rental income</th>
               <th scope="col">Taxes</th>
               <th scope="col">After-tax income</th>
+              <th scope="col">Expenses</th>
+              <th scope="col">Surplus / shortfall</th>
             </tr>
           </thead>
           <tbody>
@@ -276,9 +292,11 @@ export function RetirementProjectionTable({
                     <td><MoneyValue label="Rental income" cents={year.rentalIncomeCents} /></td>
                     <td><MoneyValue label="Taxes" cents={year.totalTaxCents} /></td>
                     <td><MoneyValue label="After-tax income" cents={year.afterTaxIncomeCents} /></td>
+                    <td><MoneyValue label="Expenses" cents={year.totalExpenseCents} /></td>
+                    <td><SignedMoneyValue label="Surplus or shortfall" cents={year.netSurplusCents} /></td>
                   </tr>
                   <tr hidden={!expanded}>
-                      <td colSpan={10}>
+                      <td colSpan={12}>
                         <YearDetails
                           year={year}
                           selectedScenario={selectedScenario}

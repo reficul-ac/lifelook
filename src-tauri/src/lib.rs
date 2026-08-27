@@ -11,7 +11,7 @@ use std::{
 use tauri::Manager;
 use thiserror::Error;
 
-const SCHEMA_VERSION: i64 = 24;
+const SCHEMA_VERSION: i64 = 25;
 const MAX_MONEY_CENTS: i64 = 99_999_999_999_999;
 
 struct Database {
@@ -334,7 +334,15 @@ struct RetirementPlanRecord {
     taxable_destination_account_id: Option<String>,
     withdrawal_account_order: Vec<String>,
     selected_scenario: String,
+    expense_buckets: Vec<RetirementExpenseBucket>,
     revision: i64,
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RetirementExpenseBucket {
+    id: String,
+    name: String,
+    annual_amount_cents: i64,
 }
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -345,6 +353,7 @@ struct RetirementPlanInput {
     taxable_destination_account_id: Option<String>,
     withdrawal_account_order: Vec<String>,
     selected_scenario: String,
+    expense_buckets: Vec<RetirementExpenseBucket>,
     expected_revision: i64,
 }
 #[derive(Debug, Deserialize)]
@@ -1106,6 +1115,27 @@ fn migrate(connection: &mut Connection) -> Result<(), AppError> {
         }
         transaction.execute("INSERT INTO schema_migrations(version) VALUES(24)", [])?;
     }
+    let version: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(version),0) FROM schema_migrations",
+        [],
+        |r| r.get(0),
+    )?;
+    if version < 25 {
+        let retirement_columns = transaction
+            .prepare("PRAGMA table_info(retirement_plans)")?
+            .query_map([], |r| r.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        if !retirement_columns
+            .iter()
+            .any(|column| column == "expense_buckets_json")
+        {
+            transaction.execute(
+                "ALTER TABLE retirement_plans ADD COLUMN expense_buckets_json TEXT NOT NULL DEFAULT '[]'",
+                [],
+            )?;
+        }
+        transaction.execute("INSERT INTO schema_migrations(version) VALUES(25)", [])?;
+    }
     transaction
         .execute_batch("DROP TABLE IF EXISTS scenario_goals; DROP TABLE IF EXISTS allocations;")?;
     transaction.commit()?;
@@ -1158,10 +1188,11 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
         }
         retirement_plan = connection
             .query_row(
-                "SELECT household_id,retirement_month,withdrawal_rate_bps,horizon_years,taxable_destination_account_id,withdrawal_account_order_json,selected_scenario,revision FROM retirement_plans WHERE household_id=?",
+                "SELECT household_id,retirement_month,withdrawal_rate_bps,horizon_years,taxable_destination_account_id,withdrawal_account_order_json,selected_scenario,expense_buckets_json,revision FROM retirement_plans WHERE household_id=?",
                 [&h.id],
                 |r| {
                     let withdrawal_account_order_json: String = r.get(5)?;
+                    let expense_buckets_json: String = r.get(7)?;
                     Ok(RetirementPlanRecord {
                         household_id: r.get(0)?,
                         retirement_month: r.get(1)?,
@@ -1179,7 +1210,10 @@ fn bootstrap(connection: &Connection) -> Result<WorkspaceSnapshot, AppError> {
                             )
                         })?,
                         selected_scenario: r.get(6)?,
-                        revision: r.get(7)?,
+                        expense_buckets: serde_json::from_str(&expense_buckets_json).map_err(|error| {
+                            rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(error))
+                        })?,
+                        revision: r.get(8)?,
                     })
                 },
             )
@@ -1629,6 +1663,18 @@ fn validate_retirement_plan_input(input: &RetirementPlanInput) -> Result<(), App
     {
         return Err(AppError::Validation("retirement plan is invalid".into()));
     }
+    let mut bucket_ids = HashSet::new();
+    for bucket in &input.expense_buckets {
+        if bucket.id.trim().is_empty()
+            || bucket.name.trim().is_empty()
+            || !bucket_ids.insert(bucket.id.trim())
+        {
+            return Err(AppError::Validation(
+                "retirement expense buckets are invalid".into(),
+            ));
+        }
+        validate_nonnegative_money(bucket.annual_amount_cents, "retirement expense")?;
+    }
     Ok(())
 }
 
@@ -1687,9 +1733,10 @@ fn store_retirement_plan(
     }
     let next = existing.map_or(1, |r| r + 1);
     let withdrawal_account_order_json = serde_json::to_string(&input.withdrawal_account_order)?;
+    let expense_buckets_json = serde_json::to_string(&input.expense_buckets)?;
     tx.execute(
-        "INSERT INTO retirement_plans(household_id,retirement_month,withdrawal_rate_bps,horizon_years,taxable_destination_account_id,withdrawal_account_order_json,selected_scenario,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(household_id) DO UPDATE SET retirement_month=excluded.retirement_month,withdrawal_rate_bps=excluded.withdrawal_rate_bps,horizon_years=excluded.horizon_years,taxable_destination_account_id=excluded.taxable_destination_account_id,withdrawal_account_order_json=excluded.withdrawal_account_order_json,selected_scenario=excluded.selected_scenario,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",
-        params![household_id, input.retirement_month, input.withdrawal_rate_bps, input.horizon_years, input.taxable_destination_account_id, withdrawal_account_order_json, input.selected_scenario, next],
+        "INSERT INTO retirement_plans(household_id,retirement_month,withdrawal_rate_bps,horizon_years,taxable_destination_account_id,withdrawal_account_order_json,selected_scenario,expense_buckets_json,revision) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9) ON CONFLICT(household_id) DO UPDATE SET retirement_month=excluded.retirement_month,withdrawal_rate_bps=excluded.withdrawal_rate_bps,horizon_years=excluded.horizon_years,taxable_destination_account_id=excluded.taxable_destination_account_id,withdrawal_account_order_json=excluded.withdrawal_account_order_json,selected_scenario=excluded.selected_scenario,expense_buckets_json=excluded.expense_buckets_json,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP",
+        params![household_id, input.retirement_month, input.withdrawal_rate_bps, input.horizon_years, input.taxable_destination_account_id, withdrawal_account_order_json, input.selected_scenario, expense_buckets_json, next],
     )?;
     tx.commit()?;
     Ok(RetirementPlanRecord {
@@ -1700,6 +1747,7 @@ fn store_retirement_plan(
         taxable_destination_account_id: input.taxable_destination_account_id,
         withdrawal_account_order: input.withdrawal_account_order,
         selected_scenario: input.selected_scenario,
+        expense_buckets: input.expense_buckets,
         revision: next,
     })
 }
@@ -5088,6 +5136,11 @@ mod tests {
             taxable_destination_account_id: Some("brokerage".into()),
             withdrawal_account_order: vec!["401k".into(), "brokerage".into()],
             selected_scenario: "sell-all-homes".into(),
+            expense_buckets: vec![RetirementExpenseBucket {
+                id: "food".into(),
+                name: "Food".into(),
+                annual_amount_cents: 18_000_00,
+            }],
             expected_revision,
         };
         let saved = store_retirement_plan(&mut c, make(1)).unwrap();
@@ -5112,6 +5165,8 @@ mod tests {
             vec!["401k".to_string(), "brokerage".to_string()]
         );
         assert_eq!(loaded.selected_scenario, "sell-all-homes");
+        assert_eq!(loaded.expense_buckets.len(), 1);
+        assert_eq!(loaded.expense_buckets[0].annual_amount_cents, 18_000_00);
         let updated = store_retirement_plan(
             &mut c,
             RetirementPlanInput {
@@ -5121,6 +5176,7 @@ mod tests {
                 taxable_destination_account_id: Some("brokerage".into()),
                 withdrawal_account_order: vec!["brokerage".into(), "401k".into()],
                 selected_scenario: "keep-homes".into(),
+                expense_buckets: vec![],
                 expected_revision: 1,
             },
         )
@@ -5255,11 +5311,12 @@ mod tests {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(version, 24);
+        assert_eq!(version, SCHEMA_VERSION);
         assert_eq!(loaded.horizon_years, 30);
         assert_eq!(loaded.taxable_destination_account_id, None);
         assert_eq!(loaded.withdrawal_account_order, Vec::<String>::new());
         assert_eq!(loaded.selected_scenario, "keep-homes");
+        assert!(loaded.expense_buckets.is_empty());
         assert_eq!(loaded.revision, 7);
         assert_eq!(
             c.query_row(
@@ -5284,6 +5341,7 @@ mod tests {
                 taxable_destination_account_id: Some("brokerage".into()),
                 withdrawal_account_order: vec!["brokerage".into(), "401k".into()],
                 selected_scenario: "sell-all-homes".into(),
+                expense_buckets: vec![],
                 expected_revision: 7,
             },
         )
@@ -5340,7 +5398,8 @@ mod tests {
                 "horizon_years",
                 "taxable_destination_account_id",
                 "withdrawal_account_order_json",
-                "selected_scenario"
+                "selected_scenario",
+                "expense_buckets_json"
             ]
         );
         let loaded = bootstrap(&c).unwrap().retirement_plan.unwrap();
@@ -5361,6 +5420,7 @@ mod tests {
                 taxable_destination_account_id: None,
                 withdrawal_account_order: vec![],
                 selected_scenario: "keep-homes".into(),
+                expense_buckets: vec![],
                 expected_revision: 1,
             },
         )
@@ -5377,6 +5437,7 @@ mod tests {
                     taxable_destination_account_id: None,
                     withdrawal_account_order: vec![],
                     selected_scenario: "keep-homes".into(),
+                    expense_buckets: vec![],
                     expected_revision: 1,
                 },
             )
@@ -5394,6 +5455,7 @@ mod tests {
                     taxable_destination_account_id: None,
                     withdrawal_account_order: vec![],
                     selected_scenario: "keep-homes".into(),
+                    expense_buckets: vec![],
                     expected_revision: 1,
                 },
             ),
@@ -5947,6 +6009,7 @@ mod tests {
                 taxable_destination_account_id: Some("brokerage".into()),
                 withdrawal_account_order: vec![],
                 selected_scenario: "sell-all-homes".into(),
+                expense_buckets: vec![],
                 expected_revision: 1,
             },
         )

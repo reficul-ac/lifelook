@@ -164,6 +164,10 @@ const annualProjectionRow = {
   typicalAfterTaxIncomeCents: 52_300_00,
   planExpenseCents: 40_000_00,
   housingExpenseCents: 8_000_00,
+  totalExpenseCents: 48_000_00,
+  typicalExpenseCents: 48_000_00,
+  netSurplusCents: 2_300_00,
+  typicalSurplusCents: 4_300_00,
   surplusCents: 2_300_00,
   shortfallCents: 0,
   destinationBalanceCents: 2_300_00,
@@ -204,6 +208,7 @@ const initial: RetirementSettingsRecord = {
   taxableDestinationAccountId: null,
   withdrawalAccountOrder: [],
   selectedScenario: "keep-homes",
+  expenseBuckets: [],
   revision: 1,
 };
 
@@ -242,6 +247,64 @@ beforeEach(() => {
 });
 
 describe("RetirementView settings and autosave", () => {
+  // Production mutation caught: an expense editor that does not persist dollars as annual cents leaves the projection unchanged after user entry.
+  it("adds and saves a named annual retirement expense bucket", async () => {
+    const updateRetirementPlan = vi.fn().mockImplementation(async (input) => ({
+      ...initial,
+      ...input,
+      revision: 2,
+    }));
+    render(
+      <RetirementView
+        initial={initial}
+        repository={repository(updateRetirementPlan)}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add expense bucket" }));
+    fireEvent.change(screen.getByLabelText("Expense bucket name"), {
+      target: { value: "Healthcare" },
+    });
+    fireEvent.change(screen.getByLabelText("Healthcare annual expense"), {
+      target: { value: "12000" },
+    });
+
+    await waitFor(() => expect(updateRetirementPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expenseBuckets: [expect.objectContaining({
+          name: "Healthcare",
+          annualAmountCents: 1_200_000,
+        })],
+      }),
+    ));
+  });
+
+  // Production mutation caught: showing income without its expense subtraction hides the scenario's usable annual cash flow.
+  it("shows typical expenses and signed surplus in each scenario summary", () => {
+    vi.mocked(calculateRetirementProjection).mockReturnValue({
+      ...availableProjection,
+      keepHomes: { ...availableProjection.keepHomes, years: [annualProjectionRow] },
+      sellHomes: { ...availableProjection.sellHomes, years: [annualProjectionRow] },
+    });
+    render(
+      <RetirementView
+        initial={initial}
+        repository={repository()}
+        bootstrap={bootstrap}
+        snapshot={snapshot}
+        scenario={activeScenario}
+      />,
+    );
+
+    const stories = screen.getByRole("region", { name: "Retirement scenarios" });
+    expect(within(stories).getAllByText("Typical annual expenses")).toHaveLength(2);
+    expect(within(stories).getAllByText("Typical annual surplus")).toHaveLength(2);
+    expect(within(stories).getAllByText("+$4,300")).toHaveLength(4);
+  });
+
   // Break caught: omitting new-setting defaults would leave a fresh retirement plan incomplete or silently autosave it on mount.
   it("defaults to next January, 3%, and 30 years without saving on mount", () => {
     const updateRetirementPlan = vi.fn();
@@ -318,6 +381,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: "brokerage",
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 1,
     });
   });
@@ -362,6 +426,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: "brokerage",
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 1,
     });
   });
@@ -659,6 +724,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 1,
     });
 
@@ -681,6 +747,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 2,
     });
     expect(calculateRetirementProjection).toHaveBeenLastCalledWith(
@@ -757,6 +824,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 11,
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();
@@ -828,6 +896,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 11,
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();
@@ -861,6 +930,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 1,
     });
     fireEvent.click(retry);
@@ -872,6 +942,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 1,
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();
@@ -887,6 +958,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 2,
     });
   });
@@ -945,6 +1017,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 1,
     });
   });
@@ -999,6 +1072,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 1,
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();
@@ -1360,6 +1434,7 @@ describe("RetirementView settings and autosave", () => {
       taxableDestinationAccountId: "joint",
       withdrawalAccountOrder: [],
       selectedScenario: "keep-homes",
+      expenseBuckets: [],
       expectedRevision: 2,
     });
     expect(await screen.findByText("Saved")).toBeInTheDocument();
@@ -1515,6 +1590,7 @@ describe("RetirementView settings and autosave", () => {
         taxableDestinationAccountId: "joint",
         withdrawalAccountOrder: [],
         selectedScenario: "keep-homes",
+        expenseBuckets: [],
         expectedRevision: 2,
       });
       expect(await within(container).findByText("Saved")).toBeInTheDocument();
@@ -1669,6 +1745,7 @@ describe("RetirementView settings and autosave", () => {
         taxableDestinationAccountId: "brokerage",
         withdrawalAccountOrder: ["ira", "brokerage"],
         selectedScenario: "keep-homes",
+        expenseBuckets: [],
         expectedRevision: 2,
       });
       await waitFor(() => expect(onSettingsChange).toHaveBeenCalledTimes(2));
@@ -1864,6 +1941,7 @@ describe("RetirementView snapshot stories", () => {
       taxableDestinationAccountId: null,
       withdrawalAccountOrder: [],
       selectedScenario: "sell-all-homes",
+      expenseBuckets: [],
       expectedRevision: 1,
     });
 
@@ -2022,7 +2100,7 @@ describe("RetirementView snapshot stories", () => {
     const keepStory = screen.getByRole("heading", { name: "If you keep your homes" }).closest("article")!;
     expect(within(keepStory).getAllByText("$20,500")).toHaveLength(2);
     const sellStory = screen.getByRole("heading", { name: "If you sell all homes" }).closest("article")!;
-    expect(within(sellStory).getAllByText("Unavailable")).toHaveLength(3);
+    expect(within(sellStory).getAllByText("Unavailable")).toHaveLength(5);
     fireEvent.click(within(sellStory).getByText("View calculation"));
     expect(within(sellStory).getByText("Add a purchase date for Oak Street.")).toBeInTheDocument();
     expect(
@@ -2065,7 +2143,7 @@ describe("RetirementView snapshot stories", () => {
       />,
     );
 
-    expect(screen.getAllByText("Unavailable")).toHaveLength(6);
+    expect(screen.getAllByText("Unavailable")).toHaveLength(10);
     expect(screen.queryByText(/\$[\d,]+/)).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Projection warnings" }))

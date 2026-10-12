@@ -1,0 +1,22 @@
+import type { Cents, ISODate } from '../model/plan';
+import { Decimal, settleSeries } from '../money';
+import { calendarDate, parseISODate } from '../dates';
+
+export interface RecurringCash {
+  readonly amountCents: Cents;
+  readonly frequency: 'monthly' | 'annual';
+  readonly startDate: ISODate;
+  readonly endDate?: ISODate;
+  readonly annualGrowthBps: number;
+}
+
+/** Scheduled payments retain their original day; growth occurs on January 1. */
+export function recurringAmounts(record: RecurringCash, year: number): readonly Cents[] {
+  const { year: startYear, month: startMonth, day: startDay } = parseISODate(record.startDate);
+  const amount = new Decimal(record.amountCents).mul(new Decimal(1).plus(new Decimal(record.annualGrowthBps).div(10000)).pow(Math.max(0, year - startYear)));
+  return settleSeries(Array.from({ length: 12 }, (_, i) => {
+    const date = calendarDate(year, i + 1, startDay);
+    return date >= record.startDate && (!record.endDate || date <= record.endDate)
+      && (record.frequency === 'monthly' || i + 1 === startMonth) ? amount : new Decimal(0);
+  }));
+}

@@ -1,0 +1,755 @@
+[
+  {
+    "id": "empty-cash",
+    "taxYear": 2026,
+    "sources": [
+      "independent Decimal(40) calendar arithmetic; specification section 5"
+    ],
+    "input": {
+      "schemaVersion": 1,
+      "id": "synthetic-plan",
+      "revision": 0,
+      "startYear": 2026,
+      "horizonYears": 1,
+      "openingCashCents": 0,
+      "household": {
+        "filingStatus": "married-joint",
+        "residence": "CA-full-year",
+        "currency": "USD",
+        "filers": [
+          {
+            "id": "owner-a",
+            "name": "Filer A",
+            "birthDate": {
+              "known": true,
+              "value": "1980-01-01"
+            },
+            "workplaceCoverage": {
+              "known": true,
+              "value": false
+            },
+            "coverageByYear": [],
+            "employerAssumptionsByYear": []
+          },
+          {
+            "id": "owner-b",
+            "name": "Filer B",
+            "birthDate": {
+              "known": true,
+              "value": "1982-01-01"
+            },
+            "workplaceCoverage": {
+              "known": true,
+              "value": false
+            },
+            "coverageByYear": [],
+            "employerAssumptionsByYear": []
+          }
+        ],
+        "coverageAnswers": {
+          "additionalIncome": {
+            "known": true,
+            "value": false
+          },
+          "additionalCredits": {
+            "known": true,
+            "value": false
+          },
+          "qualifiedDividendsOrCapitalGains": {
+            "known": true,
+            "value": false
+          },
+          "retirementDistributions": {
+            "known": true,
+            "value": false
+          },
+          "priorFederalMinimumTaxCredits": {
+            "known": true,
+            "value": false
+          },
+          "priorCaliforniaMinimumTaxCredits": {
+            "known": true,
+            "value": false
+          }
+        }
+      },
+      "taxPolicy": {
+        "baselineYear": 2026,
+        "futureIndexGrowthBps": 0,
+        "actualStateTaxPaidByYear": []
+      },
+      "salaries": [],
+      "otherIncome": [],
+      "expenses": [],
+      "accounts": [],
+      "contributions": [],
+      "debts": [],
+      "properties": [],
+      "rentals": []
+    },
+    "worksheetSteps": [
+      "Monthly unchanged salary = entered annual cents / 12.",
+      "Round cumulative calendar-year earnings to nearest cent, ties away from zero; difference consecutive cumulative totals.",
+      "Hand-checked total is 100001 cents for the salary case; all empty-plan flows are zero."
+    ],
+    "expected": {
+      "year": 2026,
+      "months": [
+        {
+          "year": 2026,
+          "month": 1,
+          "date": "2026-01",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 2,
+          "date": "2026-02",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 3,
+          "date": "2026-03",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 4,
+          "date": "2026-04",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 5,
+          "date": "2026-05",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 6,
+          "date": "2026-06",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 7,
+          "date": "2026-07",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 8,
+          "date": "2026-08",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 9,
+          "date": "2026-09",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 10,
+          "date": "2026-10",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 11,
+          "date": "2026-11",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 12,
+          "date": "2026-12",
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 0,
+          "expensesCents": 0,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        }
+      ],
+      "annual": {
+        "salaryCents": 0,
+        "otherIncomeCents": 0,
+        "rentCents": 0,
+        "grossIncomeCents": 0,
+        "expensesCents": 0,
+        "wageCents": 0,
+        "ordinaryTaxableCents": 0,
+        "nonTaxableCents": 0
+      },
+      "streams": [],
+      "wages": [],
+      "salaryPeriods": [],
+      "positiveGrossCashByMonth": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "math-calendar-v1"
+    ]
+  },
+  {
+    "id": "exact-annual-salary",
+    "taxYear": 2026,
+    "sources": [
+      "independent Decimal(40) calendar arithmetic; specification section 5"
+    ],
+    "input": {
+      "schemaVersion": 1,
+      "id": "synthetic-plan",
+      "revision": 0,
+      "startYear": 2026,
+      "horizonYears": 1,
+      "openingCashCents": 0,
+      "household": {
+        "filingStatus": "married-joint",
+        "residence": "CA-full-year",
+        "currency": "USD",
+        "filers": [
+          {
+            "id": "owner-a",
+            "name": "Filer A",
+            "birthDate": {
+              "known": true,
+              "value": "1980-01-01"
+            },
+            "workplaceCoverage": {
+              "known": true,
+              "value": false
+            },
+            "coverageByYear": [],
+            "employerAssumptionsByYear": []
+          },
+          {
+            "id": "owner-b",
+            "name": "Filer B",
+            "birthDate": {
+              "known": true,
+              "value": "1982-01-01"
+            },
+            "workplaceCoverage": {
+              "known": true,
+              "value": false
+            },
+            "coverageByYear": [],
+            "employerAssumptionsByYear": []
+          }
+        ],
+        "coverageAnswers": {
+          "additionalIncome": {
+            "known": true,
+            "value": false
+          },
+          "additionalCredits": {
+            "known": true,
+            "value": false
+          },
+          "qualifiedDividendsOrCapitalGains": {
+            "known": true,
+            "value": false
+          },
+          "retirementDistributions": {
+            "known": true,
+            "value": false
+          },
+          "priorFederalMinimumTaxCredits": {
+            "known": true,
+            "value": false
+          },
+          "priorCaliforniaMinimumTaxCredits": {
+            "known": true,
+            "value": false
+          }
+        }
+      },
+      "taxPolicy": {
+        "baselineYear": 2026,
+        "futureIndexGrowthBps": 0,
+        "actualStateTaxPaidByYear": []
+      },
+      "salaries": [
+        {
+          "id": "salary",
+          "name": "Salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "annualGrossCents": 100001,
+          "startDate": "2026-01-01",
+          "annualRaiseBps": 0,
+          "raiseMonth": 1,
+          "raiseDay": 1,
+          "changes": []
+        }
+      ],
+      "otherIncome": [],
+      "expenses": [],
+      "accounts": [],
+      "contributions": [],
+      "debts": [],
+      "properties": [],
+      "rentals": []
+    },
+    "worksheetSteps": [
+      "Monthly unchanged salary = entered annual cents / 12.",
+      "Round cumulative calendar-year earnings to nearest cent, ties away from zero; difference consecutive cumulative totals.",
+      "Hand-checked total is 100001 cents for the salary case; all empty-plan flows are zero."
+    ],
+    "expected": {
+      "year": 2026,
+      "months": [
+        {
+          "year": 2026,
+          "month": 1,
+          "date": "2026-01",
+          "salaryCents": 8333,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8333,
+          "expensesCents": 0,
+          "wageCents": 8333,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 2,
+          "date": "2026-02",
+          "salaryCents": 8334,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8334,
+          "expensesCents": 0,
+          "wageCents": 8334,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 3,
+          "date": "2026-03",
+          "salaryCents": 8333,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8333,
+          "expensesCents": 0,
+          "wageCents": 8333,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 4,
+          "date": "2026-04",
+          "salaryCents": 8334,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8334,
+          "expensesCents": 0,
+          "wageCents": 8334,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 5,
+          "date": "2026-05",
+          "salaryCents": 8333,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8333,
+          "expensesCents": 0,
+          "wageCents": 8333,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 6,
+          "date": "2026-06",
+          "salaryCents": 8334,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8334,
+          "expensesCents": 0,
+          "wageCents": 8334,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 7,
+          "date": "2026-07",
+          "salaryCents": 8333,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8333,
+          "expensesCents": 0,
+          "wageCents": 8333,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 8,
+          "date": "2026-08",
+          "salaryCents": 8333,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8333,
+          "expensesCents": 0,
+          "wageCents": 8333,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 9,
+          "date": "2026-09",
+          "salaryCents": 8334,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8334,
+          "expensesCents": 0,
+          "wageCents": 8334,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 10,
+          "date": "2026-10",
+          "salaryCents": 8333,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8333,
+          "expensesCents": 0,
+          "wageCents": 8333,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 11,
+          "date": "2026-11",
+          "salaryCents": 8334,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8334,
+          "expensesCents": 0,
+          "wageCents": 8334,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        {
+          "year": 2026,
+          "month": 12,
+          "date": "2026-12",
+          "salaryCents": 8333,
+          "otherIncomeCents": 0,
+          "rentCents": 0,
+          "grossIncomeCents": 8333,
+          "expensesCents": 0,
+          "wageCents": 8333,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        }
+      ],
+      "annual": {
+        "salaryCents": 100001,
+        "otherIncomeCents": 0,
+        "rentCents": 0,
+        "grossIncomeCents": 100001,
+        "expensesCents": 0,
+        "wageCents": 100001,
+        "ordinaryTaxableCents": 0,
+        "nonTaxableCents": 0
+      },
+      "streams": [
+        {
+          "id": "salary",
+          "kind": "salary",
+          "months": [
+            8333,
+            8334,
+            8333,
+            8334,
+            8333,
+            8334,
+            8333,
+            8333,
+            8334,
+            8333,
+            8334,
+            8333
+          ],
+          "annualCents": 100001,
+          "classification": "wage",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "niitTreatment": "excluded"
+        }
+      ],
+      "wages": [
+        {
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "monthlyCents": [
+            8333,
+            8334,
+            8333,
+            8334,
+            8333,
+            8334,
+            8333,
+            8333,
+            8334,
+            8333,
+            8334,
+            8333
+          ],
+          "annualCents": 100001,
+          "streamIds": [
+            "salary"
+          ]
+        }
+      ],
+      "salaryPeriods": [
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 1,
+          "startDate": "2026-01-01",
+          "endDate": "2026-01-31",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666668"
+        },
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 2,
+          "startDate": "2026-02-01",
+          "endDate": "2026-02-28",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666668"
+        },
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 3,
+          "startDate": "2026-03-01",
+          "endDate": "2026-03-31",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666668"
+        },
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 4,
+          "startDate": "2026-04-01",
+          "endDate": "2026-04-30",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666667"
+        },
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 5,
+          "startDate": "2026-05-01",
+          "endDate": "2026-05-31",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666668"
+        },
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 6,
+          "startDate": "2026-06-01",
+          "endDate": "2026-06-30",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666667"
+        },
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 7,
+          "startDate": "2026-07-01",
+          "endDate": "2026-07-31",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666668"
+        },
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 8,
+          "startDate": "2026-08-01",
+          "endDate": "2026-08-31",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666668"
+        },
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 9,
+          "startDate": "2026-09-01",
+          "endDate": "2026-09-30",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666667"
+        },
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 10,
+          "startDate": "2026-10-01",
+          "endDate": "2026-10-31",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666668"
+        },
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 11,
+          "startDate": "2026-11-01",
+          "endDate": "2026-11-30",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666667"
+        },
+        {
+          "salaryId": "salary",
+          "ownerId": "owner-a",
+          "employerId": "employer-a",
+          "month": 12,
+          "startDate": "2026-12-01",
+          "endDate": "2026-12-31",
+          "annualGrossCents": 100001,
+          "unroundedEarnedCents": "8333.416666666666666666666666666666666668"
+        }
+      ],
+      "positiveGrossCashByMonth": [
+        8333,
+        8334,
+        8333,
+        8334,
+        8333,
+        8334,
+        8333,
+        8333,
+        8334,
+        8333,
+        8334,
+        8333
+      ]
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "math-calendar-v1"
+    ]
+  }
+]

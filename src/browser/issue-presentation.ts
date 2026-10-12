@@ -51,6 +51,10 @@ export function resolveIssueTargets(issue:Issue,state:Pick<WorkspaceState,'saved
   const target=(section:InputSection,recordId:string,path?:string):ReviewTarget=>({section,recordId,...(path?{field:path}:{}),label:`Review ${section==='Household'?'Household':getRecordLabel(plan,id??recordId)}`});
   const household=Object.hasOwn(state.drafts,'household')?state.drafts.household!.value:{household:plan.household,taxPolicy:plan.taxPolicy,startYear:plan.startYear,horizonYears:plan.horizonYears,openingCashCents:plan.openingCashCents};
   const householdField=(ownerId:string,f:string)=>{const prefix=findRecordPath(household,ownerId);return prefix===undefined?undefined:`${prefix}.${f}`;};
+  const householdRows=(ownerId:string,f:string):readonly {year?:unknown;employerId?:unknown}[]=>{
+    const path=householdField(ownerId,f),value=path?.split('.').reduce<unknown>((node,key)=>node&&typeof node==='object'?(node as Record<string,unknown>)[key]:undefined,household);
+    return Array.isArray(value)?value:[];
+  };
   const contribution=plan.contributions.find(c=>c.id===id);
   const filer=plan.household.filers.find(f=>f.id===id);
   if(contribution||filer){
@@ -59,11 +63,13 @@ export function resolveIssueTargets(issue:Issue,state:Pick<WorkspaceState,'saved
       const people=/spouse/.test(field)||issue.code==='required-workplace-coverage'?plan.household.filers:plan.household.filers.filter(f=>f.id===ownerId);
       return people.map(person=>{
         let f=field.replace(/^spouse\./,'');
-        if(f.startsWith('employerAssumptionsByYear')){
+        if(/^workplaceCoverage(?:\.|$)/.test(f)){
+          const index=householdRows(person.id,'coverageByYear').findIndex(row=>issue.year!==undefined&&String(row.year)===String(issue.year));
+          if(index>=0)f=`coverageByYear.${index}.${f}`;
+        }
+        if(f.startsWith('employerAssumptionsByYear')&&!/^employerAssumptionsByYear\.\d+(?:\.|$)/.test(f)){
           const salary=plan.salaries.find(s=>s.id===contribution?.sponsoringSalaryId);
-          const prefix=householdField(person.id,'employerAssumptionsByYear');
-          const raw=prefix?.split('.').reduce<any>((node,key)=>node?.[key],household);
-          const index=Array.isArray(raw)?raw.findIndex(row=>String(row.year)===String(issue.year)&&(!salary||row.employerId===salary.employerId)):-1;
+          const index=salary?householdRows(person.id,'employerAssumptionsByYear').findIndex(row=>issue.year!==undefined&&String(row.year)===String(issue.year)&&row.employerId===salary.employerId):-1;
           f=index>=0?f.replace('employerAssumptionsByYear',`employerAssumptionsByYear.${index}`):'employerAssumptionsByYear';
         }
         return target('Household','household',householdField(person.id,f));

@@ -12,7 +12,7 @@ import { renderExpensesDebtsForm } from './forms/expenses-debts';
 import { renderInvestmentsForm } from './forms/investments';
 import { renderPropertiesForm } from './forms/properties';
 import { renderProjection } from './views/projection';
-import { renderIssues } from './views/issues';
+import { renderIssues,renderIssueDetails } from './views/issues';
 
 function downloadText(text:string,name:string):void {
   if(typeof URL.createObjectURL!=='function')return;
@@ -58,6 +58,11 @@ export function mountApp(root:HTMLElement,plan:PlanDocument,storage:StoragePort,
     const active=document.activeElement instanceof HTMLInputElement||document.activeElement instanceof HTMLSelectElement?document.activeElement:undefined;const activeRecord=active?.closest<HTMLElement>('[data-record-id]')?.dataset.recordId,activeField=active?.dataset.field;const selection=active instanceof HTMLInputElement&&active.type==='text'?[active.selectionStart,active.selectionEnd] as const:undefined;
     if(changed||draftKeys!==newKeys){for(const {container,renderer} of containers){disclosures.closeWithin(container,false);renderer(container,controller,context);}}
     syncFormFeedback(editor,controller,context);
+    for(const feedback of editor.querySelectorAll<HTMLElement>('[data-operation-feedback]')){disclosures.closeWithin(feedback,false);feedback.remove();}
+    if(operation?.kind==='remove'&&!operation.result.accepted){
+      const form=[...editor.querySelectorAll<HTMLElement>('form[data-record-id]')].find(node=>node.dataset.recordId===operation.recordId);
+      if(form){const feedback=element('div');feedback.dataset.operationFeedback='';feedback.append(element('strong','Record not removed. Correct the linked inputs, then remove again.'));renderIssueDetails(feedback,operation.result.issues.map(issue=>({issue})),context);form.append(feedback);}
+    }
     if(activeField&&activeRecord&&!active?.isConnected){const form=[...editor.querySelectorAll<HTMLElement>('[data-record-id]')].find(node=>node.dataset.recordId===activeRecord);const replacement=[...form?.querySelectorAll<HTMLInputElement|HTMLSelectElement>('[data-field]')??[]].find(node=>node.dataset.field===activeField);replacement?.focus();if(selection&&replacement instanceof HTMLInputElement&&replacement.type==='text')replacement.setSelectionRange(selection[0],selection[1]);}
     savedIdentity=state.savedPlan;draftKeys=newKeys;
   };

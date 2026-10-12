@@ -433,12 +433,13 @@ Extend quota restoration to edit afterward: recovery action remains visible, and
 | Shell statuses, recovery lifetime, backups and action consequences | 7 |
 | Keyboard/hover/touch, safe text, lifecycle, viewport/scrolling and regression contracts | 1–2, 4, 8 |
 
-Implemented inline on `main`. The task commits preserve engine, rule-pack, fixture, storage-key and schema contracts. A final independent whole-branch review follows the task verification gates.
+Implemented inline on `main`. The task commits preserve engine, rule-pack, fixture, storage-key and schema contracts. The independent whole-branch review and its final regression-verified fix pass are complete.
 
 ## Implementation handoff
 
-- Release verification: `PLAYWRIGHT_BROWSERS_PATH=/tmp/lifelook-foundation-browser-cache npm run check` passed 591 engine/browser tests, production build and all 10 Chromium acceptance flows.
+- Release verification: `PLAYWRIGHT_BROWSERS_PATH=/tmp/lifelook-foundation-browser-cache npm run check` passed 597 engine/browser tests, production build and all 10 Chromium acceptance flows.
 - Desktop/mobile inspection: the default 30 annual rows contain no explanation paragraphs in amount cells and reach a maximum row height of 50.55 px at the audit desktop viewport. The populated fixture retains annual net worth `$363,536.05`; all eight saved property disclosures start closed.
 - Chromium covers keyboard, hover-to-preview movement, touch, 390 px width, enlarged text, horizontal scrolling, hidden sections, result replacement, destination focus, native financial entry and applied-input recovery exports.
 - Acceptance exposed and corrected focus after hover Escape, popup placement after text-size changes, owner-document cleanup, account routing for unknown IRA basis and visible combined valuation dates. Employer history entry now selects saved salaries by their human names.
+- The independent review found six important feedback/recovery defects. Each received a mounted-workspace RED→GREEN regression: rejected removals now show dependency errors beside the initiating action; annual coverage reviews reach the effective override; ambiguous employer warnings reach the employer group; absent required properties retain field feedback; loss reconciliation targets its group without marking a valid year invalid; unchanged Save retries persist applied inputs without creating a new revision. No findings were deferred or declined.
 - Execution ruling: Testing Library role queries use exact string names without the unsupported `exact:true` option; product behavior is unchanged.

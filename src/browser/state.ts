@@ -59,6 +59,9 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
   const notify=(operation?:WorkspaceOperation)=>{if(operationDepth===0||operation)listeners.forEach(listener=>listener(operation));};
   const operate=(kind:'save'|'remove',recordId:string,action:()=>SaveRecordResult):SaveRecordResult=>{operationDepth++;let outcome:SaveRecordResult;try{outcome=action();}finally{operationDepth--;}if(operationDepth===0)notify({kind,recordId,result:outcome});return outcome;};
   const result=(accepted:boolean):SaveRecordResult=>({accepted,persisted,issues,persistenceIssues});
+  const persistApplied=():SaveRecordResult=>{
+    const saved=savePlan(storage,savedPlan);persisted=saved.persisted;persistenceIssues=saved.issues.filter(issue=>issue.code==='storage-write-failed');issues=[];notify();return result(true);
+  };
   const publish=(candidate:PlanDocument,clear:readonly string[]):SaveRecordResult=>{
     const validation=validatePlan(candidate);if(!validation.ok){issues=validation.issues;notify();return result(false);}
     let candidateProjection:ProjectionResult;
@@ -83,14 +86,19 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
     getState:()=>({savedPlan,drafts,projection,persisted,issues,persistenceIssues}),getDraft,
     editDraft(id,draft){if(id!==draft.recordId)throw new Error('Draft record identity must remain stable.');if(!bases.has(id))bases.set(id,draft.baseSnapshot??snapshot(draft.section,id));drafts={...drafts,[id]:structuredClone(draft)};issues=[];notify();},
     discardDraft(id){drafts=Object.fromEntries(Object.entries(drafts).filter(([key])=>key!==id));bases.delete(id);issues=[];notify();},
-    saveRecord(id){return operate('save',id,()=>{const draft=draftFor(id)??(id==='household'?getDraft('household',id):undefined);if(!draft)return result(false);if(draft.section==='properties')return controller.saveProperty(id);
+    saveRecord(id){return operate('save',id,()=>{
+      const edited=draftFor(id),retry=persistenceIssues.some(issue=>issue.code==='storage-write-failed');
+      if(!edited&&id==='household'&&retry)return persistApplied();
+      const draft=edited??(id==='household'?getDraft('household',id):undefined);
+      if(!draft){const sections=['salaries','otherIncome','expenses','debts','accounts','contributions','properties','rentals'] as const;return sections.some(section=>savedPlan[section].some(record=>record.id===id))?persistApplied():result(false);}
+      if(draft.section==='properties')return controller.saveProperty(id);
       if(stale(draft.section,id))return result(false);
       const decoded=fromDraftValue(draft.value,id);if(decoded.issues.length){issues=decoded.issues;notify();return result(false);}
       if(draft.section!=='household'&&decoded.value.id!==id)return rejectIdentity(id,'id');
       const candidate:PlanDocument=draft.section==='household'?{...savedPlan,...decoded.value,revision:savedPlan.revision+1}:{...savedPlan,[draft.section]:[...savedPlan[draft.section].filter(row=>row.id!==id),decoded.value],revision:savedPlan.revision+1};
       return publish(candidate,[id]);
     });},
-    saveProperty(id){return operate('save',id,()=>{const draft=draftFor(id)??getDraft('properties',id);if(stale('properties',id))return result(false);const decoded=fromDraftValue(draft.value,id);if(decoded.issues.length){issues=decoded.issues;notify();return result(false);}
+    saveProperty(id){return operate('save',id,()=>{if(!draftFor(id)&&savedPlan.properties.some(property=>property.id===id)&&persistenceIssues.some(issue=>issue.code==='storage-write-failed'))return persistApplied();const draft=draftFor(id)??getDraft('properties',id);if(stale('properties',id))return result(false);const decoded=fromDraftValue(draft.value,id);if(decoded.issues.length){issues=decoded.issues;notify();return result(false);}
       if((decoded.value.property as RawObject|undefined)?.id!==id)return rejectIdentity(id,'property.id');
       const existingRentalIds=new Set(savedPlan.rentals.filter(r=>r.propertyId===id).map(r=>r.id));
       return publish({...savedPlan,revision:savedPlan.revision+1,properties:[...savedPlan.properties.filter(p=>p.id!==id),decoded.value.property as PlanDocument['properties'][number]],rentals:[...savedPlan.rentals.filter(r=>r.propertyId!==id),...decoded.value.rentals as PlanDocument['rentals']],expenses:[...savedPlan.expenses.filter(e=>e.propertyId!==id&&(!e.rentalId||!existingRentalIds.has(e.rentalId))),...decoded.value.expenses as PlanDocument['expenses']]},[id]);

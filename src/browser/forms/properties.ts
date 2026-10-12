@@ -76,7 +76,8 @@ function historyBook(root:HTMLElement,context:FieldContext,path:FieldPath,name:s
   }),path,'History status',{kind:'select',options:[{value:'unknown',label:'Unknown'},{value:'known',label:'Enter amounts'},{value:'known-zero',label:'All amounts and losses are zero'}]});
   if(!history?.known)return;
   for(const [key,label]of bookAmounts)field(section,context,[...path,'value',key],label,{kind:'money'});
-  rows(section,context,[...path,'value','lossVintages'],'Rental loss vintage','Add rental loss vintage','Remove rental loss vintage',()=>({year:'',source:'passive',amountCents:'',activeParticipation:unknown(),qbiQualification:unknown()}),(row,p)=>{
+  const losses=group(section,'Rental loss history');losses.dataset.fieldGroup=[...path,'value','lossVintages'].join('.');losses.dataset.groupLabel='Rental loss history';
+  rows(losses,context,[...path,'value','lossVintages'],'Rental loss vintage','Add rental loss vintage','Remove rental loss vintage',()=>({year:'',source:'passive',amountCents:'',activeParticipation:unknown(),qbiQualification:unknown()}),(row,p)=>{
     field(row,context,[...p,'year'],'Loss year',{kind:'integer'});field(row,context,[...p,'source'],'Loss source',{kind:'select',options:[{value:'at-risk',label:'At-risk'},{value:'passive',label:'Passive'}]});field(row,context,[...p,'amountCents'],'Loss amount',{kind:'money'});
     booleanHistory(row,context,[...p,'activeParticipation'],'Participation when loss arose');booleanHistory(row,context,[...p,'qbiQualification'],'QBI qualification when loss arose');
   });

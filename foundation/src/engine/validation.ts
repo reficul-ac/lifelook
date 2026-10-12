@@ -268,6 +268,7 @@ export function validatePlan(raw: unknown): ValidationResult {
       v.cents(loan.originalPrincipalCents, 'originalPrincipalCents', loanId); v.rate(loan.aprBps, 'aprBps', loanId, false);
       v.date(loan.originationDate, 'originationDate', loanId); v.date(loan.acquisitionDate, 'acquisitionDate', loanId); v.date(loan.firstPaymentDate, 'firstPaymentDate', loanId); v.integer(loan.termMonths, 'termMonths', loanId, 1, 1200);
       if (isValidISODate(loan.originationDate) && forecastStart && loan.originationDate > forecastStart) v.issue('originationDate', loanId, 'Existing property loans must originate no later than forecast start.');
+      if (isValidISODate(loan.acquisitionDate) && forecastStart && loan.acquisitionDate > forecastStart) v.issue('acquisitionDate', loanId, 'Existing loan acquisition history must be no later than forecast start.');
       if (isValidISODate(loan.originationDate) && isValidISODate(loan.firstPaymentDate) && loan.firstPaymentDate < loan.originationDate) v.issue('firstPaymentDate', loanId, 'The first payment cannot precede origination.');
       v.moneyHistory(loan.openingBalance, 'openingBalance', loanId); v.moneyHistory(loan.openingPayment, 'openingPayment', loanId);
       reference(loan.collateralPropertyId, propertyById, 'collateralPropertyId', loanId);

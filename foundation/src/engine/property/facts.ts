@@ -5,7 +5,7 @@ import type { HouseholdTaxState } from '../model/tax-state';
 import type { Available, Issue } from '../model/results';
 import type { YearRules } from '../rules/types';
 import type { ExpenseAllocation } from './allocation';
-import { allocateExpense, allocateShares, sharedRentalShares } from './allocation';
+import { allocateExpense, allocateShares, loanRentalShares } from './allocation';
 import type { DepreciationYear } from './depreciation';
 import { calculateDepreciation } from './depreciation';
 import type { LoanSchedule, MortgageQualificationEvidence } from './loans';
@@ -82,18 +82,7 @@ function sumAvailable(values: readonly Available<Cents>[]): Available<Cents> {
 
 function loanShares(loan: PropertyLoan | undefined, property: Property,
   units: readonly RentalUnit[]): Readonly<Record<string, Decimal>> {
-  const defaults = sharedRentalShares(property, units);
-  return Object.fromEntries([...units].sort((a, b) => a.id.localeCompare(b.id)).map(unit => {
-    const explicit = loan && unit.loanAllocations.find(allocation => allocation.loanId === loan.id);
-    if (explicit) return [unit.id, new Decimal(explicit.share.numerator).div(explicit.share.denominator)];
-    const proceeds = loan?.proceedsAllocations.filter(allocation => allocation.use === 'rental'
-      && allocation.rentalId === unit.id) ?? [];
-    if (proceeds.length) return [unit.id, proceeds.reduce((total, allocation) => total.plus(
-      new Decimal(allocation.share.numerator).div(allocation.share.denominator)), new Decimal(0))];
-    // An explicit personal-only proceeds allocation is distinct from a missing trace.
-    if (loan?.proceedsAllocations.length) return [unit.id, new Decimal(0)];
-    return [unit.id, defaults[unit.id] ?? new Decimal(0)];
-  }));
+  return loanRentalShares(loan, property, units);
 }
 
 function eligibleLoanInterest(loan: PropertyLoan | undefined, unit: RentalUnit,

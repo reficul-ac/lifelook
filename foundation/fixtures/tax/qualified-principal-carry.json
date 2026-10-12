@@ -1,0 +1,34 @@
+{
+  "id": "activity-funded-qualified-principal-two-years",
+  "sources": ["https://www.irs.gov/instructions/i6198", "https://www.irs.gov/publications/p925"],
+  "derivation": "Independent Form 6198 ledger in integer cents: opening at risk plus positive book profit minus activity-funded qualifying principal, then deduct losses that pass the at-risk limit. No owner capital or distributions. Four books have distinct noncash depreciation; positive cash after debt service establishes the modeled activity can fund the principal. Year-two allowed loss is also within the household active-rental allowance. These expectations were written before the production correction.",
+  "openingAtRiskCents": 1000000,
+  "years": [
+    {
+      "year": 2026,
+      "rentCents": 2000000,
+      "operatingExpenseCents": 400000,
+      "principalPaidCents": 300000,
+      "cashFlowCents": 1300000,
+      "books": {
+        "federal": { "depreciationCents": 1400000, "taxableProfitCents": 200000, "allowedRentalCents": 200000, "closingAtRiskCents": 900000, "atRiskSuspendedCents": 0 },
+        "california": { "depreciationCents": 1300000, "taxableProfitCents": 300000, "allowedRentalCents": 300000, "closingAtRiskCents": 1000000, "atRiskSuspendedCents": 0 },
+        "federal-amt": { "depreciationCents": 1500000, "taxableProfitCents": 100000, "allowedRentalCents": 100000, "closingAtRiskCents": 800000, "atRiskSuspendedCents": 0 },
+        "california-amt": { "depreciationCents": 1600000, "taxableProfitCents": 0, "allowedRentalCents": 0, "closingAtRiskCents": 700000, "atRiskSuspendedCents": 0 }
+      }
+    },
+    {
+      "year": 2027,
+      "rentCents": 700000,
+      "operatingExpenseCents": 400000,
+      "principalPaidCents": 200000,
+      "cashFlowCents": 100000,
+      "books": {
+        "federal": { "depreciationCents": 1400000, "taxableProfitCents": -1100000, "allowedRentalCents": -700000, "closingAtRiskCents": 0, "atRiskSuspendedCents": 400000 },
+        "california": { "depreciationCents": 1300000, "taxableProfitCents": -1000000, "allowedRentalCents": -800000, "closingAtRiskCents": 0, "atRiskSuspendedCents": 200000 },
+        "federal-amt": { "depreciationCents": 1500000, "taxableProfitCents": -1200000, "allowedRentalCents": -600000, "closingAtRiskCents": 0, "atRiskSuspendedCents": 600000 },
+        "california-amt": { "depreciationCents": 1600000, "taxableProfitCents": -1300000, "allowedRentalCents": -500000, "closingAtRiskCents": 0, "atRiskSuspendedCents": 800000 }
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import { Decimal, MAX_CENTS, settleCents } from './money';
 import type { Filer, ISODate, PlanDocument, ValidatedPlan } from './model/plan';
 import type { Issue, ValidationResult } from './model/results';
 import { checkCoverage } from './coverage';
+import { allocateExpense, allocateShares, loanRentalShares, sharedRentalShares } from './property/allocation';
 
 type Obj = Record<string, unknown>;
 const books = ['federal', 'california', 'federal-amt', 'california-amt'] as const;
@@ -348,6 +349,27 @@ export function validatePlan(raw: unknown): ValidationResult {
     if (o.use === 'personal' && o.rentalId !== undefined) v.issue('rentalId', id, 'Personal expenses cannot also be assigned to a rental.');
     if (o.use !== 'shared' && o.allocationOverride !== undefined) v.issue('allocationOverride', id, 'Allocation overrides apply to shared expenses.');
   });
+
+  // Validate the same effective shares calculation consumes, including default/override mixtures.
+  if (v.issues.length === 0) {
+    const document = raw as PlanDocument;
+    for (const property of document.properties) {
+      const units = document.rentals.filter(unit => unit.propertyId === property.id);
+      try { sharedRentalShares(property, units); }
+      catch (error) { if (!(error instanceof RangeError)) throw error; v.issue('rentals.sharedAllocation', property.id, error.message); }
+      for (const loan of property.loans) {
+        try { allocateShares(100, loanRentalShares(loan, property, units)); }
+        catch (error) { if (!(error instanceof RangeError)) throw error; v.issue('rentals.loanAllocations', loan.id, error.message); }
+      }
+    }
+    for (const expense of document.expenses) {
+      const rental = document.rentals.find(unit => unit.id === expense.rentalId);
+      const property = document.properties.find(row => row.id === (expense.propertyId ?? rental?.propertyId));
+      if (!property) continue;
+      try { allocateExpense(expense, property, document.rentals, 100); }
+      catch (error) { if (!(error instanceof RangeError)) throw error; v.issue(expense.allocationOverride ? 'allocationOverride' : 'use', expense.id, error.message); }
+    }
+  }
 
   // Aggregate checks use decimals; individually valid amounts must not overflow a subtotal.
   if (v.issues.length === 0) {

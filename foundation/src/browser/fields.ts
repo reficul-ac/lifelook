@@ -71,6 +71,7 @@ export function renderRecordSection(root:HTMLElement,controller:WorkspaceControl
     const context:FieldContext={get draft(){return controller.getDraft(section,id);},get issues(){return controller.getState().issues.filter(i=>i.recordId===id||section==='household');},onChange(path,value){const draft=controller.getDraft(section,id);controller.editDraft(id,{...draft,value:setAt(draft.value,path,value)});},refresh(){refreshFields(body,()=>render(body,context));}};
     context.refresh();
     const save=element('button',section==='household'?'Save household':`Save ${title==='Income'?'income':title==='Investments'?'investment':title.toLowerCase()} record`);save.type='submit';card.append(save);card.addEventListener('submit',event=>{event.preventDefault();controller.saveRecord(id);});
+    card.append(button(`Discard ${title.toLowerCase()} record edits and reload saved values`,()=>{controller.discardDraft(id);renderRecordSection(root,controller,section,title,render,makeNew);}));
     if(section!=='household')card.append(button(`Remove ${String(controller.getDraft(section,id).value.name??'record')}`,()=>controller.removeRecord(section,id)));
     root.append(card);
   }

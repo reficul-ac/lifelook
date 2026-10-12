@@ -1,5 +1,5 @@
 import { Decimal, settleCents } from '../money';
-import type { Cents, Expense, Property, RentalUnit } from '../model/plan';
+import type { Cents, Expense, Property, PropertyLoan, RentalUnit } from '../model/plan';
 
 export interface ExpenseAllocation {
   readonly personalCents: Cents;
@@ -36,6 +36,23 @@ export function sharedRentalShares(
   const total = Object.values(shares).reduce((sum, share) => sum.plus(share), new Decimal(0));
   if (total.gt(1)) throw new RangeError('Rental allocation shares exceed the whole expense.');
   return shares;
+}
+
+/** Effective loan shares honor explicit unit overrides, then traced proceeds. */
+export function loanRentalShares(loan: PropertyLoan | undefined, property: Property,
+  units: readonly RentalUnit[]): Readonly<Record<string, Decimal>> {
+  const defaults = sharedRentalShares(property, units);
+  return Object.fromEntries([...units].filter(unit => unit.propertyId === property.id)
+    .sort((a, b) => a.id.localeCompare(b.id)).map(unit => {
+      const explicit = loan && unit.loanAllocations.find(allocation => allocation.loanId === loan.id);
+      if (explicit) return [unit.id, fraction(explicit.share.numerator, explicit.share.denominator)];
+      const proceeds = loan?.proceedsAllocations.filter(allocation => allocation.use === 'rental'
+        && allocation.rentalId === unit.id) ?? [];
+      if (proceeds.length) return [unit.id, proceeds.reduce((total, allocation) => total.plus(
+        fraction(allocation.share.numerator, allocation.share.denominator)), new Decimal(0))];
+      if (loan?.proceedsAllocations.length) return [unit.id, new Decimal(0)];
+      return [unit.id, defaults[unit.id] ?? new Decimal(0)];
+    }));
 }
 
 /** Cumulative rounding between units leaves a single personal residual. */

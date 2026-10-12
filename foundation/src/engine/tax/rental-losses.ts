@@ -90,15 +90,22 @@ function resolveBook(facts: PreIraFacts, opening: HouseholdTaxState, rules: Year
     const state = carried.value;
     const loss = Math.max(0, -current.value.taxableProfitCents);
     if (state.atRiskCents < 0) { unsupported.push(issue(rental.rentalId, facts.year, book, 'unsupported-at-risk-recapture', 'A negative opening amount at risk requires historical loss-recapture facts.')); continue; }
-    if (loss || state.atRiskSuspendedCents) {
+    if (rental.principalPaidCents < 0) { unsupported.push(issue(rental.rentalId, facts.year, book, 'unsupported-at-risk-financing', 'Negative principal amortization requires new borrowing and financing-history facts.')); continue; }
+    if (loss || state.atRiskSuspendedCents || rental.principalPaidCents > 0) {
       const financing: History<boolean> = rental.financingAtRiskQualification;
       if (!financing?.known) { missing.push(issue(rental.rentalId, facts.year, book, 'required-at-risk-financing', 'At-risk loss capacity requires a qualified financing answer.')); continue; }
       if (!financing.value) { unsupported.push(issue(rental.rentalId, facts.year, book, 'unsupported-at-risk-financing', 'The financing is outside supported personal-liability or qualified-nonrecourse financing.')); continue; }
     }
+    if (rental.principalPaidCents > 0 && rental.cashFlowCents < 0) {
+      missing.push(issue(rental.rentalId, facts.year, book, 'required-at-risk-repayment-funding', 'Activity cash is insufficient after debt service. Outside funding of qualifying principal cannot be inferred from household cash or wages.')); continue;
+    }
     const originalAr = state.lossVintages.filter(v => v.source === 'at-risk');
     const currentVintage: RentalLossVintage[] = loss ? [{ year: facts.year, source: 'at-risk', amountCents: loss, activeParticipation: rental.unit.activeParticipation, qbiQualification: rental.unit.qbi.qualification }] : [];
     const arTotal = sumCents([state.atRiskSuspendedCents, loss]);
-    const capacity = sumCents([state.atRiskCents, Math.max(0, current.value.taxableProfitCents)]);
+    // Form6198 lines9/18: qualified principal paid from the activity reduces
+    // risk. No unentered owner-capital contribution may offset that reduction.
+    const capacity = sumCents([state.atRiskCents, Math.max(0, current.value.taxableProfitCents), -rental.principalPaidCents]);
+    if (capacity < 0) { unsupported.push(issue(rental.rentalId, facts.year, book, 'unsupported-at-risk-recapture', 'Qualifying debt repayment makes the year-end amount at risk negative; prior deducted-loss and recapture history is required.')); continue; }
     const arReleased = Math.min(arTotal, Math.max(0, capacity));
     const ar = consume([...originalAr, ...currentVintage], arReleased);
     const passive = [...state.lossVintages.filter(v => v.source === 'passive'), ...ar.released.map(v => ({ ...v, source: 'passive' as const }))];
@@ -148,5 +155,5 @@ export function resolveRentalLosses(facts: PreIraFacts, opening: HouseholdTaxSta
     return [book, carried];
   })) as Record<TaxBook, Available<RentalBookState>>]));
   const issues = [...new Map(Object.values(resolved).flatMap(r => r.status === 'available' ? [] : r.issues).map(i => [JSON.stringify(i), i])).values()];
-  return { year: facts.year, federal: resolved.federal, california: resolved.california, federalAmt: resolved['federal-amt'], californiaAmt: resolved['california-amt'], closing: { ...opening, year: facts.year, rentals }, issues, assumptions: ['No activity-level owner capital injections or distributions are modeled; cash gaps do not create at-risk funding.'] };
+  return { year: facts.year, federal: resolved.federal, california: resolved.california, federalAmt: resolved['federal-amt'], californiaAmt: resolved['california-amt'], closing: { ...opening, year: facts.year, rentals }, issues, assumptions: ['No activity-level owner capital injections or distributions are modeled; cash gaps do not create at-risk funding.', ...(facts.rentalFacts.some(r => r.principalPaidCents > 0) ? ['Qualifying principal repayments reduce each book’s at-risk capacity under the no-owner-capital assumption; insufficient activity cash leaves repayment funding unknown.'] : [])] };
 }

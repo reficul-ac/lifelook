@@ -1,5 +1,7 @@
+import {calculateLoanSchedule} from '../../engine/property/loans';
+import type {PropertyLoan} from '../../engine';
 import type {IssueViewContext} from '../issue-presentation';
-import {syncFormFeedback} from '../form-feedback';
+import {syncFormFeedback,setFormTaskIssues,registerFormSummary} from '../form-feedback';
 import { defaultRentalAllocation,initializePurchaseLoan,type Property,type RentalUnit,type TaxBook,type PurchaseLoanInput } from '../../engine';
 import { button,element,refreshFields,renderField,renderBooleanHistory,setAt,valueAt,type FieldContext,type FieldPath,type FieldOptions } from '../fields';
 import { fromDraftValue,toDraftValue,type RawObject,type WorkspaceController } from '../state';
@@ -9,7 +11,17 @@ const bookAmounts:readonly [string,string][]=[['recoveryBasisCents','Original bu
 const zeroBook={recoveryBasisCents:0,adjustedBuildingBasisCents:0,cumulativeDepreciationCents:0,atRiskCents:0,atRiskSuspendedCents:0,passiveSuspendedCents:0,lossVintages:[]};
 const unknown=()=>({known:false});
 function group(root:HTMLElement,name:string):HTMLFieldSetElement {const node=element('fieldset');node.append(element('legend',name));root.append(node);return node;}
-function details(root:HTMLElement,name:string):HTMLDetailsElement {const node=element('details');node.open=true;node.append(element('summary',name));root.append(node);return node;}
+interface PropertyDisclosureOptions {readonly key:string;readonly initialOpen?:boolean;readonly status?:string}
+const disclosureStates=new WeakMap<HTMLElement,Map<string,boolean>>(),disclosureRoots=new WeakMap<HTMLElement,HTMLElement>();
+function ownerFor(node:HTMLElement):HTMLElement {for(let parent:HTMLElement|null=node;parent;parent=parent.parentElement){const owner=disclosureRoots.get(parent);if(owner)return owner;}return node;}
+function captureDisclosures(root:HTMLElement):void {const owner=ownerFor(root),state=disclosureStates.get(owner)??new Map<string,boolean>();for(const node of root.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]'))state.set(node.dataset.propertyDisclosure!,node.open);disclosureStates.set(owner,state);}
+function details(root:HTMLElement,name:string,options:PropertyDisclosureOptions):HTMLDetailsElement {
+  const owner=ownerFor(root),state=disclosureStates.get(owner)??new Map<string,boolean>();disclosureStates.set(owner,state);
+  const node=element('details');node.dataset.propertyDisclosure=options.key;node.dataset.disclosureName=name;node.dataset.disclosureStatus=options.status??'';node.open=state.get(options.key)??options.initialOpen??false;state.set(options.key,node.open);disclosureRoots.set(node,owner);
+  node.append(element('summary',name+(options.status?' · '+options.status:'')));node.addEventListener('toggle',()=>{if(node.isConnected)state.set(options.key,node.open);});root.append(node);return node;
+}
+function unknownCount(value:unknown):number {if(!value||typeof value!=='object')return 0;if('known' in value)return value.known?0:1;return Object.values(value).reduce<number>((count,item)=>count+unknownCount(item),0);}
+
 function at(context:FieldContext,path:FieldPath):any{return valueAt(context.draft.value,path);}
 function field(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,options:FieldOptions={}):void {renderField(root,context,path,label,options);}
 function displayed(context:FieldContext,path:FieldPath,value:unknown,change:(value:unknown)=>void):FieldContext {
@@ -20,7 +32,7 @@ function booleanHistory(root:HTMLElement,context:FieldContext,path:FieldPath,lab
 }
 function moneyHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,estimate=false):void {
   const history=at(context,path) as {known?:boolean;value?:string}|undefined;
-  field(root,displayed(context,path,history?.known?'known':'unknown',value=>{context.onChange(path,value==='known'?{known:true,value:''}:unknown());context.refresh();}),path,`${label} history`,{kind:'select',options:[{value:'unknown',label:estimate?'Unknown / use scheduled estimate':'Unknown'},{value:'known',label:'Known (enter zero when confirmed)'}]});
+  field(root,displayed(context,path,history?.known?'known':'unknown',value=>{context.onChange(path,value==='known'?{known:true,value:''}:unknown());context.refresh();}),path,`${label} history`,{kind:'select',options:[{value:'unknown',label:estimate?'Use schedule estimate':'Unknown'},{value:'known',label:estimate?'Enter known value':'Enter value'}]});
   if(history?.known)field(root,context,[...path,'value'],label,{kind:'money'});
 }
 function rows(root:HTMLElement,context:FieldContext,path:FieldPath,legend:string,addLabel:string,removeLabel:string,create:()=>RawObject,render:(root:HTMLElement,path:FieldPath,index:number)=>void):void {
@@ -56,11 +68,12 @@ function loanOptions(controller:WorkspaceController,context:FieldContext):readon
   return propertyRecords(controller,context).flatMap(property=>property.loans.map((loan,index)=>({value:loan.id,label:`${loan.name||`Loan ${index+1}`} — ${property.name||'Current property'}`})));
 }
 function historyBook(root:HTMLElement,context:FieldContext,path:FieldPath,name:string):void {
-  const section=group(details(root,name),name),history=at(context,path) as {known?:boolean;value?:RawObject}|undefined;
+  const history=at(context,path) as {known?:boolean;value?:RawObject}|undefined;
   const isZero=history?.known&&bookAmounts.every(([key])=>history.value?.[key]==='0.00')&&Array.isArray(history.value?.lossVintages)&&history.value.lossVintages.length===0;
+  const shortName=name.replace(' rental tax history',' history'),owner=at(context,path.slice(0,-2)) as RawObject;const disclosure=details(root,shortName,{key:`${String(owner.id)}:${String(path[path.length-1])}`,status:!history?.known?'Unknown':isZero?'Confirmed zero':'Entered amounts'});disclosure.dataset.fieldGroup=path.join('.');registerFormSummary(disclosure,()=>{const current=at(context,path) as {known?:boolean;value?:RawObject}|undefined;return !current?.known?'Unknown':bookAmounts.every(([key])=>/^0(?:\.0{1,2})?$/.test(String(current.value?.[key]??'')))&&Array.isArray(current.value?.lossVintages)&&current.value.lossVintages.length===0?'Confirmed zero':'Entered amounts';});const section=group(disclosure,'Opening amounts');
   field(section,displayed(context,path,history?.known?isZero?'known-zero':'known':'unknown',value=>{
     context.onChange(path,value==='unknown'?unknown():{known:true,value:value==='known-zero'?toDraftValue(zeroBook):Object.fromEntries([...bookAmounts.map(([key])=>[key,'']),['lossVintages',[]]])});context.refresh();
-  }),path,'History status',{kind:'select',options:[{value:'unknown',label:'Unknown'},{value:'known',label:'Known (enter independent book amounts)'},{value:'known-zero',label:'Known zero (all amounts and loss history are zero)'}]});
+  }),path,'History status',{kind:'select',options:[{value:'unknown',label:'Unknown'},{value:'known',label:'Enter amounts'},{value:'known-zero',label:'All amounts and losses are zero'}]});
   if(!history?.known)return;
   for(const [key,label]of bookAmounts)field(section,context,[...path,'value',key],label,{kind:'money'});
   rows(section,context,[...path,'value','lossVintages'],'Rental loss vintage','Add rental loss vintage','Remove rental loss vintage',()=>({year:'',source:'passive',amountCents:'',activeParticipation:unknown(),qbiQualification:unknown()}),(row,p)=>{
@@ -79,22 +92,23 @@ function loanWithTerms(loan:RawObject,result:{originalPrincipalCents:number;mont
   const entered=toDraftValue(result) as RawObject;
   return {...loan,originalPrincipalCents:entered.originalPrincipalCents,__draft:{paymentEstimate:entered.monthlyPaymentCents}};
 }
+function loanStatus(context:FieldContext,controller:WorkspaceController,path:FieldPath):string {const decoded=fromDraftValue(at(context,path),context.draft.recordId);if(decoded.issues.length)return 'Opening inputs unavailable';try{const schedule=calculateLoanSchedule(decoded.value as unknown as PropertyLoan,controller.getState().savedPlan.startYear,1);return `Opening balance ${schedule.openingProvenance==='known'?'entered':'estimated'}`;}catch{return 'Opening inputs unavailable';}}
 function renderLoan(root:HTMLElement,controller:WorkspaceController,context:FieldContext,path:FieldPath):void {
-  const loan=at(context,path) as RawObject,node=group(details(root,`Loan — ${String(loan.name??loan.id)}`),`Loan — ${String(loan.name??loan.id)}`);
+  const loan=at(context,path) as RawObject,saved=controller.getState().projection.loanSchedules.find(s=>s.loanId===loan.id&&s.year===controller.getState().savedPlan.startYear);const status=loanStatus(context,controller,path);const disclosure=details(root,`Loan — ${String(loan.name??loan.id)}`,{key:`${String(loan.id)}:loan`,initialOpen:!controller.getState().savedPlan.properties.some(p=>p.loans.some(l=>l.id===loan.id)),status});disclosure.dataset.fieldGroup=path.join('.');registerFormSummary(disclosure,()=>loanStatus(context,controller,path));const node=group(disclosure,'Loan terms');
   field(node,context,[...path,'name'],'Loan name');field(node,context,[...path,'originalPrincipalCents'],'Original principal',{kind:'money'});field(node,context,[...path,'aprBps'],'Nominal APR (%)',{kind:'rate'});
   for(const [key,label]of [['originationDate','Origination date'],['acquisitionDate','Acquisition date'],['firstPaymentDate','First payment date']] as const)field(node,context,[...path,key],label,{kind:'date'});
   field(node,context,[...path,'termMonths'],'Term (months)',{kind:'integer'});field(node,context,[...path,'collateralPropertyId'],'Collateral property',{kind:'select',options:propertyOptions(controller,context)});
   moneyHistory(node,context,[...path,'openingBalance'],'Opening mortgage balance',true);moneyHistory(node,context,[...path,'openingPayment'],'Opening principal-and-interest payment',true);
-  node.append(element('p','Property tax and insurance are separate from principal-and-interest payments.'));
-  const saved=controller.getState().projection.loanSchedules.find(s=>s.loanId===loan.id&&s.year===controller.getState().savedPlan.startYear);
-  if(saved?.schedule.status==='available')node.append(element('p',`Saved opening balance: ${saved.schedule.value.openingProvenance}; saved payment: ${saved.schedule.value.paymentProvenance}. Estimates use the scheduled terms; known overrides remain editable.`));
+  node.append(element('p','Exclude property tax and insurance from loan payments.'));
+  if(saved?.schedule.status==='available')node.append(element('p',`Saved opening balance: ${saved.schedule.value.openingProvenance}; saved payment: ${saved.schedule.value.paymentProvenance}. Exclude property tax and insurance.`));
   field(node,context,[...path,'proceedsQualification','kind'],'Proceeds type',{kind:'select',options:['acquisition','refinance','cash-out','mixed','grandfathered','unknown'],refresh:true});
-  if(at(context,[...path,'proceedsQualification','kind'])==='acquisition')node.append(button('Initialize ordinary purchase loan',()=>{
+  if(at(context,[...path,'proceedsQualification','kind'])==='acquisition')node.append(button('Calculate purchase loan',()=>{
     const current=at(context,path) as RawObject,result=purchaseTerms(context,current);
-    if(result.status!=='available'){node.append(element('p',result.issues.map(i=>`${i.explanation} ${i.resolution}`).join(' ')));return;}
+    if(result.status!=='available'){const form=node.closest<HTMLElement>('form')!;setFormTaskIssues(form,result.issues.map(issue=>({...issue,recordId:String(current.id),...(issue.field==='purchasePriceCents'||issue.field==='downPaymentCents'?{recordId:context.draft.recordId,field:'property.'+issue.field}:{})})));if(context.ui)syncFormFeedback(ownerFor(root),controller,context.ui);return;}
+    setFormTaskIssues(node.closest<HTMLElement>('form')!,[]);
     context.onChange(path,loanWithTerms(current,result.value));context.refresh();
   }));
-  const estimate=at(context,[...path,'__draft','paymentEstimate']);if(estimate!==undefined)node.append(element('p',`Estimated scheduled principal-and-interest payment: $${String(estimate)} per month. Known historical balances, payments and qualifications remain separate inputs.`));
+  const estimate=at(context,[...path,'__draft','paymentEstimate']);if(estimate!==undefined)node.append(element('p',`Estimated monthly principal & interest: $${String(estimate)} per month.`));
   booleanHistory(node,context,[...path,'proceedsQualification','qualifiedAcquisitionDebt'],'Qualified acquisition debt');moneyHistory(node,context,[...path,'proceedsQualification','qualifiedPrincipalCents'],'Qualified acquisition principal');booleanHistory(node,context,[...path,'proceedsQualification','historyComplete'],'Complete proceeds history');booleanHistory(node,context,[...path,'financingAtRiskQualification'],'Financing qualifies for at-risk rules');
   rows(node,context,[...path,'proceedsAllocations'],'Loan proceeds allocation','Add loan proceeds allocation','Remove loan proceeds allocation',()=>({propertyId:context.draft.recordId,use:'personal',share:{numerator:'',denominator:''}}),(row,p)=>{
     field(row,context,[...p,'propertyId'],'Proceeds property',{kind:'select',options:propertyOptions(controller,context),refresh:true});field(row,context,[...p,'use'],'Proceeds use',{kind:'select',options:['personal','rental'],refresh:true});
@@ -103,9 +117,9 @@ function renderLoan(root:HTMLElement,controller:WorkspaceController,context:Fiel
   });
 }
 function renderRental(root:HTMLElement,controller:WorkspaceController,context:FieldContext,path:FieldPath):void {
-  const unit=at(context,path) as RawObject,unitLabel=rentalOptions(controller,context,context.draft.recordId).find(option=>option.value===unit.id)?.label.split(' — ')[0]??'Rental unit',node=group(details(root,`Rental unit — ${unitLabel}`),`Rental unit — ${unitLabel}`);
+  const unit=at(context,path) as RawObject,unitLabel=rentalOptions(controller,context,context.draft.recordId).find(option=>option.value===unit.id)?.label.split(' — ')[0]??'Rental unit',disclosure=details(root,`Rental unit — ${unitLabel}`,{key:`${String(unit.id)}:rental`,initialOpen:!controller.getState().savedPlan.rentals.some(r=>r.id===unit.id),status:`${unknownCount(unit)} unknown facts`}),node=group(disclosure,'Rental details');disclosure.dataset.fieldGroup=path.join('.');registerFormSummary(disclosure,()=>`${unknownCount(at(context,path))} unknown facts`);
   field(node,context,[...path,'monthlyRentCents'],'Monthly rent receipts',{kind:'money'});field(node,context,[...path,'rentGrowthBps'],'Effective annual rent growth (%)',{kind:'rate'});field(node,context,[...path,'rentStartDate'],'Lease income start date',{kind:'date'});field(node,context,[...path,'rentEndDate'],'Lease income end date (optional)',{kind:'date',optional:true});field(node,context,[...path,'availableDate'],'Available for rent date',{kind:'date'});
-  node.append(element('p','The unit must already be available at forecast start. Lease income may start later; building basis excludes land and is separate from market value.'));
+  node.append(element('p','Available by forecast start; rent may begin later. Building basis excludes land and differs from market value.'));
   booleanHistory(node,context,[...path,'activeParticipation'],'Active participation');
   field(node,displayed(context,[...path,'sharedAllocation'],at(context,[...path,'sharedAllocation'])?'explicit':'default',value=>{context.onChange([...path,'sharedAllocation'],value==='explicit'?{numerator:'',denominator:''}:undefined);context.refresh();}),[...path,'sharedAllocation'],'Shared-cost allocation',{kind:'select',options:[{value:'default',label:'Default property / area allocation'},{value:'explicit',label:'Explicit share'}]});
   if(at(context,[...path,'sharedAllocation']))allocationFields(node,context,[...path,'sharedAllocation']);
@@ -121,9 +135,10 @@ function renderRental(root:HTMLElement,controller:WorkspaceController,context:Fi
   }
   node.append(button('Add rental interest allocation',()=>{const loans=at(context,['property','loans']) as readonly RawObject[];context.onChange([...path,'loanAllocations'],[...(at(context,[...path,'loanAllocations']) as readonly RawObject[]),{loanId:String(loans[0]?.id??''),share:{numerator:'',denominator:''},qualification:unknown()}]);context.refresh();}));
   for(const [book,label]of books)historyBook(node,context,[...path,'taxHistory',book],label);
-  const qbi=group(details(node,'Rental QBI history'),'Rental QBI history');booleanHistory(qbi,context,[...path,'qbi','qualification'],'QBI qualification');moneyHistory(qbi,context,[...path,'qbi','wagesCents'],'QBI wages');moneyHistory(qbi,context,[...path,'qbi','ubiaCents'],'QBI UBIA');
+  const qbiDisclosure=details(node,'QBI history',{key:`${String(unit.id)}:qbi`,status:`${unknownCount(unit.qbi)} unknown facts`});qbiDisclosure.dataset.fieldGroup=[...path,'qbi'].join('.');registerFormSummary(qbiDisclosure,()=>`${unknownCount(at(context,[...path,'qbi']))} unknown facts`);const qbi=group(qbiDisclosure,'Qualified business income');booleanHistory(qbi,context,[...path,'qbi','qualification'],'QBI qualification');moneyHistory(qbi,context,[...path,'qbi','wagesCents'],'QBI wages');moneyHistory(qbi,context,[...path,'qbi','ubiaCents'],'Unadjusted qualified property basis (UBIA)');
   const lossPath=[...path,'qbi','openingLossVintages'],losses=at(context,lossPath) as {known?:boolean;value?:readonly RawObject[]}|undefined;
-  field(qbi,displayed(context,lossPath,losses?.known?'known':'unknown',value=>{context.onChange(lossPath,value==='known'?{known:true,value:[]}:unknown());context.refresh();}),lossPath,'QBI loss history',{kind:'select',options:[{value:'unknown',label:'Unknown'},{value:'known',label:'Known (empty means confirmed no losses)'}]});
+  field(qbi,displayed(context,lossPath,losses?.known?'known':'unknown',value=>{context.onChange(lossPath,value==='known'?{known:true,value:[]}:unknown());context.refresh();}),lossPath,'QBI loss history',{kind:'select',options:[{value:'unknown',label:'Unknown'},{value:'known',label:'Enter losses'}]});
+  if(losses?.known)qbi.append(element('small','No rows means confirmed no prior losses.'));
   if(losses?.known)rows(qbi,context,[...lossPath,'value'],'QBI loss vintage','Add QBI loss vintage','Remove QBI loss vintage',()=>({year:'',amountCents:''}),(row,p)=>{field(row,context,[...p,'year'],'Loss year',{kind:'integer'});field(row,context,[...p,'amountCents'],'Loss amount',{kind:'money'});});
 }
 function renderExpense(root:HTMLElement,controller:WorkspaceController,context:FieldContext,path:FieldPath):void {
@@ -150,27 +165,26 @@ function propertyFields(root:HTMLElement,controller:WorkspaceController,context:
       root.append(element('p',allocation.status==='available'?`Default ADU shared allocation: ${Object.values(allocation.value).join(', ')||'add a rental unit'}. Explicit expense and loan allocations remain independent.`:`Default ADU shared allocation unavailable: ${allocation.issues.map(i=>i.explanation).join(' ')}`));
     }else root.append(element('p','Default ADU shared allocation requires valid entered areas and amounts.'));
   }
-  root.append(element('p','Only properties and rental units existing at forecast start can be saved. Future purchases, rental conversions, refinance, construction and sale events are outside this workspace.'));
-  rows(details(root,'Yearly appreciation overrides'),context,[...path,'appreciationOverrides'],'Appreciation override','Add appreciation override','Remove appreciation override',()=>({year:'',rateBps:''}),(row,p)=>{field(row,context,[...p,'year'],'Appreciation year',{kind:'integer'});field(row,context,[...p,'rateBps'],'Appreciation rate (%)',{kind:'rate'});});
+  rows(details(root,'Yearly appreciation overrides',{key:`${context.draft.recordId}:appreciation`,status:`${(at(context,[...path,'appreciationOverrides']) as readonly unknown[]).length} overrides`}),context,[...path,'appreciationOverrides'],'Appreciation override','Add appreciation override','Remove appreciation override',()=>({year:'',rateBps:''}),(row,p)=>{field(row,context,[...p,'year'],'Appreciation year',{kind:'integer'});field(row,context,[...p,'rateBps'],'Appreciation rate (%)',{kind:'rate'});});
   const loans=at(context,[...path,'loans']) as readonly RawObject[];
-  for(const [index]of loans.entries()){const section=element('section');renderLoan(section,controller,context,[...path,'loans',index]);section.append(button('Remove loan',()=>{context.onChange([...path,'loans'],(at(context,[...path,'loans']) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));root.append(section);}
+  for(const [index]of loans.entries()){const section=element('section');disclosureRoots.set(section,ownerFor(root));renderLoan(section,controller,context,[...path,'loans',index]);section.append(button('Remove loan',()=>{context.onChange([...path,'loans'],(at(context,[...path,'loans']) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));root.append(section);}
   root.append(button('Add loan',()=>{
     const date=`${controller.getState().savedPlan.startYear}-01-01`,loan:RawObject={id:idFor(controller,context,'loan'),name:'Purchase loan',originalPrincipalCents:'',aprBps:'0.00',originationDate:at(context,['property','purchaseDate']),acquisitionDate:at(context,['property','purchaseDate']),termMonths:'360',firstPaymentDate:`${date.slice(0,7)}-31`,openingBalance:unknown(),openingPayment:unknown(),collateralPropertyId:context.draft.recordId,proceedsQualification:{kind:'acquisition',qualifiedAcquisitionDebt:unknown(),qualifiedPrincipalCents:unknown(),historyComplete:unknown()},proceedsAllocations:[],financingAtRiskQualification:unknown()},initialized=purchaseTerms(context,loan);
     context.onChange([...path,'loans'],[...(at(context,[...path,'loans']) as readonly RawObject[]),initialized.status==='available'?loanWithTerms(loan,initialized.value):loan]);context.refresh();
   }));
   const rentals=at(context,['rentals']) as readonly RawObject[];
-  for(const [index]of rentals.entries()){const section=element('section');renderRental(section,controller,context,['rentals',index]);section.append(button('Remove rental unit',()=>{context.onChange(['rentals'],(at(context,['rentals']) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));root.append(section);}
+  for(const [index]of rentals.entries()){const section=element('section');disclosureRoots.set(section,ownerFor(root));renderRental(section,controller,context,['rentals',index]);section.append(button('Remove rental unit',()=>{context.onChange(['rentals'],(at(context,['rentals']) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));root.append(section);}
   if(property.role!=='primary')root.append(button('Add rental unit',()=>{const date=`${controller.getState().savedPlan.startYear}-01-01`;context.onChange(['rentals'],[...(at(context,['rentals']) as readonly RawObject[]),{id:idFor(controller,context,'rental'),propertyId:context.draft.recordId,monthlyRentCents:'0.00',rentGrowthBps:'0.00',rentStartDate:date,availableDate:date,activeParticipation:unknown(),loanAllocations:[],qualifications:{longTermFairMarketLease:unknown(),noPersonalUse:unknown(),noSubstantialTenantServices:unknown(),ordinaryResidential:unknown(),advancedBasisAdjustments:unknown(),californiaSmallBusinessQualification:unknown()},convertedFromPersonalUse:false,conversionBuildingFmv:unknown(),taxHistory:Object.fromEntries(books.map(([book])=>[book,unknown()])),qbi:{qualification:unknown(),wagesCents:unknown(),ubiaCents:unknown(),openingLossVintages:unknown()}}]);context.refresh();}));
-  for(const [index]of (at(context,['expenses']) as readonly RawObject[]).entries()){const section=element('section');renderExpense(section,controller,context,['expenses',index]);section.append(button('Remove property expense',()=>{context.onChange(['expenses'],(at(context,['expenses']) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));root.append(section);}
+  for(const [index]of (at(context,['expenses']) as readonly RawObject[]).entries()){const section=element('section');disclosureRoots.set(section,ownerFor(root));renderExpense(section,controller,context,['expenses',index]);section.append(button('Remove property expense',()=>{context.onChange(['expenses'],(at(context,['expenses']) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));root.append(section);}
   root.append(button('Add property expense',()=>{context.onChange(['expenses'],[...(at(context,['expenses']) as readonly RawObject[]),{id:idFor(controller,context,'expense'),name:'Property expense',amountCents:'0.00',frequency:'monthly',startDate:`${controller.getState().savedPlan.startYear}-01-01`,annualGrowthBps:'0.00',propertyId:context.draft.recordId,use:'personal',taxCategory:'personal'}]);context.refresh();}));
 }
 /** Related property, loan, rental and expense rows remain one revisioned draft. */
 export function renderPropertiesForm(root:HTMLElement,controller:WorkspaceController,ui?:IssueViewContext):void {
-  ui?.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2','Properties'));
+  captureDisclosures(root);disclosureRoots.set(root,root);ui?.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2','Properties'),element('p','Only existing properties and rentals are supported. Future purchases, rental conversions, refinance, construction and sales are unsupported.'));
   const state=controller.getState(),ids=[...new Set([...state.savedPlan.properties.map(p=>p.id),...Object.values(state.drafts).filter(d=>d.section==='properties').map(d=>d.recordId)])];
   for(const id of ids){
-    const card=element('form');card.dataset.recordId=id;card.dataset.editableSection='properties';const body=element('div');card.append(element('h3',String(controller.getDraft('properties',id).value.property&& (controller.getDraft('properties',id).value.property as RawObject).name||'Property')),body);
-    const context:FieldContext={...(ui?{ui}:{}),get draft(){return controller.getDraft('properties',id);},get issues(){return controller.getState().issues;},onChange(path,value){const draft=controller.getDraft('properties',id);controller.editDraft(id,{...draft,value:setAt(draft.value,path,value)});},refresh(){ui?.disclosures.closeWithin(body,false);refreshFields(body,()=>propertyFields(body,controller,context));if(ui)syncFormFeedback(root,controller,ui);}};
+    const card=element('form');card.dataset.recordId=id;card.dataset.editableSection='properties';const body=element('div');disclosureRoots.set(body,root);card.append(element('h3',String(controller.getDraft('properties',id).value.property&& (controller.getDraft('properties',id).value.property as RawObject).name||'Property')),body);
+    const context:FieldContext={...(ui?{ui}:{}),get draft(){return controller.getDraft('properties',id);},get issues(){return controller.getState().issues;},onChange(path,value){setFormTaskIssues(card,[]);const draft=controller.getDraft('properties',id);controller.editDraft(id,{...draft,value:setAt(draft.value,path,value)});},refresh(){captureDisclosures(body);ui?.disclosures.closeWithin(body,false);refreshFields(body,()=>propertyFields(body,controller,context));if(ui)syncFormFeedback(root,controller,ui);}};
     context.refresh();const save=element('button','Save property');save.type='submit';card.append(save,button('Remove property',()=>controller.removeRecord('properties',id)));card.addEventListener('submit',event=>{event.preventDefault();controller.saveProperty(id);});
     card.append(button('Discard property edits and reload saved values',()=>{controller.discardDraft(id);renderPropertiesForm(root,controller,ui);}));
     root.append(card);

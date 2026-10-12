@@ -11,6 +11,6 @@ export function mountWorkspace(doc:PlanDocument,storage?:StoragePort){
   return {root,controller};
 }
 export function setField(root:HTMLElement,label:string,value:string):void {
-  const control=within(root).getByLabelText(label) as HTMLInputElement|HTMLSelectElement;
+  const control=[...root.querySelectorAll<HTMLInputElement|HTMLSelectElement>('input,select')].find(node=>node.getAttribute('aria-label')===label)??within(root).getByLabelText(label) as HTMLInputElement|HTMLSelectElement;
   if(control instanceof HTMLSelectElement)fireEvent.change(control,{target:{value}});else fireEvent.input(control,{target:{value}});
 }

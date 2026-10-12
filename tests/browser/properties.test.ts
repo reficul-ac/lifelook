@@ -18,13 +18,14 @@ function mount(plan=main(),subscribe=true) {
   const render=()=>renderPropertiesForm(root,controller);if(subscribe)controller.subscribe(render);render();
   return {root,controller,storage};
 }
+function openAncestors(node:HTMLElement):void {const nodes:HTMLDetailsElement[]=[];for(let p:HTMLElement|null=node;p;p=p.parentElement)if(p instanceof HTMLDetailsElement)nodes.unshift(p);for(const details of nodes)if(!details.open)fireEvent.click(details.querySelector('summary')!);}
 function set(root:HTMLElement,label:string,value:string) {
   const control=[...root.querySelectorAll<HTMLInputElement|HTMLSelectElement>('input,select')].find(node=>node.getAttribute('aria-label')===label)!;
   if(!control)throw new Error(`Missing accessible control: ${label}`);
-  fireEvent.input(control,{target:{value}});fireEvent.change(control,{target:{value}});
+  openAncestors(control);fireEvent.input(control,{target:{value}});fireEvent.change(control,{target:{value}});
 }
-function click(root:HTMLElement,name:string) {fireEvent.click(getByRole(root,'button',{name}));}
-function fieldset(root:HTMLElement,name:string):HTMLElement {return getByRole(root,'group',{name});}
+function click(root:HTMLElement,name:string) {const node=[...root.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent===name);if(node)openAncestors(node);fireEvent.click(getByRole(root,'button',{name}));}
+function fieldset(root:HTMLElement,name:string):HTMLElement {const short=name==='Rental QBI history'?'QBI history':name.replace(' rental tax history',' history');const details=[...root.querySelectorAll<HTMLDetailsElement>('details')].find(node=>node.querySelector('summary')?.textContent?.startsWith(short));if(details){openAncestors(details);return details;}const group=[...root.querySelectorAll<HTMLFieldSetElement>('fieldset')].find(node=>node.querySelector('legend')?.textContent===name)!;if(group)openAncestors(group);return getByRole(root,'group',{name});}
 function record(root:HTMLElement,id:string):HTMLElement {const node=root.querySelector<HTMLElement>(`form[data-record-id="${id}"]`);if(!node)throw new Error('Missing property record');return node;}
 function direct(plan:PlanDocument) {const result=validatePlan(plan);if(!result.ok)throw new Error('Saved property document invalid');return calculateProjection(result.plan,loadRuleSet());}
 afterEach(()=>{document.body.replaceChildren();});
@@ -129,7 +130,7 @@ describe('atomic property, loan and rental workflows',()=>{
     expect(getByLabelText(root,'Opening principal-and-interest payment')).toHaveValue('1000.00');
     expect(getByLabelText(fieldset(root,'Property expense — Property tax paid'),'Property expense amount')).toHaveValue('4000.00');
     expect(getByLabelText(fieldset(root,'Property expense — Homeowners insurance'),'Property expense amount')).toHaveValue('100.00');
-    expect(root).toHaveTextContent(/Property tax and insurance are separate from principal-and-interest payments/);
+    expect(root).toHaveTextContent(/Exclude property tax and insurance from loan payments/);
     expect(root).toHaveTextContent(/Default ADU shared allocation.*25/);
   });
 
@@ -143,7 +144,7 @@ describe('atomic property, loan and rental workflows',()=>{
 
   it('edits QBI qualification, wage, UBIA and loss-vintage rows beside the rental',()=>{
     const {root,controller}=mount();
-    set(fieldset(root,'Rental QBI history'),'QBI qualification','false');set(fieldset(root,'Rental QBI history'),'QBI wages','123.00');set(fieldset(root,'Rental QBI history'),'QBI UBIA','33000.00');
+    set(fieldset(root,'Rental QBI history'),'QBI qualification','false');set(fieldset(root,'Rental QBI history'),'QBI wages','123.00');set(fieldset(root,'Rental QBI history'),'Unadjusted qualified property basis (UBIA)','33000.00');
     click(fieldset(root,'Rental QBI history'),'Add QBI loss vintage');set(fieldset(root,'QBI loss vintage 1'),'Loss year','2025');set(fieldset(root,'QBI loss vintage 1'),'Loss amount','75.00');
     click(root,'Save property');
     expect(controller.getState().savedPlan.rentals[0]!.qbi).toEqual({qualification:{known:true,value:false},wagesCents:{known:true,value:12300},ubiaCents:{known:true,value:3300000},openingLossVintages:{known:true,value:[{year:2025,amountCents:7500}]}});
@@ -174,9 +175,9 @@ describe('atomic property, loan and rental workflows',()=>{
     set(record(root,id),'Purchase price','100000.00');set(record(root,id),'Down payment','20000.00');set(record(root,id),'Property market value at forecast start','100000.00');
     click(record(root,id),'Add loan');
     expect(getByLabelText(record(root,id),'Original principal')).toHaveValue('80000.00');
-    expect(record(root,id)).toHaveTextContent(/Estimated scheduled principal-and-interest payment: \$222.22/);
-    set(record(root,id),'Nominal APR (%)','0.00');set(record(root,id),'Term (months)','120');click(record(root,id),'Initialize ordinary purchase loan');
-    expect(record(root,id)).toHaveTextContent(/Estimated scheduled principal-and-interest payment: \$666.67/);
+    expect(record(root,id)).toHaveTextContent(/Estimated monthly principal & interest: \$222.22/);
+    set(record(root,id),'Nominal APR (%)','0.00');set(record(root,id),'Term (months)','120');click(record(root,id),'Calculate purchase loan');
+    expect(record(root,id)).toHaveTextContent(/Estimated monthly principal & interest: \$666.67/);
     click(record(root,id),'Save property');const state=controller.getState();
     expect(state.savedPlan.revision).toBe(1);expect(state.savedPlan.properties).toHaveLength(1);
     expect(state.savedPlan.properties[0]!.loans[0]).toMatchObject({originalPrincipalCents:8000000,termMonths:120,openingBalance:{known:false},openingPayment:{known:false},proceedsQualification:{qualifiedAcquisitionDebt:{known:false},qualifiedPrincipalCents:{known:false},historyComplete:{known:false}}});
@@ -190,7 +191,7 @@ describe('atomic property, loan and rental workflows',()=>{
     click(record(root,id),'Add rental unit');set(record(root,id),'Monthly rent receipts','1000.00');set(record(root,id),'Active participation','true');
     for(const label of ['Long-term fair-market lease','Rental has no personal use','No substantial tenant services','Ordinary residential rental'])set(record(root,id),label,'true');
     set(record(root,id),'Advanced basis adjustments apply','false');set(record(root,id),'California AMT small-business qualification','false');set(record(root,id),'QBI qualification','false');
-    set(record(root,id),'QBI loss history','known');set(record(root,id),'QBI wages history','known');set(record(root,id),'QBI wages','0.00');set(record(root,id),'QBI UBIA history','known');set(record(root,id),'QBI UBIA','0.00');
+    set(record(root,id),'QBI loss history','known');set(record(root,id),'QBI wages history','known');set(record(root,id),'QBI wages','0.00');set(record(root,id),'Unadjusted qualified property basis (UBIA) history','known');set(record(root,id),'Unadjusted qualified property basis (UBIA)','0.00');
     for(const name of ['Federal rental tax history','California rental tax history','Federal AMT rental tax history','California AMT rental tax history'])set(fieldset(record(root,id),name),'History status','known-zero');
     const rentalId=(controller.getDraft('properties',id).value.rentals as {id:string}[])[0]!.id;
     click(record(root,id),'Add property expense');set(record(root,id),'Property expense name','Whole rental property tax');
@@ -229,7 +230,7 @@ describe('atomic property, loan and rental workflows',()=>{
     const {root,controller}=mount();set(root,'Property name','Keyboard-saved property');const save=getByRole(root,'button',{name:'Save property'}) as HTMLButtonElement;
     save.focus();expect(document.activeElement).toBe(save);expect(save.type).toBe('submit');save.form!.requestSubmit(save);
     expect(controller.getState().savedPlan.revision).toBe(1);expect(controller.getState().savedPlan.properties[0]!.name).toBe('Keyboard-saved property');
-    expect((getByRole(root,'button',{name:'Add appreciation override'}) as HTMLButtonElement).type).toBe('button');
+    openAncestors([...root.querySelectorAll<HTMLButtonElement>('button')].find(node=>node.textContent==='Add appreciation override')!);expect((getByRole(root,'button',{name:'Add appreciation override'}) as HTMLButtonElement).type).toBe('button');
   });
 
   it('retains fractional living areas and displays the engine area allocation',()=>{

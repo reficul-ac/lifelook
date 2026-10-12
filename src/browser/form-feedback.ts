@@ -34,19 +34,24 @@ function conciseIssue(issue:Issue):string{
   if(issue.code==='stale-record-draft')return 'Newer inputs changed this record. Discard edits, then reapply your changes.';
   return issue.explanation;
 }
+const summaries=new WeakMap<HTMLDetailsElement,()=>string>();
+export function registerFormSummary(node:HTMLDetailsElement,read:()=>string):void {summaries.set(node,read);}
+const taskIssues=new WeakMap<HTMLElement,readonly Issue[]>();
+export function setFormTaskIssues(form:HTMLElement,issues:readonly Issue[]):void {taskIssues.set(form,issues);}
 const lastIssues=new WeakMap<HTMLElement,readonly Issue[]>();
 export function syncFormFeedback(root:HTMLElement,controller:WorkspaceController,context:IssueViewContext):void{
   const state=controller.getState();
   for(const form of root.querySelectorAll<HTMLElement>('form[data-record-id][data-editable-section]')){
     const id=form.dataset.recordId!,draft=controller.getDraft(form.dataset.editableSection as EditableSection,id);
-    const resolved=resolveFormIssues(draft,state.savedPlan.id,state.issues),fresh=lastIssues.get(form)!==state.issues;
+    const resolved=resolveFormIssues(draft,state.savedPlan.id,[...state.issues,...taskIssues.get(form)??[]]),fresh=lastIssues.get(form)!==state.issues;
+    for(const disclosure of form.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]')){const read=summaries.get(disclosure);if(read)disclosure.dataset.disclosureStatus=read();const heading=disclosure.querySelector('summary');if(heading)heading.textContent=disclosure.dataset.disclosureName+(disclosure.dataset.disclosureStatus?' · '+disclosure.dataset.disclosureStatus:'');}
     const previous=lastIssues.get(form);lastIssues.set(form,state.issues);
-    if(!resolved.length&&!previous?.length)continue;
+    if(!resolved.length&&!previous?.length&&!form.querySelector('[data-form-feedback]'))continue;
     for(const control of form.querySelectorAll<HTMLElement>('[data-field]')){control.removeAttribute('aria-invalid');const hints=control.dataset.hintIds;if(hints)control.setAttribute('aria-describedby',hints);else control.removeAttribute('aria-describedby');}
     for(const error of form.querySelectorAll<HTMLElement>('[data-field-error]'))error.replaceChildren();
     let summary=form.querySelector<HTMLElement>('[data-form-feedback]');
     if(!summary){summary=element('div');summary.dataset.formFeedback='';form.append(summary);}
-    context.disclosures.closeWithin(summary,false);summary.replaceChildren();if(!resolved.length)continue;
+    context.disclosures.closeWithin(summary,false);summary.replaceChildren();for(const disclosure of form.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]')){const heading=disclosure.querySelector('summary');if(heading)heading.textContent=disclosure.dataset.disclosureName+(disclosure.dataset.disclosureStatus?' · '+disclosure.dataset.disclosureStatus:'');}if(!resolved.length)continue;
     summary.append(element('strong',resolved.some(item=>item.issue.severity==='error')?'Inputs not applied. Correct these errors and save again.':'Review these inputs.'));
     const list=element('ul');summary.append(list);
     for(const {issue,path} of resolved){
@@ -61,5 +66,6 @@ export function syncFormFeedback(root:HTMLElement,controller:WorkspaceController
       }
       row.append(context.disclosures.createTrigger({label:'Details',accessibleLabel:`Details: ${label} input`,title:`${label} · input error`,preview:message,renderDetails:node=>{node.append(element('p',issue.explanation),element('p',issue.resolution),element('code',[issue.code,issue.recordId,issue.field].filter(Boolean).join(' · ')));}}));list.append(row);
     }
+    for(const disclosure of form.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]')){const prefix=disclosure.dataset.fieldGroup;const count=prefix?resolved.filter(item=>item.issue.severity==='error'&&item.path?.join('.').startsWith(prefix+'.')).length:0;const summary=disclosure.querySelector('summary');if(summary)summary.textContent=disclosure.dataset.disclosureName+(count?` · ${count} input error${count===1?'':'s'}`:disclosure.dataset.disclosureStatus?' · '+disclosure.dataset.disclosureStatus:'');}
   }
 }

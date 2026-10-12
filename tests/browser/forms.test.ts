@@ -1,3 +1,5 @@
+import {loadReferences} from '../helpers/references';
+import type {PlanDocument,ProjectionResult} from '../../src/engine';
 import { describe,expect,it,vi } from 'vitest';
 import { fireEvent,within } from '@testing-library/dom';
 import { parseMoneyInput,parseRateInput } from '../../src/browser/fields';
@@ -70,5 +72,36 @@ describe('native workspace drafts and explicit record saves',()=>{
   });
   it('retains native input focus and selection while editing a draft',()=>{
     const {root}=mountWorkspace(makePlan());const input=within(root).getByLabelText('Opening cash reserve ($)') as HTMLInputElement;input.focus();input.setSelectionRange(1,1);fireEvent.input(input,{target:{value:'123.45'}});expect(document.activeElement).toBe(input);expect(within(root).getByLabelText('Opening cash reserve ($)')).toBe(input);
+  });
+});
+
+describe('collapsed property history in the mounted workspace',()=>{
+  function propertyWorkspace(){const plan=loadReferences<PlanDocument,ProjectionResult>('projection').find(c=>c.id==='two-salaries-home-adu')!.input;const mounted=mountWorkspace(plan);fireEvent.click(within(mounted.root.querySelector('nav')!).getByRole('button',{name:'Properties'}));const form=[...mounted.root.querySelectorAll<HTMLElement>('form')].find(node=>node.dataset.recordId==='home')!;return {...mounted,form,plan};}
+  it('starts saved advanced history closed and preserves deliberate opens through unrelated saves',()=>{
+    const {root,form,controller,plan}=propertyWorkspace();const details=[...form.querySelectorAll('details')];expect(details).toHaveLength(8);expect(details.every(node=>!node.open)).toBe(true);
+    const rental=within(form).getByText(/^Rental unit —/,{selector:'summary'}).parentElement as HTMLDetailsElement;rental.open=true;
+    const summary=within(form).getByText(/^Federal AMT history/,{selector:'summary'});fireEvent.click(summary);const input=[...form.querySelectorAll<HTMLInputElement>('input[data-field]')].find(node=>node.dataset.field==='rentals.0.taxHistory.federal-amt.value.adjustedBuildingBasisCents')!;
+    fireEvent.input(input,{target:{value:'40000.00'}});const salary=plan.salaries[0]!,draft=controller.getDraft('salaries',salary.id);controller.editDraft(salary.id,{...draft,value:{...draft.value,name:'Renamed salary'}});controller.saveRecord(salary.id);
+    const newForm=[...root.querySelectorAll('form')].find(node=>node.dataset.recordId==='home')!;expect((within(newForm).getByText(/^Federal AMT history/,{selector:'summary'}).parentElement as HTMLDetailsElement).open).toBe(true);expect(controller.getState().drafts.home).toBeDefined();
+  });
+  it('reveals and focuses the hidden invalid AMT field without replacing it or applying other books',()=>{
+    const {form,controller,plan}=propertyWorkspace();for(const details of form.querySelectorAll('details'))if(!details.open)fireEvent.click(details.querySelector('summary')!);
+    const input=[...form.querySelectorAll<HTMLInputElement>('input[data-field]')].find(node=>node.dataset.field==='rentals.0.taxHistory.federal-amt.value.adjustedBuildingBasisCents')!;
+    fireEvent.input(input,{target:{value:'1.234'}});const ancestors:HTMLDetailsElement[]=[];for(let node:HTMLElement|null=input.parentElement;node;node=node.parentElement)if(node instanceof HTMLDetailsElement)ancestors.push(node);
+    for(const details of ancestors)if(details.open)fireEvent.click(details.querySelector('summary')!);fireEvent.click(within(form).getByText('Save property',{selector:'button'}));
+    expect(input).toHaveValue('1.234');expect(input).toHaveAttribute('aria-invalid','true');expect(ancestors.every(node=>node.open)).toBe(true);expect(controller.getState().savedPlan.revision).toBe(0);expect(controller.getState().savedPlan.rentals[0]!.taxHistory.california).toEqual(plan.rentals[0]!.taxHistory.california);
+    expect(within(form).getByText(/^Federal AMT history/,{selector:'summary'})).toHaveTextContent('1 input error');fireEvent.click(within(form.querySelector('[data-form-feedback]')!).getByRole('button',{name:'Review Adjusted building basis'}));expect(input).toHaveFocus();
+  });
+  it('opens new loan sections for entry while distinguishing known-zero history from unknown',()=>{
+    const {form}=propertyWorkspace();fireEvent.click(within(form).getByText('Add loan',{selector:'button'}));
+    expect((within(form).getByText(/Loan — Purchase loan/,{selector:'summary'}).parentElement as HTMLDetailsElement).open).toBe(true);
+  });
+  it('keeps collapsed summary facts current during ordinary edits and marks unavailable loan inputs',()=>{
+    const {form}=propertyWorkspace();for(const details of form.querySelectorAll('details'))if(!details.open)fireEvent.click(details.querySelector('summary')!);
+    setField(form,'QBI qualification','unknown');expect(within(form).getByText(/^QBI history/,{selector:'summary'})).toHaveTextContent('1 unknown fact');
+    setField(form,'Nominal APR (%)','1.234');expect(within(form).getByText(/^Loan —/,{selector:'summary'})).toHaveTextContent('Opening inputs unavailable');
+    let federal=within(form).getByText(/^Federal history/,{selector:'summary'}).parentElement!;setField(federal,'History status','known-zero');
+    federal=within(form).getByText(/^Federal history/,{selector:'summary'}).parentElement!;expect(federal.querySelector('summary')).toHaveTextContent('Confirmed zero');
+    setField(federal,'Adjusted building basis','1.00');expect(federal.querySelector('summary')).toHaveTextContent('Entered amounts');
   });
 });

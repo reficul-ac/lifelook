@@ -1,0 +1,20 @@
+/** Browser consumers use this boundary; engine calculations have no browser dependencies. */
+export { calculateProjection, allocateAnnualTax } from './projection';
+export { summarizeYear, summarizeProjectionYear } from './reporting';
+export { createPlan, validatePlan } from './validation';
+export { loadRuleSet } from './rules/registry';
+export type * from './model/plan';
+export type * from './model/results';
+export type * from './model/tax-state';
+export type * from './rules/types';
+export type * from './projection-types';
+export type * from './property/facts';
+export type * from './tax/facts';
+export type * from './tax/workplace';
+export type * from './tax/payroll';
+export type * from './tax/rental-losses';
+export type * from './tax/ira';
+export type * from './tax/itemized';
+export type * from './tax/federal';
+export type * from './tax/california';
+export type * from './tax/comparison';

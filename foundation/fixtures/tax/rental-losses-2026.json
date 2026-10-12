@@ -1042,6 +1042,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -1060,6 +1064,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -1104,6 +1112,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -1122,6 +1134,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -1166,6 +1182,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -1184,6 +1204,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -1228,6 +1252,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -1246,6 +1274,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -1275,6 +1307,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -1297,6 +1333,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -1319,6 +1359,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -1341,6 +1385,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -2429,6 +2477,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -2447,6 +2499,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -2491,6 +2547,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -2509,6 +2569,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -2553,6 +2617,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -2571,6 +2639,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -2615,6 +2687,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -2633,6 +2709,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -2662,6 +2742,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -2684,6 +2768,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -2706,6 +2794,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -2728,6 +2820,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -3824,6 +3920,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -3876,6 +3976,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -3928,6 +4032,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -3980,6 +4088,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -4009,6 +4121,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -4031,6 +4147,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -4053,6 +4173,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -4075,6 +4199,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -5163,6 +5291,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -5181,6 +5313,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -5225,6 +5361,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -5243,6 +5383,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -5287,6 +5431,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -5305,6 +5453,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -5349,6 +5501,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -5367,6 +5523,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -5396,6 +5556,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -5418,6 +5582,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -5440,6 +5608,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -5462,6 +5634,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -6558,6 +6734,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": false
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -6608,6 +6788,10 @@
                     "source": "passive",
                     "amountCents": 3100000,
                     "activeParticipation": {
+                      "known": true,
+                      "value": false
+                    },
+                    "qbiQualification": {
                       "known": true,
                       "value": false
                     }
@@ -6662,6 +6846,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": false
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -6714,6 +6902,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": false
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -6743,6 +6935,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": false
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -6763,6 +6959,10 @@
                     "source": "passive",
                     "amountCents": 3100000,
                     "activeParticipation": {
+                      "known": true,
+                      "value": false
+                    },
+                    "qbiQualification": {
                       "known": true,
                       "value": false
                     }
@@ -6787,6 +6987,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": false
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -6807,6 +7011,10 @@
                     "source": "passive",
                     "amountCents": 3100000,
                     "activeParticipation": {
+                      "known": true,
+                      "value": false
+                    },
+                    "qbiQualification": {
                       "known": true,
                       "value": false
                     }
@@ -8325,6 +8533,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -8343,6 +8555,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8374,6 +8590,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -8392,6 +8612,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8436,6 +8660,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -8454,6 +8682,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8485,6 +8717,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -8503,6 +8739,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8547,6 +8787,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -8565,6 +8809,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8596,6 +8844,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -8614,6 +8866,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8658,6 +8914,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -8676,6 +8936,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8707,6 +8971,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -8725,6 +8993,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8754,6 +9026,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8776,6 +9052,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8798,6 +9078,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8820,6 +9104,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8844,6 +9132,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8866,6 +9158,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8888,6 +9184,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -8910,6 +9210,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -10002,6 +10306,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -10020,6 +10328,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -10064,6 +10376,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -10082,6 +10398,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -10126,6 +10446,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -10144,6 +10468,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -10188,6 +10516,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -10206,6 +10538,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -10235,6 +10571,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -10257,6 +10597,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -10279,6 +10623,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -10301,6 +10649,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -10559,6 +10911,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10600,6 +10956,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10641,6 +11001,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10682,6 +11046,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10725,6 +11093,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10744,6 +11116,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10775,6 +11151,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10794,6 +11174,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10825,6 +11209,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10844,6 +11232,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10875,6 +11267,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10894,6 +11290,10 @@
                         "activeParticipation": {
                           "known": true,
                           "value": true
+                        },
+                        "qbiQualification": {
+                          "known": true,
+                          "value": false
                         }
                       }
                     ]
@@ -10938,6 +11338,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -10960,6 +11364,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -10982,6 +11390,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -11004,6 +11416,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -11549,6 +11965,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -11567,6 +11987,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -11611,6 +12035,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -11629,6 +12057,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -11673,6 +12105,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -11691,6 +12127,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -11735,6 +12175,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -11753,6 +12197,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -11782,6 +12230,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -11804,6 +12256,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -11826,6 +12282,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -11848,6 +12308,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -13792,6 +14256,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": false
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -13831,6 +14299,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -13912,6 +14384,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": false
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -13951,6 +14427,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -14032,6 +14512,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": false
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -14071,6 +14555,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -14152,6 +14640,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": false
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -14191,6 +14683,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -16335,6 +16831,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": false
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -16351,6 +16851,10 @@
                     "source": "passive",
                     "amountCents": 333333,
                     "activeParticipation": {
+                      "known": true,
+                      "value": false
+                    },
+                    "qbiQualification": {
                       "known": true,
                       "value": false
                     }
@@ -16384,6 +16888,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -16402,6 +16910,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -16475,6 +16987,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": false
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -16491,6 +17007,10 @@
                     "source": "passive",
                     "amountCents": 333333,
                     "activeParticipation": {
+                      "known": true,
+                      "value": false
+                    },
+                    "qbiQualification": {
                       "known": true,
                       "value": false
                     }
@@ -16524,6 +17044,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -16542,6 +17066,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -16615,6 +17143,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": false
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -16631,6 +17163,10 @@
                     "source": "passive",
                     "amountCents": 333333,
                     "activeParticipation": {
+                      "known": true,
+                      "value": false
+                    },
+                    "qbiQualification": {
                       "known": true,
                       "value": false
                     }
@@ -16664,6 +17200,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -16682,6 +17222,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -16755,6 +17299,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": false
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -16771,6 +17319,10 @@
                     "source": "passive",
                     "amountCents": 333333,
                     "activeParticipation": {
+                      "known": true,
+                      "value": false
+                    },
+                    "qbiQualification": {
                       "known": true,
                       "value": false
                     }
@@ -16804,6 +17356,10 @@
                   "activeParticipation": {
                     "known": true,
                     "value": true
+                  },
+                  "qbiQualification": {
+                    "known": true,
+                    "value": false
                   }
                 }
               ],
@@ -16822,6 +17378,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -16880,6 +17440,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": false
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -16900,6 +17464,10 @@
                     "source": "passive",
                     "amountCents": 333333,
                     "activeParticipation": {
+                      "known": true,
+                      "value": false
+                    },
+                    "qbiQualification": {
                       "known": true,
                       "value": false
                     }
@@ -16924,6 +17492,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": false
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -16944,6 +17516,10 @@
                     "source": "passive",
                     "amountCents": 333333,
                     "activeParticipation": {
+                      "known": true,
+                      "value": false
+                    },
+                    "qbiQualification": {
                       "known": true,
                       "value": false
                     }
@@ -16970,6 +17546,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -16992,6 +17572,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -17014,6 +17598,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]
@@ -17036,6 +17624,10 @@
                     "activeParticipation": {
                       "known": true,
                       "value": true
+                    },
+                    "qbiQualification": {
+                      "known": true,
+                      "value": false
                     }
                   }
                 ]

@@ -65,7 +65,7 @@ function consume(pool: readonly RentalLossVintage[], amount: Cents, eligible: (v
 function mergeVintages(vintages: readonly RentalLossVintage[]): readonly RentalLossVintage[] {
   const result = new Map<string, RentalLossVintage>();
   for (const vintage of [...vintages].sort(order)) {
-    const key = JSON.stringify([vintage.year, vintage.source, vintage.activeParticipation]);
+    const key = JSON.stringify([vintage.year, vintage.source, vintage.activeParticipation, vintage.qbiQualification]);
     const previous = result.get(key);
     result.set(key, previous ? { ...vintage, amountCents: sumCents([previous.amountCents, vintage.amountCents]) } : vintage);
   }
@@ -96,7 +96,7 @@ function resolveBook(facts: PreIraFacts, opening: HouseholdTaxState, rules: Year
       if (!financing.value) { unsupported.push(issue(rental.rentalId, facts.year, book, 'unsupported-at-risk-financing', 'The financing is outside supported personal-liability or qualified-nonrecourse financing.')); continue; }
     }
     const originalAr = state.lossVintages.filter(v => v.source === 'at-risk');
-    const currentVintage: RentalLossVintage[] = loss ? [{ year: facts.year, source: 'at-risk', amountCents: loss, activeParticipation: rental.unit.activeParticipation }] : [];
+    const currentVintage: RentalLossVintage[] = loss ? [{ year: facts.year, source: 'at-risk', amountCents: loss, activeParticipation: rental.unit.activeParticipation, qbiQualification: rental.unit.qbi.qualification }] : [];
     const arTotal = sumCents([state.atRiskSuspendedCents, loss]);
     const capacity = sumCents([state.atRiskCents, Math.max(0, current.value.taxableProfitCents)]);
     const arReleased = Math.min(arTotal, Math.max(0, capacity));

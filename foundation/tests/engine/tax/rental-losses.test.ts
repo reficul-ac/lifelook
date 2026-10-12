@@ -71,7 +71,19 @@ describe('at-risk ordering and household passive rental losses', () => {
     expect(first.closing.qbiLossVintages['rental-a']).toEqual(qbi);
     if (first.federal.status !== 'available' || first.federalAmt.status !== 'available') throw new Error('missing books');
     expect(first.federal.value.rentals[0]?.closingState).not.toBe(first.federalAmt.value.rentals[0]?.closingState);
-    expect(first.federal.value.rentals[0]?.closingState.lossVintages).toEqual([{ year: 2026, source: 'passive', amountCents: 600000, activeParticipation: { known: true, value: true } }]);
+    expect(first.federal.value.rentals[0]?.closingState.lossVintages).toEqual([{ year: 2026, source: 'passive', amountCents: 600000, activeParticipation: { known: true, value: true }, qbiQualification: { known: true, value: false } }]);
+  });
+  it('keeps different QBI origin qualifications separate when releasing a shared-year loss pool', () => {
+    const i = sample();
+    const original = i.opening.rentals['rental-a']!.federal;
+    if (original.status !== 'available') throw new Error('missing history');
+    const carried = { ...original, value: { ...original.value, passiveSuspendedCents: 2000000, lossVintages: [{ year: 2024, source: 'passive' as const, amountCents: 1000000, activeParticipation: { known: true as const, value: true }, qbiQualification: { known: true as const, value: true } }, { year: 2024, source: 'passive' as const, amountCents: 1000000, activeParticipation: { known: true as const, value: true }, qbiQualification: { known: true as const, value: false } }] } };
+    const opening = { ...i.opening, rentals: { ...i.opening.rentals, 'rental-a': { ...i.opening.rentals['rental-a']!, federal: carried } } };
+    const facts = { ...i.facts, rentalFacts: i.facts.rentalFacts.map(r => ({ ...r, books: { ...r.books, federal: r.books.federal.status === 'available' ? { status: 'available' as const, value: { ...r.books.federal.value, taxableProfitCents: 0 } } : r.books.federal } })) };
+    const result = resolveRentalLosses(facts, opening, i.rules);
+    if (result.federal.status !== 'available') throw new Error('missing federal');
+    expect(result.federal.value.rentals[0]?.releasedLossVintages).toHaveLength(2);
+    expect(result.federal.value.rentals[0]?.releasedLossVintages.map(v => v.qbiQualification)).toEqual([{ known: true, value: true }, { known: true, value: false }]);
   });
   it('releases carryforward losses against another property’s passive profit before sharing the allowance', () => {
     const i = structuredClone(references.find(c => c.id === 'shared-household-allowance')!.input);

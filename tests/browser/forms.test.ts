@@ -38,7 +38,7 @@ describe('native workspace drafts and explicit record saves',()=>{
     const state=controller.getState();
     expect(state.drafts.household?.value.openingCashCents).toBe('1.234');
     expect(state.savedPlan.revision).toBe(0);expect(state.projection.inputRevision).toBe(0);
-    expect(root).toHaveTextContent('Saved input revision 0');expect(root).toHaveTextContent(/openingCashCents/);
+    expect(root).toHaveTextContent('Saved input revision 0');fireEvent.click(within(root).getByRole('button',{name:/Enter money as an ordinary decimal/}));expect(document.querySelector('[data-disclosure-panel]')).toHaveTextContent('openingCashCents');
     expect(within(root).getByLabelText('Opening cash reserve ($)')).toHaveValue('1.234');
   });
   it('saves household factual and tax-policy inputs together in one revision',()=>{

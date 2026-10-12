@@ -1,3 +1,4 @@
+import {groupIssueOccurrences,formatPeriods,getRecordLabel,resolveIssueTargets,type IssueViewContext,type AmountScope,type IssueGroup,type IssueOccurrence} from '../issue-presentation';
 import type { Available,Coverage,Issue,RuleProvenance } from '../../engine';
 
 export function element<K extends keyof HTMLElementTagNameMap>(tag:K,text?:string):HTMLElementTagNameMap[K]{
@@ -6,16 +7,36 @@ export function element<K extends keyof HTMLElementTagNameMap>(tag:K,text?:strin
 const usd=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
 const percentage=new Intl.NumberFormat('en-US',{style:'percent',maximumFractionDigits:2});
 export const formatCents=(cents:number):string=>usd.format(cents/100);
-export function appendAmount(root:HTMLElement,value:Available<number>,kind:'money'|'ratio'='money'):void {
-  if(value.status==='available'){root.append(element('span',kind==='money'?formatCents(value.value):percentage.format(value.value)));return;}
-  root.append(element('strong',value.status==='needs-data'?'Needs data':'Unsupported case'));
-  const issues=[...new Map(value.issues.map(issue=>[JSON.stringify(issue),issue])).values()];
-  if(!issues.length){root.append(element('p',value.status==='needs-data'?'Supporting information is missing.':'This case exceeds the supported calculation.'),element('p','Resolve the affected inputs before using this amount.'));return;}
-  for(const issue of issues)root.append(element('p',issue.explanation),element('p',issue.resolution));
+const coverageLabels:Record<string,string>={additionalIncome:'Additional income outside these records',additionalCredits:'Additional household tax credits',qualifiedDividendsOrCapitalGains:'Qualified dividends or capital gains'};
+export function issueLabel(issue:Issue):string {
+  const field=issue.field?.split('.').pop()??'';
+  if(coverageLabels[field])return coverageLabels[field]!;
+  const labels:Record<string,string>={'required-tax-coverage':'Tax coverage unconfirmed','required-history':'Missing history','required-age':'Age needed','required-workplace-coverage':'Workplace coverage needed','required-employer-history':'Employer history needed','contribution-capped':'Contribution limit reached','unsupported-tax-case':'Unsupported tax circumstance','provisional-rules':'Rule assumptions','cash-gap':'Cash gap','negative-amortization':'Payment below interest'};
+  return labels[issue.code]??issue.explanation;
 }
-export function moneyEntry(root:HTMLElement,label:string,value:Available<number>|number,testId?:string):void {
+export function renderIssueDetails(root:HTMLElement,items:readonly IssueOccurrence[],context:IssueViewContext):void {
+  const groups=groupIssueOccurrences(items),coverage=groups.filter(g=>g.issues[0]?.code==='required-tax-coverage'),other=groups.filter(g=>g.issues[0]?.code!=='required-tax-coverage');
+  function actions(issues:readonly Issue[]){
+    const targets=issues.flatMap(issue=>resolveIssueTargets(issue,context.readState()));
+    for(const target of [...new Map(targets.map(target=>[JSON.stringify(target),target])).values()]){
+      const button=element('button',target.label);button.type='button';button.addEventListener('click',()=>context.review(target));root.append(button);
+    }
+  }
+  function diagnostic(group:IssueGroup){const details=element('details');details.append(element('summary','Full cause and diagnostics'));for(const issue of group.issues){details.append(element('p',issue.explanation),element('p',issue.resolution),element('code',[issue.code,issue.recordId,issue.field,issue.year].filter(v=>v!==undefined).join(' · ')));}root.append(details);}
+  if(coverage.length){root.append(element('h4','Household tax coverage is unconfirmed'));const list=element('ul');for(const group of coverage){list.append(element('li',`${issueLabel(group.issues[0]!)} · ${formatPeriods(group.periods)}`));}root.append(list,element('p','Confirm the three household tax answers before relying on total liability.'));actions([coverage[0]!.issues[0]!]);for(const group of coverage)diagnostic(group);}
+  for(const group of other){const issue=group.issues[0]!;root.append(element('h4',`${issueLabel(issue)}${issue.recordId?' · '+getRecordLabel(context.readState().savedPlan,issue.recordId):''}`));const period=formatPeriods(group.periods);if(period)root.append(element('p',period));root.append(element('p',issue.explanation),element('p',issue.resolution));actions([issue]);diagnostic(group);}
+}
+export function appendAmount(root:HTMLElement,value:Available<number>,context:IssueViewContext,scope:AmountScope,kind:'money'|'ratio'='money'):void {
+  if(value.status==='available'){root.append(element('span',kind==='money'?formatCents(value.value):percentage.format(value.value)));return;}
+  const label=value.status==='needs-data'?'Needs data':'Unsupported',period=scope.period?formatPeriods([scope.period]):'',title=scope.label+(period?' · '+period:'');
+  root.append(context.disclosures.createTrigger({label,accessibleLabel:`${label}: ${title}`,title,preview:value.issues.some(i=>i.code==='required-tax-coverage')?'Confirm 3 household tax answers.':value.issues[0]?issueLabel(value.issues[0]):'Supporting information is missing.',renderDetails:node=>{
+    if(value.issues.length)renderIssueDetails(node,value.issues.map(issue=>({issue,...(scope.period?{period:scope.period}:{})})),context);
+    else node.append(element('p',value.status==='needs-data'?'Supporting information is missing.':'This case exceeds the supported calculation.'),element('p','Review the affected inputs before using this amount.'));
+  }}));
+}
+export function moneyEntry(root:HTMLElement,label:string,value:Available<number>|number,context:IssueViewContext,testId?:string):void {
   root.append(element('dt',label));const cell=element('dd');if(testId)cell.dataset.testid=testId;
-  appendAmount(cell,typeof value==='number'?{status:'available',value}:value);root.append(cell);
+  appendAmount(cell,typeof value==='number'?{status:'available',value}:value,context,{label});root.append(cell);
 }
 export function appendCoverage(root:HTMLElement,coverage:Coverage):void {
   root.append(element('p',coverage.completeForModeledScope?'Complete modeled scenario':'Incomplete modeled scenario'),element('p',coverage.completeHouseholdLiability?'Complete household liability':'Incomplete household liability'));
@@ -37,13 +58,11 @@ export function appendProvenance(root:HTMLElement,provenance:readonly RuleProven
   }
   root.append(details);
 }
-export function renderIssues(root:HTMLElement,issues:readonly Issue[]):void {
-  root.replaceChildren();root.append(element('h3','Issues and next steps'));
-  if(!issues.length){root.append(element('p','No issues in this view.'));return;}
-  const list=element('ul');
-  for(const issue of [...new Map(issues.map(issue=>[JSON.stringify(issue),issue])).values()]){
-    const row=element('li');row.className=`issue-${issue.severity}`;
-    row.append(element('strong',[issue.severity,issue.year===undefined?undefined:String(issue.year),issue.recordId,issue.field].filter(Boolean).join(' · ')),element('p',issue.explanation),element('p',issue.resolution));list.append(row);
-  }
+export function renderIssues(root:HTMLElement,issues:readonly Issue[],context:IssueViewContext,heading='Issues and next steps'):void {
+  context.disclosures.closeWithin(root,false);root.replaceChildren();if(!issues.length)return;
+  root.append(element('h3',heading));const list=element('ul');list.className='compact-issues';
+  const groups=groupIssueOccurrences(issues.map(issue=>({issue})));const coverage=groups.filter(g=>g.issues[0]!.code==='required-tax-coverage');
+  const display=groups.filter(g=>g.issues[0]!.code!=='required-tax-coverage');if(coverage.length)display.unshift(coverage[0]!);
+  for(const group of display){const issue=group.issues[0]!,row=element('li');row.className=`issue-${issue.severity}`;const label=coverage.includes(group)?`Tax coverage unconfirmed · ${coverage.length} checks`:issueLabel(issue);row.append(element('span',`${issue.severity} · ${issue.recordId?getRecordLabel(context.readState().savedPlan,issue.recordId)+' · ':''}${formatPeriods(group.periods)} `));row.append(context.disclosures.createTrigger({label,accessibleLabel:`${label} details`,title:label,preview:label,renderDetails:node=>renderIssueDetails(node,(coverage.includes(group)?coverage.flatMap(g=>g.issues):group.issues).map(issue=>({issue})),context)}));list.append(row);}
   root.append(list);
 }

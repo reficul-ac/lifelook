@@ -1,3 +1,6 @@
+import {createDisclosureController} from './disclosures';
+import {reviewTarget} from './navigation';
+import type {IssueViewContext} from './issue-presentation';
 import { createPlan,loadRuleSet,type Issue,type PlanDocument,type RuleSet } from '../engine';
 import { button,element } from './fields';
 import { createWorkspace,type WorkspaceController } from './state';
@@ -15,8 +18,14 @@ function downloadText(text:string,name:string):void {
   const url=URL.createObjectURL(new Blob([text],{type:'application/json'})),link=element('a');link.href=url;link.download=name;link.click();URL.revokeObjectURL(url);
 }
 
+const cleanups=new WeakMap<HTMLElement,()=>void>();
+export function unmountApp(root:HTMLElement):void {cleanups.get(root)?.();cleanups.delete(root);}
+
 export function mountApp(root:HTMLElement,plan:PlanDocument,storage:StoragePort,rules:RuleSet,initial?:Readonly<{persisted:boolean;issues:readonly Issue[]}>):WorkspaceController {
+  unmountApp(root);
   const controller=createWorkspace(plan,storage,rules);
+  const disclosures=createDisclosureController(root);
+  const context:IssueViewContext={disclosures,readState:controller.getState,review:target=>{disclosures.closeWithin(root,false);reviewTarget(root,target);}};
   if(initial)controller.resetPlan(plan,initial.persisted,initial.issues);
   root.replaceChildren();root.className='workspace';
   const header=element('header');header.append(element('h1','LifeLook'),element('p','A household financial forecast with explicit assumptions and saved inputs.'));
@@ -33,16 +42,16 @@ export function mountApp(root:HTMLElement,plan:PlanDocument,storage:StoragePort,
   const layout=element('div');layout.className='workspace-layout';const editor=element('section'),report=element('section');editor.setAttribute('aria-label','Financial inputs');report.setAttribute('aria-label','Saved projection');layout.append(editor,report);root.append(layout);
   const nav=element('nav');nav.setAttribute('aria-label','Input sections');editor.append(nav);
   const sections:readonly [string,(root:HTMLElement,controller:WorkspaceController)=>void][]=[['Household',renderHouseholdForm],['Income',renderIncomeForm],['Expenses and debts',renderExpensesDebtsForm],['Investments',renderInvestmentsForm],['Properties',renderPropertiesForm]];
-  const containers=sections.map(([label,renderer],index)=>{const container=element('section');container.hidden=index!==0;container.dataset.section=label;const tab=button(label,()=>{containers.forEach(c=>c.container.hidden=c.container!==container);nav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===tab)));});tab.setAttribute('aria-pressed',String(index===0));nav.append(tab);editor.append(container);return {container,renderer};});
+  const containers=sections.map(([label,renderer],index)=>{const container=element('section');container.hidden=index!==0;container.dataset.section=label;const tab=button(label,()=>{containers.forEach(c=>{if(c.container!==container)disclosures.closeWithin(c.container,false);c.container.hidden=c.container!==container;});nav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===tab)));});tab.setAttribute('aria-pressed',String(index===0));nav.append(tab);editor.append(container);return {container,renderer};});
   const projectionRoot=element('div'),issueRoot=element('div');report.append(projectionRoot,issueRoot);
   let savedIdentity:PlanDocument|undefined,draftKeys='';
   const render=()=>{const state=controller.getState(),keys=Object.keys(state.drafts).sort().join('|'),newKeys=Object.values(state.drafts).filter(d=>d.section!=='household'&&!(state.savedPlan[d.section] as readonly {id:string}[]).some(r=>r.id===d.recordId)).map(d=>d.recordId).sort().join('|'),changed=savedIdentity!==state.savedPlan;status.textContent=`${state.persisted?'Saved':'Unsaved'} · Saved input revision ${state.savedPlan.revision}${keys?' · Draft edits have not changed the saved projection.':''}`;
-    renderIssues(issueRoot,state.issues);
-    if(changed)renderProjection(projectionRoot,state.projection);
-    if(changed||draftKeys!==newKeys){for(const {container,renderer} of containers)renderer(container,controller);}
+    renderIssues(issueRoot,state.issues,context);
+    if(changed)renderProjection(projectionRoot,state.projection,context);
+    if(changed||draftKeys!==newKeys){for(const {container,renderer} of containers){disclosures.closeWithin(container,false);renderer(container,controller);}}
     savedIdentity=state.savedPlan;draftKeys=newKeys;
   };
-  controller.subscribe(render);render();return controller;
+  const unsubscribe=controller.subscribe(render);cleanups.set(root,()=>{unsubscribe();disclosures.dispose();});render();return controller;
 }
 
 /** Browser alone reads today's local calendar and storage. The engine receives explicit inputs. */

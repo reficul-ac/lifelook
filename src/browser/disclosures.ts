@@ -21,10 +21,11 @@ function visible(node: HTMLElement): boolean {
   return true;
 }
 export function createDisclosureController(owner: HTMLElement): DisclosureController {
+  const document=owner.ownerDocument,window=document.defaultView!;
   owners.get(owner)?.dispose();
   const id = `disclosure-${++sequence}`;
   let preview: HTMLElement | undefined, panel: HTMLElement | undefined;
-  let active: HTMLButtonElement | undefined, pinned = false, disposed = false, suppress = false;
+  let active: HTMLButtonElement | undefined, pinned = false, disposed = false, suppress = false, restoringFocus = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   function cancel() {if (timer !== undefined) clearTimeout(timer); timer=undefined;}
   function place() {
@@ -44,13 +45,13 @@ export function createDisclosureController(owner: HTMLElement): DisclosureContro
     cancel(); const old=active; active=undefined; pinned=false;
     if(preview) preview.hidden=true; if(panel) panel.hidden=true;
     if(old){old.removeAttribute('aria-describedby');old.setAttribute('aria-expanded','false');}
-    if(restore && old && visible(old)){suppress=true;old.focus();}
+    if(restore && old && visible(old)){suppress=true;restoringFocus=true;old.focus();restoringFocus=false;}
   }
   function delayedClose() {cancel();timer=setTimeout(()=>{if(!pinned)close(false);},150);}
   function ensurePreview() {
     if(preview) return preview;
     preview=document.createElement('div');preview.id=`${id}-preview`;preview.dataset.disclosurePreview='';preview.className='disclosure-preview';preview.setAttribute('role','tooltip');preview.hidden=true;
-    preview.addEventListener('mouseenter',cancel); preview.addEventListener('mouseleave',delayedClose); document.body.append(preview); return preview;
+    preview.addEventListener('mouseenter',cancel); preview.addEventListener('mouseleave',delayedClose); document.body.append(preview);sizeObserver?.observe(preview);return preview;
   }
   function show(trigger: HTMLButtonElement, options: DisclosureOptions, newEntry=false) {
     if(disposed || !visible(trigger) || pinned) return;
@@ -62,7 +63,7 @@ export function createDisclosureController(owner: HTMLElement): DisclosureContro
     if(disposed || !visible(trigger)) return;
     if(active===trigger && pinned){close(true);return;}
     close(false); suppress=false;active=trigger;pinned=true;
-    if(!panel){panel=document.createElement('section');panel.id=`${id}-panel`;panel.dataset.disclosurePanel='';panel.className='disclosure-panel';panel.setAttribute('role','region');document.body.append(panel);}
+    if(!panel){panel=document.createElement('section');panel.id=`${id}-panel`;panel.dataset.disclosurePanel='';panel.className='disclosure-panel';panel.setAttribute('role','region');document.body.append(panel);sizeObserver?.observe(panel);}
     panel.replaceChildren();panel.setAttribute('aria-label',options.title);panel.hidden=false;
     const heading=document.createElement('h3');heading.textContent=options.title;
     const button=document.createElement('button');button.type='button';button.textContent='Close';button.addEventListener('click',()=>close(true));
@@ -73,17 +74,18 @@ export function createDisclosureController(owner: HTMLElement): DisclosureContro
   const outside=(event: Event)=>{const node=event.target as Node;if(active && !active.contains(node) && !panel?.contains(node) && !preview?.contains(node))close(false);};
   document.addEventListener('keydown',escape); document.addEventListener('pointerdown',outside);document.addEventListener('click',outside);
   window.addEventListener('resize',place); document.addEventListener('scroll',place,true);
+  const sizeObserver=typeof ResizeObserver==='undefined'?undefined:new ResizeObserver(place);
   const observer=new MutationObserver(()=>{if(!owner.isConnected){controller.dispose();return;}if(active && !visible(active))close(false);});
   observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','open','aria-hidden']});
   const controller: DisclosureController={
     createTrigger(options){
       const trigger=document.createElement('button');trigger.type='button';trigger.className='disclosure-trigger';trigger.textContent=options.label;trigger.setAttribute('aria-label',options.accessibleLabel);trigger.setAttribute('aria-expanded','false');
       trigger.addEventListener('mouseenter',()=>show(trigger,options,true));trigger.addEventListener('mouseleave',delayedClose);
-      trigger.addEventListener('focus',()=>show(trigger,options));trigger.addEventListener('blur',()=>{suppress=false;delayedClose();});
+      trigger.addEventListener('focus',()=>show(trigger,options,!restoringFocus));trigger.addEventListener('blur',()=>{suppress=false;delayedClose();});
       trigger.addEventListener('click',()=>activate(trigger,options));return trigger;
     },
     closeWithin(root,restoreFocus=false){if(active && root.contains(active))close(restoreFocus);},
-    dispose(){if(disposed)return;disposed=true;close(false);preview?.remove();panel?.remove();observer.disconnect();document.removeEventListener('keydown',escape);document.removeEventListener('pointerdown',outside);document.removeEventListener('click',outside);window.removeEventListener('resize',place);document.removeEventListener('scroll',place,true);if(owners.get(owner)===controller)owners.delete(owner);},
+    dispose(){if(disposed)return;disposed=true;close(false);preview?.remove();panel?.remove();observer.disconnect();sizeObserver?.disconnect();document.removeEventListener('keydown',escape);document.removeEventListener('pointerdown',outside);document.removeEventListener('click',outside);window.removeEventListener('resize',place);document.removeEventListener('scroll',place,true);if(owners.get(owner)===controller)owners.delete(owner);},
   };
   owners.set(owner,controller);return controller;
 }

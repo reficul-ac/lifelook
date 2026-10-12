@@ -104,6 +104,9 @@ describe('collapsed property history in the mounted workspace',()=>{
     federal=within(form).getByText(/^Federal history/,{selector:'summary'}).parentElement!;expect(federal.querySelector('summary')).toHaveTextContent('Confirmed zero');
     setField(federal,'Adjusted building basis ($)','1.00');expect(federal.querySelector('summary')).toHaveTextContent('Entered amounts');
   });
+  it('keeps the valuation date and combined home/ADU scope beside the entered amount',()=>{
+    const {form}=propertyWorkspace();const input=form.querySelector<HTMLElement>('[data-field="property.openingValueCents"]')!;expect(input).toHaveAccessibleName('Combined home and ADU market value at forecast start ($)');expect(input).toHaveAccessibleDescription('As of Jan 1, 2026. Includes the home and ADU together.');
+  });
 });
 
 describe('recovery shell and meaningful announcements',()=>{

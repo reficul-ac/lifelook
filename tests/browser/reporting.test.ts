@@ -120,6 +120,12 @@ describe('traceable projection reporting',()=>{
 });
 
 describe('compact report hierarchy',()=>{
+  it('routes an unknown owner IRA basis to the account history that establishes it',()=>{
+    const plan=makePlan({accounts:[{id:'basis-account',name:'IRA history',ownerId:'owner-a',type:'traditional-ira',openingBalanceCents:10000,annualGrowthBps:0,openingIraBasis:{known:false}}]});const {root:node,context:ui,reviews}=mountPresentation(plan);
+    renderTaxExplanation(node,calculateProjection(mustValidate(plan),loadRuleSet()).years[0]!,ui);fireEvent.click(within(node).getByText('Contributions',{selector:'summary'}));fireEvent.click(within(within(node).getByTestId('ira-2026-owner-a-basis')).getByRole('button'));
+    fireEvent.click(within(document.body).getByRole('button',{name:'Review IRA history'}));
+    expect(reviews).toContainEqual({section:'Investments',recordId:'basis-account',field:'openingIraBasis',label:'Review IRA history'});
+  });
   it('uses N/A only when a ratio has solely the known zero-income cause',()=>{
     const node=root();renderProjection(node,result('zero-cash'),context);
     expect(within(node).getAllByText('N/A · no income')).toHaveLength(4);

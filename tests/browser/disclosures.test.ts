@@ -36,6 +36,10 @@ describe('shared disclosures', () => {
     fireEvent.mouseEnter(trigger); fireEvent.mouseLeave(trigger); controller.dispose(); vi.runAllTimers();
     expect(document.querySelector('[data-disclosure-preview]')).toBeNull();
   });
+  it('allows a fresh keyboard focus after dismissing a hover-only preview',()=>{
+    const {trigger}=setup();fireEvent.mouseEnter(trigger);fireEvent.keyDown(document,{key:'Escape'});expect(within(document.body).queryByRole('tooltip')).toBeNull();
+    trigger.focus();expect(within(document.body).getByRole('tooltip')).toBeVisible();
+  });
   it('preserves destination focus on outside dismissal or navigation and supports reopening', () => {
     const {owner, trigger} = setup(); const destination=document.createElement('input'); owner.append(destination);
     fireEvent.click(trigger); destination.focus(); fireEvent.pointerDown(destination); expect(document.activeElement).toBe(destination);

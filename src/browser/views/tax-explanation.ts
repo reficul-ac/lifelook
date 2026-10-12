@@ -1,5 +1,5 @@
 import {getRecordLabel,formatPeriods,type IssueViewContext} from '../issue-presentation';
-import type { AnnualProjection,Available,History,HouseholdYear,TaxBook } from '../../engine';
+import type { AnnualProjection,Available,History,HouseholdYear,TaxBook,Issue } from '../../engine';
 import { appendAmount,appendCoverage,appendProvenance,element,formatCents,moneyEntry,renderIssues,renderIssueDetails } from './issues';
 
 function table(root:HTMLElement,caption:string,headers:readonly string[]):HTMLTableSectionElement {
@@ -8,15 +8,20 @@ function table(root:HTMLElement,caption:string,headers:readonly string[]):HTMLTa
 function cell(row:HTMLTableRowElement,value:Available<number>|number,context:IssueViewContext,id?:string):void {
   const node=element('td');if(id)node.dataset.testid=id;appendAmount(node,typeof value==='number'?{status:'available',value}:value,context,{label:id??'Tax amount'});row.append(node);
 }
-function history(root:HTMLElement,label:string,value:History<number>,context:IssueViewContext,id?:string):void {
+function history(root:HTMLElement,label:string,value:History<number>,context:IssueViewContext,id:string,issues:readonly Issue[],year:number):void {
   root.append(element('dt',label));const node=element('dd');if(id)node.dataset.testid=id;
-  if(value.known)node.textContent=formatCents(value.value);else appendAmount(node,{status:'needs-data',issues:[{code:'required-ira-basis',recordId:id?.match(/ira-\d+-(.*)-basis/)?.[1]??'household',field:'openingIraBasis',severity:'warning',explanation:'Opening or carried IRA basis history is unknown.',resolution:'Review the owning account’s after-tax IRA basis.'}]},context,{label});root.append(node);
+  if(value.known)node.textContent=formatCents(value.value);else appendAmount(node,{status:'needs-data',issues},context,{label,period:{year}});root.append(node);
 }
 const bookLabel:Record<TaxBook,string>={federal:'Federal regular',california:'California regular','federal-amt':'Federal AMT','california-amt':'California AMT'};
 function contributions(root:HTMLElement,household:HouseholdYear,context:IssueViewContext):void {
   const body=table(root,'Contribution requests and limits',['Month','Rule','Account','Requested','Eligible','Prevented','Deductible','Nondeductible','Reasons and next steps']);
   for(const contribution of household.contributions){const row=element('tr');row.append(element('td',String(contribution.month)),element('td',getRecordLabel(context.readState().savedPlan,contribution.ruleId)),element('td',getRecordLabel(context.readState().savedPlan,contribution.accountId)));cell(row,contribution.requestedCents,context);cell(row,contribution.eligibleCents,context,`contribution-${household.year}-${contribution.month}-${contribution.ruleId}-eligible`);cell(row,contribution.preventedCents,context,`contribution-${household.year}-${contribution.month}-${contribution.ruleId}-prevented`);cell(row,contribution.deductibleCents,context);cell(row,contribution.nondeductibleCents,context);const reasons=element('td');if(contribution.reasons.length){const occurrences=household.contributions.filter(c=>c.ruleId===contribution.ruleId).flatMap(c=>c.reasons.map(issue=>({issue,period:{year:c.year,month:c.month}})));reasons.append(context.disclosures.createTrigger({label:'Review reasons',accessibleLabel:`Review reasons: ${getRecordLabel(context.readState().savedPlan,contribution.ruleId)} · ${household.year}`,preview:contribution.reasons[0]!.explanation,title:`Contribution reasons · ${household.year}`,renderDetails:node=>renderIssueDetails(node,occurrences,context)}));}row.append(reasons);body.append(row);}
-  const basis=element('dl');for(const owner of household.ira.owners)history(basis,`IRA closing basis: ${getRecordLabel(context.readState().savedPlan,owner.ownerId)}`,owner.closingBasis,context,`ira-${household.year}-${owner.ownerId}-basis`);root.append(basis);
+  const basis=element('dl');for(const owner of household.ira.owners){
+    const plan=context.readState().savedPlan;
+    const openingIssues:Issue[]=plan.accounts.filter(account=>account.ownerId===owner.ownerId&&account.type==='traditional-ira'&&!account.openingIraBasis.known).map(account=>({code:'required-ira-basis',recordId:account.id,field:'openingIraBasis',year:plan.startYear,severity:'warning',explanation:'After-tax IRA basis at forecast start is unknown.',resolution:'Enter the account’s after-tax IRA basis; use zero only if confirmed.'}));
+    const carriedIssues=owner.newBasisCents.status==='available'?[]:owner.newBasisCents.issues;
+    history(basis,`IRA closing basis: ${getRecordLabel(plan,owner.ownerId)}`,owner.closingBasis,context,`ira-${household.year}-${owner.ownerId}-basis`,[...openingIssues,...carriedIssues],household.year);
+  }root.append(basis);
   const rules=section(root,'Contribution rules');for(const explanation of household.ira.explanations)rules.append(element('p',explanation));
 }
 function rentals(root:HTMLElement,household:HouseholdYear,context:IssueViewContext):void {

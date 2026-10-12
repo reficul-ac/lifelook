@@ -1,3 +1,4 @@
+import {mountWorkspace,setField} from '../helpers/dom';
 import { expect, it } from 'vitest';
 import { fireEvent, within } from '@testing-library/dom';
 import { renderIncomeForm } from '../../src/browser/forms/income';
@@ -39,14 +40,14 @@ it('saves two salaries and dated percentage and amount raises as atomic records'
   click(root, 'Add salary change'); fill(root, 'Salary change date 2', '2026-09-01');
   fill(root, 'Salary change type 2', 'amount'); fill(root, 'Salary change annual amount 2 ($)', '130000.00');
   expect(controller.getState().savedPlan.revision).toBe(0);
-  click(root, 'Save salary record'); expect(controller.getState().savedPlan.revision).toBe(1);
+  click(root, 'Save salary'); expect(controller.getState().savedPlan.revision).toBe(1);
   expect(controller.getState().savedPlan.salaries[0]?.changes).toEqual([
     { date: '2026-03-15', kind: 'percent', percentBps: 500 }, { date: '2026-09-01', kind: 'amount', annualGrossCents: 13000000 },
   ]);
-  click(root, 'Add salary'); const form = draftForm(root, 'Save salary record');
-  fill(form, 'Salary name', 'Second salary'); fill(draftForm(root, 'Save salary record'), 'Annual gross salary ($)', '40000');
-  fill(draftForm(root, 'Save salary record'), 'Salary owner', 'owner-b');
-  fireEvent.click(within(draftForm(root, 'Save salary record')).getByRole('button', { name: 'Save salary record' }));
+  click(root, 'Add salary'); const form = draftForm(root, 'Save salary');
+  fill(form, 'Salary name', 'Second salary'); fill(draftForm(root, 'Save salary'), 'Annual gross salary ($)', '40000');
+  fill(draftForm(root, 'Save salary'), 'Salary owner', 'owner-b');
+  fireEvent.click(within(draftForm(root, 'Save salary')).getByRole('button', { name: 'Save salary' }));
   expect(controller.getState().savedPlan.salaries).toHaveLength(2);
   expect(controller.getState().savedPlan.revision).toBe(2); sameCalculation(controller);
 });
@@ -56,21 +57,21 @@ it('requires wage ownership and employer while retaining entered recurrence unit
   click(root, 'Add other income'); fill(root, 'Income classification', 'wage');
   fill(root, 'Income name', 'Bonus'); fill(root, 'Income amount ($)', '123.45');
   fill(root, 'Income frequency', 'annual'); fill(root, 'Income annual growth (%)', '3.25'); fill(root, 'Income employer', 'bonus-employer');
-  click(root, 'Save other income record');
+  click(root, 'Save other income');
   expect(controller.getState().savedPlan.otherIncome[0]).toMatchObject({ classification: 'wage', ownerId: 'owner-a', employerId: 'bonus-employer', amountCents: 12345, frequency: 'annual', annualGrowthBps: 325 });
   expect(controller.getState().savedPlan.otherIncome[0]).not.toHaveProperty('niitTreatment'); sameCalculation(controller);
 });
 
 it('saves monthly and annual expenses and a separate nominal APR debt', () => {
   const { root, controller } = mount(renderExpensesDebtsForm);
-  click(root, 'Add expense'); fill(root, 'Expense name', 'Living'); fill(root, 'Expense amount ($)', '100.00'); click(root, 'Save expense record');
+  click(root, 'Add expense'); fill(root, 'Expense name', 'Living'); fill(root, 'Expense amount ($)', '100.00'); click(root, 'Save expense');
   click(root, 'Add expense');
-  fill(draftForm(root, 'Save expense record'), 'Expense name', 'Annual membership');
-  fill(draftForm(root, 'Save expense record'), 'Expense amount ($)', '1200');
-  fill(draftForm(root, 'Save expense record'), 'Expense frequency', 'annual');
-  fireEvent.click(within(draftForm(root, 'Save expense record')).getByRole('button', { name: 'Save expense record' }));
+  fill(draftForm(root, 'Save expense'), 'Expense name', 'Annual membership');
+  fill(draftForm(root, 'Save expense'), 'Expense amount ($)', '1200');
+  fill(draftForm(root, 'Save expense'), 'Expense frequency', 'annual');
+  fireEvent.click(within(draftForm(root, 'Save expense')).getByRole('button', { name: 'Save expense' }));
   click(root, 'Add debt'); fill(root, 'Debt name', 'Personal debt'); fill(root, 'Debt opening balance ($)', '1000');
-  fill(root, 'Debt nominal APR (%)', '6.00'); fill(root, 'Debt monthly payment ($)', '100'); click(root, 'Save debt record');
+  fill(root, 'Debt nominal APR (%)', '6.00'); fill(root, 'Debt monthly payment ($)', '100'); click(root, 'Save debt');
   expect(controller.getState().savedPlan.expenses.map(e => e.frequency)).toEqual(['monthly', 'annual']);
   expect(controller.getState().savedPlan.debts[0]).toMatchObject({ openingBalanceCents: 100000, aprBps: 600, monthlyPaymentCents: 10000 });
   expect(controller.getState().savedPlan.revision).toBe(3); sameCalculation(controller);
@@ -80,15 +81,15 @@ it('saves all five account types with effective returns and explicit IRA basis',
   const { root, controller } = mount(renderInvestmentsForm);
   const types = ['taxable-brokerage', 'traditional-401k', 'roth-401k', 'traditional-ira', 'roth-ira'];
   for (const type of types) {
-    click(root, 'Add account'); let form = draftForm(root, 'Save account record');
-    fill(form, 'Account name', type); fill(draftForm(root, 'Save account record'), 'Account type', type);
-    fill(draftForm(root, 'Save account record'), 'Account opening balance ($)', '1000');
-    fill(draftForm(root, 'Save account record'), 'Effective annual account return (%)', '7.00');
+    click(root, 'Add account'); let form = draftForm(root, 'Save account');
+    fill(form, 'Account name', type); fill(draftForm(root, 'Save account'), 'Account type', type);
+    fill(draftForm(root, 'Save account'), 'Account opening balance ($)', '1000');
+    fill(draftForm(root, 'Save account'), 'Effective annual account return (%)', '7.00');
     if (type === 'traditional-ira') {
-      fill(draftForm(root, 'Save account record'), 'Opening traditional IRA basis history', 'known');
-      fill(draftForm(root, 'Save account record'), 'Opening traditional IRA basis value', '0');
+      fill(draftForm(root, 'Save account'), 'After-tax IRA basis at forecast start ($) history', 'known');
+      fill(draftForm(root, 'Save account'), 'After-tax IRA basis at forecast start ($) value', '0');
     }
-    fireEvent.click(within(draftForm(root, 'Save account record')).getByRole('button', { name: 'Save account record' }));
+    fireEvent.click(within(draftForm(root, 'Save account')).getByRole('button', { name: 'Save account' }));
   }
   expect(controller.getState().savedPlan.accounts.map(a => a.type)).toEqual(types);
   expect(controller.getState().savedPlan.accounts[3]?.openingIraBasis).toEqual({ known: true, value: 0 });
@@ -99,15 +100,25 @@ it('saves fixed and salary percentage requests with sponsorship and visible prio
   const fixture = loadReferences<PlanDocument, unknown>('projection').find(c => c.id === 'two-salaries-home-adu')!.input;
   const { root, controller } = mount(renderInvestmentsForm, makePlan({ household: fixture.household, salaries: fixture.salaries, accounts: fixture.accounts }));
   click(root, 'Add contribution'); fill(root, 'Contribution account', fixture.accounts[0]!.id);
-  fill(root, 'Monthly contribution ($)', '100'); fill(root, 'Contribution priority', '2'); click(root, 'Save contribution record');
-  click(root, 'Add contribution'); fill(draftForm(root, 'Save contribution record'), 'Contribution account', fixture.accounts[2]!.id);
-  fill(draftForm(root, 'Save contribution record'), 'Contribution amount mode', 'salary-percent');
-  fill(draftForm(root, 'Save contribution record'), 'Contribution salary', fixture.salaries[1]!.id);
-  fill(draftForm(root, 'Save contribution record'), 'Salary contribution (%)', '10');
-  fill(draftForm(root, 'Save contribution record'), 'Sponsoring salary', fixture.salaries[1]!.id);
-  fill(draftForm(root, 'Save contribution record'), 'Contribution priority', '1');
-  fireEvent.click(within(draftForm(root, 'Save contribution record')).getByRole('button', { name: 'Save contribution record' }));
+  fill(root, 'Monthly contribution ($)', '100'); fill(root, 'Contribution priority', '2'); click(root, 'Save contribution');
+  click(root, 'Add contribution'); fill(draftForm(root, 'Save contribution'), 'Contribution account', fixture.accounts[2]!.id);
+  fill(draftForm(root, 'Save contribution'), 'Contribution amount mode', 'salary-percent');
+  fill(draftForm(root, 'Save contribution'), 'Contribution salary', fixture.salaries[1]!.id);
+  fill(draftForm(root, 'Save contribution'), 'Salary contribution (%)', '10');
+  fill(draftForm(root, 'Save contribution'), 'Sponsoring salary', fixture.salaries[1]!.id);
+  fill(draftForm(root, 'Save contribution'), 'Contribution priority', '1');
+  fireEvent.click(within(draftForm(root, 'Save contribution')).getByRole('button', { name: 'Save contribution' }));
   expect(controller.getState().savedPlan.contributions[0]?.amount).toEqual({ kind: 'fixed', monthlyCents: 10000 });
   expect(controller.getState().savedPlan.contributions[1]).toMatchObject({ priority: 1, sponsoringSalaryId: fixture.salaries[1]!.id, amount: { kind: 'salary-percent', salaryId: fixture.salaries[1]!.id, percentBps: 1000 } });
   expect(controller.getState().savedPlan.revision).toBe(2); sameCalculation(controller);
+});
+
+it('keeps short labels, entry consequences and eligibility guidance attached to the native controls',()=>{
+  const fixture=loadReferences<PlanDocument,unknown>('projection').find(c=>c.id==='two-salaries-home-adu')!.input;const {root,controller}=mountWorkspace(fixture);const nav=within(root.querySelector('nav')!);
+  nav.getByRole('button',{name:'Income'}).click();const salary=[...root.querySelectorAll('form')].find(form=>form.dataset.recordId===fixture.salaries[0]!.id)!;
+  const name=within(salary).getByLabelText('Salary name');expect(name.closest('[data-field-wrapper]')!.querySelector('label')).toHaveTextContent(/^name$/i);expect(name).toHaveAccessibleName('Salary name');
+  expect(within(salary).getByLabelText('Salary end date')).toHaveAccessibleDescription('Includes this date. Blank means no end.');expect(within(salary).getByLabelText('Salary raise day')).toHaveAccessibleDescription('Shorter months use their last day.');
+  setField(salary,'Salary end date','2026-12-31');fireEvent.click(within(salary).getByText('Save salary',{selector:'button'}));expect(controller.getState().savedPlan.salaries.find(s=>s.id===fixture.salaries[0]!.id)?.endDate).toBe('2026-12-31');sameCalculation(controller);
+  nav.getByRole('button',{name:'Expenses and debts'}).click();const expense=root.querySelector<HTMLElement>('[data-section="Expenses and debts"]')!;expect(within(expense).getAllByLabelText('Expense start date')[0]).toHaveAccessibleDescription(/Payments repeat on this date/);expect(expense).toHaveTextContent('Add each mortgage once, under its property.');
+  nav.getByRole('button',{name:'Investments'}).click();const investments=root.querySelector<HTMLElement>('[data-section="Investments"]')!;expect(investments).toHaveTextContent('Different from account balance; enter 0 only if confirmed.');expect(investments).toHaveTextContent('Lower numbers receive available contribution limits first.');
 });

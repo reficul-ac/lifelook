@@ -37,16 +37,19 @@ export function refreshFields(root:HTMLElement,render:()=>void):void {
   replacement?.focus();
   if(selection&&replacement instanceof HTMLInputElement&&replacement.type==='text')replacement.setSelectionRange(selection[0],selection[1]);
 }
+export const taxCategoryOptions=[{value:'property-tax',label:'Property tax'},{value:'homeowners-insurance',label:'Homeowners insurance'},{value:'mortgage-insurance',label:'Mortgage insurance'},{value:'repair',label:'Repairs'},{value:'operating',label:'Operating costs'},{value:'capital',label:'Capital improvements'},{value:'personal',label:'Personal costs'}];
+const shortLabel=(label:string):string=>label.replace(/^(?:Filer \d+ |Property expense |Property |Salary |Income |Expense |Debt |Account |Contribution )/,'');
 let fieldSequence=0;
 export function renderField(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,options:FieldOptions={}):HTMLInputElement|HTMLSelectElement {
-  const wrapper=element('div');wrapper.className='field-wrapper';wrapper.dataset.fieldWrapper='';const caption=element('label',options.visibleLabel??label);wrapper.append(caption);const kind=options.kind??'text';
+  if(options.kind==='money'&&!label.includes('$'))label+=' ($)';
+  const wrapper=element('div');wrapper.className='field-wrapper';wrapper.dataset.fieldWrapper='';const caption=element('label',options.visibleLabel??shortLabel(label));wrapper.append(caption);const kind=options.kind??'text';
   const control=kind==='select'?element('select'):element('input');control.id=`field-${++fieldSequence}`;caption.htmlFor=control.id;control.dataset.fieldLabel=label;control.dataset.fieldKind=kind;control.name=path.join('.');control.dataset.field=path.join('.');control.setAttribute('aria-label',label);
   if(control instanceof HTMLSelectElement){for(const option of options.options??[]){const value=typeof option==='string'?option:option.value,name=typeof option==='string'?option:option.label;const child=element('option',name);child.value=value;control.append(child);}}
-  else {control.type=kind==='checkbox'?'checkbox':kind==='date'?'date':kind==='month'?'month':'text';if(kind==='money'||kind==='rate')control.inputMode='decimal';if(kind==='integer')control.inputMode='numeric';}
+  else {control.type=kind==='checkbox'?'checkbox':kind==='date'?'date':kind==='month'?'month':'text';if(kind==='money'||kind==='rate')control.inputMode='decimal';if(kind==='integer')control.inputMode='numeric';if(['primaryArea','aduArea'].includes(String(path[path.length-1])))control.inputMode='decimal';}
   const value=valueAt(context.draft.value,path);
   if(control instanceof HTMLInputElement&&control.type==='checkbox')control.checked=value===true;else control.value=value===undefined?'':String(value);
   control.addEventListener(kind==='select'||kind==='checkbox'?'change':'input',()=>{const next=control instanceof HTMLInputElement&&control.type==='checkbox'?control.checked:control.value;context.onChange(path,options.optional&&next===''?undefined:next);if(options.refresh)context.refresh();});
-  wrapper.append(control);if(options.hint){const hint=element('small',options.hint);hint.id=`${control.id}-hint`;wrapper.append(hint);control.dataset.hintIds=hint.id;control.setAttribute('aria-describedby',hint.id);}if(options.help&&context.ui)wrapper.append(context.ui.disclosures.createTrigger({label:'ⓘ',accessibleLabel:`ⓘ About ${options.visibleLabel??label}`,preview:options.help,title:label,renderDetails:node=>{node.textContent=options.help!;}}));const error=element('small');error.id=`${control.id}-error`;error.dataset.fieldError=path.join('.');error.className='field-error';wrapper.append(error);root.append(wrapper);return control;
+  wrapper.append(control);if(options.hint){const hint=element('small',options.hint);hint.id=`${control.id}-hint`;wrapper.append(hint);control.dataset.hintIds=hint.id;control.setAttribute('aria-describedby',hint.id);}if(options.help&&context.ui)wrapper.append(context.ui.disclosures.createTrigger({label:'ⓘ',accessibleLabel:`ⓘ About ${options.visibleLabel??shortLabel(label)}`,preview:options.help,title:label,renderDetails:node=>{node.textContent=options.help!;}}));const error=element('small');error.id=`${control.id}-error`;error.dataset.fieldError=path.join('.');error.className='field-error';wrapper.append(error);root.append(wrapper);return control;
 }
 export function renderBooleanHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,options:Pick<FieldOptions,'visibleLabel'|'hint'|'help'>={}):HTMLSelectElement {
   const history=valueAt(context.draft.value,path) as {known?:boolean;value?:boolean}|undefined;
@@ -55,14 +58,12 @@ export function renderBooleanHistory(root:HTMLElement,context:FieldContext,path:
 }
 export function renderHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,options:FieldOptions={}):void {
   if(options.kind==='checkbox'||options.kind==='select'){renderBooleanHistory(root,context,path,label,options);return;}
-  const group=element('fieldset');group.dataset.fieldGroup=path.join('.');group.dataset.groupLabel=label;group.append(element('legend',options.visibleLabel??label));
+  const group=element('fieldset');group.dataset.fieldGroup=path.join('.');group.dataset.groupLabel=label;group.append(element('legend',options.visibleLabel??shortLabel(label)));
   const history=valueAt(context.draft.value,path) as {known?:boolean;value?:unknown}|undefined;
-  const select=element('select');select.dataset.field=[...path,'known'].join('.');select.setAttribute('aria-label',`${label} history`);const caption=element('label',`${label} history`);caption.append(select);group.append(caption);
-  for(const [value,name] of [['unknown','Unknown'],['known','Known']] as const){const option=element('option',name);option.value=value;select.append(option);}select.value=history?.known?'known':'unknown';
-  select.addEventListener('change',()=>{context.onChange(path,select.value==='unknown'?{known:false}:{known:true,value:options.kind==='checkbox'||options.kind==='select'?false:''});context.refresh();});
-  if(history?.known){
-    renderField(group,context,[...path,'value'],`${label} value`,options);
-  }
+  const statusContext:FieldContext={...context,get draft(){return {...context.draft,value:setAt(context.draft.value,[...path,'known'],history?.known?'known':'unknown')};},onChange(_path,value){context.onChange(path,value==='unknown'?{known:false}:{known:true,value:''});}};
+  renderField(group,statusContext,[...path,'known'],`${label} history`,{kind:'select',visibleLabel:'history',...(options.hint?{hint:options.hint}:{}),options:[{value:'unknown',label:'Unknown'},{value:'known',label:'Enter value'}],refresh:true});
+  if(history?.known){const {hint,...entryOptions}=options;renderField(group,context,[...path,'value'],`${label} value`,{...entryOptions,visibleLabel:'value'});}
+
   root.append(group);
 }
 export function renderRows(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,makeRow:()=>RawObject,renderRow:(root:HTMLElement,path:FieldPath,index:number)=>void):void {
@@ -73,11 +74,11 @@ export function renderRows(root:HTMLElement,context:FieldContext,path:FieldPath,
 export function renderRecordSection(root:HTMLElement,controller:WorkspaceController,section:EditableSection,title:string,render:(root:HTMLElement,context:FieldContext)=>void,makeNew?:()=>RawObject,ui?:IssueViewContext):void {
   ui?.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2',title));
   const state=controller.getState();const records=section==='household'?['household']:[...new Set([...(state.savedPlan[section] as readonly {id:string}[]).map(r=>r.id),...Object.values(state.drafts).filter(d=>d.section===section).map(d=>d.recordId)])];
-  for(const id of records){const card=element('form');card.dataset.recordId=id;card.dataset.editableSection=section;card.append(element('h3',section==='household'?'Household':String(controller.getDraft(section,id).value.name??'New record')));const body=element('div');body.className='record-fields';card.append(body);
+  for(const id of records){const card=element('form');card.dataset.recordId=id;card.dataset.editableSection=section;card.append(element('h3',section==='household'?'Applied household inputs':String(controller.getDraft(section,id).value.name??'New record')));const body=element('div');body.className='record-fields';card.append(body);
     const context:FieldContext={...(ui?{ui}:{}),get draft(){return controller.getDraft(section,id);},get issues(){return controller.getState().issues.filter(i=>i.recordId===id||section==='household');},onChange(path,value){const draft=controller.getDraft(section,id);controller.editDraft(id,{...draft,value:setAt(draft.value,path,value)});},refresh(){ui?.disclosures.closeWithin(body,false);refreshFields(body,()=>render(body,context));if(ui)syncFormFeedback(root,controller,ui);}};
     context.refresh();
-    const save=element('button',section==='household'?'Save household':`Save ${title==='Income'?'income':title==='Investments'?'investment':title.toLowerCase()} record`);save.type='submit';card.append(save);card.addEventListener('submit',event=>{event.preventDefault();controller.saveRecord(id);});
-    card.append(button(`Discard ${title.toLowerCase()} record edits and reload saved values`,()=>{controller.discardDraft(id);renderRecordSection(root,controller,section,title,render,makeNew,ui);}));
+    const save=element('button',section==='household'?'Save household':`Save ${title==='Income'?'income':title==='Investments'?'investment':title.toLowerCase()}`);save.type='submit';card.append(save);card.addEventListener('submit',event=>{event.preventDefault();controller.saveRecord(id);});
+    card.append(element('small','Discards this draft and reloads applied inputs.'),button('Discard edits',()=>{controller.discardDraft(id);renderRecordSection(root,controller,section,title,render,makeNew,ui);}));
     if(section!=='household')card.append(button(`Remove ${String(controller.getDraft(section,id).value.name??'record')}`,()=>controller.removeRecord(section,id)));
     root.append(card);
   }

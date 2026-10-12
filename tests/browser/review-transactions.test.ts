@@ -91,7 +91,7 @@ describe('review: atomic save, restore and overlapping drafts', () => {
     const { controller } = workspace(); editProperty(controller); editExpense(controller); controller.saveRecord('insurance');
     const pending = controller.beginAdd('accounts'); controller.saveProperty('home');
     const root = document.createElement('section'); document.body.append(root); renderPropertiesForm(root, controller);
-    fireEvent.click(getByRole(root, 'button', { name: 'Discard property edits and reload saved values' }));
+    fireEvent.click(getByRole(root, 'button', { name: 'Discard edits' }));
     expect(getByLabelText(root, 'Property name')).toHaveValue('Home');
     expect(controller.getDraft('properties', 'home').value.expenses).toMatchObject([{ amountCents: '200.00' }]);
     expect(controller.getState().drafts[pending]).toBeDefined(); expect(controller.getState().drafts.home).toBeUndefined();
@@ -104,7 +104,7 @@ describe('review: atomic save, restore and overlapping drafts', () => {
     controller.editDraft('home', { ...draft, value: { ...draft.value, expenses: (draft.value.expenses as object[]).map(e => ({ ...e, amountCents: '300.00' })) } });
     controller.saveProperty('home'); controller.saveRecord('insurance');
     const root = document.createElement('section'); document.body.append(root); renderExpensesDebtsForm(root, controller);
-    fireEvent.click(getByRole(root, 'button', { name: 'Discard expense record edits and reload saved values' }));
+    fireEvent.click(getByRole(root, 'button', { name: 'Discard edits' }));
     expect(getByLabelText(root, 'Expense amount ($)')).toHaveValue('300.00');
     expect(controller.getState().drafts.insurance).toBeUndefined();
   });

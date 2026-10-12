@@ -3,7 +3,7 @@ import type {PropertyLoan} from '../../engine';
 import type {IssueViewContext} from '../issue-presentation';
 import {syncFormFeedback,setFormTaskIssues,registerFormSummary} from '../form-feedback';
 import { defaultRentalAllocation,initializePurchaseLoan,type Property,type RentalUnit,type TaxBook,type PurchaseLoanInput } from '../../engine';
-import { button,element,refreshFields,renderField,renderBooleanHistory,setAt,valueAt,type FieldContext,type FieldPath,type FieldOptions } from '../fields';
+import { button,element,refreshFields,renderField,renderBooleanHistory,setAt,valueAt,type FieldContext,type FieldPath,type FieldOptions,taxCategoryOptions } from '../fields';
 import { fromDraftValue,toDraftValue,type RawObject,type WorkspaceController } from '../state';
 
 const books:readonly [TaxBook,string][]=[['federal','Federal rental tax history'],['california','California rental tax history'],['federal-amt','Federal AMT rental tax history'],['california-amt','California AMT rental tax history']];
@@ -28,7 +28,7 @@ function displayed(context:FieldContext,path:FieldPath,value:unknown,change:(val
   return {...(context.ui?{ui:context.ui}:{}),get draft(){return {...context.draft,value:setAt(context.draft.value,path,value)};},get issues(){return context.issues;},onChange(_path,value){change(value);},refresh(){context.refresh();}};
 }
 function booleanHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string):void {
-  renderBooleanHistory(root,context,path,label);
+  const help:Record<string,string>={'Active participation':'Participation in rental management decisions is independent of floor area or ownership share.','Qualified acquisition debt':'Loan proceeds must qualify as acquisition debt under the applicable mortgage-interest rules.','QBI qualification':'Qualified business income eligibility depends on rental business facts; it is independent of cash flow.'};renderBooleanHistory(root,context,path,label,help[label]?{help:help[label]}:{});
 }
 function moneyHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,estimate=false):void {
   const history=at(context,path) as {known?:boolean;value?:string}|undefined;
@@ -82,7 +82,7 @@ function historyBook(root:HTMLElement,context:FieldContext,path:FieldPath,name:s
   });
 }
 function allocationFields(root:HTMLElement,context:FieldContext,path:FieldPath):void {
-  field(root,context,[...path,'numerator'],'Allocation numerator',{kind:'integer'});field(root,context,[...path,'denominator'],'Allocation denominator',{kind:'integer'});
+  field(root,context,[...path,'numerator'],'Rental portion',{kind:'integer'});field(root,context,[...path,'denominator'],'Total portions',{kind:'integer',hint:'1 of 4 = 25%.'});
 }
 function purchaseTerms(context:FieldContext,loan:RawObject) {
   const decoded=fromDraftValue({purchasePriceCents:at(context,['property','purchasePriceCents']),downPaymentCents:at(context,['property','downPaymentCents']),aprBps:loan.aprBps,termMonths:loan.termMonths},String(loan.id));
@@ -101,7 +101,7 @@ function renderLoan(root:HTMLElement,controller:WorkspaceController,context:Fiel
   moneyHistory(node,context,[...path,'openingBalance'],'Opening mortgage balance',true);moneyHistory(node,context,[...path,'openingPayment'],'Opening principal-and-interest payment',true);
   node.append(element('p','Exclude property tax and insurance from loan payments.'));
   if(saved?.schedule.status==='available')node.append(element('p',`Saved opening balance: ${saved.schedule.value.openingProvenance}; saved payment: ${saved.schedule.value.paymentProvenance}. Exclude property tax and insurance.`));
-  field(node,context,[...path,'proceedsQualification','kind'],'Proceeds type',{kind:'select',options:['acquisition','refinance','cash-out','mixed','grandfathered','unknown'],refresh:true});
+  field(node,context,[...path,'proceedsQualification','kind'],'Proceeds type',{kind:'select',options:[{value:'acquisition',label:'Purchase/acquisition'},{value:'refinance',label:'Refinance'},{value:'cash-out',label:'Cash-out'},{value:'mixed',label:'Mixed proceeds'},{value:'grandfathered',label:'Grandfathered debt'},{value:'unknown',label:'Unknown'}],refresh:true});
   if(at(context,[...path,'proceedsQualification','kind'])==='acquisition')node.append(button('Calculate purchase loan',()=>{
     const current=at(context,path) as RawObject,result=purchaseTerms(context,current);
     if(result.status!=='available'){const form=node.closest<HTMLElement>('form')!;setFormTaskIssues(form,result.issues.map(issue=>({...issue,recordId:String(current.id),...(issue.field==='purchasePriceCents'||issue.field==='downPaymentCents'?{recordId:context.draft.recordId,field:'property.'+issue.field}:{})})));if(context.ui)syncFormFeedback(ownerFor(root),controller,context.ui);return;}
@@ -144,7 +144,7 @@ function renderRental(root:HTMLElement,controller:WorkspaceController,context:Fi
 function renderExpense(root:HTMLElement,controller:WorkspaceController,context:FieldContext,path:FieldPath):void {
   const expense=at(context,path) as RawObject,node=group(root,`Property expense — ${String(expense.name??expense.id)}`);
   field(node,context,[...path,'name'],'Property expense name');field(node,context,[...path,'amountCents'],'Property expense amount',{kind:'money'});field(node,context,[...path,'frequency'],'Property expense frequency',{kind:'select',options:['monthly','annual']});field(node,context,[...path,'startDate'],'Property expense start date',{kind:'date'});field(node,context,[...path,'endDate'],'Property expense end date (optional)',{kind:'date',optional:true});field(node,context,[...path,'annualGrowthBps'],'Property expense annual growth (%)',{kind:'rate'});
-  field(node,context,[...path,'taxCategory'],'Property expense category',{kind:'select',options:['property-tax','homeowners-insurance','mortgage-insurance','repair','operating','capital','personal'],refresh:true});
+  field(node,context,[...path,'taxCategory'],'Property expense category',{kind:'select',options:taxCategoryOptions,refresh:true});
   field(node,context,[...path,'use'],'Property expense use',{kind:'select',options:['personal','rental','shared'],refresh:true});
   if(at(context,[...path,'use'])==='rental')field(node,context,[...path,'rentalId'],'Direct expense rental unit',{kind:'select',options:rentalOptions(controller,context,context.draft.recordId)});
   if(at(context,[...path,'use'])==='shared'){
@@ -155,9 +155,9 @@ function renderExpense(root:HTMLElement,controller:WorkspaceController,context:F
 }
 function propertyFields(root:HTMLElement,controller:WorkspaceController,context:FieldContext):void {
   const path=['property'],property=at(context,path) as RawObject;
-  field(root,context,[...path,'name'],'Property name');field(root,context,[...path,'role'],'Property role',{kind:'select',options:[{value:'primary',label:'Primary home'},{value:'rental',label:'Whole-property rental'},{value:'primary-with-adu',label:'Primary home with ADU'}],refresh:true});field(root,context,[...path,'purchaseDate'],'Purchase date',{kind:'date'});field(root,context,[...path,'purchasePriceCents'],'Purchase price',{kind:'money'});field(root,context,[...path,'downPaymentCents'],'Down payment',{kind:'money'});field(root,context,[...path,'openingValueCents'],property.role==='primary-with-adu'?'Combined home and ADU market value at forecast start':'Property market value at forecast start',{kind:'money'});field(root,context,[...path,'appreciationBps'],'Effective annual appreciation (%)',{kind:'rate'});
+  field(root,context,[...path,'name'],'Property name');field(root,context,[...path,'role'],'Property role',{kind:'select',options:[{value:'primary',label:'Primary home'},{value:'rental',label:'Whole-property rental'},{value:'primary-with-adu',label:'Primary home with ADU'}],refresh:true});field(root,context,[...path,'purchaseDate'],'Purchase date',{kind:'date',hint:'The property must exist by Jan 1 of the forecast start year.'});field(root,context,[...path,'purchasePriceCents'],'Purchase price',{kind:'money'});field(root,context,[...path,'downPaymentCents'],'Down payment',{kind:'money'});field(root,context,[...path,'openingValueCents'],property.role==='primary-with-adu'?'Combined home and ADU market value at forecast start':'Property market value at forecast start',{kind:'money'});field(root,context,[...path,'appreciationBps'],'Effective annual appreciation (%)',{kind:'rate'});
   if(property.role==='primary-with-adu') {
-    field(root,context,[...path,'primaryArea'],'Primary home living area',{kind:'integer'});field(root,context,[...path,'aduArea'],'ADU living area',{kind:'integer'});
+    field(root,context,[...path,'primaryArea'],'Primary home living area',{kind:'text',hint:'Use the same area units for home and ADU; fractions are allowed.'});field(root,context,[...path,'aduArea'],'ADU living area',{kind:'text'});
     const decoded=fromDraftValue(context.draft.value,context.draft.recordId);
     if(decoded.issues.length===0){
       const defaultUnits=(decoded.value.rentals as readonly RentalUnit[]).map(({sharedAllocation:_override,...unit})=>unit);
@@ -186,7 +186,7 @@ export function renderPropertiesForm(root:HTMLElement,controller:WorkspaceContro
     const card=element('form');card.dataset.recordId=id;card.dataset.editableSection='properties';const body=element('div');disclosureRoots.set(body,root);card.append(element('h3',String(controller.getDraft('properties',id).value.property&& (controller.getDraft('properties',id).value.property as RawObject).name||'Property')),body);
     const context:FieldContext={...(ui?{ui}:{}),get draft(){return controller.getDraft('properties',id);},get issues(){return controller.getState().issues;},onChange(path,value){setFormTaskIssues(card,[]);const draft=controller.getDraft('properties',id);controller.editDraft(id,{...draft,value:setAt(draft.value,path,value)});},refresh(){captureDisclosures(body);ui?.disclosures.closeWithin(body,false);refreshFields(body,()=>propertyFields(body,controller,context));if(ui)syncFormFeedback(root,controller,ui);}};
     context.refresh();const save=element('button','Save property');save.type='submit';card.append(save,button('Remove property',()=>controller.removeRecord('properties',id)));card.addEventListener('submit',event=>{event.preventDefault();controller.saveProperty(id);});
-    card.append(button('Discard property edits and reload saved values',()=>{controller.discardDraft(id);renderPropertiesForm(root,controller,ui);}));
+    card.append(element('small','Discards this draft and reloads applied inputs.'),button('Discard edits',()=>{controller.discardDraft(id);renderPropertiesForm(root,controller,ui);}));
     root.append(card);
   }
   if(ui)syncFormFeedback(root,controller,ui);

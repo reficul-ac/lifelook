@@ -1,12 +1,13 @@
 import {describe,expect,it} from 'vitest';
 import {fireEvent,within} from '@testing-library/dom';
 import type {Issue,PlanDocument,ProjectionResult} from '../../src/engine';
-import {resolveFormIssues,revealField} from '../../src/browser/form-feedback';
+import {resolveFormIssues,revealField,formatFieldIssue} from '../../src/browser/form-feedback';
 import {createWorkspace,toDraftValue,type RecordDraft} from '../../src/browser/state';
 import {renderField,type FieldContext} from '../../src/browser/fields';
 import {mountWorkspace,setField} from '../helpers/dom';
 import {mountPresentation} from '../helpers/presentation';
 import {makePlan} from '../helpers/plans';
+import {validatePlan} from '../../src/engine';
 import {loadReferences} from '../helpers/references';
 const problem=(recordId:string,field:string):Issue=>({recordId,field,code:'invalid-input',severity:'error',explanation:'Invalid input',resolution:'Correct this input.'});
 describe('draft-relative feedback',()=>{
@@ -55,5 +56,24 @@ describe('draft-relative feedback',()=>{
     const context:FieldContext={get draft(){return draft;},issues:[],ui,onChange(_path,value){draft={...draft,value:{name:value}};},refresh(){}};
     const input=renderField(root,context,['name'],'Debt name',{visibleLabel:'name',help:'Name this debt for later review.'});
     expect(input).toHaveAccessibleName('Debt name');expect(root.querySelector('label')).toHaveTextContent('name');expect(root.querySelector('label button')).toBeNull();fireEvent.click(within(root).getByRole('button',{name:/About name/}));expect(document.querySelector('[data-disclosure-panel]')).toHaveTextContent('Name this debt');
+  });
+});
+describe('feedback in entered units',()=>{
+  it('uses actual growth/APR validation bounds as percentages while retaining domain corrections',()=>{
+    const plan=makePlan({accounts:[{id:'account-a',name:'Account',ownerId:'owner-a',type:'taxable-brokerage',openingBalanceCents:0,annualGrowthBps:-10000,openingIraBasis:{known:false}}],debts:[{id:'debt-a',name:'Debt',openingBalanceCents:0,aprBps:-1,monthlyPaymentCents:0,firstPaymentMonth:'2026-01'}]});
+    const result=validatePlan(plan);expect(result.ok).toBe(false);
+    const growth=result.issues.find(i=>i.recordId==='account-a'&&i.field==='annualGrowthBps')!;const apr=result.issues.find(i=>i.recordId==='debt-a'&&i.field==='aprBps')!;
+    const account:RecordDraft={recordId:'account-a',section:'accounts',value:toDraftValue(plan.accounts[0])},debt:RecordDraft={recordId:'debt-a',section:'debts',value:toDraftValue(plan.debts[0])};
+    expect(formatFieldIssue(growth,account)).toContain('-99.99%');expect(formatFieldIssue(growth,account)).toContain('1,000%');expect(formatFieldIssue(apr,debt)).toContain('0%');
+    const propertyPlan=loadReferences<PlanDocument,ProjectionResult>('projection').find(c=>c.id==='two-salaries-home-adu')!.input;const invalid={...propertyPlan,properties:propertyPlan.properties.map(p=>({...p,downPaymentCents:p.purchasePriceCents+1}))};
+    const issues=validatePlan(invalid).issues;const issue=issues.find(i=>i.field==='downPaymentCents')!;
+    expect(formatFieldIssue(issue,{recordId:'home',section:'properties',value:toDraftValue({property:invalid.properties[0],rentals:[],expenses:[]})})).toBe('Down payment cannot exceed purchase price.');
+  });
+  it('distinguishes empty amounts, decimals and whole numbers while retaining unknown fallback diagnostics',()=>{
+    const draft:RecordDraft={recordId:'debt',section:'debts',value:{openingBalanceCents:'',aprBps:'1.234',termMonths:'1.5'}};
+    expect(formatFieldIssue({...problem('debt','openingBalanceCents'),explanation:'Enter money as an ordinary decimal with at most two decimal places; blank is unknown.'},draft)).toBe('Enter an amount; use 0 only if confirmed.');
+    expect(formatFieldIssue({...problem('debt','aprBps'),explanation:'Enter rate as an ordinary decimal with at most two decimal places; blank is unknown.'},draft)).toBe('Use up to 2 decimal places, without commas.');
+    expect(formatFieldIssue({...problem('debt','termMonths'),explanation:'Enter a whole number; a blank value is unknown, not zero.'},draft)).toBe('Enter a whole number.');
+    expect(formatFieldIssue({...problem('debt','other'),explanation:'Custom correction 38'},draft)).toBe('Custom correction 38');
   });
 });

@@ -90,7 +90,7 @@ describe('collapsed property history in the mounted workspace',()=>{
     fireEvent.input(input,{target:{value:'1.234'}});const ancestors:HTMLDetailsElement[]=[];for(let node:HTMLElement|null=input.parentElement;node;node=node.parentElement)if(node instanceof HTMLDetailsElement)ancestors.push(node);
     for(const details of ancestors)if(details.open)fireEvent.click(details.querySelector('summary')!);fireEvent.click(within(form).getByText('Save property',{selector:'button'}));
     expect(input).toHaveValue('1.234');expect(input).toHaveAttribute('aria-invalid','true');expect(ancestors.every(node=>node.open)).toBe(true);expect(controller.getState().savedPlan.revision).toBe(0);expect(controller.getState().savedPlan.rentals[0]!.taxHistory.california).toEqual(plan.rentals[0]!.taxHistory.california);
-    expect(within(form).getByText(/^Federal AMT history/,{selector:'summary'})).toHaveTextContent('1 input error');fireEvent.click(within(form.querySelector('[data-form-feedback]')!).getByRole('button',{name:'Review Adjusted building basis'}));expect(input).toHaveFocus();
+    expect(within(form).getByText(/^Federal AMT history/,{selector:'summary'})).toHaveTextContent('1 input error');fireEvent.click(within(form.querySelector('[data-form-feedback]')!).getByRole('button',{name:'Review Adjusted building basis ($)'}));expect(input).toHaveFocus();
   });
   it('opens new loan sections for entry while distinguishing known-zero history from unknown',()=>{
     const {form}=propertyWorkspace();fireEvent.click(within(form).getByText('Add loan',{selector:'button'}));
@@ -102,6 +102,6 @@ describe('collapsed property history in the mounted workspace',()=>{
     setField(form,'Nominal APR (%)','1.234');expect(within(form).getByText(/^Loan —/,{selector:'summary'})).toHaveTextContent('Opening inputs unavailable');
     let federal=within(form).getByText(/^Federal history/,{selector:'summary'}).parentElement!;setField(federal,'History status','known-zero');
     federal=within(form).getByText(/^Federal history/,{selector:'summary'}).parentElement!;expect(federal.querySelector('summary')).toHaveTextContent('Confirmed zero');
-    setField(federal,'Adjusted building basis','1.00');expect(federal.querySelector('summary')).toHaveTextContent('Entered amounts');
+    setField(federal,'Adjusted building basis ($)','1.00');expect(federal.querySelector('summary')).toHaveTextContent('Entered amounts');
   });
 });

@@ -9,13 +9,13 @@ export function renderIncomeForm(root: HTMLElement, controller: WorkspaceControl
   renderRecordSection(salaries, controller, 'salaries', 'Salary', (body, ctx) => {
     renderField(body, ctx, ['name'], 'Salary name');
     renderField(body, ctx, ['ownerId'], 'Salary owner', { kind: 'select', options: owners });
-    renderField(body, ctx, ['employerId'], 'Salary employer');
+    renderField(body, ctx, ['employerId'], 'Salary employer',{hint:'Use the same employer for salary-linked contributions and catch-up facts.'});
     renderField(body, ctx, ['annualGrossCents'], 'Annual gross salary ($)', { kind: 'money' });
     renderField(body, ctx, ['startDate'], 'Salary start date', { kind: 'date' });
-    renderField(body, ctx, ['endDate'], 'Salary end date', { kind: 'date', optional: true, hint: 'Inclusive; leave blank for no planned end.' });
+    renderField(body, ctx, ['endDate'], 'Salary end date', { kind: 'date', optional: true, hint: 'Includes this date. Blank means no end.' });
     renderField(body, ctx, ['annualRaiseBps'], 'Annual salary raise (%)', { kind: 'rate' });
     renderField(body, ctx, ['raiseMonth'], 'Salary raise month', { kind: 'integer' });
-    renderField(body, ctx, ['raiseDay'], 'Salary raise day', { kind: 'integer', hint: 'A day beyond the month length uses its last calendar day.' });
+    renderField(body, ctx, ['raiseDay'], 'Salary raise day', { kind: 'integer', hint: 'Shorter months use their last day.' });
     renderRows(body, ctx, ['changes'], 'salary change', () => ({ date: '', kind: 'percent', percentBps: '' }), (row, path, index) => {
       renderField(row, ctx, [...path, 'date'], `Salary change date ${index + 1}`, { kind: 'date' });
       const choice: FieldContext = { ...ctx, get draft() { return ctx.draft; }, onChange(p, value) {
@@ -32,8 +32,8 @@ export function renderIncomeForm(root: HTMLElement, controller: WorkspaceControl
     renderField(body, ctx, ['name'], 'Income name');
     renderField(body, ctx, ['amountCents'], 'Income amount ($)', { kind: 'money' });
     renderField(body, ctx, ['frequency'], 'Income frequency', { kind: 'select', options: ['monthly', 'annual'] });
-    renderField(body, ctx, ['startDate'], 'Income start date', { kind: 'date', hint: 'Payments recur on this calendar day; annual payments recur in this month.' });
-    renderField(body, ctx, ['endDate'], 'Income end date', { kind: 'date', optional: true });
+    renderField(body, ctx, ['startDate'], 'Income start date', { kind: 'date', hint: 'Payments repeat on this date each month or year.' });
+    renderField(body, ctx, ['endDate'], 'Income end date', { kind: 'date', optional: true, hint:'Includes this date. Blank means no end.' });
     renderField(body, ctx, ['annualGrowthBps'], 'Income annual growth (%)', { kind: 'rate' });
     const choice: FieldContext = { ...ctx, get draft() { return ctx.draft; }, onChange(_p, value) {
       const next: RawObject = { ...ctx.draft.value, classification: value }; delete next.ownerId; delete next.employerId; delete next.niitTreatment;
@@ -45,7 +45,7 @@ export function renderIncomeForm(root: HTMLElement, controller: WorkspaceControl
     if (ctx.draft.value.classification === 'wage') {
       renderField(body, ctx, ['ownerId'], 'Income owner', { kind: 'select', options: owners }); renderField(body, ctx, ['employerId'], 'Income employer');
     } else if (ctx.draft.value.classification === 'ordinary-taxable') {
-      renderField(body, ctx, ['niitTreatment'], 'Income NIIT treatment', { kind: 'select', options: [{ value: 'unknown', label: 'Unknown' }, { value: 'included', label: 'Included: interest or ordinary dividends' }, { value: 'excluded', label: 'Excluded' }], hint: 'Qualified dividends and realized capital gains require support beyond this scenario.' });
+      renderField(body, ctx, ['niitTreatment'], 'Income NIIT treatment', { kind: 'select', options: [{ value: 'unknown', label: 'Unknown' }, { value: 'included', label: 'Included: interest or ordinary dividends' }, { value: 'excluded', label: 'Excluded' }], hint: 'Qualified dividends and realized capital gains are unsupported.',help:'Net Investment Income Tax (NIIT) applies to eligible investment income; wages are excluded.' });
     }
   },undefined,ui);
 }

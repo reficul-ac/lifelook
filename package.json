@@ -1,40 +1,35 @@
 {
   "name": "lifelook",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
+  "engines": { "node": ">=22" },
   "scripts": {
-    "dev": "tauri dev",
-    "web:dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
+    "dev": "vite --host 127.0.0.1 --port 1421 --strictPort",
+    "web:dev": "npm run dev",
+    "preview": "vite preview --host 127.0.0.1 --port 4174 --strictPort",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e:native": "bash scripts/test-e2e-native.sh",
-    "test:e2e:scenario": "node --test --test-force-exit --test-timeout=300000 e2e/run.mjs",
-    "audit:policy": "node scripts/check-npm-audit.mjs",
-    "check": "npm run test && npm run build && bash -lc 'cargo test --manifest-path src-tauri/Cargo.toml'",
-    "tauri": "tauri",
-    "appimage": "tauri build --bundles appimage"
+    "test:engine": "vitest run --project engine",
+    "test:browser": "vitest run --project browser",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:e2e"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.7.0",
-    "@tauri-apps/plugin-dialog": "^2.7.2",
-    "lucide-react": "^0.468.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "decimal.js": "10.6.0"
+  },
+  "overrides": {
+    "vite": "$vite"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.7.1",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.1.0",
-    "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.5",
-    "@vitejs/plugin-react": "^4.3.4",
-    "jsdom": "^25.0.1",
-    "typescript": "~5.7.2",
-    "vite": "^6.0.5",
-    "vitest": "^4.1.10",
-    "webdriverio": "^9.30.1"
+    "@playwright/test": "1.58.2",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/jest-dom": "6.9.1",
+    "@types/node": "22.10.2",
+    "jsdom": "25.0.1",
+    "typescript": "5.7.3",
+    "vite": "6.4.4",
+    "vitest": "4.1.11"
   }
 }

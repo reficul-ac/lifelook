@@ -1,13 +1,11 @@
 node_modules/
 dist/
-target/
-src-tauri/target/
 *.db
 *.db-shm
 *.db-wal
 .DS_Store
-*.AppImage
 coverage/
 *.tsbuildinfo
-foundation/test-results/
-foundation/playwright-report/
+test-results/
+playwright-report/
+*.lifelook

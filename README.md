@@ -1,78 +1,78 @@
 # LifeLook
 
-LifeLook makes long-term personal finance understandable without requiring spreadsheet expertise or surrendering private financial data. It is a local-first Linux desktop planner for activity, annual budgets, net worth, taxes, and long-range scenarios.
+LifeLook is a local browser application that projects household cash, investment accounts, property equity and net worth for a California household filing jointly. Saved inputs, source versions and explicit assumptions determine the results. The calculation engine contains no browser, storage or clock access.
 
-> **Pre-release:** LifeLook is under active development. Do not rely on it as your only financial record. Calculations may change, and tax estimates are not tax advice.
+## Run locally
 
-The full product and engineering intent lives in [PLAN.md](PLAN.md).
+Use Node 22 and run these commands from the repository root:
 
-## Developer quick start
-
-Prerequisites: Node.js 20+, npm 10+, Rust stable, and Ubuntu 22.04-compatible Tauri system libraries.
-
-```bash
-sudo apt-get update
-sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-npm install
+```sh
+npm ci
 npm run dev
 ```
 
-Run the complete web check or build the desktop AppImage:
+Open `http://127.0.0.1:1421`. This package binds to localhost. For the production build and preview:
 
-```bash
-npm run check
-npm run web:dev
-npm run appimage
+```sh
+npm run build
+npm run preview
 ```
 
-`npm run test:e2e:native` runs release-binary WebDriver scenarios in isolated local profiles. Its offline scenario uses Bubblewrap (`bwrap`) to launch the driver and app in a network namespace with no host or external network interfaces.
+Open the production preview at `http://127.0.0.1:4174`. The repository contains this browser application and its independent TypeScript calculation engine. The former desktop application has been removed from the current tree; its code remains in Git history. No server account, cloud connection or desktop packaging is required.
 
-The AppImage is written under `src-tauri/target/release/bundle/appimage/`. This repository does not install Rust automatically; use [rustup](https://rustup.rs/) if `rustc` is unavailable.
+## Enter, save and recover a plan
 
-## User quick start
+Household, Income, Expenses and Debts, Investments, and Properties contain labeled native controls. Each record has its own Save action; dated raises, appreciation overrides and related tax history are saved together. Blank required history is unknown, so explicitly confirmed zero and unknown are distinct.
 
-1. Launch LifeLook and create a household with at least one member.
-2. Choose a filing status and add at least one account with its current balance. Credit-card input is the positive amount owed.
-3. Use **Add** to record income, expenses, transfers, accounts, assets, or debts. Activity can be filtered by text, account, and year; select an entry to edit it or delete it when allowed. Use **Import CSV** for signed-amount or debit/credit files, review invalid and duplicate rows, then import the selected rows.
-4. In Net Worth, manage assets and liabilities, edit account names/types, reconcile a recorded balance to a dated target, or delete an empty unreferenced account. Mortgage details calculate principal-and-interest payments with an optional override; credit-card balances are entered as positive amounts owed.
-5. In Plan, add emergency-fund, debt-payoff, education, major-purchase, or retirement funding goals. Goals reserve projected money by priority; they never perform the purchase, payoff, or retirement change for you. Use a separate dated event for lifecycle changes.
-6. Choose System, Light, or Dark appearance and reduced motion in Settings; these choices persist locally.
-7. Open the Workspace menu at the bottom of the sidebar to see the local profile path, open Settings, or create a backup. Settings also provides restore after a confirmation warning.
+A valid Save updates the in-memory input revision, recalculates, and attempts local persistence. Invalid drafts retain their text while the projection remains tied to the last saved input revision. Removing a referenced salary, account, property or loan requires resolving the references first.
 
-Activity can export exactly the current search/account/year results to an unencrypted UTF-8 CSV. Transfers export as their two signed posting rows. Plan scenarios support dated recurring changes, one-time income/expenses, contributions/transfers, asset purchases/sales, debt originations/payoffs, and ordered surplus allocations with a final 100% catch-all.
+Save validates effective shared and loan allocations and calculates the candidate projection before replacing saved state. A property draft includes its linked rental and expense records. If another Save changes one of those records, the older draft is retained and its Save is rejected. Use the record's **Discard edits and reload saved values** action, then reapply changes to the newer saved inputs. Unrelated drafts and saves remain independent.
 
-## Feature guide
+Plans retain JSON schema version 1 and browser storage key `lifelook.foundation.plan.v1`. Browser storage belongs to the current origin: development on port 1421 and preview on port 4174 have separate saved plans. Use export and restore to move a plan between origins. Download a backup to retain the current in-memory inputs and revision. Backups contain inputs rather than calculated results; results are recalculated with this package's rule version. Restore validates the entire document before replacement. Malformed JSON, unsupported schema versions and invalid references leave the current plan intact. Corrupt stored documents remain recoverable instead of being silently overwritten.
 
-- **Overview** shows current cash flow, savings, taxes, and net-worth direction without burying the headline in transaction detail.
-- **Activity** supports manual income, expense, and transfer creation, editing, and deletion. Imported rows are read-only for editing but individually deletable; transfers are deleted as one atomic event. Transfers are grouped as one balance-neutral event, with text, account, and year filters.
-- **Plan** manages recurring income and expenses and projects them by exact amount, frequency, date range, and annual growth. Create scenarios from defaults or clone the active plan, edit inflation/tax-threshold assumptions and a 1–480 month horizon, and compare up to three saved scenarios. Five goal trackers fund emergency reserves, debt payoff reserves, education, major purchases, and retirement in priority order before ordinary surplus allocations. Their semantic progress summaries show targets, earmarks, monthly requirements, shortfalls, projected completion, and status.
-- **Net Worth** brings liquid accounts, investments, assets, mortgages, and other liabilities into one balance sheet. Assets and debts support create, edit, and confirmed deletion. Mortgage projections separate principal and interest from optional property tax, insurance, and HOA assumptions; escrow itself is not modeled. Accounts can be added, renamed, retyped, and reconciled with an auditable adjustment. Only empty, non-final accounts with no financial references can be deleted.
-- **CSV import** supports UTF-8 files up to 10 MiB and 50,000 rows, saved mappings, ISO or US dates, signed or debit/credit amounts, category review, duplicate warnings with explicit override, and all-or-nothing commits. **CSV export** follows the active Activity filters and writes auditable RFC 4180 posting rows through a staged atomic replacement.
-- **Tax estimates** apply versioned federal, payroll, and California planning rules. The supported traditional workplace-retirement preset reduces federal and California taxable wages but remains subject to Social Security and Medicare tax. Explanations disclose the source year, effective and marginal rates, projected threshold growth, and exclusions.
-- **Scenario comparison** shows annual net worth, goal funding, and unfunded deficits for up to three selected scenarios. Baseline is fixed; other scenarios can be cloned, renamed, edited, and deleted.
-- **Retirement** compares keeping or selling homes, projects annual fixed-rate withdrawals and Plan spending, and orders accounts using owner age and account tax treatment. Results are planning estimates rather than tax advice.
-- **Backup/restore** creates portable, unencrypted `.lifelook` snapshots. Restore validates and stages the selected backup before replacing the current local workspace; the selected backup itself is not modified.
+The former desktop application's SQLite profiles and `.lifelook` backups are not imported by this JSON format. Removing its source code does not delete existing device data or backups. Keep those files separately; enter a new plan or restore a compatible browser JSON backup.
 
-### Actuals, assumptions, and projections
+Storage read/write and quota failures are visible. A failed write leaves the valid in-memory plan available as Unsaved and exportable; downloading its backup does not require a successful local-storage write. A valid restore that cannot persist likewise retains an exportable in-memory plan.
 
-**Actuals** are recorded events such as cleared transactions and current balances. **Assumptions** are choices you control—future income, inflation, returns, or a home purchase. **Projections** are calculated outputs produced from those assumptions. LifeLook labels each state distinctly; a projection is never presented as a promise.
+## Read the projection
 
-## Privacy and data storage
+Annual rows sum flows and use December balances. Show months expands individual settled movements; account, property and loan detail shows opening amounts, deposits/payments, growth and closing amounts. Tax explanation shows legal federal/California deduction comparisons, actual selected methods, assessed versus paid California tax, separate AMT/NIIT/surtax components, contribution limits, rental allocations and carried loss state.
 
-LifeLook has no user account, telemetry, advertising, cloud sync, or required network service. The SQLite database lives in your operating system’s per-user application-data directory (`com.lifelook.desktop`). OS file permissions provide v1 protection. The database, CSV exports, and backups are **not encrypted by LifeLook**; disk encryption and careful backup storage are recommended.
+Income-tax liabilities are reserved over months using positive gross cash-income weights. Employee payroll follows cumulative wages. Contributions are legally eligible planned deposits, including when cash is insufficient; prevented contributions stay in cash. The engine does not automatically invest surplus, add borrowing, sell assets or invent retirement withdrawals. Once a cash gap occurs, later balances remain conditional on funding it. Asset growth changes value without creating spendable cash.
 
-LifeLook provides planning estimates, not tax, legal, accounting, or investment advice. It does not prepare returns and omits credits, most itemized deductions, and self-employment tax. Capital-gain support is limited to modeled taxable-account retirement withdrawals when cost basis is available and to modeled home sales; it does not cover arbitrary security sales, wash sales, loss harvesting, or other advanced strategies.
+An available zero is displayed as money. Missing or unsupported dependent amounts display a reason and next step without a numeric placeholder. Independent income, loan, property or account schedules remain visible. Ratios use aggregate annual income; zero-income ratios are undefined while the underlying dollar amounts remain available.
 
-Goal funding is deterministic rather than Monte Carlo. Special early-withdrawal penalty exceptions and advanced retirement strategies—including Rule of 55, 72(t), Roth-conversion ladders, RMD optimization, IRMAA optimization, and Social Security claiming optimization—are not modeled. Automatic purchases or sales, automatic debt payoff, and automatic retirement transitions are also not modeled. Earmarked money remains part of its destination account, so it is not counted twice.
+Rule provenance and household coverage are separate. Verified, provisional and projected rule labels identify the actual sources and assumptions. A modeled contribution/growth scenario can remain available while distribution-dependent total household liability is incomplete. Material unmodeled income or credits, unknown relevant histories and monetary overflow prevent affected totals from being treated as complete.
 
-## Troubleshooting
+## Tax coverage and source updates
 
-- **`rustc: command not found`:** install Rust stable with rustup, restart the shell, then run `rustc --version`.
-- **WebKitGTK or JavaScriptCore not found:** install the Ubuntu packages in Developer quick start. On other distributions use Tauri’s equivalent system-dependency list.
-- **AppImage will not launch:** make it executable with `chmod +x LifeLook_*.AppImage`. Some distributions also require FUSE 2; otherwise extract it with `./LifeLook_*.AppImage --appimage-extract` and run `squashfs-root/AppRun`.
-- **Blank window:** run `npm run tauri dev` from a terminal and inspect WebKitGTK output; verify port 1420 is available.
-- **Settings do not persist:** confirm the application-data directory is writable and that the filesystem has free space.
+The baseline is 2026, with full-year California residency and married filing jointly. Covered inputs include wages, explicitly characterized ordinary taxable cash income, ordinary long-term residential rentals, employee payroll, workplace contributions, traditional/Roth IRA funding, personal acquisition mortgage deductions, and the modeled ordinary-tax, AMT, NIIT and rental-QBI paths. Qualification, owner limits, origin-year losses, federal/California basis and AMT books remain explicit. Existing or newly relevant minimum-tax-credit circumstances establish an unsupported future-credit boundary.
 
-## Status
+The model does not claim complete support for capital gains/qualified-dividend schedules, additional credits, advanced mortgage/basis cases or distribution planning. An ADU is part of its property's single asset value, with separate allocation and rental tax history.
 
-The repository contains the Tauri/React foundation, local SQLite migration and state commands, manual ledger, recurring cash-flow, dated scenario events and allocations, five funding-goal variants, account/asset/liability management, guarded deletion, filtered CSV import/export, local workspace search (`Ctrl+K`), deterministic asset growth and debt/mortgage amortization, a pure typed projection/tax domain, an accessible responsive interface, and unit/component/native/packaged tests. Search covers the records already loaded in the workspace and navigates to the existing focused record; it does not make network requests or persist queries. Escrow-aware mortgage modeling, Monte Carlo analysis, and official tax-fixture validation remain pre-release work tracked in [PLAN.md](PLAN.md).
+Rental at-risk books assume no unentered activity-level owner capital injections or distributions. Qualifying principal paid from activity funds reduces capacity in all four books before losses are released. Insufficient rental cash after debt service leaves repayment funding unknown; household wages or cash gaps do not establish owner capital. Negative capacity requires unmodeled prior deducted-loss and recapture history. The [independent two-year principal worksheet](fixtures/tax/qualified-principal-carry.json) documents the carried amounts and subsequent loss limitation.
+
+The initial review was 2026-10-12. Official 2026 tax tables were unavailable, so the packs explicitly use provisional 2025 table methods with 2026 marginal amounts. California's published bracket expression contains an inconsistent boundary; the pack records the chosen continuous-boundary assumption. Unpublished California 2026 AMT/limitation amounts use named provisional 2025 proxies. Future legally indexed amounts are forecast scenarios with recorded rounding, fixed provisions and enacted transitions; future SDI is an explicit administered-rate assumption.
+
+See [the source register](sources/register.md) and [retrieval/hash manifest](sources/manifest.json). To update a source, retain the original edition and bytes, record the URL/retrieval date/hash, review applicable-year differences, update field-level rules and assumptions, and independently recheck the affected fixture worksheets. Bump the affected pack and global rule versions when a rule or named assumption changes. Do not manufacture expected fixture values from production calculators or silently relabel provisional values as verified.
+
+## Verify
+
+```sh
+npm run typecheck
+npm run test:engine
+npm run test:browser
+npm exec playwright -- install chromium
+npm run test:e2e
+npm run check
+```
+
+Playwright starts the built localhost preview on 4174 and uses fresh browser contexts. Its [web-server configuration](https://playwright.dev/docs/test-webserver) builds before standalone acceptance runs. Linux CI installs Chromium system dependencies with `playwright install --with-deps chromium`. If a custom browser cache is used, set `PLAYWRIGHT_BROWSERS_PATH` consistently for installation and execution.
+
+Engine reference fixtures use synthetic inputs and independent primary-source worksheets. The full engine suite is checked in UTC and America/Los_Angeles. The [CI workflow](.github/workflows/ci.yml) runs the locked application's typecheck, engine/browser tests, build and Playwright flows in both timezones.
+
+The lockfile uses the compatible security patch releases [Vite 6.4.4](https://github.com/vitejs/vite/security/advisories/GHSA-rq7h-c2jc-7f22) and [Vitest 4.1.11](https://github.com/vitest-dev/vitest/security/advisories/GHSA-82fw-gwwq-j7x9). These patches apply to this package's development tools.
+
+## Design records
+
+The [foundation design](docs/superpowers/specs/2026-10-11-lifelook-foundation-rebuild-design.md) and [implementation plan](docs/superpowers/plans/2026-10-11-lifelook-foundation-rebuild.md) are retained as historical records of the rebuild. Their `foundation/` package paths and separate legacy integration boundary describe the implementation phase before this application was promoted to the repository root. Use the commands and paths in this README for the current application.

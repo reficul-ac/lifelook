@@ -1,68 +1,31 @@
-name: CI
+name: LifeLook browser and engine
+
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
-  verify-and-package:
-    runs-on: ubuntu-22.04
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        timezone: [UTC, America/Los_Angeles]
+    env:
+      TZ: ${{ matrix.timezone }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install Tauri system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev webkit2gtk-driver build-essential bubblewrap curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb openbox xdotool imagemagick
-      - run: npm ci
-      - name: Audit production npm dependencies
-        run: npm audit --omit=dev
-      - name: Show full npm dependency audit
-        continue-on-error: true
-        run: npm audit
-      - name: Enforce npm advisory policy
-        run: npm run audit:policy
-      - run: npm test
-      - run: npm run build
-      - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
-      - name: Install pinned Rust advisory scanner
-        run: cargo install cargo-audit --version 0.22.2 --locked
-      - name: Audit Rust dependencies
-        run: cargo audit --file src-tauri/Cargo.lock
-      - run: npm run appimage
-      - name: Validate AppImage contents
-        run: bash scripts/validate-appimage.sh
-      - name: Smoke launch visible AppImage window
-        run: xvfb-run -a --server-args="-screen 0 1280x820x24" bash scripts/smoke-appimage.sh
-      - name: Install Tauri WebDriver
-        run: cargo install tauri-driver --locked
-      - name: Run native WebDriver accessibility suite
-        run: npm run test:e2e:native
-      - name: Run packaged AppImage mutation, export, restore, and relaunch acceptance
-        run: |
-          appimage="$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
-          test -n "$appimage"
-          profile_root="$(mktemp -d)"
-          export XDG_DATA_HOME="$profile_root/data"
-          export LIFELOOK_E2E_BINARY="$appimage"
-          export LIFELOOK_E2E_BACKUP="$profile_root/round-trip.lifelook"
-          export LIFELOOK_E2E_ACTIVITY_EXPORT="$profile_root/activity-export.csv"
-          export LIFELOOK_E2E_SCENARIO=acceptance
-          export LIFELOOK_E2E_ARTIFACT_DIR=artifacts/packaged-e2e
-          export APPIMAGE_EXTRACT_AND_RUN=1
-          mkdir -p "$XDG_DATA_HOME" "$LIFELOOK_E2E_ARTIFACT_DIR"
-          xvfb-run -a --server-args="-screen 0 1280x820x24" npm run test:e2e:scenario
-          export LIFELOOK_E2E_ARTIFACT_DIR=artifacts/packaged-recovery
-          bash scripts/run-recovery-acceptance.sh corrupt-profile
-          bash scripts/run-recovery-acceptance.sh unwritable-profile
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          name: lifelook-native-evidence
-          path: |
-            src-tauri/target/release/bundle/appimage/*.AppImage
-            artifacts/appimage-smoke/*.png
-            artifacts/native-e2e/*.png
-            artifacts/packaged-e2e/*.png
-            artifacts/packaged-recovery/*.png
-          if-no-files-found: error
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm exec playwright -- install --with-deps chromium
+      - run: npm run check

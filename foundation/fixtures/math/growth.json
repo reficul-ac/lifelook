@@ -1,0 +1,158 @@
+[
+  {
+    "id": "seven-percent",
+    "taxYear": 2026,
+    "sources": [
+      "Independent Python Decimal80 closed-form geometric series; spec section 5"
+    ],
+    "input": {
+      "openingCents": 1000000,
+      "annualBps": 700,
+      "monthlyDepositCents": 0,
+      "months": 12
+    },
+    "worksheetSteps": [
+      "m=(1+r)^(1/12)-1",
+      "Closing=P*(1+m)^n + d*((1+m)^n-1)/m; use d*n when m=0.",
+      "Deposit is at month end; expected cents round only the closed-form final amount."
+    ],
+    "expected": {
+      "closingCents": 1070000,
+      "growthCents": 70000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "math-effective-return-v1"
+    ]
+  },
+  {
+    "id": "zero-growth-deposits",
+    "taxYear": 2026,
+    "sources": [
+      "Independent Python Decimal80 closed-form geometric series; spec section 5"
+    ],
+    "input": {
+      "openingCents": 0,
+      "annualBps": 0,
+      "monthlyDepositCents": 10000,
+      "months": 12
+    },
+    "worksheetSteps": [
+      "m=(1+r)^(1/12)-1",
+      "Closing=P*(1+m)^n + d*((1+m)^n-1)/m; use d*n when m=0.",
+      "Deposit is at month end; expected cents round only the closed-form final amount."
+    ],
+    "expected": {
+      "closingCents": 120000,
+      "growthCents": 0
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "math-effective-return-v1"
+    ]
+  },
+  {
+    "id": "negative-fifty-percent",
+    "taxYear": 2026,
+    "sources": [
+      "Independent Python Decimal80 closed-form geometric series; spec section 5"
+    ],
+    "input": {
+      "openingCents": 1000000,
+      "annualBps": -5000,
+      "monthlyDepositCents": 0,
+      "months": 12
+    },
+    "worksheetSteps": [
+      "m=(1+r)^(1/12)-1",
+      "Closing=P*(1+m)^n + d*((1+m)^n-1)/m; use d*n when m=0.",
+      "Deposit is at month end; expected cents round only the closed-form final amount."
+    ],
+    "expected": {
+      "closingCents": 500000,
+      "growthCents": -500000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "math-effective-return-v1"
+    ]
+  },
+  {
+    "id": "forty-years",
+    "taxYear": 2026,
+    "sources": [
+      "Independent Python Decimal80 closed-form geometric series; spec section 5"
+    ],
+    "input": {
+      "openingCents": 1000000,
+      "annualBps": 700,
+      "monthlyDepositCents": 0,
+      "months": 480
+    },
+    "worksheetSteps": [
+      "m=(1+r)^(1/12)-1",
+      "Closing=P*(1+m)^n + d*((1+m)^n-1)/m; use d*n when m=0.",
+      "Deposit is at month end; expected cents round only the closed-form final amount."
+    ],
+    "expected": {
+      "closingCents": 14974458,
+      "growthCents": 13974458
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "math-effective-return-v1"
+    ]
+  },
+  {
+    "id": "closed-form-month-end-deposits",
+    "taxYear": 2026,
+    "sources": [
+      "Independent Python Decimal80 closed-form geometric series; spec section 5"
+    ],
+    "input": {
+      "openingCents": 1000000,
+      "annualBps": 700,
+      "monthlyDepositCents": 10000,
+      "months": 12
+    },
+    "worksheetSteps": [
+      "m=(1+r)^(1/12)-1",
+      "Closing=P*(1+m)^n + d*((1+m)^n-1)/m; use d*n when m=0.",
+      "Deposit is at month end; expected cents round only the closed-form final amount."
+    ],
+    "expected": {
+      "closingCents": 1193803,
+      "growthCents": 73803
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "math-effective-return-v1"
+    ]
+  },
+  {
+    "id": "near-zero-negative",
+    "taxYear": 2026,
+    "sources": [
+      "Independent Python Decimal80 closed-form geometric series; spec section 5"
+    ],
+    "input": {
+      "openingCents": 1000000,
+      "annualBps": -9999,
+      "monthlyDepositCents": 100,
+      "months": 12
+    },
+    "worksheetSteps": [
+      "m=(1+r)^(1/12)-1",
+      "Closing=P*(1+m)^n + d*((1+m)^n-1)/m; use d*n when m=0.",
+      "Deposit is at month end; expected cents round only the closed-form final amount."
+    ],
+    "expected": {
+      "closingCents": 287,
+      "growthCents": -1000913
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "math-effective-return-v1"
+    ]
+  }
+]

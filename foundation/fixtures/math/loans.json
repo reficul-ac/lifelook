@@ -1,0 +1,538 @@
+[
+  {
+    "id": "zero-rate",
+    "taxYear": 2026,
+    "sources": [
+      "Independent 60-digit Python decimal worksheet; nominal APR/12 amortization equation and monthly ties-away cent settlement, computed 2026-10-12"
+    ],
+    "input": {
+      "loan": {
+        "id": "zero-rate",
+        "name": "zero-rate",
+        "openingBalanceCents": 120000,
+        "aprBps": 0,
+        "monthlyPaymentCents": 10000,
+        "firstPaymentMonth": "2026-01"
+      },
+      "startYear": 2026,
+      "horizonYears": 1,
+      "termMonths": 12
+    },
+    "worksheetSteps": [
+      "P=120000 cents; monthly nominal rate=0; term=12 months",
+      "Payment = P/n at zero APR, otherwise P*r/(1-(1+r)^(-n)); round nearest cent, ties away from zero",
+      "Independent scheduled payment=10000 cents",
+      "Each month: interest=round(opening*r); payment=min(scheduled,opening+interest); principal=payment-interest; closing=opening-principal",
+      "Worksheet preserves a rounded residual after contractual term if any, rather than forgiving debt"
+    ],
+    "expected": {
+      "scheduledPaymentCents": 10000,
+      "months": [
+        {
+          "date": "2026-01-31",
+          "openingPrincipalCents": 120000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 110000
+        },
+        {
+          "date": "2026-02-28",
+          "openingPrincipalCents": 110000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 100000
+        },
+        {
+          "date": "2026-03-31",
+          "openingPrincipalCents": 100000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 90000
+        },
+        {
+          "date": "2026-04-30",
+          "openingPrincipalCents": 90000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 80000
+        },
+        {
+          "date": "2026-05-31",
+          "openingPrincipalCents": 80000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 70000
+        },
+        {
+          "date": "2026-06-30",
+          "openingPrincipalCents": 70000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 60000
+        },
+        {
+          "date": "2026-07-31",
+          "openingPrincipalCents": 60000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 50000
+        },
+        {
+          "date": "2026-08-31",
+          "openingPrincipalCents": 50000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 40000
+        },
+        {
+          "date": "2026-09-30",
+          "openingPrincipalCents": 40000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 30000
+        },
+        {
+          "date": "2026-10-31",
+          "openingPrincipalCents": 30000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 20000
+        },
+        {
+          "date": "2026-11-30",
+          "openingPrincipalCents": 20000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 10000
+        },
+        {
+          "date": "2026-12-31",
+          "openingPrincipalCents": 10000,
+          "interestCents": 0,
+          "paymentCents": 10000,
+          "principalPaidCents": 10000,
+          "closingPrincipalCents": 0
+        }
+      ]
+    },
+    "toleranceCents": 0,
+    "ruleVersions": []
+  },
+  {
+    "id": "independent-fixed-rate",
+    "taxYear": 2026,
+    "sources": [
+      "Independent 60-digit Python decimal worksheet; nominal APR/12 amortization equation and monthly ties-away cent settlement, computed 2026-10-12"
+    ],
+    "input": {
+      "loan": {
+        "id": "independent-fixed-rate",
+        "name": "independent-fixed-rate",
+        "openingBalanceCents": 120000,
+        "aprBps": 600,
+        "monthlyPaymentCents": 10328,
+        "firstPaymentMonth": "2026-01"
+      },
+      "startYear": 2026,
+      "horizonYears": 1,
+      "termMonths": 12
+    },
+    "worksheetSteps": [
+      "P=120000 cents; monthly nominal rate=0.005; term=12 months",
+      "Payment = P/n at zero APR, otherwise P*r/(1-(1+r)^(-n)); round nearest cent, ties away from zero",
+      "Independent scheduled payment=10328 cents",
+      "Each month: interest=round(opening*r); payment=min(scheduled,opening+interest); principal=payment-interest; closing=opening-principal",
+      "Worksheet preserves a rounded residual after contractual term if any, rather than forgiving debt"
+    ],
+    "expected": {
+      "scheduledPaymentCents": 10328,
+      "months": [
+        {
+          "date": "2026-01-31",
+          "openingPrincipalCents": 120000,
+          "interestCents": 600,
+          "paymentCents": 10328,
+          "principalPaidCents": 9728,
+          "closingPrincipalCents": 110272
+        },
+        {
+          "date": "2026-02-28",
+          "openingPrincipalCents": 110272,
+          "interestCents": 551,
+          "paymentCents": 10328,
+          "principalPaidCents": 9777,
+          "closingPrincipalCents": 100495
+        },
+        {
+          "date": "2026-03-31",
+          "openingPrincipalCents": 100495,
+          "interestCents": 502,
+          "paymentCents": 10328,
+          "principalPaidCents": 9826,
+          "closingPrincipalCents": 90669
+        },
+        {
+          "date": "2026-04-30",
+          "openingPrincipalCents": 90669,
+          "interestCents": 453,
+          "paymentCents": 10328,
+          "principalPaidCents": 9875,
+          "closingPrincipalCents": 80794
+        },
+        {
+          "date": "2026-05-31",
+          "openingPrincipalCents": 80794,
+          "interestCents": 404,
+          "paymentCents": 10328,
+          "principalPaidCents": 9924,
+          "closingPrincipalCents": 70870
+        },
+        {
+          "date": "2026-06-30",
+          "openingPrincipalCents": 70870,
+          "interestCents": 354,
+          "paymentCents": 10328,
+          "principalPaidCents": 9974,
+          "closingPrincipalCents": 60896
+        },
+        {
+          "date": "2026-07-31",
+          "openingPrincipalCents": 60896,
+          "interestCents": 304,
+          "paymentCents": 10328,
+          "principalPaidCents": 10024,
+          "closingPrincipalCents": 50872
+        },
+        {
+          "date": "2026-08-31",
+          "openingPrincipalCents": 50872,
+          "interestCents": 254,
+          "paymentCents": 10328,
+          "principalPaidCents": 10074,
+          "closingPrincipalCents": 40798
+        },
+        {
+          "date": "2026-09-30",
+          "openingPrincipalCents": 40798,
+          "interestCents": 204,
+          "paymentCents": 10328,
+          "principalPaidCents": 10124,
+          "closingPrincipalCents": 30674
+        },
+        {
+          "date": "2026-10-31",
+          "openingPrincipalCents": 30674,
+          "interestCents": 153,
+          "paymentCents": 10328,
+          "principalPaidCents": 10175,
+          "closingPrincipalCents": 20499
+        },
+        {
+          "date": "2026-11-30",
+          "openingPrincipalCents": 20499,
+          "interestCents": 102,
+          "paymentCents": 10328,
+          "principalPaidCents": 10226,
+          "closingPrincipalCents": 10273
+        },
+        {
+          "date": "2026-12-31",
+          "openingPrincipalCents": 10273,
+          "interestCents": 51,
+          "paymentCents": 10324,
+          "principalPaidCents": 10273,
+          "closingPrincipalCents": 0
+        }
+      ]
+    },
+    "toleranceCents": 0,
+    "ruleVersions": []
+  },
+  {
+    "id": "thirty-year-fixed-rate",
+    "taxYear": 2026,
+    "sources": [
+      "Independent 60-digit Python decimal worksheet; nominal APR/12 amortization equation and monthly ties-away cent settlement, computed 2026-10-12"
+    ],
+    "input": {
+      "loan": {
+        "id": "thirty-year-fixed-rate",
+        "name": "thirty-year-fixed-rate",
+        "openingBalanceCents": 10000000,
+        "aprBps": 600,
+        "monthlyPaymentCents": 59955,
+        "firstPaymentMonth": "2026-01"
+      },
+      "startYear": 2026,
+      "horizonYears": 31,
+      "termMonths": 360
+    },
+    "worksheetSteps": [
+      "P=10000000 cents; monthly nominal rate=0.005; term=360 months",
+      "Payment = P/n at zero APR, otherwise P*r/(1-(1+r)^(-n)); round nearest cent, ties away from zero",
+      "Independent scheduled payment=59955 cents",
+      "Each month: interest=round(opening*r); payment=min(scheduled,opening+interest); principal=payment-interest; closing=opening-principal",
+      "Worksheet preserves a rounded residual after contractual term if any, rather than forgiving debt"
+    ],
+    "expected": {
+      "scheduledPaymentCents": 59955,
+      "months": [
+        {
+          "date": "2026-01-31",
+          "openingPrincipalCents": 10000000,
+          "interestCents": 50000,
+          "paymentCents": 59955,
+          "principalPaidCents": 9955,
+          "closingPrincipalCents": 9990045
+        },
+        {
+          "date": "2026-02-28",
+          "openingPrincipalCents": 9990045,
+          "interestCents": 49950,
+          "paymentCents": 59955,
+          "principalPaidCents": 10005,
+          "closingPrincipalCents": 9980040
+        },
+        {
+          "date": "2026-03-31",
+          "openingPrincipalCents": 9980040,
+          "interestCents": 49900,
+          "paymentCents": 59955,
+          "principalPaidCents": 10055,
+          "closingPrincipalCents": 9969985
+        },
+        {
+          "date": "2026-04-30",
+          "openingPrincipalCents": 9969985,
+          "interestCents": 49850,
+          "paymentCents": 59955,
+          "principalPaidCents": 10105,
+          "closingPrincipalCents": 9959880
+        },
+        {
+          "date": "2026-05-31",
+          "openingPrincipalCents": 9959880,
+          "interestCents": 49799,
+          "paymentCents": 59955,
+          "principalPaidCents": 10156,
+          "closingPrincipalCents": 9949724
+        },
+        {
+          "date": "2026-06-30",
+          "openingPrincipalCents": 9949724,
+          "interestCents": 49749,
+          "paymentCents": 59955,
+          "principalPaidCents": 10206,
+          "closingPrincipalCents": 9939518
+        },
+        {
+          "date": "2026-07-31",
+          "openingPrincipalCents": 9939518,
+          "interestCents": 49698,
+          "paymentCents": 59955,
+          "principalPaidCents": 10257,
+          "closingPrincipalCents": 9929261
+        },
+        {
+          "date": "2026-08-31",
+          "openingPrincipalCents": 9929261,
+          "interestCents": 49646,
+          "paymentCents": 59955,
+          "principalPaidCents": 10309,
+          "closingPrincipalCents": 9918952
+        },
+        {
+          "date": "2026-09-30",
+          "openingPrincipalCents": 9918952,
+          "interestCents": 49595,
+          "paymentCents": 59955,
+          "principalPaidCents": 10360,
+          "closingPrincipalCents": 9908592
+        },
+        {
+          "date": "2026-10-31",
+          "openingPrincipalCents": 9908592,
+          "interestCents": 49543,
+          "paymentCents": 59955,
+          "principalPaidCents": 10412,
+          "closingPrincipalCents": 9898180
+        },
+        {
+          "date": "2026-11-30",
+          "openingPrincipalCents": 9898180,
+          "interestCents": 49491,
+          "paymentCents": 59955,
+          "principalPaidCents": 10464,
+          "closingPrincipalCents": 9887716
+        },
+        {
+          "date": "2026-12-31",
+          "openingPrincipalCents": 9887716,
+          "interestCents": 49439,
+          "paymentCents": 59955,
+          "principalPaidCents": 10516,
+          "closingPrincipalCents": 9877200
+        },
+        {
+          "date": "2056-01-31",
+          "openingPrincipalCents": 45,
+          "interestCents": 0,
+          "paymentCents": 45,
+          "principalPaidCents": 45,
+          "closingPrincipalCents": 0
+        }
+      ]
+    },
+    "toleranceCents": 0,
+    "ruleVersions": []
+  },
+  {
+    "id": "fifteen-year-fixed-rate",
+    "taxYear": 2026,
+    "sources": [
+      "Independent 60-digit Python decimal worksheet; nominal APR/12 amortization equation and monthly ties-away cent settlement, computed 2026-10-12"
+    ],
+    "input": {
+      "loan": {
+        "id": "fifteen-year-fixed-rate",
+        "name": "fifteen-year-fixed-rate",
+        "openingBalanceCents": 20000000,
+        "aprBps": 725,
+        "monthlyPaymentCents": 182573,
+        "firstPaymentMonth": "2026-01"
+      },
+      "startYear": 2026,
+      "horizonYears": 16,
+      "termMonths": 180
+    },
+    "worksheetSteps": [
+      "P=20000000 cents; monthly nominal rate=0.00604166666666666666666666666666666666666666666666666666666667; term=180 months",
+      "Payment = P/n at zero APR, otherwise P*r/(1-(1+r)^(-n)); round nearest cent, ties away from zero",
+      "Independent scheduled payment=182573 cents",
+      "Each month: interest=round(opening*r); payment=min(scheduled,opening+interest); principal=payment-interest; closing=opening-principal",
+      "Worksheet preserves a rounded residual after contractual term if any, rather than forgiving debt"
+    ],
+    "expected": {
+      "scheduledPaymentCents": 182573,
+      "months": [
+        {
+          "date": "2026-01-31",
+          "openingPrincipalCents": 20000000,
+          "interestCents": 120833,
+          "paymentCents": 182573,
+          "principalPaidCents": 61740,
+          "closingPrincipalCents": 19938260
+        },
+        {
+          "date": "2026-02-28",
+          "openingPrincipalCents": 19938260,
+          "interestCents": 120460,
+          "paymentCents": 182573,
+          "principalPaidCents": 62113,
+          "closingPrincipalCents": 19876147
+        },
+        {
+          "date": "2026-03-31",
+          "openingPrincipalCents": 19876147,
+          "interestCents": 120085,
+          "paymentCents": 182573,
+          "principalPaidCents": 62488,
+          "closingPrincipalCents": 19813659
+        },
+        {
+          "date": "2026-04-30",
+          "openingPrincipalCents": 19813659,
+          "interestCents": 119708,
+          "paymentCents": 182573,
+          "principalPaidCents": 62865,
+          "closingPrincipalCents": 19750794
+        },
+        {
+          "date": "2026-05-31",
+          "openingPrincipalCents": 19750794,
+          "interestCents": 119328,
+          "paymentCents": 182573,
+          "principalPaidCents": 63245,
+          "closingPrincipalCents": 19687549
+        },
+        {
+          "date": "2026-06-30",
+          "openingPrincipalCents": 19687549,
+          "interestCents": 118946,
+          "paymentCents": 182573,
+          "principalPaidCents": 63627,
+          "closingPrincipalCents": 19623922
+        },
+        {
+          "date": "2026-07-31",
+          "openingPrincipalCents": 19623922,
+          "interestCents": 118561,
+          "paymentCents": 182573,
+          "principalPaidCents": 64012,
+          "closingPrincipalCents": 19559910
+        },
+        {
+          "date": "2026-08-31",
+          "openingPrincipalCents": 19559910,
+          "interestCents": 118174,
+          "paymentCents": 182573,
+          "principalPaidCents": 64399,
+          "closingPrincipalCents": 19495511
+        },
+        {
+          "date": "2026-09-30",
+          "openingPrincipalCents": 19495511,
+          "interestCents": 117785,
+          "paymentCents": 182573,
+          "principalPaidCents": 64788,
+          "closingPrincipalCents": 19430723
+        },
+        {
+          "date": "2026-10-31",
+          "openingPrincipalCents": 19430723,
+          "interestCents": 117394,
+          "paymentCents": 182573,
+          "principalPaidCents": 65179,
+          "closingPrincipalCents": 19365544
+        },
+        {
+          "date": "2026-11-30",
+          "openingPrincipalCents": 19365544,
+          "interestCents": 117000,
+          "paymentCents": 182573,
+          "principalPaidCents": 65573,
+          "closingPrincipalCents": 19299971
+        },
+        {
+          "date": "2026-12-31",
+          "openingPrincipalCents": 19299971,
+          "interestCents": 116604,
+          "paymentCents": 182573,
+          "principalPaidCents": 65969,
+          "closingPrincipalCents": 19234002
+        },
+        {
+          "date": "2040-12-31",
+          "openingPrincipalCents": 181338,
+          "interestCents": 1096,
+          "paymentCents": 182434,
+          "principalPaidCents": 181338,
+          "closingPrincipalCents": 0
+        }
+      ]
+    },
+    "toleranceCents": 0,
+    "ruleVersions": []
+  }
+]

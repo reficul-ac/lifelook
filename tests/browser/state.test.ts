@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest';
-import { createWorkspace,fromDraftValue } from '../../src/browser/state';
+import { createWorkspace,fromDraftValue,type WorkspaceOperation } from '../../src/browser/state';
 import { loadRuleSet } from '../../src/engine';
 import { makePlan } from '../helpers/plans';
 const storage={getItem:()=>null,setItem:()=>{}};
@@ -25,5 +25,28 @@ describe('record identity and independent draft transactions',()=>{
     const controller=createWorkspace(makePlan(),storage,loadRuleSet()),id=controller.beginAdd('salaries');
     const household=controller.getDraft('household','household');controller.editDraft('household',{...household,value:{...household.value,openingCashCents:'10.00'}});
     expect(controller.saveRecord('household').accepted).toBe(true);expect(controller.getState().savedPlan.salaries).toEqual([]);expect(controller.getState().drafts[id]).toBeDefined();expect(controller.getState().savedPlan.revision).toBe(1);
+  });
+});
+
+describe('durable persistence and operation outcomes',()=>{
+  it('retains failed storage through invalid saves, adds/discards, and clears it only after a successful write',()=>{
+    let fail=true;const controller=createWorkspace(makePlan(),{getItem:()=>null,setItem:()=>{if(fail)throw new Error('quota');}},loadRuleSet());
+    const edit=(value:string)=>{const draft=controller.getDraft('household','household');controller.editDraft('household',{...draft,value:{...draft.value,openingCashCents:value}});};
+    edit('10.00');expect(controller.saveRecord('household').accepted).toBe(true);const failure=controller.getState().persistenceIssues;expect(failure).toContainEqual(expect.objectContaining({code:'storage-write-failed'}));
+    edit('1.234');expect(controller.saveRecord('household').accepted).toBe(false);expect(controller.getState().persistenceIssues).toBe(failure);expect(controller.getState().persisted).toBe(false);
+    const id=controller.beginAdd('accounts');controller.discardDraft(id);expect(controller.getState().persistenceIssues).toBe(failure);
+    fail=false;edit('20.00');const result=controller.saveRecord('household');expect(result.persistenceIssues).toEqual([]);expect(result.issues).toEqual([]);expect(controller.getState().persisted).toBe(true);
+  });
+  it('emits one explicit outcome for every save/remove, while drafts emit no operation',()=>{
+    const controller=createWorkspace(makePlan(),storage,loadRuleSet()),operations:(WorkspaceOperation|undefined)[]=[];controller.subscribe(operation=>operations.push(operation));
+    const id=controller.beginAdd('accounts');expect(operations).toEqual([undefined]);operations.length=0;
+    controller.saveRecord(id);expect(operations).toHaveLength(1);expect(operations[0]).toMatchObject({kind:'save',recordId:id,result:{accepted:true}});operations.length=0;
+    controller.removeRecord('accounts',id);expect(operations).toHaveLength(1);expect(operations[0]).toMatchObject({kind:'remove',recordId:id});operations.length=0;
+    controller.saveRecord('missing');expect(operations).toHaveLength(1);expect(operations[0]).toMatchObject({kind:'save',recordId:'missing',result:{accepted:false}});
+  });
+  it('keeps coverage out of the recovery channel and restores only explicit write failures',()=>{
+    const plan=makePlan(),incomplete={...plan,household:{...plan.household,coverageAnswers:{...plan.household.coverageAnswers,additionalIncome:{known:false as const}}}};
+    const controller=createWorkspace(incomplete,storage,loadRuleSet());controller.saveRecord('household');expect(controller.getState().persistenceIssues).toEqual([]);expect(controller.getState().issues).toEqual([]);expect(controller.getState().projection.coverage.completeHouseholdLiability).toBe(false);
+    controller.resetPlan(incomplete,{persisted:false,persistenceIssues:[{code:'storage-write-failed',severity:'error',explanation:'Storage failed',resolution:'Export backup'}]});const id=controller.beginAdd('accounts');controller.discardDraft(id);expect(controller.getState().persistenceIssues).toHaveLength(1);
   });
 });

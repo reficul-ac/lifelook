@@ -1,6 +1,7 @@
 import { calculateProjection,loadRuleSet,validatePlan,type Issue,type PlanDocument,type ProjectionResult,type RuleSet } from '../engine';
 import { exportPlan,savePlan,type StoragePort } from './storage';
 import { parseMoneyInput,parseRateInput } from './fields';
+import { Decimal } from '../engine/money';
 
 export type EditableSection='household'|'salaries'|'otherIncome'|'expenses'|'debts'|'accounts'|'contributions'|'properties'|'rentals';
 export type RawObject=Record<string,unknown>;
@@ -22,7 +23,7 @@ export interface WorkspaceController {
 }
 export interface WorkspaceInitialization {readonly persisted:boolean;readonly persistenceIssues:readonly Issue[]}
 export type WorkspaceOperation=Readonly<{kind:'save'|'remove';recordId:string;result:SaveRecordResult}>|Readonly<{kind:'restore';persisted:boolean}>;
-const moneyHistories=new Set(['openingIraBasis','openingBalance','openingPayment','conversionBuildingFmv','priorYearWagesCents','qualifiedPrincipalCents','wagesCents','ubiaCents']);
+const moneyHistories=new Set(['openingIraBasis','openingBalance','openingPayment','openingBasis','conversionBuildingFmv','priorYearWagesCents','qualifiedPrincipalCents','wagesCents','ubiaCents']);
 const decimalUnits=(value:number)=>{const sign=value<0?'-':'';const digits=String(Math.abs(value));return `${sign}${digits.length<3?'0':digits.slice(0,-2)}.${digits.slice(-2).padStart(2,'0')}`;};
 /** Stored integers become entered dollars/percentages; histories retain explicit unknowns. */
 export function toDraftValue(value:unknown,key='',historyKey=''):any {
@@ -36,9 +37,14 @@ function decode(value:unknown,issues:Issue[],recordId:string,path:string,key='',
   if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([field])=>field!=='__draft').map(([field,entry])=>[field,decode(entry,issues,recordId,path?`${path}.${field}`:field,field,key)]));
   if(typeof value!=='string')return value;
   const isMoney=key.endsWith('Cents')||key==='value'&&moneyHistories.has(historyKey),isRate=key.endsWith('Bps');
-  const integers=new Set(['year','startYear','horizonYears','raiseMonth','raiseDay','priority','termMonths','numerator','denominator','baselineYear']);
+  const integers=new Set(['year','startYear','horizonYears','raiseMonth','raiseDay','priority','termMonths','vestingMonths','cliffMonths','numerator','denominator','baselineYear']);
   const parser=isMoney?parseMoneyInput:isRate?parseRateInput:undefined;
   if(parser){const result=parser(value);if(result.status==='available')return result.value;issues.push(...result.issues.map(issue=>({...issue,recordId,field:path})));return value;}
+  if(key==='awardedShares'||key==='openingHeldShares'){
+    const entered=value.trim(),number=Number(entered);
+    if(/^-?\d+(?:\.\d{1,6})?$/.test(entered)&&Number.isFinite(number)&&new Decimal(entered).abs().lte(Number.MAX_SAFE_INTEGER)&&new Decimal(entered).eq(new Decimal(number)))return number;
+    issues.push({code:'invalid-input',recordId,field:path,severity:'error',explanation:'Enter a finite ordinary share quantity with at most six decimal places; blank is unknown.',resolution:'Use digits and an optional decimal point, without exponents or separators, within the supported share range.'});return value;
+  }
   if(key==='primaryArea'||key==='aduArea'){
     if(/^-?\d+(?:\.\d+)?$/.test(value.trim())&&Number.isFinite(Number(value)))return Number(value);
     issues.push({code:'invalid-input',recordId,field:path,severity:'error',explanation:'Enter living area as an ordinary finite decimal; blank is unknown.',resolution:'Enter the measured living area without exponents or separators.'});return value;
@@ -105,7 +111,7 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
     });},
     removeRecord(section,id){return operate('remove',id,()=>{if(section==='household')return result(false);if(!savedPlan[section].some(row=>row.id===id)){controller.discardDraft(id);return result(true);}return publish({...savedPlan,[section]:savedPlan[section].filter(row=>row.id!==id),revision:savedPlan.revision+1},[id]);});},
     beginAdd(section,value){const existingIds=usedRecordIds();let id:string;do{id=`${section}-${++sequence}`;}while(existingIds.has(id));const date=`${savedPlan.startYear}-01-01`,owner=savedPlan.household.filers[0].id;
-      const defaults:Record<Exclude<EditableSection,'household'>,RawObject>={salaries:{id,name:'New salary',ownerId:owner,employerId:`employer-${sequence}`,annualGrossCents:0,startDate:date,annualRaiseBps:0,raiseMonth:1,raiseDay:1,changes:[]},otherIncome:{id,name:'Other income',amountCents:0,frequency:'monthly',startDate:date,annualGrowthBps:0,classification:'ordinary-taxable',niitTreatment:'unknown'},expenses:{id,name:'Expense',amountCents:0,frequency:'monthly',startDate:date,annualGrowthBps:0,use:'personal',taxCategory:'personal'},debts:{id,name:'Debt',openingBalanceCents:0,aprBps:0,monthlyPaymentCents:0,firstPaymentMonth:date.slice(0,7)},accounts:{id,name:'Account',ownerId:owner,type:'taxable-brokerage',openingBalanceCents:0,annualGrowthBps:0,openingIraBasis:{known:false}},contributions:{id,accountId:savedPlan.accounts[0]?.id??'',priority:1,startDate:date,amount:{kind:'fixed',monthlyCents:0}},properties:{property:{id,name:'Property',role:'primary',purchaseDate:date,purchasePriceCents:0,downPaymentCents:0,openingValueCents:0,appreciationBps:0,appreciationOverrides:[],loans:[]},rentals:[],expenses:[]},rentals:{id,propertyId:savedPlan.properties[0]?.id??''}};
+      const defaults:Record<Exclude<EditableSection,'household'>,RawObject>={salaries:{id,name:'New salary',ownerId:owner,employerId:`employer-${sequence}`,annualGrossCents:0,startDate:date,annualRaiseBps:0,raiseMonth:1,raiseDay:1,changes:[]},otherIncome:{id,name:'Other income',amountCents:0,frequency:'monthly',startDate:date,annualGrowthBps:0,classification:'ordinary-taxable',niitTreatment:'unknown'},expenses:{id,name:'Expense',amountCents:0,frequency:'monthly',startDate:date,annualGrowthBps:0,use:'personal',taxCategory:'personal'},debts:{id,name:'Debt',openingBalanceCents:0,aprBps:0,monthlyPaymentCents:0,firstPaymentMonth:date.slice(0,7)},accounts:{id,name:'Account',ownerId:owner,type:'taxable-brokerage',openingBalanceCents:0,annualGrowthBps:0,openingIraBasis:{known:false}},contributions:{id,accountId:savedPlan.accounts.find(account=>account.type!=='rsu')?.id??'',priority:1,startDate:date,amount:{kind:'fixed',monthlyCents:0}},properties:{property:{id,name:'Property',role:'primary',purchaseDate:date,purchasePriceCents:0,downPaymentCents:0,openingValueCents:0,appreciationBps:0,appreciationOverrides:[],loans:[]},rentals:[],expenses:[]},rentals:{id,propertyId:savedPlan.properties[0]?.id??''}};
       bases.set(id,snapshot(section,id));drafts={...drafts,[id]:{recordId:id,section,value:toDraftValue(value??(section==='household'?householdValue():defaults[section]))}};issues=[];notify();return id;
     },
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},exportBackup:()=>exportPlan(savedPlan),

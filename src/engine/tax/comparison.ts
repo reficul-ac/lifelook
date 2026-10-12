@@ -1,6 +1,6 @@
 import type { ContributionRequest } from '../cash/contribution-requests';
 import type { CashYear } from '../cash/income';
-import { checkCoverage } from '../coverage';
+import { checkCoverage, rsuDeferredTaxIssues } from '../coverage';
 import { Decimal, settleCents } from '../money';
 import type { Cents, History, ValidatedPlan } from '../model/plan';
 import type { Available, Coverage, Issue, RuleProvenance } from '../model/results';
@@ -72,12 +72,13 @@ function deductionChoice(method:DeductionMethod,standard:Available<Cents>,detail
 }
 function unsupportedCoverage(plan:ValidatedPlan,year:number):Available<never>|undefined {
   const fields=['additionalIncome','additionalCredits','qualifiedDividendsOrCapitalGains'] as const;
-  const issues:Issue[]=fields.flatMap(field=>{
+  const rsuIssues=rsuDeferredTaxIssues(plan,year);
+  const issues:Issue[]=[...rsuIssues,...fields.flatMap(field=>{
     const h=plan.household.coverageAnswers[field];
     return !h.known||h.value?[{code:h.known?'unsupported-tax-case':'required-tax-coverage',recordId:plan.id,year,field:`household.coverageAnswers.${field}`,severity:'warning' as const,explanation:h.known?'A reported material income or credit circumstance lies outside this calculation contract.':'The absence of additional material income or credits has not been established.',resolution:'Confirm the covered household circumstances or extend the sourced calculation before relying on a total.'}]:[];
-  });
+  })];
   if(!issues.length)return undefined;
-  return {status:fields.some(field=>{const h=plan.household.coverageAnswers[field];return h.known&&h.value;})?'unsupported-case':'needs-data',issues};
+  return {status:rsuIssues.length||fields.some(field=>{const h=plan.household.coverageAnswers[field];return h.known&&h.value;})?'unsupported-case':'needs-data',issues};
 }
 
 /** Resolve annual eligibility first; compare complete legal tax candidates without mutation. */

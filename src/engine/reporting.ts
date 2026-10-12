@@ -1,7 +1,8 @@
 import type { Cents } from './model/plan';
 import type { Available,Issue } from './model/results';
 import type { HouseholdYear } from './tax/comparison';
-import type { AccountProjection,AnnualProjection,LoanProjection,MonthlyProjection,MonetaryField,ProjectionMetadata,PropertyProjection } from './projection-types';
+import type { AccountProjection,AnnualProjection,LoanProjection,MonthlyProjection,MonetaryField,ProjectionMetadata,PropertyProjection,RsuPeriod } from './projection-types';
+import type { RsuGrantMonth } from './equity/rsu';
 import { balanceFields,flowFields } from './projection-types';
 import { CalculationRangeError,Decimal,settleCents } from './money';
 
@@ -49,7 +50,7 @@ function summarize(months:readonly MonthlyProjection[],override?:Omit<Projection
   const accounts:AccountProjection[]=accountIds.map(accountId=>{
     const series=ordered.map(month=>month.accounts.find(account=>account.accountId===accountId));
     const value=(index:number,key:Exclude<keyof AccountProjection,'accountId'>)=>track(series[index]?.[key]??absentRecord(`accounts.${accountId}.${key}`));
-    return {accountId,openingCents:value(0,'openingCents'),contributionCents:sum(series.map((_,i)=>value(i,'contributionCents')),`accounts.${accountId}.contributionCents`),growthCents:sum(series.map((_,i)=>value(i,'growthCents')),`accounts.${accountId}.growthCents`),closingCents:value(series.length-1,'closingCents')};
+    return {accountId,openingCents:value(0,'openingCents'),contributionCents:sum(series.map((_,i)=>value(i,'contributionCents')),`accounts.${accountId}.contributionCents`),growthCents:sum(series.map((_,i)=>value(i,'growthCents')),`accounts.${accountId}.growthCents`),closingCents:value(series.length-1,'closingCents'),...(series.some(row=>row?.vestedCents)?{vestedCents:sum(series.map((_,i)=>value(i,'vestedCents')),`accounts.${accountId}.vestedCents`),withholdingCents:sum(series.map((_,i)=>value(i,'withholdingCents')),`accounts.${accountId}.withholdingCents`)}:{})};
   });
   const propertyIds=[...new Set(ordered.flatMap(month=>month.properties.map(property=>property.propertyId)))].sort();
   const properties:PropertyProjection[]=propertyIds.map(propertyId=>{
@@ -63,6 +64,29 @@ function summarize(months:readonly MonthlyProjection[],override?:Omit<Projection
     const value=(index:number,key:Exclude<keyof LoanProjection,'loanId'>)=>track(series[index]?.[key]??absentRecord(`loans.${loanId}.${key}`));
     return {loanId,openingPrincipalCents:value(0,'openingPrincipalCents'),interestCents:sum(series.map((_,i)=>value(i,'interestCents')),`loans.${loanId}.interestCents`),paymentCents:sum(series.map((_,i)=>value(i,'paymentCents')),`loans.${loanId}.paymentCents`),principalPaidCents:sum(series.map((_,i)=>value(i,'principalPaidCents')),`loans.${loanId}.principalPaidCents`),closingPrincipalCents:value(series.length-1,'closingPrincipalCents')};
   });
+  const rsuInputs=ordered.flatMap(month=>month.rsu?[month.rsu]:[]);
+  let rsu:Available<RsuPeriod>|undefined;
+  if(rsuInputs.length) {
+    const absent=unavailable<RsuPeriod>(rsuInputs);
+    if(absent)rsu=absent;
+    else try {
+      const periods=rsuInputs.map(input=>{if(input.status!=='available')throw new Error('Unavailable RSU period');return input.value;});
+      const total=(values:readonly number[])=>settleCents(values.reduce((s,value)=>s.plus(value),new Decimal(0)));
+      const keys=[...new Set(periods.flatMap(p=>p.grants.map(g=>JSON.stringify([g.accountId,g.grantId]))))];
+      const grants:RsuGrantMonth[]=keys.map(key=>{
+        const records=periods.flatMap(p=>p.grants.filter(g=>JSON.stringify([g.accountId,g.grantId])===key));
+        const firstRecord=records[0]!,lastRecord=records[records.length-1]!;
+        const cents=(field:'growthCents'|'vestedValueCents'|'taxableIncomeCents'|'withholdingCents')=>total(records.map(g=>g[field]));
+        const shares=(field:'vestedShares'|'withheldShares')=>records.reduce((s,g)=>s.plus(g[field]),new Decimal(0)).toNumber();
+        return {...lastRecord,openingValueCents:firstRecord.openingValueCents,growthCents:cents('growthCents'),vestedValueCents:cents('vestedValueCents'),taxableIncomeCents:cents('taxableIncomeCents'),withholdingCents:cents('withholdingCents'),vestedShares:shares('vestedShares'),withheldShares:shares('withheldShares')};
+      });
+      rsu={status:'available',value:{taxableIncomeCents:total(periods.map(p=>p.taxableIncomeCents)),withholdingCents:total(periods.map(p=>p.withholdingCents)),unvestedValueCents:periods[periods.length-1]!.unvestedValueCents,grants}};
+    }catch(error) {
+      if(!(error instanceof CalculationRangeError))throw error;
+      const issue:Issue={code:'monetary-overflow',year,field:'rsu',severity:'error',explanation:'The annual RSU total exceeds the supported monetary range.',resolution:'Reduce the grant value, share price or growth assumption.'};
+      generated.push(issue);rsu=track({status:'unsupported-case',issues:[issue]});
+    }
+  }
   function ratio(numerator:Available<Cents>,field:string):Available<number>{
     const denominator=amounts.grossIncomeCents;
     const absent=unavailable<number>([numerator,denominator]);if(absent)return absent;
@@ -79,5 +103,5 @@ function summarize(months:readonly MonthlyProjection[],override?:Omit<Projection
   const coverage=affected?{...metadata.coverage,completeForModeledScope:false,completeHouseholdLiability:false,issues:deduplicate([...metadata.coverage.issues,...generated.filter(issue=>issue.severity!=='info')])}:metadata.coverage;
   const conditionalOnGap=ordered.some(month=>month.conditionalOnGap);
   const fundingStatus=last.fundingStatus==='funded'&&conditionalOnGap?'conditional-on-gap':last.fundingStatus;
-  return {...amounts,year,fundingStatus,conditionalOnGap,accounts,properties,loans,ratios,tax:metadata.tax,household:metadata.household,candidates:metadata.candidates,coverage,provenance:first.provenance,issues:deduplicate(issues)};
+  return {...amounts,year,fundingStatus,conditionalOnGap,accounts,properties,loans,...(rsu?{rsu}:{}),ratios,tax:metadata.tax,household:metadata.household,candidates:metadata.candidates,coverage,provenance:first.provenance,issues:deduplicate(issues)};
 }

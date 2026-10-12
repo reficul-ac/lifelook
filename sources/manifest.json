@@ -511,6 +511,46 @@
       "retrievedOn": "2026-10-12",
       "sha256": "12ac5573db3303d39fd6a386ff2c98b3be6d402c462be66d7242aa5f4269274a",
       "bytes": 3936119
+    },
+    {
+      "id": "irs-equity-compensation-2024",
+      "url": "https://www.irs.gov/pub/irs-pdf/p5992.pdf",
+      "snapshot": "2024-reference/irs-p5992.pdf",
+      "publicationYear": 2024,
+      "publicationDate": "2024-06-25",
+      "retrievedOn": "2026-10-12",
+      "sha256": "a1f30060531e5b5cabd682bf8cc4ef814a922d3a15e143fab22e7c25d36b9335",
+      "bytes": 193498
+    },
+    {
+      "id": "irs-p15a-2026",
+      "url": "https://www.irs.gov/publications/p15a",
+      "snapshot": "2026/irs-p15a.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "821362845aff36fa7a8af881e9e8add0db084a62e34619520c1b40c636f2b569",
+      "bytes": 341146
+    },
+    {
+      "id": "irs-p551-2025",
+      "url": "https://www.irs.gov/publications/p551",
+      "snapshot": "2025-reference/irs-p551.html",
+      "publicationYear": 2025,
+      "publicationDate": "2025-12",
+      "retrievedOn": "2026-10-12",
+      "sha256": "83109295dab8c909d1c3238187de94c5c3aef02cac8a1fd664c595b3f7448b75",
+      "bytes": 296617
+    },
+    {
+      "id": "ftb-1004-2015",
+      "url": "https://www.ftb.ca.gov/forms/misc/1004.html",
+      "snapshot": "2015-reference/ftb-1004.html",
+      "publicationYear": 2015,
+      "publicationDate": "2015-01",
+      "retrievedOn": "2026-10-12",
+      "sha256": "f48d4cb1dd14d1cc56975e57473690759b3cc1334c3e5c74b48c53e77c10a602",
+      "bytes": 66069
     }
   ]
 }

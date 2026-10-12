@@ -1,6 +1,7 @@
 import { isValidISODate, isValidYearMonth, parseISODate } from './dates';
+import { rsuVestingEvents } from './equity/rsu';
 import { Decimal, MAX_CENTS, settleCents } from './money';
-import type { Filer, ISODate, PlanDocument, ValidatedPlan } from './model/plan';
+import type { Filer, ISODate, PlanDocument, RsuGrant, ValidatedPlan } from './model/plan';
 import type { Issue, ValidationResult } from './model/results';
 import { checkCoverage } from './coverage';
 import { allocateExpense, allocateShares, loanRentalShares, sharedRentalShares } from './property/allocation';
@@ -35,6 +36,13 @@ class Validator {
   }
   cents(value: unknown, field: string, recordId?: string, signed = false): value is number { return this.integer(value, field, recordId, signed ? -MAX_CENTS : 0, MAX_CENTS); }
   rate(value: unknown, field: string, recordId?: string, growth = true): value is number { return this.integer(value, field, recordId, growth ? -9999 : 0, 100000); }
+  shares(value: unknown, field: string, recordId: string, positive = false): value is number {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || positive && value === 0 || value > Number.MAX_SAFE_INTEGER || new Decimal(value).decimalPlaces() > 6) {
+      this.issue(field, recordId, `A finite ${positive ? 'positive' : 'nonnegative'} share quantity with at most six decimal places is required.`);
+      return false;
+    }
+    return true;
+  }
   enum(value: unknown, options: readonly string[], field: string, recordId?: string): void {
     if (typeof value !== 'string' || !options.includes(value)) this.issue(field, recordId, `Choose one of: ${options.join(', ')}.`);
   }
@@ -231,10 +239,68 @@ export function validatePlan(raw: unknown): ValidationResult {
       else if (o.niitTreatment !== undefined) v.issue('niitTreatment', id, 'NIIT classification belongs to ordinary taxable income.');
     }
   });
+  const rsuGrantIds: { readonly grantId: string; readonly accountId: string; readonly field: string }[] = [];
   accounts.forEach(o => {
     const id = recordId(o); reference(o.ownerId, owners, 'ownerId', id);
-    v.enum(o.type, ['taxable-brokerage', 'traditional-401k', 'roth-401k', 'traditional-ira', 'roth-ira'], 'type', id);
+    v.enum(o.type, ['taxable-brokerage', 'traditional-401k', 'roth-401k', 'traditional-ira', 'roth-ira', 'rsu'], 'type', id);
     v.cents(o.openingBalanceCents, 'openingBalanceCents', id); v.rate(o.annualGrowthBps, 'annualGrowthBps', id); v.moneyHistory(o.openingIraBasis, 'openingIraBasis', id);
+    if (o.type !== 'rsu') {
+      if (o.rsu !== undefined) v.issue('rsu', id, 'RSU grant details belong only to RSU accounts.');
+      return;
+    }
+    if (o.openingBalanceCents !== 0) v.issue('openingBalanceCents', id, 'RSU opening value is derived from held shares; the ordinary opening balance must be zero.');
+    if (isObject(o.openingIraBasis) && o.openingIraBasis.known !== false) v.issue('openingIraBasis', id, 'An RSU account must keep IRA basis explicitly unknown.');
+    const rsu = v.object(o.rsu, 'rsu', id);
+    if (!rsu) return;
+    v.text(rsu.employerId, 'rsu.employerId', id);
+    const priceValid = v.integer(rsu.currentSharePriceCents, 'rsu.currentSharePriceCents', id, 1, MAX_CENTS);
+    v.array(rsu.grants, 'rsu.grants', id).forEach((value, index) => {
+      const field = `rsu.grants[${index}]`, grant = v.object(value, field, id);
+      if (!grant) return;
+      if (v.text(grant.id, `${field}.id`, id)) {
+        rsuGrantIds.push({ grantId: grant.id, accountId: id, field: `${field}.id` });
+        if (v.ids.has(grant.id) || grant.id === v.planId) v.issue(`${field}.id`, id, 'IDs must be unique across all document records.', 'duplicate-id');
+        else v.ids.set(grant.id, `${field}.id`);
+      }
+      v.text(grant.name, `${field}.name`, id);
+      const dateValid = v.date(grant.startDate, `${field}.startDate`, id);
+      const valueValid = v.integer(grant.grantValueCents, `${field}.grantValueCents`, id, 1, MAX_CENTS);
+      const grantPriceValid = v.integer(grant.grantSharePriceCents, `${field}.grantSharePriceCents`, id, 1, MAX_CENTS);
+      const awardValid = grant.awardedShares === undefined || v.shares(grant.awardedShares, `${field}.awardedShares`, id, true);
+      const termValid = v.integer(grant.vestingMonths, `${field}.vestingMonths`, id, 1, 600);
+      v.enum(grant.vestingFrequency, ['monthly', 'quarterly', 'annual'], `${field}.vestingFrequency`, id);
+      const frequencyValid = grant.vestingFrequency === 'monthly' || grant.vestingFrequency === 'quarterly' || grant.vestingFrequency === 'annual';
+      const cliffValid = v.integer(grant.cliffMonths, `${field}.cliffMonths`, id, 0, termValid ? Number(grant.vestingMonths) : 600);
+      v.integer(grant.withholdingBps, `${field}.withholdingBps`, id, 0, 10000);
+      v.enum(grant.taxTreatment, ['settle-at-vest', 'deferred'], `${field}.taxTreatment`, id);
+      const heldValid = v.shares(grant.openingHeldShares, `${field}.openingHeldShares`, id);
+      if (heldValid && grant.taxTreatment === 'deferred' && Number(grant.openingHeldShares) > 0) v.issue(`${field}.openingHeldShares`, id, 'Deferred grants with opening held shares require separate prior settlement history; the gross delivered and withheld shares cannot be inferred from net holdings.');
+      v.moneyHistory(grant.openingBasis, `${field}.openingBasis`, id);
+      let scheduleCalendarValid = dateValid && termValid;
+      if (scheduleCalendarValid) {
+        const start = parseISODate(grant.startDate as string);
+        if (start.year * 12 + start.month - 1 + Number(grant.vestingMonths) > 9999 * 12 + 11) {
+          scheduleCalendarValid = false;
+          v.issue(`${field}.vestingMonths`, id, 'The final vesting date exceeds the supported calendar.');
+        }
+      }
+      if (heldValid && awardValid && valueValid && grantPriceValid) {
+        const awarded = grant.awardedShares === undefined ? new Decimal(Number(grant.grantValueCents)).div(Number(grant.grantSharePriceCents)) : new Decimal(Number(grant.awardedShares));
+        if (new Decimal(grant.openingHeldShares as number).gt(awarded)) v.issue(`${field}.openingHeldShares`, id, 'Opening held shares cannot exceed the awarded share quantity.');
+        if (scheduleCalendarValid && cliffValid && frequencyValid && forecastStart) {
+          const priorVest = rsuVestingEvents(grant as unknown as RsuGrant).filter(event => event.date < forecastStart).at(-1);
+          const start = parseISODate(grant.startDate as string), prior = priorVest ? parseISODate(priorVest.date) : undefined;
+          const elapsedMonths = prior ? (prior.year - start.year) * 12 + prior.month - start.month : 0;
+          // Event dates preserve cliffs and month anchors; cumulative units avoid rounding individual events.
+          const serviceVested = elapsedMonths === grant.vestingMonths ? awarded : awarded.mul(elapsedMonths).div(Number(grant.vestingMonths));
+          if (new Decimal(grant.openingHeldShares as number).gt(serviceVested)) v.issue(`${field}.openingHeldShares`, id, 'Opening held shares cannot exceed shares vested strictly before forecast start.');
+        }
+      }
+      if (heldValid && priceValid) {
+        try { settleCents(new Decimal(grant.openingHeldShares as number).times(Number(rsu.currentSharePriceCents))); }
+        catch { v.issue(`${field}.openingHeldShares`, id, 'The opening held-share value exceeds the supported monetary range.', 'monetary-overflow'); }
+      }
+    });
   });
   contributions.forEach(o => {
     const id = recordId(o); reference(o.accountId, accountById, 'accountId', id); v.integer(o.priority, 'priority', id, 0); v.range(o, 'startDate', 'endDate', id);
@@ -245,6 +311,7 @@ export function validatePlan(raw: unknown): ValidationResult {
       if (amount.kind === 'salary-percent') { reference(amount.salaryId, salaryById, 'amount.salaryId', id); v.rate(amount.percentBps, 'amount.percentBps', id, false); }
     }
     const account = typeof o.accountId === 'string' ? accountById.get(o.accountId) : undefined;
+    if (account?.type === 'rsu') v.issue('accountId', id, 'RSU accounts receive granted stock rather than cash contributions. Remove this contribution or choose a cash investment account.');
     const payroll = account?.type === 'traditional-401k' || account?.type === 'roth-401k';
     if (payroll || o.sponsoringSalaryId !== undefined) {
       reference(o.sponsoringSalaryId, salaryById, 'sponsoringSalaryId', id);
@@ -292,6 +359,7 @@ export function validatePlan(raw: unknown): ValidationResult {
       if (total.gt(1)) v.issue('proceedsAllocations', loanId, 'Loan allocation shares cannot total more than one.');
     });
   });
+  for (const grant of rsuGrantIds) if (loanById.has(grant.grantId)) v.issue(grant.field, grant.accountId, 'IDs must be unique across all document records.', 'duplicate-id');
   debts.forEach(o => {
     const id = recordId(o); v.cents(o.openingBalanceCents, 'openingBalanceCents', id); v.rate(o.aprBps, 'aprBps', id, false); v.cents(o.monthlyPaymentCents, 'monthlyPaymentCents', id);
     if (!isValidYearMonth(o.firstPaymentMonth)) v.issue('firstPaymentMonth', id, 'Use a valid ISO calendar month (YYYY-MM).');
@@ -377,7 +445,12 @@ export function validatePlan(raw: unknown): ValidationResult {
       try { return settleCents(values.reduce((sum, value) => sum.plus(value), new Decimal(0))); }
       catch { v.issue(field, v.planId, 'The aggregate exceeds the supported monetary range.', 'monetary-overflow'); return undefined; }
     };
-    const accountTotal = aggregate(accounts.map(o => Number(o.openingBalanceCents)), 'accounts.openingBalanceCents');
+    const accountOpenings = accounts.flatMap(o => {
+      if (o.type !== 'rsu') return [Number(o.openingBalanceCents)];
+      const rsu = o.rsu as Obj;
+      return (rsu.grants as readonly Obj[]).map(grant => settleCents(new Decimal(Number(grant.openingHeldShares)).times(Number(rsu.currentSharePriceCents))));
+    });
+    const accountTotal = aggregate(accountOpenings, 'accounts.openingBalanceCents');
     const propertyTotal = aggregate(properties.map(o => Number(o.openingValueCents)), 'properties.openingValueCents');
     const debtTotal = aggregate([...debts.map(o => Number(o.openingBalanceCents)), ...[...loanById.values()].map(o => isObject(o.openingBalance) && o.openingBalance.known === true ? Number(o.openingBalance.value) : Number(o.originalPrincipalCents))], 'debts.openingBalanceCents');
     if (accountTotal !== undefined && propertyTotal !== undefined) aggregate([accountTotal, propertyTotal, Number(root.openingCashCents)], 'openingAssetsCents');

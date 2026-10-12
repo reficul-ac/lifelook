@@ -41,6 +41,7 @@ export function findRecordPath(value:unknown,id:string,path=''):string|undefined
 export function getRecordLabel(plan:PlanDocument,id:string):string{
   if(id===plan.id||id==='household')return 'Household';
   for(const record of [...plan.household.filers,...plan.salaries,...plan.otherIncome,...plan.expenses,...plan.debts,...plan.accounts,...plan.properties,...plan.properties.flatMap(p=>p.loans)])if(record.id===id)return record.name;
+  for(const account of plan.accounts)for(const grant of account.rsu?.grants??[])if(grant.id===id)return grant.name;
   const rental=plan.rentals.find(r=>r.id===id);
   if(rental){const property=plan.properties.find(p=>p.id===rental.propertyId);return `${property?.role==='primary-with-adu'?'ADU':'Rental'} ${plan.rentals.filter(r=>r.propertyId===rental.propertyId).findIndex(r=>r.id===id)+1} — ${property?.name??'Property'}`;}
   const contribution=plan.contributions.find(c=>c.id===id);if(contribution)return `${plan.accounts.find(a=>a.id===contribution.accountId)?.name??'Account'} contribution`;
@@ -78,6 +79,11 @@ export function resolveIssueTargets(issue:Issue,state:Pick<WorkspaceState,'saved
     if(filer)return [target('Household','household',householdField(filer.id,field))];
   }
   if(!id||id===plan.id||id==='household')return [target('Household','household',field)];
+  for(const accountId of new Set([...plan.accounts.map(account=>account.id),...Object.values(state.drafts).filter(draft=>draft.section==='accounts').map(draft=>draft.recordId)])){
+    const raw=Object.hasOwn(state.drafts,accountId)?state.drafts[accountId]!.value:plan.accounts.find(account=>account.id===accountId);
+    const prefix=findRecordPath(raw,id);
+    if(prefix?.startsWith('rsu.grants.'))return [target('Investments',accountId,field===prefix||field.startsWith(`${prefix}.`)?field:field?`${prefix}.${field}`:prefix)];
+  }
   const property=plan.properties.find(p=>p.id===id||p.loans.some(l=>l.id===id)||plan.rentals.some(r=>r.id===id&&r.propertyId===p.id));
   if(property){const raw=Object.hasOwn(state.drafts,property.id)?state.drafts[property.id]!.value:{property,rentals:plan.rentals.filter(r=>r.propertyId===property.id),expenses:plan.expenses.filter(e=>e.propertyId===property.id)};const prefix=findRecordPath(raw,id);return [target('Properties',property.id,field.startsWith('property.')||field.startsWith('rentals.')?field:prefix===undefined?undefined:field?`${prefix}.${field}`:prefix)];}
   const sections=[['salaries','Income'],['otherIncome','Income'],['expenses','Expenses and debts'],['debts','Expenses and debts'],['accounts','Investments'],['contributions','Investments']] as const;

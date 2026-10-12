@@ -3,6 +3,8 @@ import type { Available, Coverage, Issue, RuleProvenance } from './model/results
 import { initialTaxState, type HouseholdTaxState } from './model/tax-state';
 import { CalculationRangeError, Decimal, assertMonetaryRange, settleCents, settleSeries } from './money';
 import { resolveCashYear, type CashStream, type CashYear } from './cash/income';
+import { projectRsuAccounts, type RsuGrantMonth, type RsuProjection } from './equity/rsu';
+import { addRsuWages } from './tax/rsu-income';
 import { requestContributions, type ContributionRequest } from './cash/contribution-requests';
 import { calculateLoanSchedule, type LoanSchedule, type OpeningLoanProvenance } from './property/loans';
 import { buildPropertyFacts } from './property/facts';
@@ -14,10 +16,10 @@ import { resolveHouseholdYear, type HouseholdYear } from './tax/comparison';
 import { resolveWorkplaceContributions } from './tax/workplace';
 import { calculatePayroll, type PayrollYear } from './tax/payroll';
 import type { ContributionRecord } from './tax/facts';
-import { checkCoverage } from './coverage';
+import { checkCoverage, rsuDeferredTaxIssues } from './coverage';
 import { calendarDate, parseISODate } from './dates';
 import { summarizeProjectionYear } from './reporting';
-import type { AccountProjection, LoanProjection, MonthlyProjection, ProjectionResult, PropertyProjection } from './projection-types';
+import type { AccountProjection, LoanProjection, MonthlyProjection, ProjectionResult, PropertyProjection, RsuPeriod } from './projection-types';
 export type * from './projection-types';
 
 /** Allocate assessed annual income tax, independently of payroll withholding. */
@@ -83,6 +85,14 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
     const result=combine(values,()=>0);if(result.status!=='available')return result;
     return range(recordId,year,field,()=>settleCents(values.reduce((s,v)=>s.plus(numeric(v)),new Decimal(0))));
   };
+  const rsuAccounts=plan.accounts.filter(a=>a.type==='rsu');
+  const rsuSchedules:NonNullable<ProjectionResult['rsuSchedules']>[number][]=[];
+  const completeRsuSchedules=new Map<string,RsuProjection>();
+  for(const account of rsuAccounts) {
+    try{completeRsuSchedules.set(account.id,projectRsuAccounts({...plan,accounts:[account]}));}
+    catch(error){if(!(error instanceof CalculationRangeError))throw error;}
+    // A later overflow uses year prefixes below so earlier valid years stay available.
+  }
   const accountExact=new Map<string,Available<Decimal>>(plan.accounts.map(a=>[a.id,available(new Decimal(a.openingBalanceCents))]));
   const propertyExact=new Map<string,Available<Decimal>>(plan.properties.map(p=>[p.id,available(new Decimal(p.openingValueCents))]));
   const declaredLoans=[...plan.properties.flatMap(p=>p.loans.map(loan=>({loan,propertyId:p.id}))),...plan.debts.map(loan=>({loan,...(loan.propertyId?{propertyId:loan.propertyId}:{})}))].sort((a,b)=>a.loan.id.localeCompare(b.loan.id));
@@ -91,6 +101,14 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
   const streamDefinitions=[...plan.salaries.map(s=>({id:s.id,kind:'salary' as const})),...plan.otherIncome.map(s=>({id:s.id,kind:'other-income' as const})),...plan.expenses.map(s=>({id:s.id,kind:'expense' as const})),...plan.rentals.map(s=>({id:s.id,kind:'rent' as const}))].sort((a,b)=>a.kind.localeCompare(b.kind)||a.id.localeCompare(b.id));
   for(let year=plan.startYear;year<plan.startYear+plan.horizonYears;year++) {
     const issueStart=allIssues.length,opening=taxState;
+    const rsuByAccount=new Map<string,Available<readonly RsuGrantMonth[]>>();
+    for(const account of rsuAccounts) {
+      const projected=range(account.id,year,'rsu',()=>completeRsuSchedules.get(account.id)??projectRsuAccounts({...plan,accounts:[account],horizonYears:year-plan.startYear+1}));
+      const schedule=projected.status==='available'?available(projected.value.months.filter(m=>m.year===year)):projected;
+      if(projected.status==='available')allIssues.push(...projected.value.issues.filter(issue=>issue.year===undefined||issue.year===year));
+      rsuByAccount.set(account.id,schedule);rsuSchedules.push({accountId:account.id,year,schedule});
+    }
+    const rsuYear:Available<readonly RsuGrantMonth[]>=combine([...rsuByAccount.values()],()=>[...rsuByAccount.values()].flatMap(s=>s.status==='available'?[...s.value]:[]));
     const cash=range(plan.id,year,'cash',()=>resolveCashYear(plan,year));
     const streams=new Map<string,Available<CashStream>>();
     for(const definition of streamDefinitions){
@@ -115,7 +133,8 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
     }
     const rules=resolveYearRules(ruleSet,year,plan.taxPolicy);
     if(rules.status==='available')allProvenance.push(...Object.values(rules.value.provenance));else allIssues.push(...rules.issues);
-    const taxCash=cash.status==='available'?cash:range(plan.id,year,'taxCash',()=>resolveCashYear(taxCashScenario(plan),year));
+    const cashForTax=cash.status==='available'?cash:range(plan.id,year,'taxCash',()=>resolveCashYear(taxCashScenario(plan),year));
+    const taxCash:Available<CashYear>=cashForTax.status==='available'&&rsuYear.status==='available'?range(plan.id,year,'rsuTaxWages',()=>addRsuWages(cashForTax.value,rsuAccounts,rsuYear.value)):combine([cashForTax,rsuYear],()=>undefined as never);
     const requestResults=new Map<string,Available<readonly ContributionRequest[]>>();
     for(const rule of [...plan.contributions].sort((a,b)=>a.id.localeCompare(b.id))){
       const account=plan.accounts.find(a=>a.id===rule.accountId)!,sponsor=plan.salaries.find(s=>s.id===rule.sponsoringSalaryId);
@@ -149,7 +168,7 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
       records=household.value.contributions;payroll=available(household.value.payroll);taxState=household.value.closingTaxState;allIssues.push(...household.value.issues);
     }else {
       allIssues.push(...household.issues);taxState=interruptedTaxState(opening,year,household);
-      const wageCash=taxCash.status==='available'?taxCash:range(plan.id,year,'wageCash',()=>resolveCashYear(wageCashScenario(plan),year));
+      const wageCash=taxCash.status==='available'?taxCash:rsuYear.status==='available'?range(plan.id,year,'wageCash',()=>addRsuWages(resolveCashYear(wageCashScenario(plan),year),rsuAccounts,rsuYear.value)):rsuYear;
       const workplaceRequestResults=plan.contributions.filter(r=>{const type=plan.accounts.find(a=>a.id===r.accountId)!.type;return type==='traditional-401k'||type==='roth-401k';}).map(r=>requestResults.get(r.id)!);
       const workplace=wageCash.status==='available'&&rules.status==='available'&&workplaceRequestResults.every(r=>r.status==='available')?range(plan.id,year,'workplace',()=>resolveWorkplaceContributions(plan,wageCash.value,knownRequests,rules.value)):combine([wageCash,rules,...workplaceRequestResults],()=>undefined as never);
       payroll=wageCash.status==='available'&&rules.status==='available'?range(plan.id,year,'payroll',()=>calculatePayroll(wageCash.value,resolveWorkplaceContributions(plan,wageCash.value,[],rules.value),rules.value)):combine([wageCash,rules],()=>undefined as never);
@@ -160,9 +179,11 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
         return {ruleId:r.ruleId,accountId:r.accountId,ownerId:r.ownerId,year,month:r.month,requestedCents:r.requestedCents,eligibleCents:eligible,deductibleCents:account.type==='taxable-brokerage'?available(0):eligible,nondeductibleCents:eligible,preventedCents:eligible.status==='available'?available(r.requestedCents-eligible.value):eligible,reasons:eligible.status==='available'?[]:eligible.issues};
       });
     }
+    const deferredIssues=rsuDeferredTaxIssues(plan,year);
+    if(deferredIssues.length)payroll={status:'unsupported-case',issues:deferredIssues};
     contributions.push(...records);taxStates.push({year,opening,closing:taxState});
     const tax=household.status==='available'?household.value.tax:household;
-    const incomeAllocation=(jurisdiction:'federal'|'california'):Available<readonly Cents[]>=>tax.status==='available'&&taxCash.status==='available'?range(plan.id,year,`${jurisdiction}IncomeTaxCents`,()=>allocateAnnualTax(tax.value[jurisdiction].totalCents,taxCash.value.positiveGrossCashByMonth)):combine([tax,taxCash],()=>undefined as never);
+    const incomeAllocation=(jurisdiction:'federal'|'california'):Available<readonly Cents[]>=>tax.status==='available'&&taxCash.status==='available'&&rsuYear.status==='available'?range(plan.id,year,`${jurisdiction}IncomeTaxCents`,()=>allocateAnnualTax(tax.value[jurisdiction].totalCents,taxCash.value.positiveGrossCashByMonth.map((cashWeight,i)=>settleCents(new Decimal(cashWeight).plus(rsuYear.value.filter(g=>g.month===i+1).reduce((s,g)=>s.plus(g.taxableIncomeCents),new Decimal(0))))))):combine([tax,taxCash,rsuYear],()=>undefined as never);
     const federal=incomeAllocation('federal'),california=incomeAllocation('california');
     const carriedDistributionIssues:Issue[]=plan.household.filers.flatMap(filer=>{
       if(!filer.birthDate.known)return [];
@@ -173,20 +194,38 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
     allIssues.push(...carriedDistributionIssues);
     const baseCoverage=household.status==='available'?household.value.coverage:checkCoverage(plan,year);
     const coverage:Coverage={completeForModeledScope:baseCoverage.completeForModeledScope&&household.status==='available',completeHouseholdLiability:baseCoverage.completeHouseholdLiability&&household.status==='available'&&carriedDistributionIssues.length===0,issues:uniqueIssues([...baseCoverage.issues,...carriedDistributionIssues,...(household.status==='available'?[]:household.issues)])};
-    const provenance=rules.status==='available'?uniqueProvenance(Object.values(rules.value.provenance)):[];
+    const rsuProvenance:RuleProvenance[] = rsuAccounts.length?[{status:'projected',ruleVersion:'rsu-settle-at-vest.1',baselineYear:2026,applicableYear:year,sources:['https://www.irs.gov/pub/irs-pdf/p5992.pdf','https://www.irs.gov/publications/p15','https://www.irs.gov/publications/p15a','https://www.irs.gov/publications/p551','https://www.ftb.ca.gov/forms/misc/1004.html','https://edd.ca.gov/en/payroll_taxes/What_Are_Wages'],assumptions:['RSU shares are delivered at each vest; deferred settlement tax timing requires a separate model.','Current share price is assumed on January 1 of the forecast start year and grows at the entered effective annual rate.','Sell-to-cover uses the entered fractional-share percentage at the vest valuation with no capital gain or fee; its proceeds fund assessed tax reserves rather than establish a final tax rate.','Income-tax reserve timing is a planning allocation, not an actual payroll-remittance or refund schedule.']}]:[];
+    allProvenance.push(...rsuProvenance);
+    const provenance=uniqueProvenance([...(rules.status==='available'?Object.values(rules.value.provenance):[]),...rsuProvenance]);
     const yearMonths:MonthlyProjection[]=[];
     for(let month=1;month<=12;month++){
       const fieldIssuesStart=allIssues.length,i=month-1;
       const streamSum=(predicate:(definition:typeof streamDefinitions[number])=>boolean,field:string):Available<Cents>=>sum(streamDefinitions.filter(predicate).map(d=>{const s=streams.get(d.id)!;return s.status==='available'?available(s.value.months[i]!):s;}),year,field);
       const salaryCents=streamSum(d=>d.kind==='salary','salaryCents'),otherIncomeCents=streamSum(d=>d.kind==='other-income','otherIncomeCents'),rentCents=streamSum(d=>d.kind==='rent','rentCents');
+      const grants=rsuYear.status==='available'?rsuYear.value.filter(g=>g.month===month):[];
+      const paperIssues=grants.flatMap(grant=>grant.unvestedValueIssue?[grant.unvestedValueIssue]:[]);
+      const rsuMonth:Available<RsuPeriod>=rsuYear.status!=='available'?rsuYear:paperIssues.length?{status:'unsupported-case',issues:paperIssues}:range(plan.id,year,'rsu',()=>{
+        const total=(key:'taxableIncomeCents'|'withholdingCents'|'unvestedValueCents')=>settleCents(grants.reduce((s,g)=>{const value=g[key];if(value===null)throw new CalculationRangeError();return s.plus(value);},new Decimal(0)));
+        return {taxableIncomeCents:total('taxableIncomeCents'),withholdingCents:total('withholdingCents'),unvestedValueCents:total('unvestedValueCents'),grants};
+      });
+      // Paper-value availability must not prevent independent wages or tax funding.
+      const rsuFlow=(key:'taxableIncomeCents'|'withholdingCents'):Available<Cents>=>rsuYear.status==='available'?sum(rsuYear.value.filter(g=>g.month===month).map(g=>available(g[key])),year,`rsu.${key}`):rsuYear;
+      const rsuIncomeCents=rsuFlow('taxableIncomeCents'),rsuWithholdingCents=rsuFlow('withholdingCents');
       const ordinaryExpensesCents=streamSum(d=>d.kind==='expense'&&!plan.expenses.find(e=>e.id===d.id)?.propertyId,'ordinaryExpensesCents'),propertyExpensesCents=streamSum(d=>d.kind==='expense'&&!!plan.expenses.find(e=>e.id===d.id)?.propertyId,'propertyExpensesCents');
-      const grossIncomeCents=sum([salaryCents,otherIncomeCents,rentCents],year,'grossIncomeCents'),expensesCents=sum([ordinaryExpensesCents,propertyExpensesCents],year,'expensesCents');
+      const cashIncomeCents=sum([salaryCents,otherIncomeCents,rentCents],year,'cashIncomeCents');
+      const grossIncomeCents=sum([cashIncomeCents,rsuIncomeCents],year,'grossIncomeCents'),expensesCents=sum([ordinaryExpensesCents,propertyExpensesCents],year,'expensesCents');
       const monthlyRecords=records.filter(r=>r.month===month);
       const unresolvedRequests=[...requestResults.values()].filter(r=>r.status!=='available');
       const requestedContributionCents=sum([...monthlyRecords.map(r=>available(r.requestedCents)),...unresolvedRequests],year,'requestedContributionCents');
       const eligibleContributionCents=sum([...monthlyRecords.map(r=>r.eligibleCents),...unresolvedRequests],year,'eligibleContributionCents');
       const preventedContributionCents=sum([...monthlyRecords.map(r=>r.preventedCents),...unresolvedRequests],year,'preventedContributionCents');
       const accounts:AccountProjection[]=[...plan.accounts].sort((a,b)=>a.id.localeCompare(b.id)).map(account=>{
+        if(account.type==='rsu') {
+          const schedule=rsuByAccount.get(account.id)!;
+          const accountMonth=schedule.status==='available'?schedule.value.filter(g=>g.month===month):[];
+          const amount=(key:'openingValueCents'|'growthCents'|'closingValueCents'|'vestedValueCents'|'withholdingCents'):Available<Cents>=>schedule.status==='available'?sum(accountMonth.map(g=>available(g[key])),year,key,account.id):schedule;
+          return {accountId:account.id,openingCents:amount('openingValueCents'),contributionCents:available(0),growthCents:amount('growthCents'),closingCents:amount('closingValueCents'),vestedCents:amount('vestedValueCents'),withholdingCents:amount('withholdingCents')};
+        }
         const previous=accountExact.get(account.id)!;
         const unresolved=plan.contributions.filter(c=>c.accountId===account.id).map(c=>requestResults.get(c.id)!).filter(r=>r.status!=='available');
         const contributionCents=sum([...monthlyRecords.filter(r=>r.accountId===account.id).map(r=>r.eligibleCents),...unresolved],year,'contributionCents',account.id);
@@ -220,15 +259,15 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
       const payrollAmount=(field:'socialSecurityCents'|'medicareCents'|'additionalMedicareCents'|'sdiCents'):Available<Cents>=>payroll.status==='available'?available(payroll.value.months[i]![field]):payroll;
       const socialSecurityCents=payrollAmount('socialSecurityCents'),medicareCents=payrollAmount('medicareCents'),additionalMedicareCents=payrollAmount('additionalMedicareCents'),sdiCents=payrollAmount('sdiCents');
       const totalTaxCents=sum([federalIncomeTaxCents,californiaIncomeTaxCents,socialSecurityCents,medicareCents,additionalMedicareCents,sdiCents],year,'totalTaxCents');
-      const cashFlowCents=sum([grossIncomeCents,...[totalTaxCents,expensesCents,debtPaymentCents,eligibleContributionCents].map(v=>v.status==='available'?available(-v.value):v)],year,'cashFlowCents');
+      const cashFlowCents=sum([cashIncomeCents,rsuWithholdingCents,...[totalTaxCents,expensesCents,debtPaymentCents,eligibleContributionCents].map(v=>v.status==='available'?available(-v.value):v)],year,'cashFlowCents');
       reserve=sum([reserve,cashFlowCents],year,'reserveCents');if(reserve.status==='available'&&reserve.value<0)conditionalOnGap=true;
       const netWorthCents=sum([reserve,accountBalanceCents,propertyValueCents,loanBalanceCents.status==='available'?available(-loanBalanceCents.value):loanBalanceCents],year,'netWorthCents');
       const fundingStatus=reserve.status!=='available'?'unavailable':conditionalOnGap?'conditional-on-gap':'funded';
-      const row:MonthlyProjection={year,month,date:`${year}-${String(month).padStart(2,'0')}`,fundingStatus,conditionalOnGap,grossIncomeCents,salaryCents,otherIncomeCents,rentCents,ordinaryExpensesCents,propertyExpensesCents,expensesCents,debtPaymentCents,interestCents,principalPaidCents,federalIncomeTaxCents,californiaIncomeTaxCents,socialSecurityCents,medicareCents,additionalMedicareCents,sdiCents,totalTaxCents,requestedContributionCents,eligibleContributionCents,preventedContributionCents,accountBalanceCents,accountGrowthCents,propertyValueCents,propertyGrowthCents,loanBalanceCents,equityCents,cashFlowCents,reserveCents:reserve,netWorthCents,accounts,properties,loans,tax,household,candidates:household.status==='available'?household.value.candidates:[],coverage,provenance,issues:uniqueIssues([...allIssues.slice(issueStart,fieldIssuesStart),...allIssues.slice(fieldIssuesStart),...coverage.issues])};
+      const row:MonthlyProjection={year,month,date:`${year}-${String(month).padStart(2,'0')}`,fundingStatus,conditionalOnGap,grossIncomeCents,salaryCents,otherIncomeCents,rentCents,ordinaryExpensesCents,propertyExpensesCents,expensesCents,debtPaymentCents,interestCents,principalPaidCents,federalIncomeTaxCents,californiaIncomeTaxCents,socialSecurityCents,medicareCents,additionalMedicareCents,sdiCents,totalTaxCents,requestedContributionCents,eligibleContributionCents,preventedContributionCents,accountBalanceCents,accountGrowthCents,propertyValueCents,propertyGrowthCents,loanBalanceCents,equityCents,cashFlowCents,reserveCents:reserve,netWorthCents,accounts,properties,loans,...(rsuAccounts.length?{rsu:rsuMonth}:{}),tax,household,candidates:household.status==='available'?household.value.candidates:[],coverage,provenance,issues:uniqueIssues([...allIssues.slice(issueStart,fieldIssuesStart),...allIssues.slice(fieldIssuesStart),...coverage.issues])};
       yearMonths.push(row);months.push(row);
     }
     const annual=summarizeProjectionYear(yearMonths);years.push(annual);allIssues.push(...annual.issues);
   }
   const issues=uniqueIssues(allIssues),coverage:Coverage={completeForModeledScope:years.every(y=>y.coverage.completeForModeledScope)&&!issues.some(i=>i.code==='monetary-overflow'),completeHouseholdLiability:years.every(y=>y.coverage.completeHouseholdLiability)&&!issues.some(i=>i.code==='monetary-overflow'),issues:uniqueIssues(years.flatMap(y=>y.coverage.issues))};
-  return {planId:plan.id,inputRevision:plan.revision,months,years,contributions,contributionSchedules,taxStates,loanSchedules,cashSchedules,openingTaxState,closingTaxState:taxState,provenance:uniqueProvenance(allProvenance),coverage,issues};
+  return {planId:plan.id,inputRevision:plan.revision,months,years,contributions,contributionSchedules,taxStates,loanSchedules,cashSchedules,...(rsuAccounts.length?{rsuSchedules}:{}),openingTaxState,closingTaxState:taxState,provenance:uniqueProvenance(allProvenance),coverage,issues};
 }

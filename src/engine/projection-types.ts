@@ -6,6 +6,7 @@ import type { CashStream } from './cash/income';
 import type { HouseholdTaxResult, HouseholdYear, TaxCandidate } from './tax/comparison';
 import type { ContributionRecord } from './tax/facts';
 import type { ContributionRequest } from './cash/contribution-requests';
+import type { RsuGrantMonth } from './equity/rsu';
 
 export const flowFields = ['grossIncomeCents','salaryCents','otherIncomeCents','rentCents','ordinaryExpensesCents','propertyExpensesCents','expensesCents','debtPaymentCents','interestCents','principalPaidCents','federalIncomeTaxCents','californiaIncomeTaxCents','socialSecurityCents','medicareCents','additionalMedicareCents','sdiCents','totalTaxCents','requestedContributionCents','eligibleContributionCents','preventedContributionCents','accountGrowthCents','propertyGrowthCents','cashFlowCents'] as const;
 export const balanceFields = ['accountBalanceCents','propertyValueCents','loanBalanceCents','equityCents','reserveCents','netWorthCents'] as const;
@@ -18,6 +19,14 @@ export interface AccountProjection {
   readonly contributionCents:Available<Cents>;
   readonly growthCents:Available<Cents>;
   readonly closingCents:Available<Cents>;
+  readonly vestedCents?:Available<Cents>;
+  readonly withholdingCents?:Available<Cents>;
+}
+export interface RsuPeriod {
+  readonly taxableIncomeCents:Cents;
+  readonly withholdingCents:Cents;
+  readonly unvestedValueCents:Cents;
+  readonly grants:readonly RsuGrantMonth[];
 }
 export interface PropertyProjection {
   readonly propertyId:string;
@@ -52,6 +61,7 @@ export interface MonthlyProjection extends ProjectionAmounts,ProjectionMetadata 
   readonly accounts:readonly AccountProjection[];
   readonly properties:readonly PropertyProjection[];
   readonly loans:readonly LoanProjection[];
+  readonly rsu?:Available<RsuPeriod>;
 }
 export interface AnnualProjection extends ProjectionAmounts,ProjectionMetadata {
   readonly year:number;
@@ -60,6 +70,7 @@ export interface AnnualProjection extends ProjectionAmounts,ProjectionMetadata {
   readonly accounts:readonly AccountProjection[];
   readonly properties:readonly PropertyProjection[];
   readonly loans:readonly LoanProjection[];
+  readonly rsu?:Available<RsuPeriod>;
   readonly ratios:Readonly<{expenseRatio:Available<number>;taxRatio:Available<number>;contributionRatio:Available<number>;cashFlowMargin:Available<number>}>;
 }
 export interface ProjectionResult {
@@ -72,6 +83,7 @@ export interface ProjectionResult {
   readonly taxStates:readonly Readonly<{year:number;opening:HouseholdTaxState;closing:HouseholdTaxState}>[];
   readonly loanSchedules:readonly Readonly<{loanId:string;year:number;schedule:Available<LoanSchedule>}>[];
   readonly cashSchedules:readonly Readonly<{recordId:string;year:number;kind:CashStream['kind'];schedule:Available<CashStream>}>[];
+  readonly rsuSchedules?:readonly Readonly<{accountId:string;year:number;schedule:Available<readonly RsuGrantMonth[]>}>[];
   readonly openingTaxState:HouseholdTaxState;
   readonly closingTaxState:HouseholdTaxState;
   readonly provenance:readonly RuleProvenance[];

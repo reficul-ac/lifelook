@@ -88,7 +88,28 @@ export interface Expense extends RecurringPayment {
   readonly taxCategory: 'property-tax' | 'homeowners-insurance' | 'mortgage-insurance' | 'repair' | 'operating' | 'capital' | 'personal';
   readonly mortgageInsuranceQualification?: History<boolean>;
 }
-export type AccountType = 'taxable-brokerage' | 'traditional-401k' | 'roth-401k' | 'traditional-ira' | 'roth-ira';
+export interface RsuGrant {
+  readonly id: string;
+  readonly name: string;
+  readonly startDate: ISODate;
+  readonly grantValueCents: Cents;
+  readonly grantSharePriceCents: Cents;
+  readonly awardedShares?: number;
+  readonly vestingMonths: number;
+  readonly vestingFrequency: 'monthly' | 'quarterly' | 'annual';
+  readonly cliffMonths: number;
+  readonly withholdingBps: BasisPoints;
+  readonly taxTreatment: 'settle-at-vest' | 'deferred';
+  readonly openingHeldShares: number;
+  readonly openingBasis: History<Cents>;
+}
+export interface RsuAccountDetails {
+  readonly employerId: string;
+  /** Share valuation assumed on January 1 of the forecast start year. */
+  readonly currentSharePriceCents: Cents;
+  readonly grants: readonly RsuGrant[];
+}
+export type AccountType = 'taxable-brokerage' | 'traditional-401k' | 'roth-401k' | 'traditional-ira' | 'roth-ira' | 'rsu';
 export interface Account {
   readonly id: string;
   readonly name: string;
@@ -97,6 +118,7 @@ export interface Account {
   readonly openingBalanceCents: Cents;
   readonly annualGrowthBps: BasisPoints;
   readonly openingIraBasis: History<Cents>;
+  readonly rsu?: RsuAccountDetails;
 }
 export type ContributionAmount = Readonly<{ kind: 'fixed'; monthlyCents: Cents }> | Readonly<{ kind: 'salary-percent'; salaryId: string; percentBps: BasisPoints }>;
 export interface ContributionRule {

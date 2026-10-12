@@ -1,6 +1,15 @@
 import { parseISODate } from './dates';
 import type { History, ValidatedPlan } from './model/plan';
 import type { Coverage, Issue } from './model/results';
+import { rsuVestingEvents } from './equity/rsu';
+
+/** Deferred awards need their actual settlement and FICA history before tax can be complete. */
+export function rsuDeferredTaxIssues(plan:ValidatedPlan,year:number):readonly Issue[] {
+  return plan.accounts.filter(account=>account.type==='rsu').flatMap(account=>account.rsu!.grants.flatMap((grant,index)=>{
+    if(grant.taxTreatment!=='deferred'||!rsuVestingEvents(grant).some(event=>event.date<=`${year}-12-31`))return [];
+    return [{code:'unsupported-rsu-deferred-settlement',recordId:account.id,year,field:`rsu.grants.${index}.taxTreatment`,severity:'warning' as const,explanation:'This RSU grant defers share delivery. Income-tax and payroll-tax timing require settlement terms and history beyond this model.',resolution:'Use settlement at each vest only if the award delivers shares then; deferred awards need a separate settlement and payroll model.'}];
+  }));
+}
 
 /** Scenario coverage is independent of whether the selected rule constants are verified. */
 export function checkCoverage(plan: ValidatedPlan, year: number): Coverage {
@@ -71,5 +80,7 @@ export function checkCoverage(plan: ValidatedPlan, year: number): Coverage {
       required(rental.qbi.ubiaCents, rental.id, 'qbi.ubiaCents');
     }
   });
+  const rsuIssues=rsuDeferredTaxIssues(plan,year);
+  if(rsuIssues.length){issues.push(...rsuIssues);completeForModeledScope=false;completeHouseholdLiability=false;}
   return { completeForModeledScope, completeHouseholdLiability, issues };
 }

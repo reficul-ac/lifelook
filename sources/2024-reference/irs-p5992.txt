@@ -1,0 +1,577 @@
+Equity (Stock) - Based
+Compensation Audit
+Technique Guide
+This document is not an official pronouncement of the law or the position of the Service and cannot be
+used, cited, or relied upon as such. This guide is current through the revision date. Since changes may
+have occurred after the revision date that would affect the accuracy of this document, no guarantees are
+made concerning the technical accuracy after the revision date.
+The taxpayer names and addresses shown in this publication are hypothetical.
+
+Audit Technique Guide Revision Date: 6/25/2024
+
+Publication 5992 (6-2024) Catalog Number 95086W Department of the Treasury Internal Revenue Service publish.no.irs.gov
+
+Table of Contents
+I.
+
+Overview ................................................................................................................. 3
+A. What is Equity-Based Compensation........................................................... 3
+B. Where to Find Information on Equity-Based Compensation ..................... 3
+C. SEC Documents ............................................................................................. 3
+D. Internal Taxpayer Documents ....................................................................... 5
+E. Stock Transfers and Awards ......................................................................... 6
+F. Potential Issues Involving Stock Options .................................................... 9
+F.1. Qualifying Dispositions ................................................................... 10
+F.2. Disqualifying Dispositions .............................................................. 10
+F.3. Annual Limitations ........................................................................... 11
+F.4. Reporting and Filing Rules .............................................................. 11
+G. Other Types of Equity-Based Compensation ............................................ 13
+G.1. Phantom Stock Plan ........................................................................ 13
+G.2. Stock Appreciation Rights .............................................................. 13
+G.3. Restricted Stock Units..................................................................... 14
+G.4. Stock Warrants................................................................................. 14
+H. Additional Resources .................................................................................. 15
+
+2
+
+I. Overview
+A. What is Equity-Based Compensation
+The term "equity-based compensation" includes any compensation paid to an
+employee, director, or independent contractor that is based on the value of specified
+stock (generally, the stock of the employer, which may be a corporation or a
+partnership). Examples of equity-based compensation include Stock Transfers,
+Stock Options, Stock Warrants, Restricted Stock, Restricted Stock Units, Phantom
+Stock Plans, Stock Appreciation Rights, and other awards whose value is based on
+the value of specified stock.
+
+B. Where to Find Information on Equity-Based Compensation
+(1) During the initial examination process, a review of relevant filings with the
+Securities and Exchange Commission (SEC) and the taxpayer's internal
+documents is a good place to start. The review of these documents may assist
+in identifying individuals who may have received equity-based compensation.
+(2) Pertinent documents for compensation purposes filed with the SEC include
+Form 10-K (Annual Report), DEF 14A (Definitive Proxy Statement), and Form 4
+(Statement of Changes in Beneficial Ownership). The individuals identified in
+the SEC reports are considered executives and directors under Security
+Exchange Act section 16(b). Once the section 16(b) executives and directors
+with equity-based compensation arrangements have been identified,
+confirmation should be made on whether all compensation related to various
+compensation plans have been reported to the recipient (on the individual's
+Form W-2 or Form 1099-MISC) and that the appropriate employment taxes
+have been withheld and paid. If the compensation awarded to the section 16(b)
+executives has not been properly recognized, the audit scope may need to be
+expanded to other executives, directors, and employees accordingly. The
+assistance of an Employment Tax Specialist and a review of the Compensation
+& Benefits (CAB) Practice Network website should be considered.
+(3) SEC filings can be downloaded from the SEC website.
+(4) The suggested SEC filings and possible taxpayer's internal documents are
+further discussed below.
+
+C. SEC Documents
+Form 10-K is the annual report filed with the SEC and provides a complete listing of
+section 16(b) executives and directors, executive compensation, and the security
+ownership of certain beneficial owners and management. Items 10, 11, and 12 of
+the Form 10-K and references to supplementary exhibits filed with the SEC may
+contain additional compensation plans for executives. These compensation plans
+3
+
+may include stock options, restricted stock, and other types of equity-based
+compensation. The plans may discuss vesting of options and vesting in the event of
+a change in control (i.e., a merger or buyout of the company). A change in control
+provision may also apply to publicly-traded partnerships that offer equity to
+employees.
+DEF 14A (Proxy Statement Pursuant to Section 14A of the SEC), better known as
+the Definitive Proxy Statement or the annual proxy statement, is the easiest place to
+look up information on executive compensation. This proxy statement is sent to the
+shareholders of record prior to the Annual Meeting and may contain information
+about specific stock options and compensation plans for executives. It is more
+detailed than Form 10-K and provides specific detail on the number of options
+granted and the total exercise price under the various plans.
+The Summary Compensation Table, found in the Definitive Proxy Statement, is the
+cornerstone of the SEC's required disclosures on executive compensation. The
+Summary Compensation Table provides a comprehensive overview of the
+company's executive pay practices. The Summary Compensation Table is followed
+by other tables and disclosures containing more specific information on the
+components of compensation for the last completed year. This disclosure includes
+information about grants of stock options, stock appreciation rights, long-term
+incentive plan awards, pension plans, employment contracts, and related
+arrangements.
+The Definitive Proxy Statement also contains the Compensation Discussion and
+Analysis (CD&A), which explains all material elements of the company's executive
+compensation programs.
+To comply with its financial reporting requirements, the company must estimate the
+value of the equity-based compensation at the time of grant. For tax purposes, the
+equity-based compensation is not reported as compensation until the vest date or
+exercise date (depending on the type of equity-based compensation at issue).
+Large discrepancies are common between the GAAP expense and the amount
+deductible for federal income tax purposes. The tables for Outstanding Equity at
+Year End and Option Exercises and Stock Vested may provide insight on where the
+discrepancies arise.
+Stock options and other equity-based incentive plans are often included as exhibits
+attached to the SEC filings in the year the plan went into effect. These plans are
+generally included in the DEF 14A filing. For example, a "2004 Stock and Incentive
+Plan" is often available in the 2004 DEF 14A. For fiscal year companies, the plans
+may be attached to the DEF 14A for the prior calendar year. The term "Incentive
+Stock Options" (ISOs) may indicate the company offers equity compensation
+intended to comply with IRC § 422. The term "Employee Stock Purchase Plan" may
+indicate the company offers equity compensation intended to comply with IRC §
+423. See the section on Statutory Stock Options for more information.
+
+4
+
+Form S-3 (Registration Statement) is a simplified security registration under the
+Securities Act of 1933. The Registration Statement requires disclosure of important
+financial information including information related to equity-based compensation.
+Form 4 (Statement of Changes in Beneficial Ownership) provides information about
+the disposition of stock either by sale or transfer. This information may indicate
+whether the shares have been transferred to a family partnership or other entity
+controlled by the shareholders, officers, and/or directors.
+
+D. Internal Taxpayer Documents
+Employment contracts may contain additional information on the types of
+compensation awarded to employees, including the right to participate in specific
+equity-based compensation plans such as the grant of stock options, phantom
+stock, stock appreciation rights, restricted stock, restricted stock units/awards, or
+other items based on the value of specified stock. It is important to review these
+contracts, even if the contents are duplicative of information contained in the SEC
+filings.
+Board of directors and compensation committee minutes should be reviewed to
+identify activities relating to the adoption of incentive compensation plans and the
+grant or vesting of stock, options, or other equity-based compensation. Reports
+issued by the compensation committee and presented to the board of directors
+should be requested and reviewed to provide insight into any equity-based
+compensation.
+The examiner should verify that plans under which statutory options may be granted
+were approved by the board of directors and the shareholders. Statutory Stock
+Option Plans require shareholder approval within 12 months before or after
+adoption by the board of directors. Statutory options include Incentive Stock Options
+(ISOs) and options granted under an Employee Stock Purchase Plan (ESPP).
+There are also shareholder approval rules related to the deduction limitation under
+IRC §162(m). There are no shareholder approval requirements under the Internal
+Revenue Code for non-statutory stock options, restricted stock, Stock Appreciation
+Rights (SARs), or phantom stock plans, except as provided in the regulations under
+IRC §162(m). See the Audit Technique Guide (ATG) for more information
+concerning IRC §162(m).
+The examiner should also verify that the taxpayer has not cancelled or reduced
+loans advanced to executives as a condition to exercise options or purchase
+restricted stock. Loan cancellations or reductions are acceptable to the extent they
+were included as additional compensation and are subject to Federal Insurance
+Contributions Act (FICA) taxes, Federal Unemployment Tax Act (FUTA), and
+Federal Income Tax Withholding (FITW). See Treasury Regulation (Treas. Reg.)
+§1.83-4(c) and Revenue Ruling (Rev. Rul.) 2004-37. Without an inclusion in the
+executives' wages, the examiner should consider whether the corporate deduction
+is allowable. See IRC § 83(h). Penalties may also be applicable for incorrect filing
+5
+
+and furnishing of Form W-2 under IRC §§ 6721, 6722, and/or 6674. Additional
+discussion of reduced loans used to acquire employer stock is found below under
+potential issues.
+
+E. Stock Transfers and Awards
+Determine if stock was actually transferred. Stock is considered "transferred" only if
+the employee has the risks and benefits of an owner. Transfer does not hinge solely
+on receipt of the stock.
+Determine if the following conditions exist:
+• Does the employee or independent contractor have voting and dividend
+rights?
+• Are restrictions placed upon the stock in the employment contracts, stock
+plans or other documents? There are many types of restrictions, but one
+example would be a restriction on the sale or transfer of the stock by the
+employee.
+• If the corporation were liquidated, does the employee or independent
+contractor have a right to a liquidation distribution?
+• Does the employee or independent contractor have the right to a gain or
+loss based on the increase or decrease in the stock's value?
+Treas. Reg. §1.83-3(a) contains several criteria and examples for deciding whether
+a transfer has occurred. For example, if a service provider (i.e., an employee or
+independent contractor) pays for stock with a nonrecourse note (a note where the
+service provider has no personal liability), the transaction may not be a transfer of
+the stock, but instead, may be considered an option to buy stock in the future
+because the service provider has made no investment and has no risk of loss. If the
+stock declines in value, the service provider can decide not to pay the note and
+forfeit the stock. In these circumstances, the service provider has not incurred the
+risk of a beneficial owner if the value of the property declines substantially.
+Determine if there was transfer of stock options to a related person. The transfer of
+compensatory stock options to related persons (of the service provider) is a "listed
+transaction." The examiner should consider issuing the Information Document
+Request for Tax Shelters and review Notice 2003-47, 2003-2 C.B. 132 for additional
+information on this type of listed transaction.
+Determine whether there has been a reduction in the purchase price of a note used
+to acquire employer stock. Historically, in declining stock markets, some employers
+have reduced the outstanding balance of a recourse note (a note where the creditor
+has the ability to hold the debtor personally responsible to repay) issued by the
+employer to the employee in satisfaction of the exercise price of an option to
+acquire the employer's stock. Under Treas. Reg. §1.83-4(c), if an indebtedness that
+has been treated as an "amount paid" (for purposes of IRC § 83 is subsequently
+6
+
+cancelled, forgiven, or satisfied) for an amount less than the amount of such
+indebtedness, the amount that is not in fact paid is includible in the gross income of
+the service provider for the taxable year in which such cancellation, forgiveness, or
+satisfaction occurs. The reduction of the outstanding balance of the note results in
+compensation income to the employee and wages are subject to FICA, FUTA, and
+FITW.
+Some taxpayers erroneously believe such a reduction is a purchase price
+adjustment under IRC §108(e)(5). If IRC §108(e)(5) applies, the employee does not
+recognize income upon the reduction of the outstanding balance of the note, but
+instead adjusts the basis of the underlying property (the acquired stock). However,
+in this case, IRC §108(e)(5) does not apply because the reduction of the
+outstanding balance of the note is a medium for payment of compensation by the
+employer to the employee, and any income resulting from the reduction is not
+income from the discharge of indebtedness to the employee. See Rev. Rul. 200437.
+Determine whether any elections pursuant to IRC §83(b) have been made and
+request records to verify these elections. An election pursuant to IRC §83(b) allows
+a recipient of restricted property to be taxed when the property is transferred instead
+of when the property actually vests (at a later date when the value may be higher).
+The election must be made no later than 30 days from the date the property is
+transferred to the service provider, with no extensions. Generally, such elections are
+handled through the employer's payroll department. Elections pursuant to IRC
+§83(b) are also common when an individual receives an interest in a partnership or
+receives equity before an entity makes an Initial Public Offering (IPO). See Rev.
+Proc. 2012-29 for a model election pursuant to IRC §83(b).
+Determine whether any elections pursuant to IRC § 83(i) have been made and
+request records to verify these elections. For stock options exercised or Restricted
+Stock Units (RSUs) settled after December 31, 2017, employees of startup
+companies can make an election under IRC § 83(i) so that no amount will be
+included in income of the employee for the first taxable year in which the rights of
+the employee in such stock are transferable or are not subject to a substantial risk
+of forfeiture, whichever is applicable. Under IRC § 83(i), income taxation is deferred
+by the employee until the earlier of (1) five years after the first date the rights of the
+employee in such stock are transferable or are not subject to a substantial risk of
+forfeiture, whichever occurs earlier; (2) the first date any qualified stock becomes
+transferable (including becoming transferable to the employer); (3) the date the
+employee first becomes an “excluded employee;” (4) the first date on which any
+stock of the corporation that issued the qualified stock becomes readily tradable on
+an established securities market; or (5) the date on which the employee revokes an
+election to treat a grant as a qualified equity grant under IRC § 83(i). An election
+under IRC § 83(i) may be made only if no stock of the corporation is readily tradable
+on an established securities market, and the corporation has a written plan under
+which not less than 80% of all employees who are granted stock options or RSUs
+with the same rights and privileges to receive qualified stock. An election with
+7
+
+respect to qualified stock must be made no later than 30 days after the first date the
+rights of the employee in such stock are transferable or are not subject to a
+substantial risk of forfeiture, whichever occurs earlier. An election under IRC § 83(i)
+is made in a manner similar to an election made under IRC § 83(b). Please see
+Notice 2018-97 for additional guidance on the application of IRC § 83(i).
+The examiner should verify that employment taxes have been properly withheld with
+respect to restricted property for which an IRC §83(b) election was made, if
+applicable. In addition, the examiner should verify that the corporate deduction
+matches the amount included (if any) in the service provider's income.
+Elections pursuant to IRC §83(b) and stock options. On occasion, a service provider
+may try to make an election pursuant to IRC §83(b) on the receipt of stock options.
+An election with respect to an option is usually void because an election pursuant to
+IRC §83(b) may be made only with respect to property that has been transferred.
+Options without a readily ascertainable fair market value (FMV) are not property
+within the meaning of IRC §83. However, if the stock purchased pursuant to the
+exercise of an option is subject to a substantial risk of forfeiture, the service provider
+may make an IRC §83(b) election with respect to the stock received pursuant to the
+exercise of the option.
+Determining whether a substantial risk of forfeiture exists depends on the facts and
+circumstances. Generally, a substantial risk of forfeiture exists only if rights in
+property that are transferred are conditioned, directly or indirectly, upon the future
+performance (or refraining from performance) of substantial services by any person,
+or upon the occurrence of a condition related to a purpose of the transfer. Property
+is not considered transferred if it is subject to a substantial risk of forfeiture, and at
+the time of transfer, the facts and circumstances demonstrate that the forfeiture
+condition is unlikely to be enforced. See Treas. Reg. §1.83-3(c) for the definition
+and examples of substantial risks of forfeiture.
+If there is a transfer of property, the examiner must determine if there is a
+substantial risk of forfeiture, and if so, compensation should be recognized once the
+substantial risk of forfeiture has lapsed (assuming no election pursuant to IRC
+§83(b) was made). The corporation is entitled to a corresponding deduction unless
+disallowed by IRC §§ 162(m) or 280G. (see IRC §83(h).
+• Section 16b Executives. Individual(s) that qualify as an executive under
+section 16(b) of the Securities Exchange Act of 1934 may be subject to
+suit if the executive sells the stock at a profit within six months after the
+purchase of the stock. These individual's rights in the property are treated
+as subject to a substantial risk of forfeiture and is not transferable until the
+earlier of (i) the expiration of such six-month period, or (ii) the first day on
+which the sale of such property at a profit will not subject the individual to
+suit under section 16(b) of the Securities Exchange Act of 1934.
+• Lapse Restrictions. Lapse Restrictions are restrictions other than nonlapse restrictions (see below) and include restrictions that carry a
+substantial risk of forfeiture. A "lapse" restriction prevents the transfer of
+8
+
+restricted stock until a specific date after which the stock may be sold
+outright such as a requirement that the employee perform services for one
+year. See Treas. Reg. §1.83-3(i).
+• Non-Lapse Restrictions. Non-Lapse Restrictions will never lapse and
+requires the holder of the stock to sell, or offer to sell, the stock at a price
+determined under a formula. Non-Lapse Restrictions are not considered
+substantial risks of forfeiture and never postpone the recognition of
+income. Therefore, the service provider recognizes income immediately
+upon grant and the company is allowed a deduction. A Non-Lapse
+Restriction is not dependent upon the service provider performing services
+for a specified number of years. Rather, the restriction will terminate upon
+the occurrence of a specific event such as a change in control, termination
+of employment, or death of the service provider. A common Non-Lapse
+Restriction (generally with a non-public employer) is when an employer
+requires the employee to sell the stock back to the employer at book value
+whenever the employee wishes to dispose of it for any reason. In this
+case, book value will be considered FMV when determining the amount
+included as compensation in the service provider's gross income. The
+employee will recognize as compensation the difference between book
+value and any amount paid for the stock. See IRC §83(d) and Treas. Reg.
+§§ 1.83-3(h) and 1.83-5.
+Dividends from restricted stock. If an employee or independent contractor receives
+dividends or other income from substantially non-vested restricted stock, the
+amounts are (1) considered additional compensation to the individual and must be
+included in income, (2) are subject to employment taxes, and (3) may be deductible
+by the corporation. See Treas. Reg. §§ 1.83-1(a)(1) and 1.83-1(f), Example (1).
+However, if the employee makes an election pursuant to IRC §83(b), the dividends
+are treated as dividend income rather than compensation. Once the restricted stock
+award vests, the dividends are treated as dividend income rather than
+compensation.
+
+F. Potential Issues Involving Stock Options
+To determine if there is an issue with stock options, the examiner must determine
+the type of stock option received by the individual. Generally, the options received
+by executives are called "Non-Statutory Options." Employers have much more
+discretion in granting Non-Statutory Options as compared to Statutory Options.
+Statutory Options include Incentive Stock Options (ISOs) as described in IRC § 422
+and options granted under an Employee Stock Purchase Plan (ESPP) as described
+in IRC § 423.
+Statutory Stock Options include ISO's and options granted under an ESPP that can
+only be granted to employees. The exercise of Statutory Options does not result in
+income (compensation) or income tax to the employee, and the employer may not
+9
+
+take a compensation deduction. Employment taxes such as FICA, FUTA, and FITW
+do not apply upon the exercise of an ISO or ESPP option. See Notice 2002-47,
+2002-2 C.B. 97 (this notice was provided for a moratorium on the assessment of
+FICA, FUTA, and FITW on either the exercise of a statutory stock option or the
+disposition of stock acquired by an employee pursuant to the exercise of a statutory
+stock option), IRC §§3121(a)(22), 3306(b)(19), and 421(b). For information
+regarding employment taxes, see Notice 2002-47.
+The examiner should review the terms of a Statutory Stock Option and verify that it
+is not allowable for it to be treated any other way than as a Statutory Stock Option.
+If the executive is allowed to convert it to something other than a Statutory Stock
+Option, then the option is considered a Non-Statutory Stock Option, subject to
+FICA, FUTA and FITW at the time of exercise (Rev. Rul. 78-185, 1978-1 C.B. 304).
+
+F.1. Qualifying Dispositions
+A qualifying disposition occurs when the employee holds the stock for at least two
+years from the date of grant and one year from the date of exercise. If the specific
+holding period requirements are met, then the employee recognizes capital gain (or
+loss) on disposition of the stock (but there is still no deduction for the employer).
+Special rules apply to a qualifying disposition of stock acquired under an ESPP if
+the option's exercise price was less than the share's FMV when the option was
+granted. Per IRC § 423(c), the employee recognizes compensation income equal to
+the lesser of:
+•
+
+the excess of the FMV of the share on the date of its disposition over the
+amount paid for the share, or
+
+•
+
+The excess of the share on the option’s grant date over the exercise
+price.
+
+If the option price is not fixed and determinable at the time the option is granted, the
+option price will be computed as if the option had been exercised on the grant date.
+See Treas. Reg. § 1.423-2(k)(1)(ii). This compensation income is not subject to
+FICA, FUTA or FITW. See Notice 2002-47. Any additional gain on the disposition of
+the stock is characterized as capital gain. See IRC § 423(c). The employer receives
+no tax deduction for the compensation recognized by the employee under this
+special rule. See Treas. Reg. § 1.423-2(k)(1)(iii).
+
+F.2. Disqualifying Dispositions
+A failure to meet the holding period requirements results in a disqualifying
+disposition of the stock purchased by exercising a Statutory Stock Option. In that
+event, the employee has compensation (ordinary income) on the date of the
+disqualifying disposition equal to the difference between the exercise price and FMV
+of the underlying stock on the date of exercise. If the stock at issue was restricted
+10
+
+(i.e., subject to a substantial risk of forfeiture) the income is the difference between
+the exercise price and the FMV on the date the restriction lapsed. In the event of a
+disqualifying disposition, the employer is entitled to a corresponding wage
+deduction.
+Pursuant to Treas. Reg. § 1.6041-2(a)(1), the compensation from a disqualifying
+disposition is considered wages, should be reported on the employee's Form W-2,
+and is deductible on the employer's income tax return. However, the income from
+disqualifying dispositions is not subject to FICA, FUTA or FITW. For information
+regarding employment taxes, see Notice 2002-47.
+
+F.3. Annual Limitations
+There is a $100,000 annual limitation on the value of an employee's ISO that may
+become exercisable for the first time during any calendar year. See IRC § 422(d).
+This limit is determined based on the FMV of the stock at the time the option is
+granted and not at the time the option vests. To the extent in which an ISO is
+exercisable for the first time (first day the FMV exceeds $100,000), the excess
+amount over $100,000 is treated as a Non-Statutory Option, subject to all
+employment tax rules governing those options. At the time of exercise, this results
+in ordinary income to the employee and a wage deduction to the employer. See
+Treas. Reg. § 1.422-4 for rules related to the $100,000 rule. See IRC § 422(c)(5) for
+the special rules for a 10% owner.
+For options granted under an ESPP, no employee is permitted to accrue the right to
+purchase stock of the employer that exceeds $25,000 of the FMV of the stock
+(determined when the options are granted) for each calendar year in which the
+option is outstanding. See IRC § 423(b) (8) and Treas. Reg. §1.423-2(i).
+
+F.4. Reporting and Filing Rules
+In addition to issuing a Form W-2, an employer has an information reporting
+requirement under IRC § 6039 following the exercise of a statutory option. IRC §
+6039 requires corporations to furnish a written statement to each employee on or
+before January 31 of the year following the year for which the statement is required
+regarding:
+• The transfer of stock to the employee pursuant to the exercise of an ISO
+after December 31, 2009, shall be reported on Form 3921. With respect to
+the exercise of an option under an ESPP after December 31, 2009, the
+transfer of stock to the employee is reported on Form 3922. IRC § 6039
+also requires corporations to file an information return with the IRS.
+• The corporation's transfer of stock pursuant to the employee's exercise of
+an ISO; and
+
+11
+
+• The corporation's (or its agent's) recording the first transfer of the legal title
+of a share of stock acquired by the employee pursuant to the exercise of
+an ESPP option described in IRC § 423(c).
+Non-Statutory Stock Options generally result in ordinary income and wages on the
+date of exercise or other disposition (Rev. Rul. 78-185). The corporation is generally
+entitled to a corresponding deduction under IRC § 83(h), unless disallowed under
+IRC §§ 162(m) and 280G. Non-statutory options with an exercise price less than the
+FMV on the date of grant (a "discounted option") may be subject to IRC § 409A.
+See final regulations under IRC § 409A.
+Non-Statutory Stock Options do not fall under the wage exclusions provided under
+IRC §§ 3121(a)(22) or 3306(b)(19) and are not subject to the moratorium under
+Notice 2002-47. Special rules apply to an option with a readily ascertainable FMV.
+Generally, the company can provide a Non-Statutory Stock Option report which
+should show, by employee, the option grant date, exercise date, employment taxes
+withheld, and the type of information return furnished. This report may be used to
+reconcile the tax deduction on the company's tax return Schedule M-3 to the Forms
+W-2 issued to the employees. Former employees' compensation should be reported
+on Form W-2. A reconciliation should be requested for some of the larger exercises
+to the employee's reported option income in Box 1 and Box 12, code V of Form W2. Extra steps must be taken to reconcile deductions to the proper year for
+companies with a fiscal year end. Discrepancies in the reconciliations may indicate
+an income or employment tax issue.
+Income from qualified equity grants under IRC § 83(i) should be reported on Form
+W-2, box 12 with code GG. Aggregate deferrals under IRC § 83(i) elections as of
+the close of the calendar year should be reported on Form W-2, box 12 with code
+HH.
+If the options are offered to directors, ascertain whether a Form 1099 was issued.
+This option income should be reported on the director's individual tax return (e.g.
+Schedule C or on Form 1040, line 8, Other Income and on Schedule 1, line 8k),
+along with self-employment tax upon exercise or other disposition.
+Determine that all appropriate FICA, FUTA, and FITW are deposited. If the
+employment taxes equal or exceed $100,000 on any day during a deposit period,
+the company is required to deposit the tax by the next banking day, regardless of
+whether they are a monthly or semi-weekly depositor. If there are large Schedule M3 adjustments for options exercised and if the deposit schedule doesn't vary,
+consult with an Employment Tax Specialist for guidance on pursuing a possible
+Failure to Deposit Penalty under IRC § 6656.
+
+12
+
+G. Other Types of Equity-Based Compensation
+G.1. Phantom Stock Plan
+A Phantom Stock Plan is an arrangement under which deferred amounts are
+determined by a reference to hypothetical "phantom" shares of the employer's stock
+without ever issuing the actual shares to the employee. Depending on the terms of
+the arrangement, the employee may be entitled to receive only the growth in the
+value of the stock between the time the employer awards the phantom shares and
+the time the employee cashes out the shares. Alternatively, the employee may be
+entitled to receive the entire value of the stock as well as any dividends paid from
+the time the employer grants the phantom shares. The employer does not hold
+actual shares of stock for the employee, but depending on the terms of the plan, the
+employee may be paid in actual shares or in cash at the time of the cash-out.
+Despite their name, Phantom Stock Plans are Non-Qualified Deferred
+Compensation (NQDC) arrangements, not stock arrangements. IRC § 3121(v)(2)
+provides that an arrangement is a NQDC if the employee has a legally binding right
+in a calendar year to the cash value of a certain number of shares that is to be paid
+in a later calendar year. Typically, the individual is entitled to receive the cash value
+of the number of phantom shares that have been credited to the individual's account
+upon termination of employment. The examiner should determine if the company
+engages in such practices and if so, obtain an understanding of the terms of the
+arrangement. See the final regulations under IRC § 409A, which are applicable to
+NQDC arrangements.
+IRC § 3121(v)(2) deals with treatment of certain deferred compensation & salary
+reduction arrangements specifically the treatment of certain nonqualified deferred
+compensation plans. Treas. Reg. § 31.3121(v)(2)-1(b)(4)(ii) discusses plans,
+arrangements, and benefits that do not provide for the deferral of compensation
+such as stock options, stock appreciation rights, and other stock value rights. Treas.
+Reg. § 31.3121(v)(2)-1(b)(5) example 8 provides a special timing rule for
+nonqualified deferred compensation, which may include phantom stock. Under the
+special timing rule the FMV of the phantom stock is wages at the time credited to
+the employee's account (when it is vested). If "taken into account" when credited to
+the employee's account, then any appreciation in the value of the stock is not FICA
+wages when the executive cashes-out the phantom stock. However, such
+appreciation is income to the employee and subject to FITW.
+
+G.2. Stock Appreciation Rights
+Stock Appreciation Rights are another method of compensating employees or
+independent contractors. A Stock Appreciation Right (SAR) is an arrangement,
+during a specified period, which the employee has the right to receive the increased
+value of the employer's stock by cashing out or exercising the SAR. The employee
+can only benefit from the appreciation in the value of the stock; therefore, a taxable
+13
+
+event does not take place until the exercise of a SAR. The amount received upon
+exercise of the SAR is includible in the employee's income, constitutes wages, and
+creates a deduction to the employer at that time. See Rev. Rul. 80-300, 1980-2 C.B.
+165, Rev. Rul. 82-121, 1982-1 C.B. 79, and Treas. Reg. § 1.451-2(a). Stock
+appreciation rights are NOT deferred compensation subject to the special timing
+rule under IRC § 3121(v)(2). See Treas. Reg. § 31.3121(v)(2)-1(b)(4)(ii). However, if
+the terms of the SAR limit the amount that an employee may receive upon exercise,
+the IRS has ruled income has been constructively received in the tax year in which
+the maximum limit has been attained. See Private Letter Ruling (PLR) 8104119. In
+addition, an employee who fails to exercise a SAR has constructively received the
+value of stock at the end of its term. See PLR 8120103.
+
+G.3. Restricted Stock Units
+Restricted Stock Units are unsecured, unfunded promises to pay cash or stock in
+the future and are considered nonqualified deferred compensation subject to IRC §§
+3121(v)(2), 451 and 409A. Typically, one Restricted Stock Unit represents one
+share of actual stock. Restricted Stock Units generally are not taxable at grant if
+they meet the requirements of, or otherwise are exempt from, IRC §§ 451 and
+409A. Generally, a taxable event does not take place until the vesting of the
+Restricted Stock Unit. In addition, Restricted Stock Units are not considered
+property for purposes of IRC § 83 since no actual property has been transferred,
+and therefore an IRC § 83(b) election cannot be made with respect to the grant of a
+Restricted Stock Unit.
+• Restricted Stock Units Settled with Stock. A Restricted Stock Unit payable
+in stock is similar to a Restricted Stock Award, except that the employer
+does not transfer the stock to the employee until the Restricted Stock Unit
+vests. Restricted Stock Units settled in stock are subject to IRC §§ 451
+and 409A (unless they satisfy an exception) but are not subject to IRC §83
+at grant. Restricted Stock Units settled in stock are subject to IRC §83
+only when the stock is actually transferred to the employee. Typically, the
+value of the stock transferred is includable in the income of the service
+provider and a corresponding deduction allowed to the service recipient.
+• Restricted Stock Units Settled with Cash. A Restricted Stock Unit payable
+in cash is an arrangement under which the employee has the right to
+receive the value of the unit on the date the unit vests. Restricted Stock
+Units payable in cash are never subject to IRC §83 because no property is
+ever transferred. The amount of cash received upon vesting of the
+Restricted Stock Unit is includible in income of the service provider and a
+corresponding deduction is allowed to the service recipient.
+
+G.4. Stock Warrants
+
+14
+
+Stock Warrants are similar to stock options. They are certificates that allow the
+owner to purchase a specified number of shares, at a specified time, for a specified
+price. Stock options are normally granted to employees and other service providers,
+whereas warrants are typically granted to non-employees (including outside
+investors). They are typically options to purchase stock over a long period and are
+freely transferable instruments. See Black's Law Dictionary 1617 (8th ed. 2004).
+Generally, warrants are not compensatory for tax purposes; however, some options
+may be incorrectly referred to as "warrants." Depending upon the facts and
+circumstances, the warrants that are actually issued in exchange for, or in
+connection with, performance of services should be subject to taxation under IRC §
+83. To determine if proper tax treatment and consideration was given, a copy of the
+stock warrant agreement and underlying plan documentation (if any) should be
+obtained.
+
+H. Additional Resources
+Technical questions may be submitted to the Compensation & Benefits Practice
+Network on the CAB PN SharePoint site. Please use the “Submit an Inquiry” link to
+submit a formal request for assistance.
+
+15
+
+

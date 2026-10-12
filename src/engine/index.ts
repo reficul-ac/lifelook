@@ -4,6 +4,8 @@ export { summarizeYear, summarizeProjectionYear } from './reporting';
 export { createPlan, validatePlan } from './validation';
 export { loadRuleSet } from './rules/registry';
 export { initializePurchaseLoan, defaultRentalAllocation } from './property/input-defaults';
+export { rsuVestingEvents, projectRsuAccounts } from './equity/rsu';
+export type * from './equity/rsu';
 export type { PurchaseLoanInput } from './property/input-defaults';
 export type * from './model/plan';
 export type * from './model/results';

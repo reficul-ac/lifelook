@@ -6,6 +6,7 @@ import type { PropertyYearFacts } from '../property/facts';
 import type { YearRules } from '../rules/types';
 import type { PreIraFacts } from './facts';
 import type { WorkplaceYear } from './workplace';
+import type { RentalLossYear } from './rental-losses';
 
 export const sumCents = (values: readonly Cents[]): Cents => settleCents(values.reduce((sum, value) => sum.plus(value), new Decimal(0)));
 export function mapAvailableCents(value: Available<Cents>, transform: (value: Cents) => Cents): Available<Cents> { return value.status === 'available' ? { status: 'available', value: transform(value.value) } : value; }
@@ -32,4 +33,14 @@ export function buildPreIraFacts(cash: CashYear, workplace: WorkplaceYear, prope
 /** Form8582 and FTB3801 line6 exclude passive income/loss and restore IRA deductions. */
 export function passiveAllowanceMagi(facts: PreIraFacts, _rules: YearRules): Available<Cents> {
   return mapAvailableCents(facts.nonRentalFederalAgiCents, value => sumCents([value, facts.adjustments.traditionalIraDeductionCents, facts.adjustments.passiveMagiAddbacksCents]));
+}
+/** Pub590-A: deductible-IRA MAGI retains allowed rental results and restores IRA deduction. */
+export function traditionalIraMagi(facts: PreIraFacts, rental: RentalLossYear, _rules: YearRules): Available<Cents> {
+  const allowed = rental.federal.status === 'available' ? { status: 'available' as const, value: rental.federal.value.allowedRentalCents } : rental.federal;
+  return combineAvailableCents([facts.nonRentalFederalAgiCents, allowed], values => sumCents([...values, facts.adjustments.traditionalIraDeductionCents, facts.adjustments.traditionalMagiAddbacksCents]));
+}
+/** Worksheet2-1 reconstructs AGI before IRA deduction, including its allowed passive-loss result. */
+export function rothIraMagi(facts: PreIraFacts, rental: RentalLossYear, _rules: YearRules): Available<Cents> {
+  const allowed = rental.federal.status === 'available' ? { status: 'available' as const, value: rental.federal.value.allowedRentalCents } : rental.federal;
+  return combineAvailableCents([facts.nonRentalFederalAgiCents, allowed], values => sumCents([...values, facts.adjustments.traditionalIraDeductionCents, facts.adjustments.rothMagiAddbacksCents]));
 }

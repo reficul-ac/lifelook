@@ -3,6 +3,7 @@ import type { Available, Issue } from '../model/results';
 import type { RentalYearFacts } from '../property/facts';
 import type { RentalLossYear } from './rental-losses';
 import type { WorkplaceYear } from './workplace';
+import { combineAvailableCents, mapAvailableCents, sumCents } from './modified-income';
 
 export interface ContributionRecord {
   readonly ruleId: string;
@@ -88,4 +89,16 @@ export interface ResolvedTaxFacts {
   readonly workplace: WorkplaceYear;
   readonly preIra: PreIraFacts;
   readonly issues: readonly Issue[];
+}
+/** Final tax facts retain every named income definition and separate AMT books. */
+export function buildResolvedTaxFacts(preIra: PreIraFacts, rental: RentalLossYear, ira: IraYear, workplace: WorkplaceYear): ResolvedTaxFacts {
+  const rentalAmount = (value: RentalLossYear['federal']): Available<Cents> => value.status === 'available' ? { status: 'available', value: value.value.allowedRentalCents } : value;
+  const federalRentalCents = rentalAmount(rental.federal);
+  const californiaRentalCents = rentalAmount(rental.california);
+  const federalAgiCents = combineAvailableCents([preIra.nonRentalFederalAgiCents, federalRentalCents, ira.federalDeductibleCents], values => sumCents([values[0]!, preIra.adjustments.traditionalIraDeductionCents, values[1]!, -values[2]!]));
+  const californiaAgiCents = combineAvailableCents([preIra.nonRentalCaliforniaAgiCents, californiaRentalCents, ira.californiaDeductibleCents], values => sumCents([values[0]!, preIra.adjustments.traditionalIraDeductionCents, values[1]!, -values[2]!]));
+  const federalAmtIncomeCents = combineAvailableCents([preIra.nonRentalFederalAgiCents, rentalAmount(rental.federalAmt), ira.federalDeductibleCents], values => sumCents([values[0]!, preIra.adjustments.traditionalIraDeductionCents, values[1]!, -values[2]!]));
+  const californiaAmtIncomeCents = combineAvailableCents([preIra.nonRentalCaliforniaAgiCents, rentalAmount(rental.californiaAmt), ira.californiaDeductibleCents], values => sumCents([values[0]!, preIra.adjustments.traditionalIraDeductionCents, values[1]!, -values[2]!]));
+  const passiveAllowanceMagiCents = mapAvailableCents(preIra.nonRentalFederalAgiCents, value => sumCents([value, preIra.adjustments.traditionalIraDeductionCents, preIra.adjustments.passiveMagiAddbacksCents]));
+  return { year: preIra.year, filers: preIra.filers, federalAgiCents, californiaAgiCents, federalAmtIncomeCents, californiaAmtIncomeCents, federalRentalCents, californiaRentalCents, saltMagiCents: federalAgiCents, niitMagiCents: federalAgiCents, niitOtherIncomeCents: preIra.niitOtherIncomeCents, traditionalIraMagiCents: ira.traditionalMagiCents, rothIraMagiCents: ira.rothMagiCents, passiveAllowanceMagiCents, rental, ira, workplace, preIra, issues: [...preIra.issues, ...rental.issues, ...ira.issues] };
 }

@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 export interface ReferenceCase<I, O> {
   readonly id: string;
@@ -12,7 +13,7 @@ export interface ReferenceCase<I, O> {
 }
 export function loadReferences<I = unknown, O = unknown>(suite: string): readonly ReferenceCase<I, O>[] {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(suite)) throw new Error(`Invalid reference suite: ${suite}`);
-  const candidates = ['math', 'tax'].map(kind => new URL(`../../fixtures/${kind}/${suite}.json`, import.meta.url)).filter(existsSync);
+  const candidates = ['math', 'tax'].map(kind => resolve(process.cwd(), 'fixtures', kind, `${suite}.json`)).filter(existsSync);
   if (candidates.length !== 1) throw new Error(`Expected one fixture suite for ${suite}; found ${candidates.length}`);
   const parsed: unknown = JSON.parse(readFileSync(candidates[0]!, 'utf8'));
   const cases = Array.isArray(parsed) ? parsed : (parsed as { cases?: unknown }).cases;

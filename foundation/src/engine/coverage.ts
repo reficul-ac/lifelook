@@ -54,6 +54,7 @@ export function checkCoverage(plan: ValidatedPlan, year: number): Coverage {
     required(rental.activeParticipation, rental.id, 'activeParticipation');
     if (rental.convertedFromPersonalUse) required(rental.conversionBuildingFmv, rental.id, 'conversionBuildingFmv');
     Object.entries(rental.qualifications).forEach(([field, answer]: [string, History<boolean>]) => {
+      if (field === 'californiaSmallBusinessQualification') return;
       required(answer, rental.id, `qualifications.${field}`);
       if (answer.known && (field === 'advancedBasisAdjustments' ? answer.value : !answer.value)) add('unsupported-tax-case', rental.id, `qualifications.${field}`, 'This rental qualification is outside the ordinary residential long-term rental contract.', 'Provide supported qualification or basis history before calculating dependent rental taxes.');
     });

@@ -1,0 +1,4140 @@
+[
+  {
+    "id": "home-adu-separated-cash-and-tax",
+    "taxYear": 2026,
+    "sources": [
+      {
+        "url": "https://www.irs.gov/publications/p527",
+        "publicationYear": 2025,
+        "applicableYear": 2026,
+        "reviewDate": "2026-10-12",
+        "method": "Residential straight-line method, mid-month service convention, building-only basis and reasonable shared cost allocation"
+      },
+      {
+        "url": "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html",
+        "publicationYear": 2025,
+        "applicableYear": 2026,
+        "reviewDate": "2026-10-12",
+        "method": "Independent California depreciation basis and adjustment books"
+      }
+    ],
+    "input": {
+      "plan": {
+        "schemaVersion": 1,
+        "id": "property-reference",
+        "revision": 0,
+        "startYear": 2026,
+        "horizonYears": 1,
+        "openingCashCents": 0,
+        "household": {
+          "filingStatus": "married-joint",
+          "residence": "CA-full-year",
+          "currency": "USD",
+          "filers": [
+            {
+              "id": "owner-a",
+              "name": "Filer A",
+              "birthDate": {
+                "known": true,
+                "value": "1980-01-01"
+              },
+              "workplaceCoverage": {
+                "known": true,
+                "value": false
+              },
+              "coverageByYear": [],
+              "employerAssumptionsByYear": []
+            },
+            {
+              "id": "owner-b",
+              "name": "Filer B",
+              "birthDate": {
+                "known": true,
+                "value": "1982-01-01"
+              },
+              "workplaceCoverage": {
+                "known": true,
+                "value": false
+              },
+              "coverageByYear": [],
+              "employerAssumptionsByYear": []
+            }
+          ],
+          "coverageAnswers": {
+            "additionalIncome": {
+              "known": true,
+              "value": false
+            },
+            "additionalCredits": {
+              "known": true,
+              "value": false
+            },
+            "qualifiedDividendsOrCapitalGains": {
+              "known": true,
+              "value": false
+            },
+            "retirementDistributions": {
+              "known": true,
+              "value": false
+            },
+            "priorFederalMinimumTaxCredits": {
+              "known": true,
+              "value": false
+            },
+            "priorCaliforniaMinimumTaxCredits": {
+              "known": true,
+              "value": false
+            }
+          }
+        },
+        "taxPolicy": {
+          "baselineYear": 2026,
+          "futureIndexGrowthBps": 0,
+          "actualStateTaxPaidByYear": []
+        },
+        "salaries": [],
+        "otherIncome": [],
+        "expenses": [
+          {
+            "id": "property-tax",
+            "name": "property-tax",
+            "amountCents": 100001,
+            "frequency": "annual",
+            "startDate": "2026-01-01",
+            "annualGrowthBps": 0,
+            "propertyId": "home",
+            "use": "shared",
+            "taxCategory": "property-tax"
+          },
+          {
+            "id": "insurance",
+            "name": "insurance",
+            "amountCents": 10000,
+            "frequency": "annual",
+            "startDate": "2026-01-01",
+            "annualGrowthBps": 0,
+            "propertyId": "home",
+            "use": "shared",
+            "taxCategory": "homeowners-insurance"
+          },
+          {
+            "id": "repair",
+            "name": "repair",
+            "amountCents": 10000,
+            "frequency": "monthly",
+            "startDate": "2026-01-01",
+            "annualGrowthBps": 0,
+            "propertyId": "home",
+            "use": "rental",
+            "taxCategory": "repair",
+            "rentalId": "adu"
+          }
+        ],
+        "accounts": [],
+        "contributions": [],
+        "debts": [],
+        "properties": [
+          {
+            "id": "home",
+            "name": "Home with available ADU",
+            "role": "primary-with-adu",
+            "purchaseDate": "2026-01-01",
+            "purchasePriceCents": 50000000,
+            "downPaymentCents": 0,
+            "openingValueCents": 80000000,
+            "appreciationBps": 0,
+            "appreciationOverrides": [],
+            "primaryArea": 1500,
+            "aduArea": 500,
+            "loans": []
+          }
+        ],
+        "rentals": [
+          {
+            "id": "adu",
+            "propertyId": "home",
+            "monthlyRentCents": 100000,
+            "rentGrowthBps": 0,
+            "rentStartDate": "2026-07-01",
+            "availableDate": "2026-01-01",
+            "activeParticipation": {
+              "known": true,
+              "value": true
+            },
+            "loanAllocations": [],
+            "qualifications": {
+              "longTermFairMarketLease": {
+                "known": true,
+                "value": true
+              },
+              "noPersonalUse": {
+                "known": true,
+                "value": true
+              },
+              "noSubstantialTenantServices": {
+                "known": true,
+                "value": true
+              },
+              "ordinaryResidential": {
+                "known": true,
+                "value": true
+              },
+              "advancedBasisAdjustments": {
+                "known": true,
+                "value": false
+              }
+            },
+            "convertedFromPersonalUse": false,
+            "conversionBuildingFmv": {
+              "known": false
+            },
+            "taxHistory": {
+              "federal": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "federal-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "qbi": {
+              "qualification": {
+                "known": true,
+                "value": true
+              },
+              "wagesCents": {
+                "known": true,
+                "value": 0
+              },
+              "ubiaCents": {
+                "known": true,
+                "value": 33000000
+              },
+              "openingLossVintages": {
+                "known": true,
+                "value": []
+              }
+            }
+          }
+        ]
+      },
+      "cash": {
+        "year": 2026,
+        "months": [
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 120001,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 1,
+            "date": "2026-01"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 2,
+            "date": "2026-02"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 3,
+            "date": "2026-03"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 4,
+            "date": "2026-04"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 5,
+            "date": "2026-05"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 6,
+            "date": "2026-06"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 7,
+            "date": "2026-07"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 8,
+            "date": "2026-08"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 9,
+            "date": "2026-09"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 10,
+            "date": "2026-10"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 11,
+            "date": "2026-11"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 12,
+            "date": "2026-12"
+          }
+        ],
+        "annual": {
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 600000,
+          "grossIncomeCents": 600000,
+          "expensesCents": 230001,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        "streams": [
+          {
+            "id": "insurance",
+            "kind": "expense",
+            "months": [
+              10000,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "annualCents": 10000,
+            "propertyId": "home"
+          },
+          {
+            "id": "property-tax",
+            "kind": "expense",
+            "months": [
+              100001,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "annualCents": 100001,
+            "propertyId": "home"
+          },
+          {
+            "id": "repair",
+            "kind": "expense",
+            "months": [
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000
+            ],
+            "annualCents": 120000,
+            "propertyId": "home"
+          },
+          {
+            "id": "adu",
+            "kind": "rent",
+            "months": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              100000,
+              100000,
+              100000,
+              100000,
+              100000,
+              100000
+            ],
+            "annualCents": 600000,
+            "propertyId": "home"
+          }
+        ],
+        "wages": [],
+        "salaryPeriods": [],
+        "positiveGrossCashByMonth": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100000,
+          100000,
+          100000,
+          100000,
+          100000,
+          100000
+        ]
+      },
+      "loans": [],
+      "opening": {
+        "year": 2025,
+        "rentals": {
+          "adu": {
+            "federal": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 33000000,
+                "adjustedBuildingBasisCents": 33000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            },
+            "california": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 33000000,
+                "adjustedBuildingBasisCents": 33000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            },
+            "federal-amt": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 33000000,
+                "adjustedBuildingBasisCents": 33000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            },
+            "california-amt": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 33000000,
+                "adjustedBuildingBasisCents": 33000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            }
+          }
+        },
+        "qbiLossVintages": {
+          "adu": {
+            "known": true,
+            "value": []
+          }
+        },
+        "iraBasisByOwner": {
+          "owner-a": {
+            "known": true,
+            "value": 0
+          },
+          "owner-b": {
+            "known": true,
+            "value": 0
+          }
+        },
+        "minimumTaxCreditCoverage": {
+          "federal": {
+            "known": true,
+            "value": false
+          },
+          "california": {
+            "known": true,
+            "value": false
+          }
+        }
+      },
+      "rules": {
+        "year": 2026,
+        "ruleVersion": "property-2026-reference",
+        "baselineYear": 2026,
+        "federal": {
+          "brackets": [
+            {
+              "upperCents": null,
+              "rateBps": 0
+            }
+          ],
+          "standardDeductionCents": 0,
+          "additionalStandardDeductionPerFilerCents": 0,
+          "ageDeductionMinimumAge": 65,
+          "seniorDeduction": {
+            "perFilerCents": 0,
+            "minimumAge": 65,
+            "phaseoutStartCents": 0,
+            "reductionBps": 0
+          },
+          "salt": {
+            "capCents": 0,
+            "phaseoutStartCents": 0,
+            "reductionBps": 0,
+            "floorCents": 0
+          },
+          "itemized": {
+            "restrictionNumerator": 0,
+            "restrictionDenominator": 37,
+            "thresholdCents": 0
+          },
+          "mortgage": {
+            "post2017LimitCents": 0,
+            "pre2017LimitCents": 0,
+            "cutoffDate": "2017-12-15"
+          },
+          "mortgageInsurance": {
+            "allowed": false,
+            "phaseoutStartCents": 0,
+            "phaseoutStepCents": 100000,
+            "reductionBps": 0
+          },
+          "amt": {
+            "exemptionCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutBps": 0,
+            "rateSplitCents": 0,
+            "lowerRateBps": 0,
+            "upperRateBps": 0
+          },
+          "passive": {
+            "allowanceCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutEndCents": 0,
+            "reductionBps": 0
+          },
+          "niit": {
+            "thresholdCents": 0,
+            "rateBps": 0
+          },
+          "qbi": {
+            "deductionBps": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutEndCents": 0,
+            "wageOnlyLimitBps": 0,
+            "wageMixedLimitBps": 0,
+            "ubiaLimitBps": 0,
+            "minimumDeductionCents": 0,
+            "minimumQbiCents": 0
+          },
+          "rental": {
+            "recoveryPeriodMonths": 330,
+            "convention": "mid-month",
+            "amtPre1999RecoveryPeriodMonths": 480,
+            "amtSameRecoveryFromDate": "1999-01-01",
+            "ordinaryMacrsFromDate": "1987-01-01"
+          }
+        },
+        "california": {
+          "brackets": [
+            {
+              "upperCents": null,
+              "rateBps": 0
+            }
+          ],
+          "standardDeductionCents": 0,
+          "personalCreditPerFilerCents": 0,
+          "seniorCreditPerFilerCents": 0,
+          "seniorCreditMinimumAge": 65,
+          "creditPhaseout": {
+            "startCents": 0,
+            "stepCents": 100000,
+            "reductionPerExemptionCents": 0
+          },
+          "itemized": {
+            "phaseoutStartCents": 0,
+            "reductionBps": 0,
+            "maxReductionBps": 0
+          },
+          "mortgage": {
+            "acquisitionLimitCents": 0
+          },
+          "mortgageInsurance": {
+            "allowed": false
+          },
+          "amt": {
+            "exemptionCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutBps": 0,
+            "rateBps": 0,
+            "smallBusinessGrossReceiptsThresholdCents": 100000000
+          },
+          "surtax": {
+            "thresholdCents": 0,
+            "rateBps": 0
+          },
+          "passive": {
+            "allowanceCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutEndCents": 0,
+            "reductionBps": 0
+          },
+          "rental": {
+            "recoveryPeriodMonths": 330,
+            "convention": "mid-month",
+            "amtPre1999RecoveryPeriodMonths": 480,
+            "amtSameRecoveryFromDate": "1999-01-01",
+            "ordinaryMacrsFromDate": "1987-01-01"
+          }
+        },
+        "payroll": {
+          "socialSecurityRateBps": 0,
+          "socialSecurityWageBaseCents": 0,
+          "medicareRateBps": 0,
+          "additionalMedicareRateBps": 0,
+          "additionalMedicareThresholdCents": 0,
+          "sdiRateBps": 0,
+          "sdiWageBaseCents": null
+        },
+        "retirement": {
+          "electiveDeferralLimitCents": 0,
+          "regularCatchupCents": 0,
+          "enhancedCatchupCents": 0,
+          "catchupMinimumAge": 0,
+          "enhancedCatchupMinimumAge": 0,
+          "enhancedCatchupMaximumAge": 0,
+          "rothCatchupPriorYearWageThresholdCents": 0,
+          "iraLimitCents": 0,
+          "iraCatchupCents": 0,
+          "iraCatchupMinimumAge": 0,
+          "mandatoryRothCatchup": false,
+          "iraDeductionCovered": {
+            "startCents": 0,
+            "endCents": 0
+          },
+          "iraDeductionSpouseCovered": {
+            "startCents": 0,
+            "endCents": 0
+          },
+          "rothIra": {
+            "startCents": 0,
+            "endCents": 0
+          }
+        },
+        "provenance": {
+          "federal.rental.recoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.convention": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          },
+          "california.rental.recoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "california.rental.convention": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.amtPre1999RecoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/instructions/i6251"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.amtSameRecoveryFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/instructions/i6251"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.ordinaryMacrsFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          },
+          "california.rental.amtPre1999RecoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "california.rental.amtSameRecoveryFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "california.rental.ordinaryMacrsFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          }
+        }
+      }
+    },
+    "worksheetSteps": [
+      "Building-only recovery basis supplied explicitly; purchase/market value and land do not create basis",
+      "January availability recovers 11.5 months; July tenancy supplies six months rent of 100000 cents",
+      "Depreciation = original book basis / 330 months * 11.5 months; nearest cent direct-method worksheet",
+      "Shared ADU ratio = 500/(1500+500); annual property tax 100001 settles to 25000 rental, 75001 personal",
+      "Shared insurance 10000 -> 2500 rental, 7500 personal; twelve direct repairs total120000",
+      "Cash flow excludes depreciation; taxable profit subtracts operating expenses and each separate depreciation book",
+      "Whole rental fixture allocates all shared costs to rental and never puts them in personal itemization",
+      "Unused tax/payroll/retirement rule fields are inert synthetic inputs; these cases claim only property-method references"
+    ],
+    "expected": {
+      "year": 2026,
+      "expenses": [
+        {
+          "expenseId": "insurance",
+          "propertyId": "home",
+          "taxCategory": "homeowners-insurance",
+          "paidCents": 10000,
+          "personalCents": 7500,
+          "rentalCentsByUnit": {
+            "adu": 2500
+          }
+        },
+        {
+          "expenseId": "property-tax",
+          "propertyId": "home",
+          "taxCategory": "property-tax",
+          "paidCents": 100001,
+          "personalCents": 75001,
+          "rentalCentsByUnit": {
+            "adu": 25000
+          }
+        },
+        {
+          "expenseId": "repair",
+          "propertyId": "home",
+          "taxCategory": "repair",
+          "paidCents": 120000,
+          "personalCents": 0,
+          "rentalCentsByUnit": {
+            "adu": 120000
+          }
+        }
+      ],
+      "rentals": [
+        {
+          "rentalId": "adu",
+          "propertyId": "home",
+          "unit": {
+            "id": "adu",
+            "propertyId": "home",
+            "monthlyRentCents": 100000,
+            "rentGrowthBps": 0,
+            "rentStartDate": "2026-07-01",
+            "availableDate": "2026-01-01",
+            "activeParticipation": {
+              "known": true,
+              "value": true
+            },
+            "loanAllocations": [],
+            "qualifications": {
+              "longTermFairMarketLease": {
+                "known": true,
+                "value": true
+              },
+              "noPersonalUse": {
+                "known": true,
+                "value": true
+              },
+              "noSubstantialTenantServices": {
+                "known": true,
+                "value": true
+              },
+              "ordinaryResidential": {
+                "known": true,
+                "value": true
+              },
+              "advancedBasisAdjustments": {
+                "known": true,
+                "value": false
+              }
+            },
+            "convertedFromPersonalUse": false,
+            "conversionBuildingFmv": {
+              "known": false
+            },
+            "taxHistory": {
+              "federal": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "federal-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "qbi": {
+              "qualification": {
+                "known": true,
+                "value": true
+              },
+              "wagesCents": {
+                "known": true,
+                "value": 0
+              },
+              "ubiaCents": {
+                "known": true,
+                "value": 33000000
+              },
+              "openingLossVintages": {
+                "known": true,
+                "value": []
+              }
+            }
+          },
+          "rentCents": 600000,
+          "operatingExpenseCents": 147500,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 0,
+          "cashInterestCents": 0,
+          "principalPaidCents": 0,
+          "cashFlowCents": 452500,
+          "eligibleInterestCents": {
+            "status": "available",
+            "value": 0
+          },
+          "depreciation": {
+            "federal": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "federal",
+                "recoveryBasisCents": 33000000,
+                "openingAdjustedBuildingBasisCents": 33000000,
+                "depreciationCents": 1150000,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            },
+            "california": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "california",
+                "recoveryBasisCents": 33000000,
+                "openingAdjustedBuildingBasisCents": 33000000,
+                "depreciationCents": 1150000,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html",
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            },
+            "federal-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "federal-amt",
+                "recoveryBasisCents": 33000000,
+                "openingAdjustedBuildingBasisCents": 33000000,
+                "depreciationCents": 1150000,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.irs.gov/instructions/i6251",
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            },
+            "california-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "california-amt",
+                "recoveryBasisCents": 33000000,
+                "openingAdjustedBuildingBasisCents": 33000000,
+                "depreciationCents": 1150000,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html",
+                    "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            }
+          },
+          "books": {
+            "federal": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "federal",
+                "rentCents": 600000,
+                "operatingExpenseCents": 147500,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 1150000,
+                "taxableProfitCents": -697500,
+                "openingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "california": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "california",
+                "rentCents": 600000,
+                "operatingExpenseCents": 147500,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 1150000,
+                "taxableProfitCents": -697500,
+                "openingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "federal-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "federal-amt",
+                "rentCents": 600000,
+                "operatingExpenseCents": 147500,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 1150000,
+                "taxableProfitCents": -697500,
+                "openingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "california-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "california-amt",
+                "rentCents": 600000,
+                "operatingExpenseCents": 147500,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 1150000,
+                "taxableProfitCents": -697500,
+                "openingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            }
+          },
+          "financingAtRiskQualification": {
+            "known": true,
+            "value": true
+          }
+        }
+      ],
+      "personal": {
+        "propertyTaxPaidCents": 75001,
+        "homeownersInsuranceCents": 7500,
+        "mortgageInsuranceCents": 0,
+        "mortgageInterestCents": {
+          "status": "available",
+          "value": 0
+        },
+        "loans": []
+      },
+      "cash": {
+        "rentCents": 600000,
+        "operatingExpenseCents": 230001,
+        "capitalExpenseCents": 0,
+        "debtPaymentCents": 0,
+        "interestCents": 0,
+        "principalPaidCents": 0
+      },
+      "closingRentalState": {
+        "adu": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 33000000,
+              "adjustedBuildingBasisCents": 31850000,
+              "cumulativeDepreciationCents": 1150000,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 33000000,
+              "adjustedBuildingBasisCents": 31850000,
+              "cumulativeDepreciationCents": 1150000,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 33000000,
+              "adjustedBuildingBasisCents": 31850000,
+              "cumulativeDepreciationCents": 1150000,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 33000000,
+              "adjustedBuildingBasisCents": 31850000,
+              "cumulativeDepreciationCents": 1150000,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          }
+        }
+      },
+      "issues": []
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "property-2026-reference"
+    ]
+  },
+  {
+    "id": "jurisdiction-and-amt-basis-books",
+    "taxYear": 2026,
+    "sources": [
+      {
+        "url": "https://www.irs.gov/publications/p527",
+        "publicationYear": 2025,
+        "applicableYear": 2026,
+        "reviewDate": "2026-10-12",
+        "method": "Residential straight-line method, mid-month service convention, building-only basis and reasonable shared cost allocation"
+      },
+      {
+        "url": "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html",
+        "publicationYear": 2025,
+        "applicableYear": 2026,
+        "reviewDate": "2026-10-12",
+        "method": "Independent California depreciation basis and adjustment books"
+      }
+    ],
+    "input": {
+      "plan": {
+        "schemaVersion": 1,
+        "id": "property-reference",
+        "revision": 0,
+        "startYear": 2026,
+        "horizonYears": 1,
+        "openingCashCents": 0,
+        "household": {
+          "filingStatus": "married-joint",
+          "residence": "CA-full-year",
+          "currency": "USD",
+          "filers": [
+            {
+              "id": "owner-a",
+              "name": "Filer A",
+              "birthDate": {
+                "known": true,
+                "value": "1980-01-01"
+              },
+              "workplaceCoverage": {
+                "known": true,
+                "value": false
+              },
+              "coverageByYear": [],
+              "employerAssumptionsByYear": []
+            },
+            {
+              "id": "owner-b",
+              "name": "Filer B",
+              "birthDate": {
+                "known": true,
+                "value": "1982-01-01"
+              },
+              "workplaceCoverage": {
+                "known": true,
+                "value": false
+              },
+              "coverageByYear": [],
+              "employerAssumptionsByYear": []
+            }
+          ],
+          "coverageAnswers": {
+            "additionalIncome": {
+              "known": true,
+              "value": false
+            },
+            "additionalCredits": {
+              "known": true,
+              "value": false
+            },
+            "qualifiedDividendsOrCapitalGains": {
+              "known": true,
+              "value": false
+            },
+            "retirementDistributions": {
+              "known": true,
+              "value": false
+            },
+            "priorFederalMinimumTaxCredits": {
+              "known": true,
+              "value": false
+            },
+            "priorCaliforniaMinimumTaxCredits": {
+              "known": true,
+              "value": false
+            }
+          }
+        },
+        "taxPolicy": {
+          "baselineYear": 2026,
+          "futureIndexGrowthBps": 0,
+          "actualStateTaxPaidByYear": []
+        },
+        "salaries": [],
+        "otherIncome": [],
+        "expenses": [
+          {
+            "id": "property-tax",
+            "name": "property-tax",
+            "amountCents": 100001,
+            "frequency": "annual",
+            "startDate": "2026-01-01",
+            "annualGrowthBps": 0,
+            "propertyId": "home",
+            "use": "shared",
+            "taxCategory": "property-tax"
+          },
+          {
+            "id": "insurance",
+            "name": "insurance",
+            "amountCents": 10000,
+            "frequency": "annual",
+            "startDate": "2026-01-01",
+            "annualGrowthBps": 0,
+            "propertyId": "home",
+            "use": "shared",
+            "taxCategory": "homeowners-insurance"
+          },
+          {
+            "id": "repair",
+            "name": "repair",
+            "amountCents": 10000,
+            "frequency": "monthly",
+            "startDate": "2026-01-01",
+            "annualGrowthBps": 0,
+            "propertyId": "home",
+            "use": "rental",
+            "taxCategory": "repair",
+            "rentalId": "adu"
+          }
+        ],
+        "accounts": [],
+        "contributions": [],
+        "debts": [],
+        "properties": [
+          {
+            "id": "home",
+            "name": "Home with available ADU",
+            "role": "primary-with-adu",
+            "purchaseDate": "2026-01-01",
+            "purchasePriceCents": 50000000,
+            "downPaymentCents": 0,
+            "openingValueCents": 80000000,
+            "appreciationBps": 0,
+            "appreciationOverrides": [],
+            "primaryArea": 1500,
+            "aduArea": 500,
+            "loans": []
+          }
+        ],
+        "rentals": [
+          {
+            "id": "adu",
+            "propertyId": "home",
+            "monthlyRentCents": 100000,
+            "rentGrowthBps": 0,
+            "rentStartDate": "2026-07-01",
+            "availableDate": "2026-01-01",
+            "activeParticipation": {
+              "known": true,
+              "value": true
+            },
+            "loanAllocations": [],
+            "qualifications": {
+              "longTermFairMarketLease": {
+                "known": true,
+                "value": true
+              },
+              "noPersonalUse": {
+                "known": true,
+                "value": true
+              },
+              "noSubstantialTenantServices": {
+                "known": true,
+                "value": true
+              },
+              "ordinaryResidential": {
+                "known": true,
+                "value": true
+              },
+              "advancedBasisAdjustments": {
+                "known": true,
+                "value": false
+              }
+            },
+            "convertedFromPersonalUse": false,
+            "conversionBuildingFmv": {
+              "known": false
+            },
+            "taxHistory": {
+              "federal": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 30000000,
+                  "adjustedBuildingBasisCents": 30000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "federal-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 27000000,
+                  "adjustedBuildingBasisCents": 27000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 24000000,
+                  "adjustedBuildingBasisCents": 24000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "qbi": {
+              "qualification": {
+                "known": true,
+                "value": true
+              },
+              "wagesCents": {
+                "known": true,
+                "value": 0
+              },
+              "ubiaCents": {
+                "known": true,
+                "value": 33000000
+              },
+              "openingLossVintages": {
+                "known": true,
+                "value": []
+              }
+            }
+          }
+        ]
+      },
+      "cash": {
+        "year": 2026,
+        "months": [
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 120001,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 1,
+            "date": "2026-01"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 2,
+            "date": "2026-02"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 3,
+            "date": "2026-03"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 4,
+            "date": "2026-04"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 5,
+            "date": "2026-05"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 6,
+            "date": "2026-06"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 7,
+            "date": "2026-07"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 8,
+            "date": "2026-08"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 9,
+            "date": "2026-09"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 10,
+            "date": "2026-10"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 11,
+            "date": "2026-11"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 12,
+            "date": "2026-12"
+          }
+        ],
+        "annual": {
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 600000,
+          "grossIncomeCents": 600000,
+          "expensesCents": 230001,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        "streams": [
+          {
+            "id": "insurance",
+            "kind": "expense",
+            "months": [
+              10000,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "annualCents": 10000,
+            "propertyId": "home"
+          },
+          {
+            "id": "property-tax",
+            "kind": "expense",
+            "months": [
+              100001,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "annualCents": 100001,
+            "propertyId": "home"
+          },
+          {
+            "id": "repair",
+            "kind": "expense",
+            "months": [
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000
+            ],
+            "annualCents": 120000,
+            "propertyId": "home"
+          },
+          {
+            "id": "adu",
+            "kind": "rent",
+            "months": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              100000,
+              100000,
+              100000,
+              100000,
+              100000,
+              100000
+            ],
+            "annualCents": 600000,
+            "propertyId": "home"
+          }
+        ],
+        "wages": [],
+        "salaryPeriods": [],
+        "positiveGrossCashByMonth": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100000,
+          100000,
+          100000,
+          100000,
+          100000,
+          100000
+        ]
+      },
+      "loans": [],
+      "opening": {
+        "year": 2025,
+        "rentals": {
+          "adu": {
+            "federal": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 33000000,
+                "adjustedBuildingBasisCents": 33000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            },
+            "california": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 30000000,
+                "adjustedBuildingBasisCents": 30000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            },
+            "federal-amt": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 27000000,
+                "adjustedBuildingBasisCents": 27000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            },
+            "california-amt": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 24000000,
+                "adjustedBuildingBasisCents": 24000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            }
+          }
+        },
+        "qbiLossVintages": {
+          "adu": {
+            "known": true,
+            "value": []
+          }
+        },
+        "iraBasisByOwner": {
+          "owner-a": {
+            "known": true,
+            "value": 0
+          },
+          "owner-b": {
+            "known": true,
+            "value": 0
+          }
+        },
+        "minimumTaxCreditCoverage": {
+          "federal": {
+            "known": true,
+            "value": false
+          },
+          "california": {
+            "known": true,
+            "value": false
+          }
+        }
+      },
+      "rules": {
+        "year": 2026,
+        "ruleVersion": "property-2026-reference",
+        "baselineYear": 2026,
+        "federal": {
+          "brackets": [
+            {
+              "upperCents": null,
+              "rateBps": 0
+            }
+          ],
+          "standardDeductionCents": 0,
+          "additionalStandardDeductionPerFilerCents": 0,
+          "ageDeductionMinimumAge": 65,
+          "seniorDeduction": {
+            "perFilerCents": 0,
+            "minimumAge": 65,
+            "phaseoutStartCents": 0,
+            "reductionBps": 0
+          },
+          "salt": {
+            "capCents": 0,
+            "phaseoutStartCents": 0,
+            "reductionBps": 0,
+            "floorCents": 0
+          },
+          "itemized": {
+            "restrictionNumerator": 0,
+            "restrictionDenominator": 37,
+            "thresholdCents": 0
+          },
+          "mortgage": {
+            "post2017LimitCents": 0,
+            "pre2017LimitCents": 0,
+            "cutoffDate": "2017-12-15"
+          },
+          "mortgageInsurance": {
+            "allowed": false,
+            "phaseoutStartCents": 0,
+            "phaseoutStepCents": 100000,
+            "reductionBps": 0
+          },
+          "amt": {
+            "exemptionCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutBps": 0,
+            "rateSplitCents": 0,
+            "lowerRateBps": 0,
+            "upperRateBps": 0
+          },
+          "passive": {
+            "allowanceCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutEndCents": 0,
+            "reductionBps": 0
+          },
+          "niit": {
+            "thresholdCents": 0,
+            "rateBps": 0
+          },
+          "qbi": {
+            "deductionBps": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutEndCents": 0,
+            "wageOnlyLimitBps": 0,
+            "wageMixedLimitBps": 0,
+            "ubiaLimitBps": 0,
+            "minimumDeductionCents": 0,
+            "minimumQbiCents": 0
+          },
+          "rental": {
+            "recoveryPeriodMonths": 330,
+            "convention": "mid-month",
+            "amtPre1999RecoveryPeriodMonths": 480,
+            "amtSameRecoveryFromDate": "1999-01-01",
+            "ordinaryMacrsFromDate": "1987-01-01"
+          }
+        },
+        "california": {
+          "brackets": [
+            {
+              "upperCents": null,
+              "rateBps": 0
+            }
+          ],
+          "standardDeductionCents": 0,
+          "personalCreditPerFilerCents": 0,
+          "seniorCreditPerFilerCents": 0,
+          "seniorCreditMinimumAge": 65,
+          "creditPhaseout": {
+            "startCents": 0,
+            "stepCents": 100000,
+            "reductionPerExemptionCents": 0
+          },
+          "itemized": {
+            "phaseoutStartCents": 0,
+            "reductionBps": 0,
+            "maxReductionBps": 0
+          },
+          "mortgage": {
+            "acquisitionLimitCents": 0
+          },
+          "mortgageInsurance": {
+            "allowed": false
+          },
+          "amt": {
+            "exemptionCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutBps": 0,
+            "rateBps": 0,
+            "smallBusinessGrossReceiptsThresholdCents": 100000000
+          },
+          "surtax": {
+            "thresholdCents": 0,
+            "rateBps": 0
+          },
+          "passive": {
+            "allowanceCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutEndCents": 0,
+            "reductionBps": 0
+          },
+          "rental": {
+            "recoveryPeriodMonths": 330,
+            "convention": "mid-month",
+            "amtPre1999RecoveryPeriodMonths": 480,
+            "amtSameRecoveryFromDate": "1999-01-01",
+            "ordinaryMacrsFromDate": "1987-01-01"
+          }
+        },
+        "payroll": {
+          "socialSecurityRateBps": 0,
+          "socialSecurityWageBaseCents": 0,
+          "medicareRateBps": 0,
+          "additionalMedicareRateBps": 0,
+          "additionalMedicareThresholdCents": 0,
+          "sdiRateBps": 0,
+          "sdiWageBaseCents": null
+        },
+        "retirement": {
+          "electiveDeferralLimitCents": 0,
+          "regularCatchupCents": 0,
+          "enhancedCatchupCents": 0,
+          "catchupMinimumAge": 0,
+          "enhancedCatchupMinimumAge": 0,
+          "enhancedCatchupMaximumAge": 0,
+          "rothCatchupPriorYearWageThresholdCents": 0,
+          "iraLimitCents": 0,
+          "iraCatchupCents": 0,
+          "iraCatchupMinimumAge": 0,
+          "mandatoryRothCatchup": false,
+          "iraDeductionCovered": {
+            "startCents": 0,
+            "endCents": 0
+          },
+          "iraDeductionSpouseCovered": {
+            "startCents": 0,
+            "endCents": 0
+          },
+          "rothIra": {
+            "startCents": 0,
+            "endCents": 0
+          }
+        },
+        "provenance": {
+          "federal.rental.recoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.convention": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          },
+          "california.rental.recoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "california.rental.convention": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.amtPre1999RecoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/instructions/i6251"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.amtSameRecoveryFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/instructions/i6251"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.ordinaryMacrsFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          },
+          "california.rental.amtPre1999RecoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "california.rental.amtSameRecoveryFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "california.rental.ordinaryMacrsFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          }
+        }
+      }
+    },
+    "worksheetSteps": [
+      "Building-only recovery basis supplied explicitly; purchase/market value and land do not create basis",
+      "January availability recovers 11.5 months; July tenancy supplies six months rent of 100000 cents",
+      "Depreciation = original book basis / 330 months * 11.5 months; nearest cent direct-method worksheet",
+      "Shared ADU ratio = 500/(1500+500); annual property tax 100001 settles to 25000 rental, 75001 personal",
+      "Shared insurance 10000 -> 2500 rental, 7500 personal; twelve direct repairs total120000",
+      "Cash flow excludes depreciation; taxable profit subtracts operating expenses and each separate depreciation book",
+      "Whole rental fixture allocates all shared costs to rental and never puts them in personal itemization",
+      "Unused tax/payroll/retirement rule fields are inert synthetic inputs; these cases claim only property-method references"
+    ],
+    "expected": {
+      "year": 2026,
+      "expenses": [
+        {
+          "expenseId": "insurance",
+          "propertyId": "home",
+          "taxCategory": "homeowners-insurance",
+          "paidCents": 10000,
+          "personalCents": 7500,
+          "rentalCentsByUnit": {
+            "adu": 2500
+          }
+        },
+        {
+          "expenseId": "property-tax",
+          "propertyId": "home",
+          "taxCategory": "property-tax",
+          "paidCents": 100001,
+          "personalCents": 75001,
+          "rentalCentsByUnit": {
+            "adu": 25000
+          }
+        },
+        {
+          "expenseId": "repair",
+          "propertyId": "home",
+          "taxCategory": "repair",
+          "paidCents": 120000,
+          "personalCents": 0,
+          "rentalCentsByUnit": {
+            "adu": 120000
+          }
+        }
+      ],
+      "rentals": [
+        {
+          "rentalId": "adu",
+          "propertyId": "home",
+          "unit": {
+            "id": "adu",
+            "propertyId": "home",
+            "monthlyRentCents": 100000,
+            "rentGrowthBps": 0,
+            "rentStartDate": "2026-07-01",
+            "availableDate": "2026-01-01",
+            "activeParticipation": {
+              "known": true,
+              "value": true
+            },
+            "loanAllocations": [],
+            "qualifications": {
+              "longTermFairMarketLease": {
+                "known": true,
+                "value": true
+              },
+              "noPersonalUse": {
+                "known": true,
+                "value": true
+              },
+              "noSubstantialTenantServices": {
+                "known": true,
+                "value": true
+              },
+              "ordinaryResidential": {
+                "known": true,
+                "value": true
+              },
+              "advancedBasisAdjustments": {
+                "known": true,
+                "value": false
+              }
+            },
+            "convertedFromPersonalUse": false,
+            "conversionBuildingFmv": {
+              "known": false
+            },
+            "taxHistory": {
+              "federal": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 30000000,
+                  "adjustedBuildingBasisCents": 30000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "federal-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 27000000,
+                  "adjustedBuildingBasisCents": 27000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 24000000,
+                  "adjustedBuildingBasisCents": 24000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "qbi": {
+              "qualification": {
+                "known": true,
+                "value": true
+              },
+              "wagesCents": {
+                "known": true,
+                "value": 0
+              },
+              "ubiaCents": {
+                "known": true,
+                "value": 33000000
+              },
+              "openingLossVintages": {
+                "known": true,
+                "value": []
+              }
+            }
+          },
+          "rentCents": 600000,
+          "operatingExpenseCents": 147500,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 0,
+          "cashInterestCents": 0,
+          "principalPaidCents": 0,
+          "cashFlowCents": 452500,
+          "eligibleInterestCents": {
+            "status": "available",
+            "value": 0
+          },
+          "depreciation": {
+            "federal": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "federal",
+                "recoveryBasisCents": 33000000,
+                "openingAdjustedBuildingBasisCents": 33000000,
+                "depreciationCents": 1150000,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            },
+            "california": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "california",
+                "recoveryBasisCents": 30000000,
+                "openingAdjustedBuildingBasisCents": 30000000,
+                "depreciationCents": 1045455,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 30000000,
+                  "adjustedBuildingBasisCents": 28954545,
+                  "cumulativeDepreciationCents": 1045455,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html",
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            },
+            "federal-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "federal-amt",
+                "recoveryBasisCents": 27000000,
+                "openingAdjustedBuildingBasisCents": 27000000,
+                "depreciationCents": 940909,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 27000000,
+                  "adjustedBuildingBasisCents": 26059091,
+                  "cumulativeDepreciationCents": 940909,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.irs.gov/instructions/i6251",
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            },
+            "california-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "california-amt",
+                "recoveryBasisCents": 24000000,
+                "openingAdjustedBuildingBasisCents": 24000000,
+                "depreciationCents": 836364,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 24000000,
+                  "adjustedBuildingBasisCents": 23163636,
+                  "cumulativeDepreciationCents": 836364,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html",
+                    "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            }
+          },
+          "books": {
+            "federal": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "federal",
+                "rentCents": 600000,
+                "operatingExpenseCents": 147500,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 1150000,
+                "taxableProfitCents": -697500,
+                "openingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "california": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "california",
+                "rentCents": 600000,
+                "operatingExpenseCents": 147500,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 1045455,
+                "taxableProfitCents": -592955,
+                "openingState": {
+                  "recoveryBasisCents": 30000000,
+                  "adjustedBuildingBasisCents": 30000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 30000000,
+                  "adjustedBuildingBasisCents": 28954545,
+                  "cumulativeDepreciationCents": 1045455,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "federal-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "federal-amt",
+                "rentCents": 600000,
+                "operatingExpenseCents": 147500,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 940909,
+                "taxableProfitCents": -488409,
+                "openingState": {
+                  "recoveryBasisCents": 27000000,
+                  "adjustedBuildingBasisCents": 27000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 27000000,
+                  "adjustedBuildingBasisCents": 26059091,
+                  "cumulativeDepreciationCents": 940909,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "california-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "california-amt",
+                "rentCents": 600000,
+                "operatingExpenseCents": 147500,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 836364,
+                "taxableProfitCents": -383864,
+                "openingState": {
+                  "recoveryBasisCents": 24000000,
+                  "adjustedBuildingBasisCents": 24000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 24000000,
+                  "adjustedBuildingBasisCents": 23163636,
+                  "cumulativeDepreciationCents": 836364,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            }
+          },
+          "financingAtRiskQualification": {
+            "known": true,
+            "value": true
+          }
+        }
+      ],
+      "personal": {
+        "propertyTaxPaidCents": 75001,
+        "homeownersInsuranceCents": 7500,
+        "mortgageInsuranceCents": 0,
+        "mortgageInterestCents": {
+          "status": "available",
+          "value": 0
+        },
+        "loans": []
+      },
+      "cash": {
+        "rentCents": 600000,
+        "operatingExpenseCents": 230001,
+        "capitalExpenseCents": 0,
+        "debtPaymentCents": 0,
+        "interestCents": 0,
+        "principalPaidCents": 0
+      },
+      "closingRentalState": {
+        "adu": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 33000000,
+              "adjustedBuildingBasisCents": 31850000,
+              "cumulativeDepreciationCents": 1150000,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 30000000,
+              "adjustedBuildingBasisCents": 28954545,
+              "cumulativeDepreciationCents": 1045455,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 27000000,
+              "adjustedBuildingBasisCents": 26059091,
+              "cumulativeDepreciationCents": 940909,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 24000000,
+              "adjustedBuildingBasisCents": 23163636,
+              "cumulativeDepreciationCents": 836364,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          }
+        }
+      },
+      "issues": []
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "property-2026-reference"
+    ]
+  },
+  {
+    "id": "whole-rental-no-personal-deductions",
+    "taxYear": 2026,
+    "sources": [
+      {
+        "url": "https://www.irs.gov/publications/p527",
+        "publicationYear": 2025,
+        "applicableYear": 2026,
+        "reviewDate": "2026-10-12",
+        "method": "Residential straight-line method, mid-month service convention, building-only basis and reasonable shared cost allocation"
+      },
+      {
+        "url": "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html",
+        "publicationYear": 2025,
+        "applicableYear": 2026,
+        "reviewDate": "2026-10-12",
+        "method": "Independent California depreciation basis and adjustment books"
+      }
+    ],
+    "input": {
+      "plan": {
+        "schemaVersion": 1,
+        "id": "property-reference",
+        "revision": 0,
+        "startYear": 2026,
+        "horizonYears": 1,
+        "openingCashCents": 0,
+        "household": {
+          "filingStatus": "married-joint",
+          "residence": "CA-full-year",
+          "currency": "USD",
+          "filers": [
+            {
+              "id": "owner-a",
+              "name": "Filer A",
+              "birthDate": {
+                "known": true,
+                "value": "1980-01-01"
+              },
+              "workplaceCoverage": {
+                "known": true,
+                "value": false
+              },
+              "coverageByYear": [],
+              "employerAssumptionsByYear": []
+            },
+            {
+              "id": "owner-b",
+              "name": "Filer B",
+              "birthDate": {
+                "known": true,
+                "value": "1982-01-01"
+              },
+              "workplaceCoverage": {
+                "known": true,
+                "value": false
+              },
+              "coverageByYear": [],
+              "employerAssumptionsByYear": []
+            }
+          ],
+          "coverageAnswers": {
+            "additionalIncome": {
+              "known": true,
+              "value": false
+            },
+            "additionalCredits": {
+              "known": true,
+              "value": false
+            },
+            "qualifiedDividendsOrCapitalGains": {
+              "known": true,
+              "value": false
+            },
+            "retirementDistributions": {
+              "known": true,
+              "value": false
+            },
+            "priorFederalMinimumTaxCredits": {
+              "known": true,
+              "value": false
+            },
+            "priorCaliforniaMinimumTaxCredits": {
+              "known": true,
+              "value": false
+            }
+          }
+        },
+        "taxPolicy": {
+          "baselineYear": 2026,
+          "futureIndexGrowthBps": 0,
+          "actualStateTaxPaidByYear": []
+        },
+        "salaries": [],
+        "otherIncome": [],
+        "expenses": [
+          {
+            "id": "property-tax",
+            "name": "property-tax",
+            "amountCents": 100001,
+            "frequency": "annual",
+            "startDate": "2026-01-01",
+            "annualGrowthBps": 0,
+            "propertyId": "home",
+            "use": "shared",
+            "taxCategory": "property-tax"
+          },
+          {
+            "id": "insurance",
+            "name": "insurance",
+            "amountCents": 10000,
+            "frequency": "annual",
+            "startDate": "2026-01-01",
+            "annualGrowthBps": 0,
+            "propertyId": "home",
+            "use": "shared",
+            "taxCategory": "homeowners-insurance"
+          },
+          {
+            "id": "repair",
+            "name": "repair",
+            "amountCents": 10000,
+            "frequency": "monthly",
+            "startDate": "2026-01-01",
+            "annualGrowthBps": 0,
+            "propertyId": "home",
+            "use": "rental",
+            "taxCategory": "repair",
+            "rentalId": "adu"
+          }
+        ],
+        "accounts": [],
+        "contributions": [],
+        "debts": [],
+        "properties": [
+          {
+            "id": "home",
+            "name": "Home with available ADU",
+            "role": "rental",
+            "purchaseDate": "2026-01-01",
+            "purchasePriceCents": 50000000,
+            "downPaymentCents": 0,
+            "openingValueCents": 80000000,
+            "appreciationBps": 0,
+            "appreciationOverrides": [],
+            "loans": []
+          }
+        ],
+        "rentals": [
+          {
+            "id": "adu",
+            "propertyId": "home",
+            "monthlyRentCents": 100000,
+            "rentGrowthBps": 0,
+            "rentStartDate": "2026-07-01",
+            "availableDate": "2026-01-01",
+            "activeParticipation": {
+              "known": true,
+              "value": true
+            },
+            "loanAllocations": [],
+            "qualifications": {
+              "longTermFairMarketLease": {
+                "known": true,
+                "value": true
+              },
+              "noPersonalUse": {
+                "known": true,
+                "value": true
+              },
+              "noSubstantialTenantServices": {
+                "known": true,
+                "value": true
+              },
+              "ordinaryResidential": {
+                "known": true,
+                "value": true
+              },
+              "advancedBasisAdjustments": {
+                "known": true,
+                "value": false
+              }
+            },
+            "convertedFromPersonalUse": false,
+            "conversionBuildingFmv": {
+              "known": false
+            },
+            "taxHistory": {
+              "federal": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "federal-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "qbi": {
+              "qualification": {
+                "known": true,
+                "value": true
+              },
+              "wagesCents": {
+                "known": true,
+                "value": 0
+              },
+              "ubiaCents": {
+                "known": true,
+                "value": 33000000
+              },
+              "openingLossVintages": {
+                "known": true,
+                "value": []
+              }
+            }
+          }
+        ]
+      },
+      "cash": {
+        "year": 2026,
+        "months": [
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 120001,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 1,
+            "date": "2026-01"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 2,
+            "date": "2026-02"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 3,
+            "date": "2026-03"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 4,
+            "date": "2026-04"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 5,
+            "date": "2026-05"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 0,
+            "grossIncomeCents": 0,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 6,
+            "date": "2026-06"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 7,
+            "date": "2026-07"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 8,
+            "date": "2026-08"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 9,
+            "date": "2026-09"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 10,
+            "date": "2026-10"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 11,
+            "date": "2026-11"
+          },
+          {
+            "salaryCents": 0,
+            "otherIncomeCents": 0,
+            "rentCents": 100000,
+            "grossIncomeCents": 100000,
+            "expensesCents": 10000,
+            "wageCents": 0,
+            "ordinaryTaxableCents": 0,
+            "nonTaxableCents": 0,
+            "year": 2026,
+            "month": 12,
+            "date": "2026-12"
+          }
+        ],
+        "annual": {
+          "salaryCents": 0,
+          "otherIncomeCents": 0,
+          "rentCents": 600000,
+          "grossIncomeCents": 600000,
+          "expensesCents": 230001,
+          "wageCents": 0,
+          "ordinaryTaxableCents": 0,
+          "nonTaxableCents": 0
+        },
+        "streams": [
+          {
+            "id": "insurance",
+            "kind": "expense",
+            "months": [
+              10000,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "annualCents": 10000,
+            "propertyId": "home"
+          },
+          {
+            "id": "property-tax",
+            "kind": "expense",
+            "months": [
+              100001,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "annualCents": 100001,
+            "propertyId": "home"
+          },
+          {
+            "id": "repair",
+            "kind": "expense",
+            "months": [
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000,
+              10000
+            ],
+            "annualCents": 120000,
+            "propertyId": "home"
+          },
+          {
+            "id": "adu",
+            "kind": "rent",
+            "months": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              100000,
+              100000,
+              100000,
+              100000,
+              100000,
+              100000
+            ],
+            "annualCents": 600000,
+            "propertyId": "home"
+          }
+        ],
+        "wages": [],
+        "salaryPeriods": [],
+        "positiveGrossCashByMonth": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          100000,
+          100000,
+          100000,
+          100000,
+          100000,
+          100000
+        ]
+      },
+      "loans": [],
+      "opening": {
+        "year": 2025,
+        "rentals": {
+          "adu": {
+            "federal": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 33000000,
+                "adjustedBuildingBasisCents": 33000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            },
+            "california": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 33000000,
+                "adjustedBuildingBasisCents": 33000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            },
+            "federal-amt": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 33000000,
+                "adjustedBuildingBasisCents": 33000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            },
+            "california-amt": {
+              "status": "available",
+              "value": {
+                "recoveryBasisCents": 33000000,
+                "adjustedBuildingBasisCents": 33000000,
+                "cumulativeDepreciationCents": 0,
+                "atRiskCents": 50000000,
+                "atRiskSuspendedCents": 0,
+                "passiveSuspendedCents": 0,
+                "lossVintages": []
+              }
+            }
+          }
+        },
+        "qbiLossVintages": {
+          "adu": {
+            "known": true,
+            "value": []
+          }
+        },
+        "iraBasisByOwner": {
+          "owner-a": {
+            "known": true,
+            "value": 0
+          },
+          "owner-b": {
+            "known": true,
+            "value": 0
+          }
+        },
+        "minimumTaxCreditCoverage": {
+          "federal": {
+            "known": true,
+            "value": false
+          },
+          "california": {
+            "known": true,
+            "value": false
+          }
+        }
+      },
+      "rules": {
+        "year": 2026,
+        "ruleVersion": "property-2026-reference",
+        "baselineYear": 2026,
+        "federal": {
+          "brackets": [
+            {
+              "upperCents": null,
+              "rateBps": 0
+            }
+          ],
+          "standardDeductionCents": 0,
+          "additionalStandardDeductionPerFilerCents": 0,
+          "ageDeductionMinimumAge": 65,
+          "seniorDeduction": {
+            "perFilerCents": 0,
+            "minimumAge": 65,
+            "phaseoutStartCents": 0,
+            "reductionBps": 0
+          },
+          "salt": {
+            "capCents": 0,
+            "phaseoutStartCents": 0,
+            "reductionBps": 0,
+            "floorCents": 0
+          },
+          "itemized": {
+            "restrictionNumerator": 0,
+            "restrictionDenominator": 37,
+            "thresholdCents": 0
+          },
+          "mortgage": {
+            "post2017LimitCents": 0,
+            "pre2017LimitCents": 0,
+            "cutoffDate": "2017-12-15"
+          },
+          "mortgageInsurance": {
+            "allowed": false,
+            "phaseoutStartCents": 0,
+            "phaseoutStepCents": 100000,
+            "reductionBps": 0
+          },
+          "amt": {
+            "exemptionCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutBps": 0,
+            "rateSplitCents": 0,
+            "lowerRateBps": 0,
+            "upperRateBps": 0
+          },
+          "passive": {
+            "allowanceCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutEndCents": 0,
+            "reductionBps": 0
+          },
+          "niit": {
+            "thresholdCents": 0,
+            "rateBps": 0
+          },
+          "qbi": {
+            "deductionBps": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutEndCents": 0,
+            "wageOnlyLimitBps": 0,
+            "wageMixedLimitBps": 0,
+            "ubiaLimitBps": 0,
+            "minimumDeductionCents": 0,
+            "minimumQbiCents": 0
+          },
+          "rental": {
+            "recoveryPeriodMonths": 330,
+            "convention": "mid-month",
+            "amtPre1999RecoveryPeriodMonths": 480,
+            "amtSameRecoveryFromDate": "1999-01-01",
+            "ordinaryMacrsFromDate": "1987-01-01"
+          }
+        },
+        "california": {
+          "brackets": [
+            {
+              "upperCents": null,
+              "rateBps": 0
+            }
+          ],
+          "standardDeductionCents": 0,
+          "personalCreditPerFilerCents": 0,
+          "seniorCreditPerFilerCents": 0,
+          "seniorCreditMinimumAge": 65,
+          "creditPhaseout": {
+            "startCents": 0,
+            "stepCents": 100000,
+            "reductionPerExemptionCents": 0
+          },
+          "itemized": {
+            "phaseoutStartCents": 0,
+            "reductionBps": 0,
+            "maxReductionBps": 0
+          },
+          "mortgage": {
+            "acquisitionLimitCents": 0
+          },
+          "mortgageInsurance": {
+            "allowed": false
+          },
+          "amt": {
+            "exemptionCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutBps": 0,
+            "rateBps": 0,
+            "smallBusinessGrossReceiptsThresholdCents": 100000000
+          },
+          "surtax": {
+            "thresholdCents": 0,
+            "rateBps": 0
+          },
+          "passive": {
+            "allowanceCents": 0,
+            "phaseoutStartCents": 0,
+            "phaseoutEndCents": 0,
+            "reductionBps": 0
+          },
+          "rental": {
+            "recoveryPeriodMonths": 330,
+            "convention": "mid-month",
+            "amtPre1999RecoveryPeriodMonths": 480,
+            "amtSameRecoveryFromDate": "1999-01-01",
+            "ordinaryMacrsFromDate": "1987-01-01"
+          }
+        },
+        "payroll": {
+          "socialSecurityRateBps": 0,
+          "socialSecurityWageBaseCents": 0,
+          "medicareRateBps": 0,
+          "additionalMedicareRateBps": 0,
+          "additionalMedicareThresholdCents": 0,
+          "sdiRateBps": 0,
+          "sdiWageBaseCents": null
+        },
+        "retirement": {
+          "electiveDeferralLimitCents": 0,
+          "regularCatchupCents": 0,
+          "enhancedCatchupCents": 0,
+          "catchupMinimumAge": 0,
+          "enhancedCatchupMinimumAge": 0,
+          "enhancedCatchupMaximumAge": 0,
+          "rothCatchupPriorYearWageThresholdCents": 0,
+          "iraLimitCents": 0,
+          "iraCatchupCents": 0,
+          "iraCatchupMinimumAge": 0,
+          "mandatoryRothCatchup": false,
+          "iraDeductionCovered": {
+            "startCents": 0,
+            "endCents": 0
+          },
+          "iraDeductionSpouseCovered": {
+            "startCents": 0,
+            "endCents": 0
+          },
+          "rothIra": {
+            "startCents": 0,
+            "endCents": 0
+          }
+        },
+        "provenance": {
+          "federal.rental.recoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.convention": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          },
+          "california.rental.recoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "california.rental.convention": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.amtPre1999RecoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/instructions/i6251"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.amtSameRecoveryFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/instructions/i6251"
+            ],
+            "assumptions": []
+          },
+          "federal.rental.ordinaryMacrsFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          },
+          "california.rental.amtPre1999RecoveryPeriodMonths": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "california.rental.amtSameRecoveryFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html"
+            ],
+            "assumptions": []
+          },
+          "california.rental.ordinaryMacrsFromDate": {
+            "status": "verified",
+            "ruleVersion": "property-2026-reference",
+            "baselineYear": 2026,
+            "applicableYear": 2026,
+            "sources": [
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": []
+          }
+        }
+      }
+    },
+    "worksheetSteps": [
+      "Building-only recovery basis supplied explicitly; purchase/market value and land do not create basis",
+      "January availability recovers 11.5 months; July tenancy supplies six months rent of 100000 cents",
+      "Depreciation = original book basis / 330 months * 11.5 months; nearest cent direct-method worksheet",
+      "Shared ADU ratio = 500/(1500+500); annual property tax 100001 settles to 25000 rental, 75001 personal",
+      "Shared insurance 10000 -> 2500 rental, 7500 personal; twelve direct repairs total120000",
+      "Cash flow excludes depreciation; taxable profit subtracts operating expenses and each separate depreciation book",
+      "Whole rental fixture allocates all shared costs to rental and never puts them in personal itemization",
+      "Unused tax/payroll/retirement rule fields are inert synthetic inputs; these cases claim only property-method references"
+    ],
+    "expected": {
+      "year": 2026,
+      "expenses": [
+        {
+          "expenseId": "insurance",
+          "propertyId": "home",
+          "taxCategory": "homeowners-insurance",
+          "paidCents": 10000,
+          "personalCents": 0,
+          "rentalCentsByUnit": {
+            "adu": 10000
+          }
+        },
+        {
+          "expenseId": "property-tax",
+          "propertyId": "home",
+          "taxCategory": "property-tax",
+          "paidCents": 100001,
+          "personalCents": 0,
+          "rentalCentsByUnit": {
+            "adu": 100001
+          }
+        },
+        {
+          "expenseId": "repair",
+          "propertyId": "home",
+          "taxCategory": "repair",
+          "paidCents": 120000,
+          "personalCents": 0,
+          "rentalCentsByUnit": {
+            "adu": 120000
+          }
+        }
+      ],
+      "rentals": [
+        {
+          "rentalId": "adu",
+          "propertyId": "home",
+          "unit": {
+            "id": "adu",
+            "propertyId": "home",
+            "monthlyRentCents": 100000,
+            "rentGrowthBps": 0,
+            "rentStartDate": "2026-07-01",
+            "availableDate": "2026-01-01",
+            "activeParticipation": {
+              "known": true,
+              "value": true
+            },
+            "loanAllocations": [],
+            "qualifications": {
+              "longTermFairMarketLease": {
+                "known": true,
+                "value": true
+              },
+              "noPersonalUse": {
+                "known": true,
+                "value": true
+              },
+              "noSubstantialTenantServices": {
+                "known": true,
+                "value": true
+              },
+              "ordinaryResidential": {
+                "known": true,
+                "value": true
+              },
+              "advancedBasisAdjustments": {
+                "known": true,
+                "value": false
+              }
+            },
+            "convertedFromPersonalUse": false,
+            "conversionBuildingFmv": {
+              "known": false
+            },
+            "taxHistory": {
+              "federal": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "federal-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              },
+              "california-amt": {
+                "known": true,
+                "value": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "qbi": {
+              "qualification": {
+                "known": true,
+                "value": true
+              },
+              "wagesCents": {
+                "known": true,
+                "value": 0
+              },
+              "ubiaCents": {
+                "known": true,
+                "value": 33000000
+              },
+              "openingLossVintages": {
+                "known": true,
+                "value": []
+              }
+            }
+          },
+          "rentCents": 600000,
+          "operatingExpenseCents": 230001,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 0,
+          "cashInterestCents": 0,
+          "principalPaidCents": 0,
+          "cashFlowCents": 369999,
+          "eligibleInterestCents": {
+            "status": "available",
+            "value": 0
+          },
+          "depreciation": {
+            "federal": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "federal",
+                "recoveryBasisCents": 33000000,
+                "openingAdjustedBuildingBasisCents": 33000000,
+                "depreciationCents": 1150000,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            },
+            "california": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "california",
+                "recoveryBasisCents": 33000000,
+                "openingAdjustedBuildingBasisCents": 33000000,
+                "depreciationCents": 1150000,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html",
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            },
+            "federal-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "federal-amt",
+                "recoveryBasisCents": 33000000,
+                "openingAdjustedBuildingBasisCents": 33000000,
+                "depreciationCents": 1150000,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.irs.gov/instructions/i6251",
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            },
+            "california-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "year": 2026,
+                "book": "california-amt",
+                "recoveryBasisCents": 33000000,
+                "openingAdjustedBuildingBasisCents": 33000000,
+                "depreciationCents": 1150000,
+                "monthsRecovered": 11.5,
+                "closing": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "provenance": {
+                  "status": "verified",
+                  "ruleVersion": "property-2026-reference",
+                  "baselineYear": 2026,
+                  "applicableYear": 2026,
+                  "sources": [
+                    "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html",
+                    "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
+                    "https://www.irs.gov/publications/p527"
+                  ],
+                  "assumptions": []
+                }
+              }
+            }
+          },
+          "books": {
+            "federal": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "federal",
+                "rentCents": 600000,
+                "operatingExpenseCents": 230001,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 1150000,
+                "taxableProfitCents": -780001,
+                "openingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "california": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "california",
+                "rentCents": 600000,
+                "operatingExpenseCents": 230001,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 1150000,
+                "taxableProfitCents": -780001,
+                "openingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "federal-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "federal-amt",
+                "rentCents": 600000,
+                "operatingExpenseCents": 230001,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 1150000,
+                "taxableProfitCents": -780001,
+                "openingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            },
+            "california-amt": {
+              "status": "available",
+              "value": {
+                "rentalId": "adu",
+                "book": "california-amt",
+                "rentCents": 600000,
+                "operatingExpenseCents": 230001,
+                "eligibleInterestCents": 0,
+                "depreciationCents": 1150000,
+                "taxableProfitCents": -780001,
+                "openingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 33000000,
+                  "cumulativeDepreciationCents": 0,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                },
+                "closingState": {
+                  "recoveryBasisCents": 33000000,
+                  "adjustedBuildingBasisCents": 31850000,
+                  "cumulativeDepreciationCents": 1150000,
+                  "atRiskCents": 50000000,
+                  "atRiskSuspendedCents": 0,
+                  "passiveSuspendedCents": 0,
+                  "lossVintages": []
+                }
+              }
+            }
+          },
+          "financingAtRiskQualification": {
+            "known": true,
+            "value": true
+          }
+        }
+      ],
+      "personal": {
+        "propertyTaxPaidCents": 0,
+        "homeownersInsuranceCents": 0,
+        "mortgageInsuranceCents": 0,
+        "mortgageInterestCents": {
+          "status": "available",
+          "value": 0
+        },
+        "loans": []
+      },
+      "cash": {
+        "rentCents": 600000,
+        "operatingExpenseCents": 230001,
+        "capitalExpenseCents": 0,
+        "debtPaymentCents": 0,
+        "interestCents": 0,
+        "principalPaidCents": 0
+      },
+      "closingRentalState": {
+        "adu": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 33000000,
+              "adjustedBuildingBasisCents": 31850000,
+              "cumulativeDepreciationCents": 1150000,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 33000000,
+              "adjustedBuildingBasisCents": 31850000,
+              "cumulativeDepreciationCents": 1150000,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 33000000,
+              "adjustedBuildingBasisCents": 31850000,
+              "cumulativeDepreciationCents": 1150000,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "recoveryBasisCents": 33000000,
+              "adjustedBuildingBasisCents": 31850000,
+              "cumulativeDepreciationCents": 1150000,
+              "atRiskCents": 50000000,
+              "atRiskSuspendedCents": 0,
+              "passiveSuspendedCents": 0,
+              "lossVintages": []
+            }
+          }
+        }
+      },
+      "issues": []
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "property-2026-reference"
+    ]
+  }
+]

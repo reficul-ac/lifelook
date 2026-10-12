@@ -138,9 +138,10 @@ export function validatePlan(raw: unknown): ValidationResult {
       const id = recordId(f);
       owners.add(id);
       v.history(f.birthDate, 'birthDate', id, (birth, field) => {
-        if (v.date(birth, field, id) && startValid && Number(birth.slice(0, 4)) > Number(root.startYear) - 18) v.issue(field, id, 'Each modeled filer must be an adult at the forecast start.');
+        if (v.date(birth, field, id) && startValid && birth > `${Number(root.startYear)-18}-01-01`) v.issue(field, id, 'Each modeled filer must be an adult at the forecast start.');
       });
       v.booleanHistory(f.workplaceCoverage, 'workplaceCoverage', id);
+      if(f.seniorDeductionSsnEligible!==undefined)v.booleanHistory(f.seniorDeductionSsnEligible,'seniorDeductionSsnEligible',id);
       const coverage = v.array(f.coverageByYear, 'coverageByYear', id);
       v.uniqueRows(coverage, row => row.year, 'coverageByYear', id);
       coverage.forEach((value, index) => {
@@ -309,6 +310,7 @@ export function validatePlan(raw: unknown): ValidationResult {
     allocations.forEach((value, index) => { const row = v.object(value, `loanAllocations[${index}]`, id); if (!row) return; reference(row.loanId, loanById, `loanAllocations[${index}].loanId`, id); v.allocation(row.share, `loanAllocations[${index}].share`, id); v.booleanHistory(row.qualification, `loanAllocations[${index}].qualification`, id); });
     const qualifications = v.object(o.qualifications, 'qualifications', id);
     if (qualifications) for (const field of ['longTermFairMarketLease', 'noPersonalUse', 'noSubstantialTenantServices', 'ordinaryResidential', 'advancedBasisAdjustments']) v.booleanHistory(qualifications[field], `qualifications.${field}`, id);
+    if (qualifications?.californiaSmallBusinessQualification !== undefined) v.booleanHistory(qualifications.californiaSmallBusinessQualification, 'qualifications.californiaSmallBusinessQualification', id);
     const history = v.object(o.taxHistory, 'taxHistory', id);
     if (history) for (const book of books) v.history(history[book], `taxHistory.${book}`, id, (value, field) => {
       const state = v.object(value, field, id); if (!state) return;
@@ -316,7 +318,7 @@ export function validatePlan(raw: unknown): ValidationResult {
       if (typeof state.adjustedBuildingBasisCents === 'number' && typeof state.recoveryBasisCents === 'number' && state.adjustedBuildingBasisCents > state.recoveryBasisCents) v.issue(`${field}.adjustedBuildingBasisCents`, id, 'Adjusted building basis cannot exceed original recovery basis for ordinary depreciation.');
       if (typeof state.cumulativeDepreciationCents === 'number' && typeof state.recoveryBasisCents === 'number' && state.cumulativeDepreciationCents > state.recoveryBasisCents) v.issue(`${field}.cumulativeDepreciationCents`, id, 'Prior depreciation cannot exceed recovery basis.');
       const vintages = v.array(state.lossVintages, `${field}.lossVintages`, id);
-      vintages.forEach((value, index) => { const row = v.object(value, `${field}.lossVintages[${index}]`, id); if (!row) return; v.integer(row.year, `${field}.lossVintages[${index}].year`, id, 1, startValid ? Number(root.startYear) - 1 : 9999); v.enum(row.source, ['at-risk', 'passive'], `${field}.lossVintages[${index}].source`, id); v.cents(row.amountCents, `${field}.lossVintages[${index}].amountCents`, id); });
+      vintages.forEach((value, index) => { const row = v.object(value, `${field}.lossVintages[${index}]`, id); if (!row) return; v.integer(row.year, `${field}.lossVintages[${index}].year`, id, 1, startValid ? Number(root.startYear) - 1 : 9999); v.enum(row.source, ['at-risk', 'passive'], `${field}.lossVintages[${index}].source`, id); v.cents(row.amountCents, `${field}.lossVintages[${index}].amountCents`, id); if(row.activeParticipation!==undefined) v.booleanHistory(row.activeParticipation,`${field}.lossVintages[${index}].activeParticipation`,id); if(row.qbiQualification!==undefined) v.booleanHistory(row.qbiQualification,`${field}.lossVintages[${index}].qbiQualification`,id); });
       for (const source of ['at-risk', 'passive'] as const) {
         const qualified = vintages.filter((row): row is Obj => isObject(row) && row.source === source);
         if (qualified.every(row => typeof row.amountCents === 'number' && Number.isSafeInteger(row.amountCents) && row.amountCents >= 0 && row.amountCents <= MAX_CENTS)) {
@@ -339,6 +341,7 @@ export function validatePlan(raw: unknown): ValidationResult {
     if (o.propertyId !== undefined || o.use === 'shared') reference(o.propertyId, propertyById, 'propertyId', id);
     if (o.rentalId !== undefined || o.use === 'rental') reference(o.rentalId, rentalById, 'rentalId', id);
     if (o.allocationOverride !== undefined) v.allocation(o.allocationOverride, 'allocationOverride', id);
+    if (o.mortgageInsuranceQualification !== undefined) v.booleanHistory(o.mortgageInsuranceQualification, 'mortgageInsuranceQualification', id);
     const linked = typeof o.rentalId === 'string' ? rentalById.get(o.rentalId) : undefined;
     if (linked && o.propertyId !== undefined && linked.propertyId !== o.propertyId) v.issue('rentalId', id, 'The expense rental must belong to the referenced property.');
     if (o.use === 'personal' && o.rentalId !== undefined) v.issue('rentalId', id, 'Personal expenses cannot also be assigned to a rental.');

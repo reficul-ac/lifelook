@@ -32,6 +32,7 @@ export interface Filer {
   readonly workplaceCoverage: History<boolean>;
   readonly coverageByYear: readonly AnnualWorkplaceCoverage[];
   readonly employerAssumptionsByYear: readonly EmployerYearAssumptions[];
+  readonly seniorDeductionSsnEligible?: History<boolean>;
 }
 export interface Household {
   readonly filers: readonly [Filer, Filer];
@@ -85,6 +86,7 @@ export interface Expense extends RecurringPayment {
   readonly use: 'personal' | 'rental' | 'shared';
   readonly allocationOverride?: AllocationShare;
   readonly taxCategory: 'property-tax' | 'homeowners-insurance' | 'mortgage-insurance' | 'repair' | 'operating' | 'capital' | 'personal';
+  readonly mortgageInsuranceQualification?: History<boolean>;
 }
 export type AccountType = 'taxable-brokerage' | 'traditional-401k' | 'roth-401k' | 'traditional-ira' | 'roth-ira';
 export interface Account {
@@ -162,6 +164,8 @@ export interface RentalLossVintage {
   readonly year: number;
   readonly source: 'at-risk' | 'passive';
   readonly amountCents: Cents;
+  readonly activeParticipation?: History<boolean>;
+  readonly qbiQualification?: History<boolean>;
 }
 export interface RentalBookState {
   readonly recoveryBasisCents: Cents;
@@ -185,6 +189,7 @@ export interface RentalQualifications {
   readonly noSubstantialTenantServices: History<boolean>;
   readonly ordinaryResidential: History<boolean>;
   readonly advancedBasisAdjustments: History<boolean>;
+  readonly californiaSmallBusinessQualification?: History<boolean>;
 }
 export interface RentalLoanAllocation {
   readonly loanId: string;

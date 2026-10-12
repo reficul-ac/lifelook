@@ -351,6 +351,166 @@
       "retrievedOn": "2026-10-12",
       "sha256": "eb5c820a15b416338d7317b780fa16676e571d8cfae04889064a947b090ebb43",
       "bytes": 263683
+    },
+    {
+      "id": "irs-6251-2025",
+      "url": "https://www.irs.gov/instructions/i6251",
+      "snapshot": "2025-reference/irs-6251.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "54eaefa504e139caccd6b361edff404d31b139a511c58ee401e6ac1b918ccdad",
+      "bytes": 232571
+    },
+    {
+      "id": "ftb-540-table-2025",
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-540-taxtable.pdf",
+      "snapshot": "2025-reference/ftb-540-taxtable.pdf",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "0414ffb02dbcd209966f5fe9bbdfeffd55816cc8d86a08501fd9ef7d79e7087d",
+      "bytes": 236624
+    },
+    {
+      "id": "irs-1040-table-2025",
+      "url": "https://www.irs.gov/pub/irs-pdf/i1040tt.pdf",
+      "snapshot": "2025-reference/irs-1040-tax-table.pdf",
+      "publicationYear": 2025,
+      "publicationDate": "2025-09-17",
+      "retrievedOn": "2026-10-12",
+      "sha256": "8ae019bd3b28b07b37e46e18597d8e899222a2224ce7482c015b130033403532",
+      "bytes": 1452403
+    },
+    {
+      "id": "irs-8960-2025",
+      "url": "https://www.irs.gov/instructions/i8960",
+      "snapshot": "2025-reference/irs-8960.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "a204d23930569af620af2e0718c9ac4f81fdeb26e0d94d0e98b2a3993d10cb1c",
+      "bytes": 338829
+    },
+    {
+      "id": "ftb-540-p-form-2025",
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-540-p.pdf",
+      "snapshot": "2025-reference/ftb-540-p.pdf",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "87b27d1611d4085da26b9f68e4957f9cbe08592c14eefc4b7ff35d12de0475ef",
+      "bytes": 155241
+    },
+    {
+      "id": "usc-56-2024",
+      "url": "https://www.govinfo.gov/link/uscode/26/56",
+      "snapshot": "2026/usc-56.pdf",
+      "publicationYear": 2024,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "7d3aff42a4d80ed344ec2ad7d41334afac5d7fae2035a91d44d3aee0c80edc6e",
+      "bytes": 199336
+    },
+    {
+      "id": "irs-8801-2025",
+      "url": "https://www.irs.gov/instructions/i8801",
+      "snapshot": "2025-reference/irs-8801.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "4637fee9342270c6afbf34c881da9acc805135e851b26aba277d25de3d8f4807",
+      "bytes": 143029
+    },
+    {
+      "id": "irs-schedule-1a-2025",
+      "url": "https://www.irs.gov/pub/irs-pdf/f1040s1a.pdf",
+      "snapshot": "2025-reference/irs-schedule-1a.pdf",
+      "publicationYear": 2025,
+      "publicationDate": "2025-11-04",
+      "retrievedOn": "2026-10-12",
+      "sha256": "64f97b38ff4218e2f188fd55a8aab7043556687487c82bbefe0b6dd1a956ecd4",
+      "bytes": 94224
+    },
+    {
+      "id": "irs-6251-form-2025",
+      "url": "https://www.irs.gov/pub/irs-pdf/f6251.pdf",
+      "snapshot": "2025-reference/irs-6251.pdf",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "6995bfd29c6fe1b80fdc396c9c4796c7cef58a966070db0346721eae815fea3f",
+      "bytes": 104434
+    },
+    {
+      "id": "irs-6251-2016",
+      "url": "https://www.irs.gov/pub/irs-prior/i6251--2016.pdf",
+      "snapshot": "2025-reference/irs-6251-2016.pdf",
+      "publicationYear": 2016,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "1ae2e9100ed7dd995c5f84483d60d7b79714f07dcde9941d4c47459a247bbdb0",
+      "bytes": 276834
+    },
+    {
+      "id": "irs-6251-2021",
+      "url": "https://www.irs.gov/pub/irs-prior/i6251--2021.pdf",
+      "snapshot": "2025-reference/irs-6251-2021.pdf",
+      "publicationYear": 2021,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "c6e5d9dba73d7a246cb381ea105d720305985fc1c1a4f4674fbe3e32df0368d9",
+      "bytes": 246989
+    },
+    {
+      "id": "irs-i8582-2025",
+      "url": "https://www.irs.gov/instructions/i8582",
+      "snapshot": "2025-reference/irs-i8582.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "fff6d8e687bde3878210387a5c515007aecec823796049b83e4c39d097272c34",
+      "bytes": 243029
+    },
+    {
+      "id": "irs-i6198-2025",
+      "url": "https://www.irs.gov/instructions/i6198",
+      "snapshot": "2025-reference/irs-i6198.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "4c2c47179da64812f7aac9810939cc3b11158af48d0ba4b6cf5ca53b8a496506",
+      "bytes": 185633
+    },
+    {
+      "id": "irs-p590a-2025",
+      "url": "https://www.irs.gov/publications/p590a",
+      "snapshot": "2025-reference/irs-p590a.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "9a784bc9e10f00060db65d6832451db0e5b411d1288294d46c4facc64268b26a",
+      "bytes": 723616
+    },
+    {
+      "id": "edd-wages-2026",
+      "url": "https://edd.ca.gov/en/payroll_taxes/what_are_wages/",
+      "snapshot": "2026/edd-wages.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "764887a85ce63e2fa3ae52eb8df49de901fb09364d01c3e9b1c94ec6ae6c78f9",
+      "bytes": 131009
+    },
+    {
+      "id": "ftb-1005-2025",
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-1005-publication.pdf",
+      "snapshot": "2025-reference/ftb-1005.pdf",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "12ac5573db3303d39fd6a386ff2c98b3be6d402c462be66d7242aa5f4269274a",
+      "bytes": 3936119
     }
   ]
 }

@@ -10,7 +10,8 @@
       "https://www.ftb.ca.gov/forms/2025/2025-540-instructions.html",
       "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
       "https://edd.ca.gov/en/payroll_taxes/rates_and_withholding/",
-      "https://www.ssa.gov/oact/cola/cbb.html"
+      "https://www.ssa.gov/oact/cola/cbb.html",
+      "https://www.govinfo.gov/link/uscode/26/56"
     ],
     "input": {
       "baselineYear": 2026,
@@ -21,7 +22,8 @@
       "Transcribe MFJ Rev Proc 2025-32 sections 4.01, 4.10, 4.14, 4.26 and Notice 2025-67 independently in cents.",
       "Public Law 119-21 sections 70103, 70107, 70108, 70111, 70120 govern enacted transitions.",
       "FTB October 2026 Schedule Y lower boundary is 118,996, conflicting with over 118,966; explicitly use continuous integration from boundaries.",
-      "2025 CA phaseout and AMT values remain named provisional proxies for missing December 2026 indexed amounts."
+      "2025 CA phaseout and AMT values remain named provisional proxies for missing December 2026 indexed amounts.",
+      "USC56(b)(1)(D)-(E), read with current IRS6251 senior instructions: personal exemption senior deduction not allowed and section68 does not apply in AMT."
     ],
     "expected": {
       "federal.standardDeductionCents": 3220000,
@@ -68,7 +70,9 @@
         "phaseoutBps": 5000,
         "rateSplitCents": 24450000,
         "lowerRateBps": 2600,
-        "upperRateBps": 2800
+        "upperRateBps": 2800,
+        "seniorDeductionAllowed": false,
+        "itemizedRestrictionApplies": false
       },
       "federal.seniorDeduction": {
         "perFilerCents": 600000,
@@ -114,7 +118,10 @@
       },
       "federal.rental": {
         "recoveryPeriodMonths": 330,
-        "convention": "mid-month"
+        "convention": "mid-month",
+        "amtPre1999RecoveryPeriodMonths": 480,
+        "amtSameRecoveryFromDate": "1999-01-01",
+        "ordinaryMacrsFromDate": "1987-01-01"
       },
       "california.brackets": [
         {
@@ -171,7 +178,8 @@
         "exemptionCents": 12366700,
         "phaseoutStartCents": 46374500,
         "phaseoutBps": 2500,
-        "rateBps": 700
+        "rateBps": 700,
+        "smallBusinessGrossReceiptsThresholdCents": 100000000
       },
       "california.surtax": {
         "thresholdCents": 100000000,
@@ -212,6 +220,24 @@
           "startCents": 24200000,
           "endCents": 25200000
         }
+      },
+      "california.taxTable": {
+        "method": "california-hundred-dollar-midpoint",
+        "maximumCents": 10000000,
+        "firstUpperCents": 5000,
+        "binWidthCents": 10000
+      },
+      "federal.taxTable": {
+        "method": "federal-variable-dollar-midpoint",
+        "maximumExclusiveCents": 10000000,
+        "narrowBinsThroughCents": 300000,
+        "narrowBinWidthCents": 2500,
+        "wideBinWidthCents": 5000,
+        "initialUpperCents": [
+          500,
+          1500,
+          2500
+        ]
       }
     },
     "toleranceCents": 0,

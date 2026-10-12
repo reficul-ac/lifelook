@@ -1,0 +1,4423 @@
+[
+  {
+    "id": "salt-50500000",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "salt",
+      "paidCents": 5000000,
+      "magiCents": 50500000
+    },
+    "worksheetSteps": [
+      "Start with 40,400 cap; subtract 30% of MAGI over 505,000, retaining 10,000 floor; cap actual paid taxes."
+    ],
+    "expected": 4040000,
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "salt-51500000",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "salt",
+      "paidCents": 5000000,
+      "magiCents": 51500000
+    },
+    "worksheetSteps": [
+      "Start with 40,400 cap; subtract 30% of MAGI over 505,000, retaining 10,000 floor; cap actual paid taxes."
+    ],
+    "expected": 3740000,
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "salt-100000000",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "salt",
+      "paidCents": 5000000,
+      "magiCents": 100000000
+    },
+    "worksheetSteps": [
+      "Start with 40,400 cap; subtract 30% of MAGI over 505,000, retaining 10,000 floor; cap actual paid taxes."
+    ],
+    "expected": 1000000,
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "salt-cannot-exceed-paid",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "salt",
+      "paidCents": 200000,
+      "magiCents": 100000000
+    },
+    "worksheetSteps": [
+      "SALT floor limits cap phaseout, not the actual amount paid; 2,000 paid stays 2,000."
+    ],
+    "expected": 200000,
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "section68-exact-two-over37",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "restriction",
+      "itemizedCents": 3700000,
+      "taxableCents": 80000000
+    },
+    "worksheetSteps": [
+      "Taxable income WITHOUT section68 is 800,000; add 37,000 itemized; excess over 768,700 is 68,300.",
+      "Use smaller of 37,000 and 68,300; reduction=37,000*2/37=2,000; allowed=35,000."
+    ],
+    "expected": 3500000,
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "section68-partial-limit",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "restriction",
+      "itemizedCents": 5000000,
+      "taxableCents": 72000000
+    },
+    "worksheetSteps": [
+      "Taxable income before section68 plus itemization=770,000; excess over 768,700=1,300; smaller=1,300.",
+      "1,300*2/37=70.27027027; allowed 50,000-70.27027027 settles to 4,992,973 cents."
+    ],
+    "expected": 4992973,
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "salt-phaseout-without-section68",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "restriction",
+      "itemizedCents": 3740000,
+      "taxableCents": 47760000
+    },
+    "worksheetSteps": [
+      "515,000 AGI with only 37,400 deductions means taxable 477,600; add deductions back=515,000 below 768,700; no restriction."
+    ],
+    "expected": 3740000,
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "standard-under65",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "standard",
+      "birthDates": [
+        "1962-01-02",
+        "1980-01-01"
+      ],
+      "jurisdiction": "federal"
+    },
+    "worksheetSteps": [
+      "MFJ standard 32,200; add 1,650 per age-65 filer, with January1 birthday considered attained December31."
+    ],
+    "expected": {
+      "status": "available",
+      "value": 3220000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "standard-january1-convention",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "standard",
+      "birthDates": [
+        "1962-01-01",
+        "1980-01-01"
+      ],
+      "jurisdiction": "federal"
+    },
+    "worksheetSteps": [
+      "MFJ standard 32,200; add 1,650 per age-65 filer, with January1 birthday considered attained December31."
+    ],
+    "expected": {
+      "status": "available",
+      "value": 3385000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "standard-two-aged",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "standard",
+      "birthDates": [
+        "1950-01-01",
+        "1951-02-01"
+      ],
+      "jurisdiction": "federal"
+    },
+    "worksheetSteps": [
+      "MFJ standard 32,200; add 1,650 per age-65 filer, with January1 birthday considered attained December31."
+    ],
+    "expected": {
+      "status": "available",
+      "value": 3550000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "post-2017-interest-only-federal",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "mortgage",
+      "property": {
+        "year": 2026,
+        "expenses": [],
+        "rentals": [],
+        "personal": {
+          "propertyTaxPaidCents": 0,
+          "homeownersInsuranceCents": 0,
+          "mortgageInsuranceCents": 0,
+          "mortgageInterestCents": {
+            "status": "available",
+            "value": 6000000
+          },
+          "loans": [
+            {
+              "loanId": "loan",
+              "propertyId": "home",
+              "cashInterestCents": 6000000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 6000000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 100000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 100000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            }
+          ]
+        },
+        "cash": {
+          "rentCents": 0,
+          "operatingExpenseCents": 0,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 6000000,
+          "interestCents": 6000000,
+          "principalPaidCents": 0
+        },
+        "closingRentalState": {},
+        "issues": []
+      },
+      "loans": [
+        {
+          "loanId": "loan",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 100000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 100000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 100000000,
+              "closingPrincipalCents": 100000000,
+              "monthlyOpeningPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ]
+            }
+          ]
+        }
+      ],
+      "jurisdiction": "federal"
+    },
+    "worksheetSteps": [
+      "Pub936 average=(1,000,000 opening+1,000,000 closing)/2=1,000,000.",
+      "Interest paid=60,000. Federal cap ratio .75 permits45,000; distinct CA1,000,000 cap permits60,000."
+    ],
+    "expected": {
+      "status": "available",
+      "paidInterestCents": 6000000,
+      "allowedInterestCents": 4500000,
+      "averageQualifiedDebtCents": 100000000,
+      "applicableLimitCents": 75000000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "post-2017-interest-only-california",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "mortgage",
+      "property": {
+        "year": 2026,
+        "expenses": [],
+        "rentals": [],
+        "personal": {
+          "propertyTaxPaidCents": 0,
+          "homeownersInsuranceCents": 0,
+          "mortgageInsuranceCents": 0,
+          "mortgageInterestCents": {
+            "status": "available",
+            "value": 6000000
+          },
+          "loans": [
+            {
+              "loanId": "loan",
+              "propertyId": "home",
+              "cashInterestCents": 6000000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 6000000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 100000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 100000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            }
+          ]
+        },
+        "cash": {
+          "rentCents": 0,
+          "operatingExpenseCents": 0,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 6000000,
+          "interestCents": 6000000,
+          "principalPaidCents": 0
+        },
+        "closingRentalState": {},
+        "issues": []
+      },
+      "loans": [
+        {
+          "loanId": "loan",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 100000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 100000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 100000000,
+              "closingPrincipalCents": 100000000,
+              "monthlyOpeningPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ]
+            }
+          ]
+        }
+      ],
+      "jurisdiction": "california"
+    },
+    "worksheetSteps": [
+      "Pub936 average=(1,000,000 opening+1,000,000 closing)/2=1,000,000.",
+      "Interest paid=60,000. Federal cap ratio .75 permits45,000; distinct CA1,000,000 cap permits60,000."
+    ],
+    "expected": {
+      "status": "available",
+      "paidInterestCents": 6000000,
+      "allowedInterestCents": 6000000,
+      "averageQualifiedDebtCents": 100000000,
+      "applicableLimitCents": 100000000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "average-debt-declines",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "mortgage",
+      "property": {
+        "year": 2026,
+        "expenses": [],
+        "rentals": [],
+        "personal": {
+          "propertyTaxPaidCents": 0,
+          "homeownersInsuranceCents": 0,
+          "mortgageInsuranceCents": 0,
+          "mortgageInterestCents": {
+            "status": "available",
+            "value": 5832218
+          },
+          "loans": [
+            {
+              "loanId": "loan",
+              "propertyId": "home",
+              "cashInterestCents": 5832218,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 5832218
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 100000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 100000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            }
+          ]
+        },
+        "cash": {
+          "rentCents": 0,
+          "operatingExpenseCents": 0,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 12000000,
+          "interestCents": 5832218,
+          "principalPaidCents": 6167782
+        },
+        "closingRentalState": {},
+        "issues": []
+      },
+      "loans": [
+        {
+          "loanId": "loan",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 100000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 100000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 1000000,
+              "principalPaidCents": 500000,
+              "closingPrincipalCents": 99500000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 99500000,
+              "interestCents": 497500,
+              "paymentCents": 1000000,
+              "principalPaidCents": 502500,
+              "closingPrincipalCents": 98997500,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 98997500,
+              "interestCents": 494988,
+              "paymentCents": 1000000,
+              "principalPaidCents": 505012,
+              "closingPrincipalCents": 98492488,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 98492488,
+              "interestCents": 492462,
+              "paymentCents": 1000000,
+              "principalPaidCents": 507538,
+              "closingPrincipalCents": 97984950,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 97984950,
+              "interestCents": 489925,
+              "paymentCents": 1000000,
+              "principalPaidCents": 510075,
+              "closingPrincipalCents": 97474875,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 97474875,
+              "interestCents": 487374,
+              "paymentCents": 1000000,
+              "principalPaidCents": 512626,
+              "closingPrincipalCents": 96962249,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 96962249,
+              "interestCents": 484811,
+              "paymentCents": 1000000,
+              "principalPaidCents": 515189,
+              "closingPrincipalCents": 96447060,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 96447060,
+              "interestCents": 482235,
+              "paymentCents": 1000000,
+              "principalPaidCents": 517765,
+              "closingPrincipalCents": 95929295,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 95929295,
+              "interestCents": 479646,
+              "paymentCents": 1000000,
+              "principalPaidCents": 520354,
+              "closingPrincipalCents": 95408941,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 95408941,
+              "interestCents": 477045,
+              "paymentCents": 1000000,
+              "principalPaidCents": 522955,
+              "closingPrincipalCents": 94885986,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 94885986,
+              "interestCents": 474430,
+              "paymentCents": 1000000,
+              "principalPaidCents": 525570,
+              "closingPrincipalCents": 94360416,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 94360416,
+              "interestCents": 471802,
+              "paymentCents": 1000000,
+              "principalPaidCents": 528198,
+              "closingPrincipalCents": 93832218,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 100000000,
+              "closingPrincipalCents": 93832218,
+              "monthlyOpeningPrincipalCents": [
+                100000000,
+                99500000,
+                98997500,
+                98492488,
+                97984950,
+                97474875,
+                96962249,
+                96447060,
+                95929295,
+                95408941,
+                94885986,
+                94360416
+              ],
+              "monthlyClosingPrincipalCents": [
+                99500000,
+                98997500,
+                98492488,
+                97984950,
+                97474875,
+                96962249,
+                96447060,
+                95929295,
+                95408941,
+                94885986,
+                94360416,
+                93832218
+              ]
+            }
+          ]
+        }
+      ],
+      "jurisdiction": "federal"
+    },
+    "worksheetSteps": [
+      "Independent Decimal worksheet: 1,000,000 opening, 6% APR/12, monthly payment10,000. Round each monthly accrued interest to cents with ties away. Closing 938322.18; total paid interest 58322.18.",
+      "Pub936 first/last average=969161.09; deductible interest=interestpaid*750,000/average=45133.50303817913284157951492, settled to cents.",
+      "No original principal denominator persists after scheduled principal payments."
+    ],
+    "expected": {
+      "status": "available",
+      "paidInterestCents": 5832218,
+      "allowedInterestCents": 4513350,
+      "averageQualifiedDebtCents": 96916109,
+      "applicableLimitCents": 75000000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "pre-december16-2017-interest-only",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "mortgage",
+      "property": {
+        "year": 2026,
+        "expenses": [],
+        "rentals": [],
+        "personal": {
+          "propertyTaxPaidCents": 0,
+          "homeownersInsuranceCents": 0,
+          "mortgageInsuranceCents": 0,
+          "mortgageInterestCents": {
+            "status": "available",
+            "value": 6000000
+          },
+          "loans": [
+            {
+              "loanId": "loan",
+              "propertyId": "home",
+              "cashInterestCents": 6000000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 6000000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2017-12-15",
+                "originationDate": "2017-12-15",
+                "originalPrincipalCents": 100000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 100000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            }
+          ]
+        },
+        "cash": {
+          "rentCents": 0,
+          "operatingExpenseCents": 0,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 6000000,
+          "interestCents": 6000000,
+          "principalPaidCents": 0
+        },
+        "closingRentalState": {},
+        "issues": []
+      },
+      "loans": [
+        {
+          "loanId": "loan",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2017-12-15",
+            "originationDate": "2017-12-15",
+            "originalPrincipalCents": 100000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 100000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 100000000,
+              "closingPrincipalCents": 100000000,
+              "monthlyOpeningPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ]
+            }
+          ]
+        }
+      ],
+      "jurisdiction": "federal"
+    },
+    "worksheetSteps": [
+      "Qualified acquisition on2017-12-15 uses federal1m cap rather than750k;60kpaid fullyallowed."
+    ],
+    "expected": {
+      "status": "available",
+      "paidInterestCents": 6000000,
+      "allowedInterestCents": 6000000,
+      "averageQualifiedDebtCents": 100000000,
+      "applicableLimitCents": 100000000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "rental-share-removed-before-personal-limit",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "mortgage",
+      "property": {
+        "year": 2026,
+        "expenses": [],
+        "rentals": [],
+        "personal": {
+          "propertyTaxPaidCents": 0,
+          "homeownersInsuranceCents": 0,
+          "mortgageInsuranceCents": 0,
+          "mortgageInterestCents": {
+            "status": "available",
+            "value": 4500000
+          },
+          "loans": [
+            {
+              "loanId": "loan",
+              "propertyId": "home",
+              "cashInterestCents": 4500000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 4500000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 100000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 100000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 3,
+                      "denominator": 4
+                    }
+                  },
+                  {
+                    "propertyId": "home",
+                    "rentalId": "adu",
+                    "use": "rental",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 4
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            }
+          ]
+        },
+        "cash": {
+          "rentCents": 0,
+          "operatingExpenseCents": 0,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 6000000,
+          "interestCents": 6000000,
+          "principalPaidCents": 0
+        },
+        "closingRentalState": {},
+        "issues": []
+      },
+      "loans": [
+        {
+          "loanId": "loan",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 100000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 100000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 3,
+                  "denominator": 4
+                }
+              },
+              {
+                "propertyId": "home",
+                "rentalId": "adu",
+                "use": "rental",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 4
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 100000000,
+              "closingPrincipalCents": 100000000,
+              "monthlyOpeningPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ]
+            }
+          ]
+        }
+      ],
+      "jurisdiction": "federal"
+    },
+    "worksheetSteps": [
+      "Traced75%personalprincipal=750k andpersonalinterest45k;25%rentalinterest15kremovedbeforepersonal limit.",
+      "Federalpersonalcap750k permitsfull45k; rentalinterest neverduplicated."
+    ],
+    "expected": {
+      "status": "available",
+      "paidInterestCents": 4500000,
+      "allowedInterestCents": 4500000,
+      "averageQualifiedDebtCents": 75000000,
+      "applicableLimitCents": 75000000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "aggregate-two-mortgages-federal",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "mortgage",
+      "property": {
+        "year": 2026,
+        "expenses": [],
+        "rentals": [],
+        "personal": {
+          "propertyTaxPaidCents": 0,
+          "homeownersInsuranceCents": 0,
+          "mortgageInsuranceCents": 0,
+          "mortgageInterestCents": {
+            "status": "available",
+            "value": 7200000
+          },
+          "loans": [
+            {
+              "loanId": "loan",
+              "propertyId": "home",
+              "cashInterestCents": 3600000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 3600000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 60000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 60000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            },
+            {
+              "loanId": "loan2",
+              "propertyId": "home",
+              "cashInterestCents": 3600000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 3600000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 60000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 60000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            }
+          ]
+        },
+        "cash": {
+          "rentCents": 0,
+          "operatingExpenseCents": 0,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 6000000,
+          "interestCents": 6000000,
+          "principalPaidCents": 0
+        },
+        "closingRentalState": {},
+        "issues": []
+      },
+      "loans": [
+        {
+          "loanId": "loan",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 60000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 60000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 60000000,
+              "closingPrincipalCents": 60000000,
+              "monthlyOpeningPrincipalCents": [
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000
+              ]
+            }
+          ]
+        },
+        {
+          "loanId": "loan2",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 60000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 60000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan2",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 60000000,
+              "closingPrincipalCents": 60000000,
+              "monthlyOpeningPrincipalCents": [
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000
+              ]
+            }
+          ]
+        }
+      ],
+      "jurisdiction": "federal"
+    },
+    "worksheetSteps": [
+      "Two600kaverage loansaggregate1.2m with72kinterest; onehousehold IRSworksheet.",
+      "Federal750k/1.2m*.72m=45k; CA1m/1.2m*72k=60k."
+    ],
+    "expected": {
+      "status": "available",
+      "paidInterestCents": 7200000,
+      "allowedInterestCents": 4500000,
+      "averageQualifiedDebtCents": 120000000,
+      "applicableLimitCents": 75000000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "aggregate-two-mortgages-california",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html"
+    ],
+    "input": {
+      "kind": "mortgage",
+      "property": {
+        "year": 2026,
+        "expenses": [],
+        "rentals": [],
+        "personal": {
+          "propertyTaxPaidCents": 0,
+          "homeownersInsuranceCents": 0,
+          "mortgageInsuranceCents": 0,
+          "mortgageInterestCents": {
+            "status": "available",
+            "value": 7200000
+          },
+          "loans": [
+            {
+              "loanId": "loan",
+              "propertyId": "home",
+              "cashInterestCents": 3600000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 3600000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 60000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 60000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            },
+            {
+              "loanId": "loan2",
+              "propertyId": "home",
+              "cashInterestCents": 3600000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 3600000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 60000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 60000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            }
+          ]
+        },
+        "cash": {
+          "rentCents": 0,
+          "operatingExpenseCents": 0,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 6000000,
+          "interestCents": 6000000,
+          "principalPaidCents": 0
+        },
+        "closingRentalState": {},
+        "issues": []
+      },
+      "loans": [
+        {
+          "loanId": "loan",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 60000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 60000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 60000000,
+              "closingPrincipalCents": 60000000,
+              "monthlyOpeningPrincipalCents": [
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000
+              ]
+            }
+          ]
+        },
+        {
+          "loanId": "loan2",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 60000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 60000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan2",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan2",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 60000000,
+              "interestCents": 300000,
+              "paymentCents": 300000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 60000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 60000000,
+              "closingPrincipalCents": 60000000,
+              "monthlyOpeningPrincipalCents": [
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000,
+                60000000
+              ]
+            }
+          ]
+        }
+      ],
+      "jurisdiction": "california"
+    },
+    "worksheetSteps": [
+      "Two600kaverage loansaggregate1.2m with72kinterest; onehousehold IRSworksheet.",
+      "Federal750k/1.2m*.72m=45k; CA1m/1.2m*72k=60k."
+    ],
+    "expected": {
+      "status": "available",
+      "paidInterestCents": 7200000,
+      "allowedInterestCents": 6000000,
+      "averageQualifiedDebtCents": 120000000,
+      "applicableLimitCents": 100000000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "candidate-actual-paid-niit",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html",
+      "https://www.irs.gov/instructions/i8960"
+    ],
+    "input": {
+      "kind": "candidate",
+      "property": {
+        "year": 2026,
+        "expenses": [],
+        "rentals": [],
+        "personal": {
+          "propertyTaxPaidCents": 1000000,
+          "homeownersInsuranceCents": 200000,
+          "mortgageInsuranceCents": 0,
+          "mortgageInterestCents": {
+            "status": "available",
+            "value": 6000000
+          },
+          "loans": [
+            {
+              "loanId": "loan",
+              "propertyId": "home",
+              "cashInterestCents": 6000000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 6000000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 100000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 100000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            }
+          ]
+        },
+        "cash": {
+          "rentCents": 0,
+          "operatingExpenseCents": 0,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 6000000,
+          "interestCents": 6000000,
+          "principalPaidCents": 0
+        },
+        "closingRentalState": {},
+        "issues": []
+      },
+      "loans": [
+        {
+          "loanId": "loan",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 100000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 100000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 100000000,
+              "closingPrincipalCents": 100000000,
+              "monthlyOpeningPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ]
+            }
+          ]
+        }
+      ],
+      "facts": {
+        "year": 2026,
+        "federalAgiCents": {
+          "status": "available",
+          "value": 16000000
+        },
+        "saltMagiCents": {
+          "status": "available",
+          "value": 16000000
+        },
+        "niitOtherIncomeCents": {
+          "status": "available",
+          "value": 0
+        },
+        "rental": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "allowedRentalCents": 6000000
+            }
+          }
+        }
+      },
+      "statePaid": {
+        "status": "available",
+        "value": {
+          "californiaIncomeTaxPaidCents": 1000000,
+          "sdiPaidCents": 100000,
+          "source": "actual-override"
+        }
+      }
+    },
+    "worksheetSteps": [
+      "Only paid personal property tax10,000 and stateincome10,000 plus SDI1,000 enter federalSALT; homeownersinsurance2,000 isdisallowed.",
+      "CAonlymortgage60,000+propertytax10,000; stateincome/SDI/MPI excluded.",
+      "CAhigh-incomeat600,000usesexplicitprovisional504,411floor:6%*(600,000-504,411)=5,735.34 reduction;70,000-5,735.34=64,264.66.",
+      "FederalNIIstateallocation uses allowedSALT proportionalstateincome share and NII60,000/AGI, excludingSDI/propertytax.",
+      "MPI AGI100,000.01 rounds excess fraction to one1,000step;1,000premium\u00d790%=900."
+    ],
+    "expected": {
+      "federal": {
+        "status": "available",
+        "allowedCents": 6600000,
+        "mortgageInsuranceCents": 0,
+        "niitDeductionCents": {
+          "status": "available",
+          "value": 375000
+        },
+        "amtAllowedCents": 4500000
+      },
+      "california": {
+        "status": "available",
+        "allowedCents": 7000000,
+        "mortgageInsuranceCents": 0,
+        "niitDeductionCents": {
+          "status": "available",
+          "value": 0
+        },
+        "amtAllowedCents": 6000000
+      }
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "candidate-ca-high-income",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html",
+      "https://www.irs.gov/instructions/i8960"
+    ],
+    "input": {
+      "kind": "candidate",
+      "property": {
+        "year": 2026,
+        "expenses": [],
+        "rentals": [],
+        "personal": {
+          "propertyTaxPaidCents": 1000000,
+          "homeownersInsuranceCents": 200000,
+          "mortgageInsuranceCents": 0,
+          "mortgageInterestCents": {
+            "status": "available",
+            "value": 6000000
+          },
+          "loans": [
+            {
+              "loanId": "loan",
+              "propertyId": "home",
+              "cashInterestCents": 6000000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 6000000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 100000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 100000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            }
+          ]
+        },
+        "cash": {
+          "rentCents": 0,
+          "operatingExpenseCents": 0,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 6000000,
+          "interestCents": 6000000,
+          "principalPaidCents": 0
+        },
+        "closingRentalState": {},
+        "issues": []
+      },
+      "loans": [
+        {
+          "loanId": "loan",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 100000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 100000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 100000000,
+              "closingPrincipalCents": 100000000,
+              "monthlyOpeningPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ]
+            }
+          ]
+        }
+      ],
+      "facts": {
+        "year": 2026,
+        "federalAgiCents": {
+          "status": "available",
+          "value": 60000000
+        },
+        "saltMagiCents": {
+          "status": "available",
+          "value": 60000000
+        },
+        "niitOtherIncomeCents": {
+          "status": "available",
+          "value": 0
+        },
+        "rental": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "allowedRentalCents": 6000000
+            }
+          }
+        }
+      },
+      "statePaid": {
+        "status": "available",
+        "value": {
+          "californiaIncomeTaxPaidCents": 1000000,
+          "sdiPaidCents": 100000,
+          "source": "actual-override"
+        }
+      }
+    },
+    "worksheetSteps": [
+      "Only paid personal property tax10,000 and stateincome10,000 plus SDI1,000 enter federalSALT; homeownersinsurance2,000 isdisallowed.",
+      "CAonlymortgage60,000+propertytax10,000; stateincome/SDI/MPI excluded.",
+      "CAhigh-incomeat600,000usesexplicitprovisional504,411floor:6%*(600,000-504,411)=5,735.34 reduction;70,000-5,735.34=64,264.66.",
+      "FederalNIIstateallocation uses allowedSALT proportionalstateincome share and NII60,000/AGI, excludingSDI/propertytax.",
+      "MPI AGI100,000.01 rounds excess fraction to one1,000step;1,000premium\u00d790%=900."
+    ],
+    "expected": {
+      "federal": {
+        "status": "available",
+        "allowedCents": 5690000,
+        "mortgageInsuranceCents": 0,
+        "niitDeductionCents": {
+          "status": "available",
+          "value": 56667
+        },
+        "amtAllowedCents": 4500000
+      },
+      "california": {
+        "status": "available",
+        "allowedCents": 6426466,
+        "mortgageInsuranceCents": 0,
+        "niitDeductionCents": {
+          "status": "available",
+          "value": 0
+        },
+        "amtAllowedCents": 6000000
+      }
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "candidate-qualified-mpi-partial",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html",
+      "https://www.irs.gov/instructions/i8960"
+    ],
+    "input": {
+      "kind": "candidate",
+      "property": {
+        "year": 2026,
+        "expenses": [
+          {
+            "expenseId": "mpi",
+            "propertyId": "home",
+            "taxCategory": "mortgage-insurance",
+            "paidCents": 100000,
+            "personalCents": 100000,
+            "rentalCentsByUnit": {},
+            "mortgageInsuranceQualification": {
+              "known": true,
+              "value": true
+            }
+          }
+        ],
+        "rentals": [],
+        "personal": {
+          "propertyTaxPaidCents": 1000000,
+          "homeownersInsuranceCents": 200000,
+          "mortgageInsuranceCents": 100000,
+          "mortgageInterestCents": {
+            "status": "available",
+            "value": 6000000
+          },
+          "loans": [
+            {
+              "loanId": "loan",
+              "propertyId": "home",
+              "cashInterestCents": 6000000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 6000000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 100000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 100000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            }
+          ]
+        },
+        "cash": {
+          "rentCents": 0,
+          "operatingExpenseCents": 0,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 6000000,
+          "interestCents": 6000000,
+          "principalPaidCents": 0
+        },
+        "closingRentalState": {},
+        "issues": []
+      },
+      "loans": [
+        {
+          "loanId": "loan",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 100000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 100000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 100000000,
+              "closingPrincipalCents": 100000000,
+              "monthlyOpeningPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ]
+            }
+          ]
+        }
+      ],
+      "facts": {
+        "year": 2026,
+        "federalAgiCents": {
+          "status": "available",
+          "value": 10000001
+        },
+        "saltMagiCents": {
+          "status": "available",
+          "value": 10000001
+        },
+        "niitOtherIncomeCents": {
+          "status": "available",
+          "value": 0
+        },
+        "rental": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "allowedRentalCents": 6000000
+            }
+          }
+        }
+      },
+      "statePaid": {
+        "status": "available",
+        "value": {
+          "californiaIncomeTaxPaidCents": 1000000,
+          "sdiPaidCents": 100000,
+          "source": "actual-override"
+        }
+      }
+    },
+    "worksheetSteps": [
+      "Only paid personal property tax10,000 and stateincome10,000 plus SDI1,000 enter federalSALT; homeownersinsurance2,000 isdisallowed.",
+      "CAonlymortgage60,000+propertytax10,000; stateincome/SDI/MPI excluded.",
+      "CAhigh-incomeat600,000usesexplicitprovisional504,411floor:6%*(600,000-504,411)=5,735.34 reduction;70,000-5,735.34=64,264.66.",
+      "FederalNIIstateallocation uses allowedSALT proportionalstateincome share and NII60,000/AGI, excludingSDI/propertytax.",
+      "MPI AGI100,000.01 rounds excess fraction to one1,000step;1,000premium\u00d790%=900."
+    ],
+    "expected": {
+      "federal": {
+        "status": "available",
+        "allowedCents": 6690000,
+        "mortgageInsuranceCents": 90000,
+        "niitDeductionCents": {
+          "status": "available",
+          "value": 600000
+        },
+        "amtAllowedCents": 4590000
+      },
+      "california": {
+        "status": "available",
+        "allowedCents": 7000000,
+        "mortgageInsuranceCents": 0,
+        "niitDeductionCents": {
+          "status": "available",
+          "value": 0
+        },
+        "amtAllowedCents": 6000000
+      }
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  },
+  {
+    "id": "candidate-ca-independent-state-paid",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/publications/p936",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html",
+      "https://www.irs.gov/instructions/i8960"
+    ],
+    "input": {
+      "kind": "candidate",
+      "property": {
+        "year": 2026,
+        "expenses": [],
+        "rentals": [],
+        "personal": {
+          "propertyTaxPaidCents": 1000000,
+          "homeownersInsuranceCents": 200000,
+          "mortgageInsuranceCents": 0,
+          "mortgageInterestCents": {
+            "status": "available",
+            "value": 6000000
+          },
+          "loans": [
+            {
+              "loanId": "loan",
+              "propertyId": "home",
+              "cashInterestCents": 6000000,
+              "personalInterestCents": {
+                "status": "available",
+                "value": 6000000
+              },
+              "qualification": {
+                "collateralPropertyId": "home",
+                "acquisitionDate": "2020-01-01",
+                "originationDate": "2020-01-01",
+                "originalPrincipalCents": 100000000,
+                "proceedsQualification": {
+                  "kind": "acquisition",
+                  "qualifiedAcquisitionDebt": {
+                    "known": true,
+                    "value": true
+                  },
+                  "qualifiedPrincipalCents": {
+                    "known": true,
+                    "value": 100000000
+                  },
+                  "historyComplete": {
+                    "known": true,
+                    "value": true
+                  }
+                },
+                "proceedsAllocations": [
+                  {
+                    "propertyId": "home",
+                    "use": "personal",
+                    "share": {
+                      "numerator": 1,
+                      "denominator": 1
+                    }
+                  }
+                ],
+                "financingAtRiskQualification": {
+                  "known": true,
+                  "value": true
+                }
+              }
+            }
+          ]
+        },
+        "cash": {
+          "rentCents": 0,
+          "operatingExpenseCents": 0,
+          "capitalExpenseCents": 0,
+          "debtPaymentCents": 6000000,
+          "interestCents": 6000000,
+          "principalPaidCents": 0
+        },
+        "closingRentalState": {},
+        "issues": []
+      },
+      "loans": [
+        {
+          "loanId": "loan",
+          "startYear": 2026,
+          "horizonYears": 1,
+          "openingProvenance": "known",
+          "paymentProvenance": "known",
+          "qualification": {
+            "collateralPropertyId": "home",
+            "acquisitionDate": "2020-01-01",
+            "originationDate": "2020-01-01",
+            "originalPrincipalCents": 100000000,
+            "proceedsQualification": {
+              "kind": "acquisition",
+              "qualifiedAcquisitionDebt": {
+                "known": true,
+                "value": true
+              },
+              "qualifiedPrincipalCents": {
+                "known": true,
+                "value": 100000000
+              },
+              "historyComplete": {
+                "known": true,
+                "value": true
+              }
+            },
+            "proceedsAllocations": [
+              {
+                "propertyId": "home",
+                "use": "personal",
+                "share": {
+                  "numerator": 1,
+                  "denominator": 1
+                }
+              }
+            ],
+            "financingAtRiskQualification": {
+              "known": true,
+              "value": true
+            }
+          },
+          "issues": [],
+          "months": [
+            {
+              "loanId": "loan",
+              "date": "2026-01-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-02-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-03-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-04-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-05-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-06-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-07-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-08-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-09-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-10-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-11-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            },
+            {
+              "loanId": "loan",
+              "date": "2026-12-28",
+              "openingPrincipalCents": 100000000,
+              "interestCents": 500000,
+              "paymentCents": 500000,
+              "principalPaidCents": 0,
+              "closingPrincipalCents": 100000000,
+              "openingProvenance": "known",
+              "issues": []
+            }
+          ],
+          "averageBalanceEvidence": [
+            {
+              "year": 2026,
+              "openingPrincipalCents": 100000000,
+              "closingPrincipalCents": 100000000,
+              "monthlyOpeningPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ],
+              "monthlyClosingPrincipalCents": [
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000,
+                100000000
+              ]
+            }
+          ]
+        }
+      ],
+      "facts": {
+        "year": 2026,
+        "federalAgiCents": {
+          "status": "available",
+          "value": 16000000
+        },
+        "saltMagiCents": {
+          "status": "available",
+          "value": 16000000
+        },
+        "niitOtherIncomeCents": {
+          "status": "available",
+          "value": 0
+        },
+        "rental": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "allowedRentalCents": 6000000
+            }
+          }
+        }
+      },
+      "statePaid": {
+        "status": "needs-data",
+        "issues": []
+      }
+    },
+    "worksheetSteps": [
+      "Only paid personal property tax10,000 and stateincome10,000 plus SDI1,000 enter federalSALT; homeownersinsurance2,000 isdisallowed.",
+      "CAonlymortgage60,000+propertytax10,000; stateincome/SDI/MPI excluded.",
+      "CAhigh-incomeat600,000usesexplicitprovisional504,411floor:6%*(600,000-504,411)=5,735.34 reduction;70,000-5,735.34=64,264.66.",
+      "FederalNIIstateallocation uses allowedSALT proportionalstateincome share and NII60,000/AGI, excludingSDI/propertytax.",
+      "MPI AGI100,000.01 rounds excess fraction to one1,000step;1,000premium\u00d790%=900."
+    ],
+    "expected": {
+      "federal": {
+        "status": "needs-data"
+      },
+      "california": {
+        "status": "available",
+        "allowedCents": 7000000,
+        "mortgageInsuranceCents": 0,
+        "niitDeductionCents": {
+          "status": "available",
+          "value": 0
+        },
+        "amtAllowedCents": 6000000
+      }
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  }
+]

@@ -64,6 +64,7 @@ export interface PassiveRules {
 export interface FederalRules {
   readonly brackets: readonly TaxBracket[];
   readonly standardDeductionCents: number;
+  readonly taxTable: { readonly method: string; readonly maximumExclusiveCents: number; readonly narrowBinsThroughCents: number; readonly narrowBinWidthCents: number; readonly wideBinWidthCents: number; readonly initialUpperCents: readonly number[] };
   readonly additionalStandardDeductionPerFilerCents: number;
   readonly ageDeductionMinimumAge: number;
   readonly seniorDeduction: { readonly perFilerCents: number; readonly minimumAge: number; readonly phaseoutStartCents: number; readonly reductionBps: number };
@@ -71,15 +72,16 @@ export interface FederalRules {
   readonly itemized: { readonly restrictionNumerator: number; readonly restrictionDenominator: number; readonly thresholdCents: number };
   readonly mortgage: { readonly post2017LimitCents: number; readonly pre2017LimitCents: number; readonly cutoffDate: string };
   readonly mortgageInsurance: { readonly allowed: boolean; readonly phaseoutStartCents: number; readonly phaseoutStepCents: number; readonly reductionBps: number };
-  readonly amt: { readonly exemptionCents: number; readonly phaseoutStartCents: number; readonly phaseoutBps: number; readonly rateSplitCents: number; readonly lowerRateBps: number; readonly upperRateBps: number };
+  readonly amt: { readonly exemptionCents: number; readonly phaseoutStartCents: number; readonly phaseoutBps: number; readonly rateSplitCents: number; readonly lowerRateBps: number; readonly upperRateBps: number; readonly seniorDeductionAllowed: boolean; readonly itemizedRestrictionApplies: boolean };
   readonly passive: PassiveRules;
   readonly niit: { readonly thresholdCents: number; readonly rateBps: number };
   readonly qbi: { readonly deductionBps: number; readonly phaseoutStartCents: number; readonly phaseoutEndCents: number; readonly wageOnlyLimitBps: number; readonly wageMixedLimitBps: number; readonly ubiaLimitBps: number; readonly minimumDeductionCents: number; readonly minimumQbiCents: number };
-  readonly rental: { readonly recoveryPeriodMonths: number; readonly convention: string };
+  readonly rental: RentalRecoveryRules;
 }
 export interface CaliforniaRules {
   readonly brackets: readonly TaxBracket[];
   readonly standardDeductionCents: number;
+  readonly taxTable: { readonly method: string; readonly maximumCents: number; readonly firstUpperCents: number; readonly binWidthCents: number };
   readonly personalCreditPerFilerCents: number;
   readonly seniorCreditPerFilerCents: number;
   readonly seniorCreditMinimumAge: number;
@@ -87,11 +89,12 @@ export interface CaliforniaRules {
   readonly itemized: { readonly phaseoutStartCents: number; readonly reductionBps: number; readonly maxReductionBps: number };
   readonly mortgage: { readonly acquisitionLimitCents: number };
   readonly mortgageInsurance: { readonly allowed: boolean };
-  readonly amt: { readonly exemptionCents: number; readonly phaseoutStartCents: number; readonly phaseoutBps: number; readonly rateBps: number };
+  readonly amt: { readonly exemptionCents: number; readonly phaseoutStartCents: number; readonly phaseoutBps: number; readonly rateBps: number; readonly smallBusinessGrossReceiptsThresholdCents: number };
   readonly surtax: { readonly thresholdCents: number; readonly rateBps: number };
   readonly passive: PassiveRules;
-  readonly rental: { readonly recoveryPeriodMonths: number; readonly convention: string };
+  readonly rental: RentalRecoveryRules;
 }
+export interface RentalRecoveryRules { readonly recoveryPeriodMonths: number; readonly convention: string; readonly amtPre1999RecoveryPeriodMonths: number; readonly amtSameRecoveryFromDate: string; readonly ordinaryMacrsFromDate: string }
 export interface PayrollRules {
   readonly socialSecurityRateBps: number;
   readonly socialSecurityWageBaseCents: number;

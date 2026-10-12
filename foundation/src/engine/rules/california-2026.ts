@@ -12,6 +12,10 @@ thresholds.forEach((upper, i) => {
 const proxy = (value: number, source: typeof s.caForm | typeof s.caAmt) => rule(value, source, indexed(100, 'nearest'), [`Explicit provisional proxy: retain the published 2025 amount (${value / 100} USD) for 2026. FTB says complete 2026 indexed amounts are pending late December; statutory endpoint could not be retrieved, so no verified 2026 value is claimed.`], 'provisional');
 Object.assign(values, {
   standardDeductionCents: rule(1180000, s.california, indexed(100, 'nearest')),
+  'taxTable.method': rule('california-hundred-dollar-midpoint', s.caTaxTable, fixed, ['Explicit provisional method assumption: apply the complete official 2025 California tax-table bin method to the published 2026 marginal schedule until the 2026 official table is published.'], 'provisional'),
+  'taxTable.maximumCents': rule(10000000, s.caTaxTable, fixed, ['Explicit provisional 2025 table boundary used for the 2026 scenario.'], 'provisional'),
+  'taxTable.firstUpperCents': rule(5000, s.caTaxTable, fixed, ['Explicit provisional 2025 first-bin upper boundary used for the 2026 scenario.'], 'provisional'),
+  'taxTable.binWidthCents': rule(10000, s.caTaxTable, fixed, ['Explicit provisional 2025 regular-bin width used for the 2026 scenario; truncate the final bin at maximumCents.'], 'provisional'),
   personalCreditPerFilerCents: rule(15800, s.california, indexed(100, 'nearest')),
   seniorCreditPerFilerCents: rule(15800, s.california, indexed(100, 'nearest')),
   seniorCreditMinimumAge: rule(65, s.caForm),
@@ -27,6 +31,7 @@ Object.assign(values, {
   'amt.phaseoutStartCents': proxy(46374500, s.caAmt),
   'amt.phaseoutBps': rule(2500, s.caAmt),
   'amt.rateBps': rule(700, s.caAmt),
+  'amt.smallBusinessGrossReceiptsThresholdCents': rule(100000000, s.caAmt),
   'surtax.thresholdCents': rule(100000000, s.caEstimate),
   'surtax.rateBps': rule(100, s.caEstimate),
   'passive.allowanceCents': rule(2500000, s.caPassive),
@@ -35,5 +40,8 @@ Object.assign(values, {
   'passive.reductionBps': rule(5000, s.caPassive),
   'rental.recoveryPeriodMonths': rule(330, s.rental),
   'rental.convention': rule('mid-month', s.rental),
+  'rental.amtPre1999RecoveryPeriodMonths': rule(480, s.caAmt),
+  'rental.amtSameRecoveryFromDate': rule('1999-01-01', s.caAmt),
+  'rental.ordinaryMacrsFromDate': rule('1987-01-01', s.rental),
 });
 export const california2026: RulePack = { jurisdiction: 'california', version: 'california-2026.1', baselineYear: 2026, values };

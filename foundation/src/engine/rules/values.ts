@@ -35,6 +35,10 @@ export const SOURCES = {
   rothIndex: source('usc-408a-2024', 'https://www.govinfo.gov/link/uscode/26/408A', '2026/usc-408a.pdf', 2024),
   mortgageStatute: source('usc-163-2024', 'https://www.govinfo.gov/link/uscode/26/163', '2026/usc-163.pdf', 2024),
   qbiStatute: source('usc-199a-2024', 'https://www.govinfo.gov/link/uscode/26/199A', '2026/usc-199a.pdf', 2024),
+  amtMethod: source('irs-6251-2025', 'https://www.irs.gov/instructions/i6251', '2025-reference/irs-6251.html', 2025),
+  amtStatute: source('usc-56-2024', 'https://www.govinfo.gov/link/uscode/26/56', '2026/usc-56.pdf', 2024),
+  caTaxTable: source('ftb-540-table-2025', 'https://www.ftb.ca.gov/forms/2025/2025-540-taxtable.pdf', '2025-reference/ftb-540-taxtable.pdf', 2025),
+  federalTaxTable: source('irs-1040-table-2025', 'https://www.irs.gov/pub/irs-pdf/i1040tt.pdf', '2025-reference/irs-1040-tax-table.pdf', 2025, '2025-09-17'),
 } as const;
 
 export function rule(value: RuleScalar, sources: RuleSource | readonly RuleSource[], indexing: IndexingPolicy = fixed, assumptions: readonly string[] = [], status: 'verified' | 'provisional' = 'verified', transitions: readonly RuleTransition<RuleScalar>[] = []): RuleValue<RuleScalar> {

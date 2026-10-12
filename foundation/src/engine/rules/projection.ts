@@ -88,6 +88,9 @@ export function aggregateRuleProvenance(rules: YearRules, paths: readonly string
     if (!field) throw new Error(`Unknown provenance path: ${path}`);
     return field;
   });
+  return mergeRuleProvenance(rules, fields);
+}
+export function mergeRuleProvenance(rules: YearRules, fields: readonly RuleProvenance[]): RuleProvenance {
   const status = fields.some(p => p.status === 'provisional') ? 'provisional' : fields.some(p => p.status === 'projected') ? 'projected' : 'verified';
   return { status, ruleVersion: rules.ruleVersion, baselineYear: rules.baselineYear, applicableYear: rules.year, sources: [...new Set(fields.flatMap(p => p.sources))], assumptions: [...new Set(fields.flatMap(p => p.assumptions))] };
 }

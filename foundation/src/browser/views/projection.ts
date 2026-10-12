@@ -1,0 +1,65 @@
+import type { AnnualProjection,MonthlyProjection,MonetaryField,ProjectionResult } from '../../engine';
+import { appendAmount,appendCoverage,appendProvenance,element,renderIssues } from './issues';
+import { renderTaxExplanation } from './tax-explanation';
+
+const columns:readonly {key:MonetaryField;label:string}[]=[
+  {key:'grossIncomeCents',label:'Gross income'},{key:'salaryCents',label:'Salary'},{key:'otherIncomeCents',label:'Other income'},{key:'rentCents',label:'Rent'},
+  {key:'federalIncomeTaxCents',label:'Federal income tax'},{key:'californiaIncomeTaxCents',label:'California income tax'},{key:'socialSecurityCents',label:'Social Security'},{key:'medicareCents',label:'Medicare'},{key:'additionalMedicareCents',label:'Additional Medicare'},{key:'sdiCents',label:'SDI'},{key:'totalTaxCents',label:'Total tax'},
+  {key:'ordinaryExpensesCents',label:'Ordinary expenses'},{key:'propertyExpensesCents',label:'Property expenses'},{key:'expensesCents',label:'Expenses'},{key:'debtPaymentCents',label:'Debt payments'},{key:'interestCents',label:'Interest'},{key:'principalPaidCents',label:'Principal'},
+  {key:'requestedContributionCents',label:'Requested contributions'},{key:'eligibleContributionCents',label:'Eligible contributions'},{key:'preventedContributionCents',label:'Prevented contributions'},{key:'accountGrowthCents',label:'Account growth'},{key:'propertyGrowthCents',label:'Property growth'},
+  {key:'cashFlowCents',label:'Cash flow'},{key:'accountBalanceCents',label:'Accounts'},{key:'propertyValueCents',label:'Property value'},{key:'loanBalanceCents',label:'Loans'},{key:'equityCents',label:'Equity'},{key:'reserveCents',label:'Cash reserve'},{key:'netWorthCents',label:'Net worth'},
+];
+const slug=(key:string)=>key.replace(/Cents$/,'').replace(/[A-Z]/g,c=>`-${c.toLowerCase()}`);
+function movementTable(root:HTMLElement,rows:readonly (AnnualProjection|MonthlyProjection)[],caption:string):void {
+  const scroll=element('div');scroll.className='projection-table-wrap';scroll.style.overflowX='auto';
+  const table=element('table');table.append(element('caption',caption));const head=element('thead'),header=element('tr');
+  const period=element('th','Period');period.scope='col';header.append(period);
+  for(const column of columns){const cell=element('th',column.label);cell.scope='col';header.append(cell);}head.append(header);table.append(head);
+  const body=element('tbody');
+  for(const row of rows){
+    const line=element('tr'),isMonth='month'in row,period=isMonth?row.date:String(row.year),prefix=isMonth?`monthly-${row.date}`:`annual-${row.year}`;
+    const label=element('th',period);label.scope='row';line.append(label);
+    for(const column of columns){const cell=element('td');cell.dataset.testid=`${prefix}-${slug(column.key)}`;appendAmount(cell,row[column.key]);line.append(cell);}body.append(line);
+  }
+  table.append(body);scroll.append(table);root.append(scroll);
+}
+function records(root:HTMLElement,row:AnnualProjection|MonthlyProjection,prefix:string):void {
+  const details=element('details');details.append(element('summary',`Account, property and loan detail for ${'date'in row?row.date:row.year}`));
+  function table(caption:string,headers:readonly string[]):{table:HTMLTableElement;body:HTMLTableSectionElement}{
+    const table=element('table');table.append(element('caption',caption));const head=element('thead'),line=element('tr');for(const label of headers){const cell=element('th',label);cell.scope='col';line.append(cell);}head.append(line);table.append(head);const body=element('tbody');table.append(body);details.append(table);return{table,body};
+  }
+  function cell(line:HTMLTableRowElement,value:Parameters<typeof appendAmount>[1],id?:string){const node=element('td');if(id)node.dataset.testid=id;appendAmount(node,value);line.append(node);}
+  if(row.accounts.length){const {body}=table('Account balances and flows',['Account','Opening balance','Eligible deposit','Growth','Closing balance']);for(const account of row.accounts){const line=element('tr');line.append(element('th',account.accountId));cell(line,account.openingCents);cell(line,account.contributionCents);cell(line,account.growthCents);cell(line,account.closingCents,`${prefix}-account-${account.accountId}-closing`);body.append(line);}}
+  if(row.properties.length){const {body}=table('Property values and equity',['Property','Opening value','Growth','Closing value','Closing loans','Equity']);for(const property of row.properties){const line=element('tr');line.append(element('th',property.propertyId));cell(line,property.openingValueCents);cell(line,property.growthCents);cell(line,property.closingValueCents);cell(line,property.loanBalanceCents);cell(line,property.equityCents,`${prefix}-property-${property.propertyId}-equity`);body.append(line);}}
+  if(row.loans.length){const {body}=table('Loan balances and payments',['Loan','Opening principal','Interest','Full payment','Principal paid','Closing principal']);for(const loan of row.loans){const line=element('tr');line.append(element('th',loan.loanId));cell(line,loan.openingPrincipalCents);cell(line,loan.interestCents);cell(line,loan.paymentCents);cell(line,loan.principalPaidCents);cell(line,loan.closingPrincipalCents,`${prefix}-loan-${loan.loanId}-closing`);body.append(line);}}
+  if(!row.accounts.length&&!row.properties.length&&!row.loans.length)details.append(element('p','No asset or loan records in this period.'));
+  root.append(details);
+}
+function expandButton(root:HTMLElement,label:string,hiddenLabel:string,target:HTMLElement,id:string,render:()=>void):void {
+  target.id=id;target.hidden=true;const button=element('button',label);button.type='button';button.setAttribute('aria-controls',id);button.setAttribute('aria-expanded','false');
+  let rendered=false;
+  button.addEventListener('click',()=>{target.hidden=!target.hidden;if(!target.hidden&&!rendered){render();rendered=true;}button.textContent=target.hidden?label:hiddenLabel;button.setAttribute('aria-expanded',String(!target.hidden));});root.append(button,target);
+}
+export function renderProjection(root:HTMLElement,result:ProjectionResult):void {
+  root.replaceChildren();root.append(element('h2','Projection'),element('p',`Calculated from saved revision ${result.inputRevision}`),element('p','Annual income tax is reserved across months in proportion to positive gross cash income. Payroll taxes follow cumulative wages.'),element('p','Investment and property growth changes asset values; it does not add spendable cash.'),element('p','Contributions remain planned when cash is insufficient. Later balances are conditional on covering the cash gap; no borrowing, sales or withdrawals are added.'));
+  appendCoverage(root,result.coverage);appendProvenance(root,result.provenance);
+  if(result.contributionSchedules.length){
+    const details=element('details');details.append(element('summary','Contribution request schedules'));details.open=result.contributionSchedules.some(schedule=>schedule.requests.status!=='available');
+    const table=element('table');table.append(element('caption','Contribution request schedules'));const head=element('thead'),header=element('tr');for(const label of ['Rule','Year','Request schedule']){const cell=element('th',label);cell.scope='col';header.append(cell);}head.append(header);table.append(head);const body=element('tbody');
+    for(const schedule of result.contributionSchedules){const row=element('tr'),cell=element('td');row.append(element('th',schedule.ruleId),element('td',String(schedule.year)));cell.dataset.testid=`contribution-schedule-${schedule.year}-${schedule.ruleId}`;if(schedule.requests.status==='available')cell.textContent=`${schedule.requests.value.length} monthly requests`;else appendAmount(cell,schedule.requests);row.append(cell);body.append(row);}table.append(body);details.append(table);root.append(details);
+  }
+  for(const year of result.years){
+    const section=element('section');section.append(element('h3',String(year.year)));
+    if(year.fundingStatus==='unavailable')section.append(element('p','Funding result unavailable'));
+    else if(!year.conditionalOnGap)section.append(element('p','Funded scenario'));
+    if(year.conditionalOnGap)section.append(element('p','Conditional after a cash gap'));
+    appendCoverage(section,year.coverage);movementTable(section,[year],'Annual flows and December balances');
+    const ratios=element('dl');for(const [key,label]of [['expenseRatio','Expense / income'],['taxRatio','Tax / income'],['contributionRatio','Eligible contributions / income'],['cashFlowMargin','Cash flow / income']] as const){ratios.append(element('dt',label));const value=element('dd');appendAmount(value,year.ratios[key],'ratio');ratios.append(value);}section.append(ratios);
+    records(section,year,`annual-${year.year}`);
+    const monthly=element('div'),months=result.months.filter(month=>month.year===year.year);
+    expandButton(section,`Show months for ${year.year}`,`Hide months for ${year.year}`,monthly,`months-${year.year}`,()=>{movementTable(monthly,months,`Monthly flows and closing balances for ${year.year}`);for(const month of months)records(monthly,month,`monthly-${month.date}`);});
+    const explanation=element('div');expandButton(section,`Tax explanation for ${year.year}`,`Hide tax explanation for ${year.year}`,explanation,`tax-explanation-${year.year}`,()=>renderTaxExplanation(explanation,year));
+    root.append(section);
+  }
+  const issues=element('div');renderIssues(issues,result.issues);root.append(issues);
+}

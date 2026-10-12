@@ -9,3 +9,5 @@ src-tauri/target/
 *.AppImage
 coverage/
 *.tsbuildinfo
+foundation/test-results/
+foundation/playwright-report/

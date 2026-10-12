@@ -1,0 +1,598 @@
+§ 199A                               TITLE 26—INTERNAL REVENUE CODE                                     Page 930
+
+         Statutory Notes and Related Subsidiaries                 publicly traded partnership income of the
+               EFFECTIVE DATE OF REPEAL
+                                                                  taxpayer for the taxable year.
+  Repeal applicable to taxable years beginning after
+                                                                 (2) Determination of deductible amount for
+Dec. 31, 2017, except as provided by transition rule, see            each trade or business
+section 13305(c) of Pub. L. 115–97, set out as an Effective        The amount determined under this para-
+Date of 2017 Amendment note under section 74 of this             graph with respect to any qualified trade or
+title.                                                           business is the lesser of—
+         AMENDMENT RELATING TO CONSOLIDATED                          (A) 20 percent of the taxpayer’s qualified
+              APPROPRIATIONS ACT, 2016                             business income with respect to the quali-
+  Pub. L. 115–141, div. U, title I, § 102, Mar. 23, 2018, 132
+                                                                   fied trade or business, or
+Stat. 1169, provided that:                                           (B) the greater of—
+  ‘‘(a) AMENDMENT RELATING TO SECTION 305 OF DIVISION                  (i) 50 percent of the W–2 wages with re-
+P.—For purposes of applying section 199(c)(3)(C)(i) of               spect to the qualified trade or business, or
+the Internal Revenue Code of 1986 (as in effect before its             (ii) the sum of 25 percent of the W–2
+repeal by Public Law 115–97) [see Subsection (c)(3)(C) of            wages with respect to the qualified trade
+this Section Prior to Repeal note above] to taxable                  or business, plus 2.5 percent of the
+years beginning after December 31, 2015, and before                  unadjusted basis immediately after acqui-
+January 1, 2018, such section shall be applied—
+     ‘‘(1) by inserting ‘who elects the application of this
+                                                                     sition of all qualified property.
+  clause for any taxable year,’ after ‘In the case of any        (3) Modifications to limit based on taxable in-
+  taxpayer’,                                                         come
+     ‘‘(2) by substituting ‘, and who’ for ‘and who’,
+     ‘‘(3) by substituting ‘such taxable year’ for ‘the tax-      (A) Exception from limit
+  able year’, and                                                   In the case of any taxpayer whose taxable
+     ‘‘(4) by substituting ‘(as defined in subsection             income for the taxable year does not exceed
+  (d)(9)(B))’ for ‘under subsection (d)(9)(B)’.
+                                                                  the threshold amount, paragraph (2) shall be
+  ‘‘(b) EFFECTIVE DATE.—The amendment made by this
+section [amending this section] shall take effect as if           applied without regard to subparagraph (B).
+included in section 305 of division P of the Consolidated         (B) Phase-in of limit for certain taxpayers
+Appropriations Act, 2016 [Pub. L. 114–113].’’
+                                                                    (i) In general
+EXTENSION OF DEDUCTION ALLOWABLE WITH RESPECT                          If—
+ TO INCOME ATTRIBUTABLE TO DOMESTIC PRODUCTION
+                                                                         (I) the taxable income of a taxpayer for
+ ACTIVITIES IN PUERTO RICO
+                                                                       any taxable year exceeds the threshold
+  Pub. L. 115–123, div. D, title I, § 40309, Feb. 9, 2018, 132         amount, but does not exceed the sum of
+Stat. 146, provided that: ‘‘For purposes of applying sec-              the threshold amount plus $50,000
+tion 199(d)(8)(C) of the Internal Revenue Code of 1986
+                                                                       ($100,000 in the case of a joint return),
+[see Subsection (d)(8) of this Section Prior to Repeal
+note above] with respect to taxable years beginning                    and
+during 2017, such section shall be applied—                              (II) the amount determined under
+    ‘‘(1) by substituting ‘first 12 taxable years’ for ‘first          paragraph (2)(B) (determined without re-
+  11 taxable years’, and                                               gard to this subparagraph) with respect
+    ‘‘(2) by substituting ‘January 1, 2018’ for ‘January 1,            to any qualified trade or business carried
+  2017’.’’                                                             on by the taxpayer is less than the
+                                                                       amount determined under paragraph
+§ 199A. Qualified business income                                      (2)(A) with respect such trade or busi-
+(a) Allowance of deduction                                             ness,
+  In the case of a taxpayer other than a corpora-                   then paragraph (2) shall be applied with re-
+tion, there shall be allowed as a deduction for                     spect to such trade or business without re-
+any taxable year an amount equal to the lesser                      gard to subparagraph (B) thereof and by
+of—                                                                 reducing the amount determined under
+    (1) the combined qualified business income                      subparagraph (A) thereof by the amount
+  amount of the taxpayer, or                                        determined under clause (ii).
+    (2) an amount equal to 20 percent of the ex-                    (ii) Amount of reduction
+  cess (if any) of—
+       (A) the taxable income of the taxpayer for                      The amount determined under this sub-
+    the taxable year, over                                          paragraph is the amount which bears the
+       (B) the net capital gain (as defined in sec-                 same ratio to the excess amount as—
+    tion 1(h)) of the taxpayer for such taxable                          (I) the amount by which the taxpayer’s
+    year.                                                              taxable income for the taxable year ex-
+                                                                       ceeds the threshold amount, bears to
+(b) Combined qualified business income amount                            (II) $50,000 ($100,000 in the case of a
+  For purposes of this section—                                        joint return).
+  (1) In general                                                    (iii) Excess amount
+    The term ‘‘combined qualified business in-                         For purposes of clause (ii), the excess
+  come amount’’ means, with respect to any tax-                     amount is the excess of—
+  able year, an amount equal to—                                         (I) the amount determined under para-
+       (A) the sum of the amounts determined                           graph (2)(A) (determined without regard
+    under paragraph (2) for each qualified trade                       to this paragraph), over
+    or business carried on by the taxpayer, plus                         (II) the amount determined under
+       (B) 20 percent of the aggregate amount of                       paragraph (2)(B) (determined without re-
+    the qualified REIT dividends and qualified                         gard to this paragraph).
+Page 931                      TITLE 26—INTERNAL REVENUE CODE                                                    § 199A
+
+ (4) Wages, etc.                                             (A) 9 percent of so much of the qualified
+   (A) In general                                         business income with respect to such trade
+                                                          or business as is properly allocable to quali-
+      The term ‘‘W–2 wages’’ means, with re-
+                                                          fied payments received from such coopera-
+   spect to any person for any taxable year of
+                                                          tive, or
+   such person, the amounts described in para-
+                                                             (B) 50 percent of so much of the W–2 wages
+   graphs (3) and (8) of section 6051(a) paid by
+                                                          with respect to such trade or business as are
+   such person with respect to employment of
+                                                          so allocable.
+   employees by such person during the cal-
+   endar year ending during such taxable year.        (c) Qualified business income
+   (B) Limitation to wages attributable to quali-       For purposes of this section—
+        fied business income                            (1) In general
+      Such term shall not include any amount              The term ‘‘qualified business income’’
+   which is not properly allocable to qualified         means, for any taxable year, the net amount
+   business income for purposes of subsection           of qualified items of income, gain, deduction,
+   (c)(1).                                              and loss with respect to any qualified trade or
+   (C) Return requirement                               business of the taxpayer. Such term shall not
+                                                        include any qualified REIT dividends or quali-
+      Such term shall not include any amount
+                                                        fied publicly traded partnership income.
+   which is not properly included in a return
+   filed with the Social Security Administra-           (2) Carryover of losses
+   tion on or before the 60th day after the due           If the net amount of qualified income, gain,
+   date (including extensions) for such return.         deduction, and loss with respect to qualified
+ (5) Acquisitions, dispositions, and short taxable      trades or businesses of the taxpayer for any
+      years                                             taxable year is less than zero, such amount
+                                                        shall be treated as a loss from a qualified
+   The Secretary shall provide for the applica-
+                                                        trade or business in the succeeding taxable
+ tion of this subsection in cases of a short tax-
+                                                        year.
+ able year or where the taxpayer acquires, or
+ disposes of, the major portion of a trade or           (3) Qualified items of income, gain, deduction,
+ business or the major portion of a separate                 and loss
+ unit of a trade or business during the taxable           For purposes of this subsection—
+ year.                                                    (A) In general
+ (6) Qualified property                                      The term ‘‘qualified items of income, gain,
+   For purposes of this section:                          deduction, and loss’’ means items of income,
+   (A) In general                                         gain, deduction, and loss to the extent such
+                                                          items are—
+      The term ‘‘qualified property’’ means,
+                                                                (i) effectively connected with the con-
+   with respect to any qualified trade or busi-
+                                                             duct of a trade or business within the
+   ness for a taxable year, tangible property of
+                                                             United States (within the meaning of sec-
+   a character subject to the allowance for de-
+                                                             tion 864(c), determined by substituting
+   preciation under section 167—
+                                                             ‘‘qualified trade or business (within the
+        (i) which is held by, and available for use
+                                                             meaning of section 199A)’’ for ‘‘nonresident
+      in, the qualified trade or business at the
+                                                             alien individual or a foreign corporation’’
+      close of the taxable year,
+        (ii) which is used at any point during the           or for ‘‘a 1 foreign corporation’’ each place
+      taxable year in the production of qualified            it appears), and
+                                                                (ii) included or allowed in determining
+      business income, and
+        (iii) the depreciable period for which has           taxable income for the taxable year.
+      not ended before the close of the taxable           (B) Exceptions
+      year.                                                  The following items shall not be taken
+   (B) Depreciable period                                 into account as a qualified item of income,
+      The term ‘‘depreciable period’’ means,              gain, deduction, or loss:
+                                                                (i) Any item of short-term capital gain,
+   with respect to qualified property of a tax-
+                                                             short-term capital loss, long-term capital
+   payer, the period beginning on the date the
+                                                             gain, or long-term capital loss.
+   property was first placed in service by the
+                                                                (ii) Any dividend, income equivalent to a
+   taxpayer and ending on the later of—
+                                                             dividend, or payment in lieu of dividends
+        (i) the date that is 10 years after such
+                                                             described in section 954(c)(1)(G). Any
+      date, or
+        (ii) the last day of the last full year in           amount described in section 1385(a)(1) shall
+      the applicable recovery period that would              not be treated as described in this clause.
+                                                                (iii) Any interest income other than in-
+      apply to the property under section 168
+                                                             terest income which is properly allocable
+      (determined without regard to subsection
+                                                             to a trade or business.
+      (g) thereof).
+                                                                (iv) Any item of gain or loss described in
+ (7) Special rule with respect to income re-                 subparagraph (C) or (D) of section 954(c)(1)
+      ceived from cooperatives                               (applied by substituting ‘‘qualified trade
+   In the case of any qualified trade or business            or business’’ for ‘‘controlled foreign cor-
+ of a patron of a specified agricultural or horti-           poration’’).
+ cultural cooperative, the amount determined
+ under paragraph (2) with respect to such trade         1 So in original. The word ‘‘a’’ probably should not appear with-
+
+ or business shall be reduced by the lesser of—       in the quoted text.
+§ 199A                          TITLE 26—INTERNAL REVENUE CODE                                      Page 932
+
+         (v) Any item of income, gain, deduction,             sition of qualified property, of the tax-
+       or loss taken into account under section               payer allocable to such specified service
+       954(c)(1)(F) (determined without regard to             trade or business shall be taken into ac-
+       clause (ii) thereof and other than items at-           count in computing the qualified business
+       tributable to notional principal contracts             income, W–2 wages, and the unadjusted
+       entered into in transactions qualifying                basis immediately after acquisition of
+       under section 1221(a)(7)).                             qualified property of the taxpayer for the
+         (vi) Any amount received from an annu-               taxable year for purposes of applying this
+       ity which is not received in connection                section.
+       with the trade or business.                          (B) Applicable percentage
+         (vii) Any item of deduction or loss prop-
+       erly allocable to an amount described in                For purposes of subparagraph (A), the term
+       any of the preceding clauses.                        ‘‘applicable percentage’’ means, with respect
+                                                            to any taxable year, 100 percent reduced (not
+  (4) Treatment of reasonable compensation and              below zero) by the percentage equal to the
+       guaranteed payments                                  ratio of—
+    Qualified business income shall not in-                      (i) the taxable income of the taxpayer
+  clude—                                                       for the taxable year in excess of the
+       (A) reasonable compensation paid to the                 threshold amount, bears to
+    taxpayer by any qualified trade or business                  (ii) $50,000 ($100,000 in the case of a joint
+    of the taxpayer for services rendered with                 return).
+    respect to the trade or business,                   (e) Other definitions
+       (B) any guaranteed payment described in
+                                                          For purposes of this section—
+    section 707(c) paid to a partner for services
+    rendered with respect to the trade or busi-           (1) Taxable income
+    ness, and                                               Except as otherwise provided in subsection
+       (C) to the extent provided in regulations,         (g)(2)(B), taxable income shall be computed
+    any payment described in section 707(a) to a          without regard to any deduction allowable
+    partner for services rendered with respect to         under this section.
+    the trade or business.                                (2) Threshold amount
+(d) Qualified trade or business                             (A) In general
+  For purposes of this section—                                The term ‘‘threshold amount’’ means
+  (1) In general                                            $157,500 (200 percent of such amount in the
+                                                            case of a joint return).
+    The term ‘‘qualified trade or business’’
+  means any trade or business other than—                   (B) Inflation adjustment
+       (A) a specified service trade or business, or           In the case of any taxable year beginning
+       (B) the trade or business of performing              after 2018, the dollar amount in subpara-
+    services as an employee.                                graph (A) shall be increased by an amount
+  (2) Specified service trade or business                   equal to—
+                                                                 (i) such dollar amount, multiplied by
+    The term ‘‘specified service trade or busi-                  (ii) the cost-of-living adjustment deter-
+  ness’’ means any trade or business—                          mined under section 1(f)(3) for the calendar
+       (A) which is described in section                       year in which the taxable year begins, de-
+    1202(e)(3)(A) (applied without regard to the               termined by substituting ‘‘calendar year
+    words ‘‘engineering, architecture,’’) or which             2017’’ for ‘‘calendar year 2016’’ in subpara-
+    would be so described if the term ‘‘employ-                graph (A)(ii) thereof.
+    ees or owners’’ were substituted for ‘‘em-
+    ployees’’ therein, or                                   The amount of any increase under the pre-
+       (B) which involves the performance of                ceding sentence shall be rounded as provided
+    services that consist of investing and invest-          in section 1(f)(7).
+    ment management, trading, or dealing in se-           (3) Qualified REIT dividend
+    curities (as defined in section 475(c)(2)), part-       The term ‘‘qualified REIT dividend’’ means
+    nership interests, or commodities (as defined         any dividend from a real estate investment
+    in section 475(e)(2)).                                trust received during the taxable year which—
+  (3) Exception for specified service businesses              (A) is not a capital gain dividend, as de-
+       based on taxpayer’s income                           fined in section 857(b)(3), and
+    (A) In general                                            (B) is not qualified dividend income, as de-
+                                                            fined in section 1(h)(11).
+       If, for any taxable year, the taxable in-
+    come of any taxpayer is less than the sum of          (4) Qualified publicly traded partnership in-
+    the threshold amount plus $50,000 ($100,000 in            come
+    the case of a joint return), then—                      The term ‘‘qualified publicly traded partner-
+         (i) any specified service trade or business      ship income’’ means, with respect to any
+       of the taxpayer shall not fail to be treated       qualified trade or business of a taxpayer, the
+       as a qualified trade or business due to            sum of—
+       paragraph (1)(A), but                                  (A) the net amount of such taxpayer’s allo-
+         (ii) only the applicable percentage of             cable share of each qualified item of income,
+       qualified items of income, gain, deduction,          gain, deduction, and loss (as defined in sub-
+       or loss, and the W–2 wages and the                   section (c)(3) and determined after the appli-
+       unadjusted basis immediately after acqui-            cation of subsection (c)(4)) from a publicly
+Page 933                                 TITLE 26—INTERNAL REVENUE CODE                               § 199A
+
+    traded partnership (as defined in section                  term ‘‘United States’’ shall include the
+    7704(a)) 2 which is not treated as a corpora-              Commonwealth of Puerto Rico.
+    tion under section 7704(c), plus                           (ii) Special rule for applying limit
+      (B) any gain recognized by such taxpayer
+    upon disposition of its interest in such part-                In the case of any taxpayer described in
+    nership to the extent such gain is treated as              clause (i), the determination of W–2 wages
+    an amount realized from the sale or ex-                    of such taxpayer with respect to any quali-
+    change of property other than a capital asset              fied trade or business conducted in Puerto
+    under section 751(a).                                      Rico shall be made without regard to any
+                                                               exclusion under section 3401(a)(8) for remu-
+(f) Special rules                                              neration paid for services in Puerto Rico.
+   (1) Application to partnerships and S corpora-          (2) Coordination with minimum tax
+       tions
+                                                             For purposes of determining alternative
+     (A) In general                                        minimum taxable income under section 55,
+      In the case of a partnership or S corpora-           qualified business income shall be determined
+    tion—                                                  without regard to any adjustments under sec-
+        (i) this section shall be applied at the           tions 56 through 59.
+      partner or shareholder level,                        (3) Deduction limited to income taxes
+        (ii) each partner or shareholder shall               The deduction under subsection (a) shall
+      take into account such person’s allocable            only be allowed for purposes of this chapter.
+      share of each qualified item of income,
+      gain, deduction, and loss, and                       (4) Regulations
+        (iii) each partner or shareholder shall be           The Secretary shall prescribe such regula-
+      treated for purposes of subsection (b) as            tions as are necessary to carry out the pur-
+      having W–2 wages and unadjusted basis im-            poses of this section, including regulations—
+      mediately after acquisition of qualified                 (A) for requiring or restricting the alloca-
+      property for the taxable year in an amount             tion of items and wages under this section
+      equal to such person’s allocable share of              and such reporting requirements as the Sec-
+      the W–2 wages and the unadjusted basis                 retary determines appropriate, and
+      immediately after acquisition of qualified               (B) for the application of this section in
+      property of the partnership or S corpora-              the case of tiered entities.
+      tion for the taxable year (as determined           (g) Deduction for income attributable to domes-
+      under regulations prescribed by the Sec-               tic production activities of specified agricul-
+      retary).                                               tural or horticultural cooperatives
+    For purposes of clause (iii), a partner’s or           (1) Allowance of deduction
+    shareholder’s allocable share of W–2 wages               (A) In general
+    shall be determined in the same manner as
+    the partner’s or shareholder’s allocable                   In the case of a taxpayer which is a speci-
+    share of wage expenses. For purposes of such             fied agricultural or horticultural coopera-
+    clause, partner’s or shareholder’s allocable             tive, there shall be allowed as a deduction an
+    share of the unadjusted basis immediately                amount equal to 9 percent of the lesser of—
+    after acquisition of qualified property shall                 (i) the qualified production activities in-
+    be determined in the same manner as the                    come of the taxpayer for the taxable year,
+    partner’s or shareholder’s allocable share of              or
+    depreciation. For purposes of this subpara-                   (ii) the taxable income of the taxpayer
+    graph, in the case of an S corporation, an al-             for the taxable year.
+    locable share shall be the shareholder’s pro             (B) Limitation
+    rata share of an item.                                     (i) In general
+    (B) Application to trusts and estates                         The deduction allowable under subpara-
+      Rules similar to the rules under section                 graph (A) for any taxable year shall not
+    199(d)(1)(B)(i) (as in effect on December 1,               exceed 50 percent of the W–2 wages of the
+    2017) for the apportionment of W–2 wages                   taxpayer for the taxable year.
+    shall apply to the apportionment of W–2                    (ii) W–2 wages
+    wages and the apportionment of unadjusted
+                                                                  For purposes of this subparagraph, the
+    basis immediately after acquisition of quali-
+                                                               W–2 wages of the taxpayer shall be deter-
+    fied property under this section.
+                                                               mined in the same manner as under sub-
+    (C) Treatment of trades or business in Puer-               section (b)(4) (without regard to subpara-
+         to Rico                                               graph (B) thereof and after application of
+      (i) In general                                           subsection (b)(5)), except that such wages
+                                                               shall not include any amount which is not
+         In the case of any taxpayer with quali-
+                                                               properly allocable to domestic production
+      fied business income from sources within
+                                                               gross receipts for purposes of paragraph
+      the commonwealth of Puerto Rico, if all
+                                                               (3)(A).
+      such income is taxable under section 1 for
+      such taxable year, then for purposes of de-            (C) Taxable income of cooperatives deter-
+      termining the qualified business income of                  mined without regard to certain deduc-
+      such taxpayer for such taxable year, the                    tions
+                                                               For purposes of this subsection, the tax-
+ 2 So in original. Probably should be ‘‘7704(b))’’.          able income of a specified agricultural or
+§ 199A                        TITLE 26—INTERNAL REVENUE CODE                                 Page 934
+
+   horticultural cooperative shall be computed             (i) the taxpayer’s domestic production
+   without regard to any deduction allowable            gross receipts for such taxable year, over
+   under subsection (b) or (c) of section 1382 (re-        (ii) the sum of—
+   lating to patronage dividends, per-unit re-                (I) the cost of goods sold that are allo-
+   tain allocations, and nonpatronage distribu-            cable to such receipts, and
+   tions).                                                    (II) other expenses, losses, or deduc-
+ (2) Deduction allowed to patrons                          tions (other than the deduction allowed
+   (A) In general                                          under this subsection), which are prop-
+                                                           erly allocable to such receipts.
+      In the case of any eligible taxpayer who
+                                                      (B) Allocation method
+   receives a qualified payment from a speci-
+   fied agricultural or horticultural coopera-          The Secretary shall prescribe rules for the
+   tive, there shall be allowed as a deduction        proper allocation of items described in sub-
+   for the taxable year in which such payment         paragraph (A) for purposes of determining
+   is received an amount equal to the portion         qualified production activities income. Such
+   of the deduction allowed under paragraph (1)       rules shall provide for the proper allocation
+   to such cooperative which is—                      of items whether or not such items are di-
+        (i) allowed with respect to the portion of    rectly allocable to domestic production
+      the qualified production activities income      gross receipts.
+      to which such payment is attributable, and      (C) Special rules for determining costs
+        (ii) identified by such cooperative in a        (i) In general
+      written notice mailed to such taxpayer
+                                                           For purposes of determining costs under
+      during the payment period described in
+                                                        subclause (I) of subparagraph (A)(ii), any
+      section 1382(d).
+                                                        item or service brought into the United
+   (B) Limitation based on taxable income               States shall be treated as acquired by pur-
+      The deduction allowed to any taxpayer             chase, and its cost shall be treated as not
+   under this paragraph shall not exceed the            less than its value immediately after it en-
+   taxable income of the taxpayer determined            tered the United States. A similar rule
+   without regard to the deduction allowed              shall apply in determining the adjusted
+   under this paragraph and after taking into           basis of leased or rented property where
+   account any deduction allowed to the tax-            the lease or rental gives rise to domestic
+   payer under subsection (a) for the taxable           production gross receipts.
+   year.                                                (ii) Exports for further manufacture
+   (C) Cooperative denied deduction for portion            In the case of any property described in
+        of qualified payments                           clause (i) that had been exported by the
+      The taxable income of a specified agricul-        taxpayer for further manufacture, the in-
+   tural or horticultural cooperative shall not         crease in cost or adjusted basis under
+   be reduced under section 1382 by reason of           clause (i) shall not exceed the difference
+   that portion of any qualified payment as             between the value of the property when ex-
+   does not exceed the deduction allowable              ported and the value of the property when
+   under subparagraph (A) with respect to such          brought back into the United States after
+   payment.                                             the further manufacture.
+   (D) Eligible taxpayer                              (D) Domestic production gross receipts
+      For purposes of this paragraph, the term          (i) In general
+   ‘‘eligible taxpayer’’ means—                            The term ‘‘domestic production gross re-
+        (i) a taxpayer other than a corporation,        ceipts’’ means the gross receipts of the
+      or                                                taxpayer which are derived from any lease,
+        (ii) a specified agricultural or horti-         rental, license, sale, exchange, or other
+      cultural cooperative.                             disposition of any agricultural or horti-
+   (E) Qualified payment                                cultural product which was manufactured,
+      For purposes of this section, the term            produced, grown, or extracted by the tax-
+   ‘‘qualified payment’’ means, with respect to         payer (determined after the application of
+   any eligible taxpayer, any amount which—             paragraph (4)(B)) in whole or significant
+        (i) is described in paragraph (1) or (3) of     part within the United States. Such term
+      section 1385(a),                                  shall not include gross receipts of the tax-
+        (ii) is received by such taxpayer from a        payer which are derived from the lease,
+      specified agricultural or horticultural co-       rental, license, sale, exchange, or other
+      operative, and                                    disposition of land.
+        (iii) is attributable to qualified produc-      (ii) Related persons
+      tion activities income with respect to               (I) In general
+      which a deduction is allowed to such coop-
+                                                             The term ‘‘domestic production gross
+      erative under paragraph (1).
+                                                           receipts’’ shall not include any gross re-
+ (3) Qualified production activities income                ceipts of the taxpayer derived from prop-
+   For purposes of this subsection—                        erty leased, licensed, or rented by the
+   (A) In general                                          taxpayer for use by any related person.
+      The term ‘‘qualified production activities           (II) Related person
+   income’’ for any taxable year means an                    For purposes of subclause (I), a person
+   amount equal to the excess (if any) of—                 shall be treated as related to another
+Page 935                      TITLE 26—INTERNAL REVENUE CODE                                      § 199A
+
+        person if such persons are treated as a          in a partnership, rules similar to the rules of
+        single employer under subsection (a) or          subsection (f)(1) shall apply for purposes of
+        (b) of section 52 or subsection (m) or (o)       this subsection.
+        of section 414, except that determina-           (C) Trade or business requirement
+        tions under subsections (a) and (b) of sec-
+        tion 52 shall be made without regard to            This subsection shall be applied by only
+        section 1563(b).                                 taking into account items which are attrib-
+                                                         utable to the actual conduct of a trade or
+ (4) Specified agricultural or horticultural coop-       business.
+     erative
+                                                         (D) Unrelated business taxable income
+   For purposes of this section—
+                                                           For purposes of determining the tax im-
+   (A) In general
+                                                         posed by section 511, this section shall be ap-
+     The term ‘‘specified agricultural or horti-         plied by substituting ‘‘unrelated business
+   cultural cooperative’’ means an organization          taxable income’’ for ‘‘taxable income’’ each
+   to which part I of subchapter T applies               place it appears in this section (other than
+   which is engaged—                                     this subparagraph).
+        (i) in the manufacturing, production,
+                                                         (E) Special rule for cooperative with oil re-
+     growth, or extraction in whole or signifi-
+                                                              lated qualified production activities in-
+     cant part of any agricultural or horti-
+                                                              come
+     cultural product, or
+        (ii) in the marketing of agricultural or           (i) In general
+     horticultural products.                                   If a specified agricultural or horti-
+   (B) Application to marketing cooperatives                cultural cooperative has oil related quali-
+     A specified agricultural or horticultural              fied production activities income for any
+   cooperative described in subparagraph (A)(ii)            taxable year, the amount otherwise allow-
+   shall be treated as having manufactured,                 able as a deduction under paragraph (1)
+   produced, grown, or extracted in whole or                shall be reduced by 3 percent of the least
+   significant part any agricultural or horti-              of—
+   cultural product marketed by the specified                    (I) the oil related qualified production
+   agricultural or horticultural cooperative                   activities income of the cooperative for
+   which its patrons have so manufactured,                     the taxable year,
+   produced, grown, or extracted.                                (II) the qualified production activities
+                                                               income of the cooperative for the taxable
+ (5) Definitions and special rules
+                                                               year, or
+   (A) Special rule for affiliated groups                        (III) taxable income.
+     (i) In general
+                                                            (ii) Oil related qualified production activi-
+        All members of an expanded affiliated                    ties income
+     group shall be treated as a single corpora-
+                                                               For purposes of this subparagraph, the
+     tion for purposes of this subsection.
+                                                            term ‘‘oil related qualified production ac-
+     (ii) Partnerships owned by expanded affili-            tivities income’’ means for any taxable
+           ated groups                                      year the qualified production activities in-
+        For purposes of paragraph (3)(D), if all of         come which is attributable to the produc-
+     the interests in the capital and profits of a          tion, refining, processing, transportation,
+     partnership are owned by members of a                  or distribution of oil, gas, or any primary
+     single expanded affiliated group at all                product thereof (within the meaning of
+     times during the taxable year of such part-            section 927(a)(2)(C), as in effect before its
+     nership, the partnership and all members               repeal) during such taxable year.
+     of such group shall be treated as a single         (6) Regulations
+     taxpayer during such period.
+                                                          The Secretary shall prescribe such regula-
+     (iii) Expanded affiliated group
+                                                        tions as are necessary to carry out the pur-
+        For purposes of this subsection, the term       poses of this subsection, including regulations
+     ‘‘expanded affiliated group’’ means an af-         which prevent more than 1 taxpayer from
+     filiated group as defined in section 1504(a),      being allowed a deduction under this sub-
+     determined—                                        section with respect to any activity described
+           (I) by substituting ‘‘more than 50 per-      in paragraph (3)(D)(i). Such regulations shall
+        cent’’ for ‘‘at least 80 percent’’ each         be based on the regulations applicable to co-
+        place it appears, and                           operatives and their patrons under section 199
+           (II) without regard to paragraphs (2)        (as in effect before its repeal).
+        and (4) of section 1504(b).
+                                                      (h) Anti-abuse rules
+     (iv) Allocation of deduction
+                                                        The Secretary shall—
+        Except as provided in regulations, the            (1) apply rules similar to the rules under sec-
+     deduction under paragraph (1) shall be al-         tion 179(d)(2) in order to prevent the manipula-
+     located among the members of the ex-               tion of the depreciable period of qualified
+     panded affiliated group in proportion to           property using transactions between related
+     each member’s respective amount (if any)           parties, and
+     of qualified production activities income.           (2) prescribe rules for determining the
+   (B) Special rule for cooperative partners            unadjusted basis immediately after acquisi-
+     In the case of a specified agricultural or         tion of qualified property acquired in like-
+   horticultural cooperative which is a partner         kind exchanges or involuntary conversions.
+§ 199A                                TITLE 26—INTERNAL REVENUE CODE                                                   Page 936
+
+(i) Termination                                                    Sec.
+                                                                   217.       Moving expenses.
+   This section shall not apply to taxable years                   [218.      Repealed.]
+beginning after December 31, 2025.                                 219.       Retirement savings.
+(Added Pub. L. 115–97, title I, § 11011(a), Dec. 22,               220.       Archer MSAs.
+                                                                   221.       Interest on education loans.
+2017, 131 Stat. 2063; amended Pub. L. 115–141, div.                [222.      Repealed.]
+T, § 101(a)(1), (2)(A), (C), (b), Mar. 23, 2018, 132               223.       Health savings accounts.
+Stat. 1151, 1155.)                                                 224.       Cross reference.
+ INFLATION ADJUSTED ITEMS FOR CERTAIN YEARS
+                                                                                          Editorial Notes
+    For inflation adjustment of certain items in
+  this section, see Revenue Procedures listed in a                                         AMENDMENTS
+  table under section 1 of this title.                                2020—Pub. L. 116–260, div. EE, title I, § 104(b)(1), Dec.
+                                                                   27, 2020, 134 Stat. 3041, struck out item 222 ‘‘Qualified
+                       Editorial Notes                             tuition and related expenses’’.
+                    REFERENCES IN TEXT                                2017—Pub. L. 115–97, title I, § 11051(a), Dec. 22, 2017, 131
+                                                                   Stat. 2089, which directed amendment of part VII of
+  Section 199(d)(1)(B)(i) (as in effect on December 1,             subchapter B by striking the item relating to section
+2017), referred to in subsec. (f)(1)(B), means section             215 in the table of sections for ‘‘such subpart’’, was exe-
+199(d)(1)(B)(i) of this title prior to repeal of section 199       cuted by striking item 215 ‘‘Alimony, etc., payments’’
+by Pub. L. 115–97, title I, § 13305(a), Dec. 22, 2017, 131         in this analysis, which is the analysis for part VII of
+Stat. 2126.                                                        subchapter B of chapter 1, to reflect the probable intent
+                        AMENDMENTS                                 of Congress.
+                                                                      2003—Pub. L. 108–173, title XII, § 1201(j), Dec. 8, 2003,
+   2018—Subsec. (a). Pub. L. 115–141, § 101(b)(1), amended         117 Stat. 2479, added items 223 and 224 and struck out
+subsec. (a) generally. Prior to amendment, subsec. (a)             former item 223 ‘‘Cross reference’’.
+provided equation for allowed deduction for any tax-                  2001—Pub. L. 107–16, title IV, § 431(c)(4), June 7, 2001,
+able year, which included special deduction for quali-             115 Stat. 68, added items 222 and 223 and struck out
+fied cooperative dividends.                                        former item 222 ‘‘Cross reference’’.
+   Subsec. (b)(7). Pub. L. 115–141, § 101(b)(3), added par.           2000—Pub. L. 106–554, § 1(a)(7) [title II, § 202(b)(9)], Dec.
+(7).                                                               21, 2000, 114 Stat. 2763, 2763A–629, substituted ‘‘Archer
+   Subsec. (c)(1). Pub. L. 115–141, § 101(b)(2)(A), struck
+                                                                   MSAs’’ for ‘‘Medical savings accounts’’ in item 220.
+out ‘‘, qualified cooperative dividends,’’ after ‘‘quali-
+                                                                      1997—Pub. L. 105–34, title II, § 202(d), Aug. 5, 1997, 111
+fied REIT dividends’’.
+                                                                   Stat. 809, added items 221 and 222 and struck out former
+   Subsec. (c)(3)(B). Pub. L. 115–141, § 101(b)(2)(B)(i)(I),
+                                                                   item 221 ‘‘Cross reference’’.
+struck out ‘‘investment’’ before ‘‘items’’ in introduc-
+                                                                      1996—Pub. L. 104–191, title III, § 301(i), Aug. 21, 1996, 110
+tory provisions.
+                                                                   Stat. 2052, added items 220 and 221 and struck out
+   Subsec.       (c)(3)(B)(ii).     Pub.       L.      115–141,
+                                                                   former item 220 ‘‘Cross reference’’.
+§ 101(b)(2)(B)(i)(II), inserted at end ‘‘Any amount de-
+                                                                      1990—Pub. L. 101–508, title XI, § 11802(e)(3), Nov. 5,
+scribed in section 1385(a)(1) shall not be treated as de-
+                                                                   1990, 104 Stat. 1388–530, added item 220 and struck out
+scribed in this clause.’’
+                                                                   former items 220 ‘‘Jury duty pay remitted to employer’’
+   Subsec. (e)(1). Pub. L. 115–141, § 101(a)(2)(C), sub-
+                                                                   and 221 ‘‘Cross references’’.
+stituted ‘‘Except as otherwise provided in subsection
+                                                                      1988—Pub. L. 100–647, title VI, § 6007(c), Nov. 10, 1988,
+(g)(2)(B), taxable income’’ for ‘‘Taxable income’’.
+   Pub. L. 115–141, § 101(a)(2)(A), substituted ‘‘any deduc-       102 Stat. 3687, added item 220 and redesignated former
+tion’’ for ‘‘the deduction’’.                                      item 220 as 221.
+   Subsec. (e)(4), (5). Pub. L. 115–141, § 101(b)(2)(B)(ii), re-      1986—Pub. L. 99–514, title I, §§ 131(b)(3), 135(b)(2), title
+designated par. (5) as (4) and struck out former par. (4)          III, § 301(b)(5)(B), Oct. 22, 1986, 100 Stat. 2113, 2116, 2217,
+which defined ‘‘qualified cooperative dividend’’.                  added item 220, struck out items 221 ‘‘Deduction for
+   Subsec. (g). Pub. L. 115–141, § 101(a)(1), amended sub-         two-earner married couples’’ and 222 ‘‘Adoption ex-
+sec. (g) generally. Prior to amendment, subsec. (g) re-            penses’’, substituted ‘‘reference’’ for ‘‘references’’ in
+lated to deduction allowed to specified agricultural or            item 223, and struck out item 223 ‘‘Cross reference’’.
+horticultural cooperatives.                                           1981—Pub. L. 97–34, title I, §§ 103(c)(3), 125(b), title III,
+                                                                   § 311(h)(11), Aug. 13, 1981, 95 Stat. 188, 201, 282, repealed
+         Statutory Notes and Related Subsidiaries                  item 220 ‘‘Retirement savings for certain married indi-
+                                                                   viduals’’, added items 221 and 222 and redesignated
+             EFFECTIVE DATE OF 2018 AMENDMENT                      former item 221 as 223.
+                                                                      1978—Pub. L. 95–600, title I, § 113(a)(2)(A), Nov. 6, 1978,
+  Amendment by Pub. L. 115–141 effective as if included
+                                                                   92 Stat. 2778, struck out item 218 ‘‘Contributions to can-
+in section 11011 of Pub. L. 115–97, see section 101(d) of
+                                                                   didates for public office’’.
+Pub. L. 115–141, set out as a note under section 62 of
+                                                                      1976—Pub. L. 94–455, title V, § 504(b)(2), Oct. 4, 1976, 90
+this title.
+                                                                   Stat. 1565, struck out item 214 ‘‘Expenses for household
+                      EFFECTIVE DATE                               and dependent care services necessary for gainful em-
+                                                                   ployment’’.
+  Section applicable to taxable years beginning after
+                                                                      Pub. L. 94–455, title XV, § 1501(c), Oct. 4, 1976, 90 Stat.
+Dec. 31, 2017, see section 11011(e) of Pub. L. 115–97, set
+                                                                   1737, added item 220 and redesignated former item 220 as
+out as an Effective Date of 2017 Amendment note under
+                                                                   221.
+section 62 of this title.
+                                                                      1974—Pub. L. 93–406, title II, § 2002(h)(1), Sept. 2, 1974,
+       PART VII—ADDITIONAL ITEMIZED                                88 Stat. 970, added item 219 and redesignated former
+        DEDUCTIONS FOR INDIVIDUALS                                 item 219 as 220.
+                                                                      1971—Pub. L. 92–178, title II, § 210(b), title VII, § 702(c),
+Sec.                                                               Dec. 10, 1971, 85 Stat. 520, 562, substituted ‘‘Expenses for
+211.         Allowance of deductions.                              household and dependent care services necessary for
+212.         Expenses for production of income.                    gainful employment’’ for ‘‘expenses for care of certain
+213.         Medical, dental, etc., expenses.                      dependents’’ in item 214, added item 218, and redesig-
+[214, 215.   Repealed.]                                            nated former item 218 as 219.
+216.         Deduction of taxes, interest, and business de-           1964—Pub. L. 88–272, title II, § 213(a)(2), Feb. 26, 1964, 78
+              preciation by cooperative housing corpora-           Stat. 52, added item 217 and redesignated former item
+              tion tenant-stockholder.                             217 as 218.
+

@@ -1,0 +1,356 @@
+{
+  "retrievedOn": "2026-10-12",
+  "note": "Government publication date is null when the document gives only an applicable tax year or no exact publication date; rolling web pages identify the reviewed 2026 version. Statutory 2024 edition evidence is read together with Public Law 119-21, not used to override 2026 amendments.",
+  "sources": [
+    {
+      "id": "irs-rp-2025-32",
+      "url": "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "snapshot": "2026/irs-rp-2025-32.pdf",
+      "publicationYear": 2025,
+      "publicationDate": "2025-10-09",
+      "retrievedOn": "2026-10-12",
+      "sha256": "e9ada115fb43a4af5ea326ca91edd40ab0bf29b9be01d2c13d7b8fa96214635b",
+      "bytes": 260406
+    },
+    {
+      "id": "pl-119-21",
+      "url": "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "snapshot": "2026/pl-119-21.pdf",
+      "publicationYear": 2025,
+      "publicationDate": "2025-07-04",
+      "retrievedOn": "2026-10-12",
+      "sha256": "42f86c3d408bccb1a663c11a51a90d207b3dbc25e689240da51726154be51c8b",
+      "bytes": 968588
+    },
+    {
+      "id": "irs-p505-2026",
+      "url": "https://www.irs.gov/publications/p505",
+      "snapshot": "2026/irs-p505.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "4280462a745ce8896eff54e56a1f3082390b82d50eae46743032f5211e6274fa",
+      "bytes": 734573
+    },
+    {
+      "id": "usc-1-2024",
+      "url": "https://www.govinfo.gov/content/pkg/USCODE-2024-title26/html/USCODE-2024-title26-subtitleA-chap1-subchapA-partI-sec1.htm",
+      "snapshot": "2026/usc-1-2024.html",
+      "publicationYear": 2024,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "725cb94c9ca65ec6258643eda0c5c9c551efdb11dfc1ed3fac103c31d7c5ab7a",
+      "bytes": 276756
+    },
+    {
+      "id": "usc-63-2024",
+      "url": "https://www.govinfo.gov/content/pkg/USCODE-2024-title26/html/USCODE-2024-title26-subtitleA-chap1-subchapB-partI-sec63.htm",
+      "snapshot": "2026/usc-63-2024.html",
+      "publicationYear": 2024,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "1f095b810947b437cbac8e1e2b2321a8257697a377645a837f036d69eb1e470d",
+      "bytes": 42180
+    },
+    {
+      "id": "usc-55-2024",
+      "url": "https://www.govinfo.gov/content/pkg/USCODE-2024-title26/html/USCODE-2024-title26-subtitleA-chap1-subchapA-partVI-sec55.htm",
+      "snapshot": "2026/usc-55-2024.html",
+      "publicationYear": 2024,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "c17459905d8964ec3bfd75074877bd8392306b4619f4b81875f276a2a2d9b762",
+      "bytes": 71057
+    },
+    {
+      "id": "ftb-tax-news-2026-10",
+      "url": "https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/",
+      "snapshot": "2026/ftb-tax-news.html",
+      "publicationYear": 2026,
+      "publicationDate": "2026-10",
+      "retrievedOn": "2026-10-12",
+      "sha256": "a022f198d855e36dfbff771256c55ffff75b89aba55d378be529a84afe8b3409",
+      "bytes": 63561
+    },
+    {
+      "id": "ftb-540-2025",
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-540-instructions.html",
+      "snapshot": "2025-reference/ftb-540.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "11f8f8dfb6cca48d6678491f05fbe202c533940743b577c0435273700911e3b2",
+      "bytes": 134657
+    },
+    {
+      "id": "ftb-schedule-ca-2025",
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-540-ca-instructions.html",
+      "snapshot": "2025-reference/ftb-schedule-ca.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "6478b8f0bef4977dcf4bb6b744c73912cb31cf542e2645da5bd934cecb23625b",
+      "bytes": 150226
+    },
+    {
+      "id": "ftb-schedule-p-2025",
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
+      "snapshot": "2025-reference/ftb-schedule-p.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "de075bb51d2932ee47308efec6b0ed4b9aee9e2e8e8883a3fb0b8ecdd65fa2cf",
+      "bytes": 105017
+    },
+    {
+      "id": "ftb-540-es-2026",
+      "url": "https://www.ftb.ca.gov/forms/2026/2026-540-es-instructions.html",
+      "snapshot": "2026/ftb-540-es.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "4fc5e2eb50f12720f7af9e391c835f8948ab029e8dd0449e510e27b8e33efca1",
+      "bytes": 50308
+    },
+    {
+      "id": "ftb-ab1620-analysis-2026",
+      "url": "https://www.ftb.ca.gov/tax-pros/law/legislation/2025-2026/AB1620-012226.pdf",
+      "snapshot": "2026/ftb-mortgage-insurance-analysis.pdf",
+      "publicationYear": 2026,
+      "publicationDate": "2026-01-22",
+      "retrievedOn": "2026-10-12",
+      "sha256": "58db89abb4f15ef80a3491717d259b0d4e2daebf2d17df5dd412f5ec6759991a",
+      "bytes": 45174
+    },
+    {
+      "id": "ftb-3801-2025",
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-3801-instructions.html",
+      "snapshot": "2025-reference/ftb-3801.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "ddfca0664ee5c379942315e08e5f8b36c3ae264810347dc273128d813ab9c824",
+      "bytes": 64099
+    },
+    {
+      "id": "irs-p936-2025",
+      "url": "https://www.irs.gov/publications/p936",
+      "snapshot": "2025-reference/irs-p936.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "a725a19604ed6f06f87e22a5457482a0044451979640620842b87c0122b7bb39",
+      "bytes": 320577
+    },
+    {
+      "id": "irs-p925-2025",
+      "url": "https://www.irs.gov/publications/p925",
+      "snapshot": "2025-reference/irs-p925.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "3c90cb0cddf4130f3e88a99c52cf9d53c7e4cd2a7453f498b5fb22e3fb171938",
+      "bytes": 371377
+    },
+    {
+      "id": "irs-p527-2025",
+      "url": "https://www.irs.gov/publications/p527",
+      "snapshot": "2025-reference/irs-p527.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "86b3232935ec5e2dd149f963c5af4fdeffbdb5a80f211cbd05d6afbc98cc2b39",
+      "bytes": 474344
+    },
+    {
+      "id": "irs-qbi",
+      "url": "https://www.irs.gov/newsroom/qualified-business-income-deduction",
+      "snapshot": "2026/irs-qbi.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "1610e847ec27fcf9bbd07e9f7deffd9bfa815b0f796d4e052fdfd09be94411fc",
+      "bytes": 110063
+    },
+    {
+      "id": "irs-tc559",
+      "url": "https://www.irs.gov/taxtopics/tc559",
+      "snapshot": "2026/irs-niit.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "3ef75623344bc9fbd4a503a81d13908f69ea5b1d8e90b68af0fda252ece5994f",
+      "bytes": 102561
+    },
+    {
+      "id": "ssa-cbb",
+      "url": "https://www.ssa.gov/oact/cola/cbb.html",
+      "snapshot": "2026/ssa-cbb.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "320195ad8a4e22126ff6599b08757b6299b88a203fbb50d65db505038d2efa7a",
+      "bytes": 39391
+    },
+    {
+      "id": "ssa-cbb-formula",
+      "url": "https://www.ssa.gov/OACT/COLA/cbbdet.html",
+      "snapshot": "2026/ssa-cbb-rounding.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "24862806b3012117ff0fdefc8e2d874b01951d718743ecf005075bc599eec4fa",
+      "bytes": 33752
+    },
+    {
+      "id": "irs-p15-2026",
+      "url": "https://www.irs.gov/publications/p15",
+      "snapshot": "2026/irs-p15.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "1f2b8627e41c77773ccda100a7462d4f7c9bf77128233173539b6747558c14e5",
+      "bytes": 624239
+    },
+    {
+      "id": "irs-tc560",
+      "url": "https://www.irs.gov/taxtopics/tc560",
+      "snapshot": "2026/irs-additional-medicare.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "c7ba36a40d57ed9c4e1adf633e9f2fb006d56b381b7b33c67061ac6363ac398a",
+      "bytes": 103361
+    },
+    {
+      "id": "edd-rates-2026",
+      "url": "https://edd.ca.gov/en/payroll_taxes/rates_and_withholding/",
+      "snapshot": "2026/edd-rates.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "3954288ee8e5266666054b14b54f0b5d732edda961f26c40b9a89526096e552b",
+      "bytes": 146494
+    },
+    {
+      "id": "irs-notice-2025-67",
+      "url": "https://www.irs.gov/pub/irs-drop/n-25-67.pdf",
+      "snapshot": "2026/irs-n-2025-67.pdf",
+      "publicationYear": 2025,
+      "publicationDate": "2025-11-13",
+      "retrievedOn": "2026-10-12",
+      "sha256": "1eea8f141b0cddd182f9f09b3bc8ffad683d27ceb806dfc6da126811dc0a1f8d",
+      "bytes": 133701
+    },
+    {
+      "id": "irs-catch-up",
+      "url": "https://www.irs.gov/retirement-plans/plan-participant-employee/retirement-topics-catch-up-contributions",
+      "snapshot": "2026/irs-catch-up.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "4b72dd2d84b4d8a127c729263a161c2c3f650f272ae130f244c65848c4659884",
+      "bytes": 103212
+    },
+    {
+      "id": "irs-final-catch-up-2025-40",
+      "url": "https://www.irs.gov/irb/2025-40_IRB",
+      "snapshot": "2026/irs-catch-up-final-rule.html",
+      "publicationYear": 2025,
+      "publicationDate": "2025-09-29",
+      "retrievedOn": "2026-10-12",
+      "sha256": "7c97c75300ed1fc73a177f9e84711d8d3cc43b681fa26d0a77794acda98ab16c",
+      "bytes": 419382
+    },
+    {
+      "id": "usc-219-2024",
+      "url": "https://www.govinfo.gov/content/pkg/USCODE-2024-title26/html/USCODE-2024-title26-subtitleA-chap1-subchapB-partVII-sec219.htm",
+      "snapshot": "2026/usc-219-2024.html",
+      "publicationYear": 2024,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "8e46f501ac8b8c520abf2795f1afc5e959309f73d6e146c75b14eb03e120d547",
+      "bytes": 86657
+    },
+    {
+      "id": "usc-402-2024",
+      "url": "https://www.govinfo.gov/link/uscode/26/402",
+      "snapshot": "2026/usc-402.pdf",
+      "publicationYear": 2024,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "b16ae738fc285061cd2958dc053fda3e170a8c46c82aeba698bfa86af762fcb9",
+      "bytes": 237059
+    },
+    {
+      "id": "usc-408a-2024",
+      "url": "https://www.govinfo.gov/link/uscode/26/408A",
+      "snapshot": "2026/usc-408a.pdf",
+      "publicationYear": 2024,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "7822dc0aa159ecb58874125f8bc9b5b2daa5283a3db74d3dae8102660fabc801",
+      "bytes": 174100
+    },
+    {
+      "id": "usc-163-2024",
+      "url": "https://www.govinfo.gov/link/uscode/26/163",
+      "snapshot": "2026/usc-163.pdf",
+      "publicationYear": 2024,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "d7348021c013a268e2c0fe6f37d82da9158af46c6a14cfba166ad4f3b1184dc3",
+      "bytes": 213517
+    },
+    {
+      "id": "usc-199a-2024",
+      "url": "https://www.govinfo.gov/link/uscode/26/199A",
+      "snapshot": "2026/usc-199a.pdf",
+      "publicationYear": 2024,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "b571dfbfcb7e02c14f7dc74e23eeb4ad6f15569d4f5edc9198acf5bc5686e2bc",
+      "bytes": 167159
+    },
+    {
+      "id": "irs-p936-2021",
+      "url": "https://www.irs.gov/pub/irs-prior/p936--2021.pdf",
+      "snapshot": "2025-reference/irs-p936-2021.pdf",
+      "publicationYear": 2021,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "cfabb10d26223dae13060fdb5c6434d9f1b57cc4a70ada889ccdd36349716529",
+      "bytes": 1297111
+    },
+    {
+      "id": "irs-8995a",
+      "url": "https://www.irs.gov/instructions/i8995a",
+      "snapshot": "2026/irs-8995a.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "766eaa1487a796c04c0d5cee90128bb12a4441345679d5a8ef0c4b034dd29e52",
+      "bytes": 196045
+    },
+    {
+      "id": "ftb-3885a-2025",
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-3885a-instructions.html",
+      "snapshot": "2025-reference/ftb-3885a.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "1f42e4cfa424faf5cb754c54cabf790ace384e454b13c802742f0388b3317108",
+      "bytes": 43577
+    },
+    {
+      "id": "usc-414-code",
+      "url": "https://www.govinfo.gov/link/uscode/26/414",
+      "snapshot": "2026/usc-414.pdf",
+      "publicationYear": 2024,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-12",
+      "sha256": "eb5c820a15b416338d7317b780fa16676e571d8cfae04889064a947b090ebb43",
+      "bytes": 263683
+    }
+  ]
+}

@@ -1,0 +1,502 @@
+[
+  {
+    "id": "published-2026-and-explicit-ca-proxies",
+    "taxYear": 2026,
+    "sources": [
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.irs.gov/pub/irs-drop/n-25-67.pdf",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-instructions.html",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
+      "https://edd.ca.gov/en/payroll_taxes/rates_and_withholding/",
+      "https://www.ssa.gov/oact/cola/cbb.html"
+    ],
+    "input": {
+      "baselineYear": 2026,
+      "futureIndexGrowthBps": 0,
+      "actualStateTaxPaidByYear": []
+    },
+    "worksheetSteps": [
+      "Transcribe MFJ Rev Proc 2025-32 sections 4.01, 4.10, 4.14, 4.26 and Notice 2025-67 independently in cents.",
+      "Public Law 119-21 sections 70103, 70107, 70108, 70111, 70120 govern enacted transitions.",
+      "FTB October 2026 Schedule Y lower boundary is 118,996, conflicting with over 118,966; explicitly use continuous integration from boundaries.",
+      "2025 CA phaseout and AMT values remain named provisional proxies for missing December 2026 indexed amounts."
+    ],
+    "expected": {
+      "federal.standardDeductionCents": 3220000,
+      "federal.additionalStandardDeductionPerFilerCents": 165000,
+      "federal.brackets": [
+        {
+          "upperCents": 2480000,
+          "rateBps": 1000
+        },
+        {
+          "upperCents": 10080000,
+          "rateBps": 1200
+        },
+        {
+          "upperCents": 21140000,
+          "rateBps": 2200
+        },
+        {
+          "upperCents": 40355000,
+          "rateBps": 2400
+        },
+        {
+          "upperCents": 51245000,
+          "rateBps": 3200
+        },
+        {
+          "upperCents": 76870000,
+          "rateBps": 3500
+        },
+        {
+          "upperCents": null,
+          "rateBps": 3700
+        }
+      ],
+      "federal.salt": {
+        "capCents": 4040000,
+        "phaseoutStartCents": 50500000,
+        "reductionBps": 3000,
+        "floorCents": 1000000
+      },
+      "federal.amt": {
+        "exemptionCents": 14020000,
+        "phaseoutStartCents": 100000000,
+        "phaseoutBps": 5000,
+        "rateSplitCents": 24450000,
+        "lowerRateBps": 2600,
+        "upperRateBps": 2800
+      },
+      "federal.seniorDeduction": {
+        "perFilerCents": 600000,
+        "minimumAge": 65,
+        "phaseoutStartCents": 15000000,
+        "reductionBps": 600
+      },
+      "federal.itemized": {
+        "restrictionNumerator": 2,
+        "restrictionDenominator": 37,
+        "thresholdCents": 76870000
+      },
+      "federal.mortgage": {
+        "post2017LimitCents": 75000000,
+        "pre2017LimitCents": 100000000,
+        "cutoffDate": "2017-12-15"
+      },
+      "federal.mortgageInsurance": {
+        "allowed": true,
+        "phaseoutStartCents": 10000000,
+        "phaseoutStepCents": 100000,
+        "reductionBps": 1000
+      },
+      "federal.passive": {
+        "allowanceCents": 2500000,
+        "phaseoutStartCents": 10000000,
+        "phaseoutEndCents": 15000000,
+        "reductionBps": 5000
+      },
+      "federal.niit": {
+        "thresholdCents": 25000000,
+        "rateBps": 380
+      },
+      "federal.qbi": {
+        "deductionBps": 2000,
+        "phaseoutStartCents": 40350000,
+        "phaseoutEndCents": 55350000,
+        "wageOnlyLimitBps": 5000,
+        "wageMixedLimitBps": 2500,
+        "ubiaLimitBps": 250,
+        "minimumDeductionCents": 40000,
+        "minimumQbiCents": 100000
+      },
+      "federal.rental": {
+        "recoveryPeriodMonths": 330,
+        "convention": "mid-month"
+      },
+      "california.brackets": [
+        {
+          "upperCents": 2291200,
+          "rateBps": 100
+        },
+        {
+          "upperCents": 5431400,
+          "rateBps": 200
+        },
+        {
+          "upperCents": 8572200,
+          "rateBps": 400
+        },
+        {
+          "upperCents": 11899600,
+          "rateBps": 600
+        },
+        {
+          "upperCents": 15039400,
+          "rateBps": 800
+        },
+        {
+          "upperCents": 76821800,
+          "rateBps": 930
+        },
+        {
+          "upperCents": 92185400,
+          "rateBps": 1030
+        },
+        {
+          "upperCents": 153642600,
+          "rateBps": 1130
+        },
+        {
+          "upperCents": null,
+          "rateBps": 1230
+        }
+      ],
+      "california.standardDeductionCents": 1180000,
+      "california.personalCreditPerFilerCents": 15800,
+      "california.seniorCreditPerFilerCents": 15800,
+      "california.creditPhaseout": {
+        "startCents": 50441100,
+        "stepCents": 250000,
+        "reductionPerExemptionCents": 600
+      },
+      "california.itemized": {
+        "phaseoutStartCents": 50441100,
+        "reductionBps": 600,
+        "maxReductionBps": 8000
+      },
+      "california.amt": {
+        "exemptionCents": 12366700,
+        "phaseoutStartCents": 46374500,
+        "phaseoutBps": 2500,
+        "rateBps": 700
+      },
+      "california.surtax": {
+        "thresholdCents": 100000000,
+        "rateBps": 100
+      },
+      "california.mortgage.acquisitionLimitCents": 100000000,
+      "california.mortgageInsurance.allowed": false,
+      "payroll": {
+        "socialSecurityRateBps": 620,
+        "socialSecurityWageBaseCents": 18450000,
+        "medicareRateBps": 145,
+        "additionalMedicareRateBps": 90,
+        "additionalMedicareThresholdCents": 25000000,
+        "sdiRateBps": 130,
+        "sdiWageBaseCents": null
+      },
+      "retirement": {
+        "electiveDeferralLimitCents": 2450000,
+        "regularCatchupCents": 800000,
+        "enhancedCatchupCents": 1125000,
+        "catchupMinimumAge": 50,
+        "enhancedCatchupMinimumAge": 60,
+        "enhancedCatchupMaximumAge": 63,
+        "rothCatchupPriorYearWageThresholdCents": 15000000,
+        "mandatoryRothCatchup": true,
+        "iraLimitCents": 750000,
+        "iraCatchupCents": 110000,
+        "iraCatchupMinimumAge": 50,
+        "iraDeductionCovered": {
+          "startCents": 12900000,
+          "endCents": 14900000
+        },
+        "iraDeductionSpouseCovered": {
+          "startCents": 24200000,
+          "endCents": 25200000
+        },
+        "rothIra": {
+          "startCents": 24200000,
+          "endCents": 25200000
+        }
+      }
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ],
+    "publicationYears": [
+      2025,
+      2026
+    ],
+    "reviewDate": "2026-10-12"
+  },
+  {
+    "id": "2027-zero-index-fixed-thresholds",
+    "taxYear": 2027,
+    "sources": [
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.irs.gov/pub/irs-drop/n-25-67.pdf",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-instructions.html",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
+      "https://edd.ca.gov/en/payroll_taxes/rates_and_withholding/",
+      "https://www.ssa.gov/oact/cola/cbb.html"
+    ],
+    "input": {
+      "baselineYear": 2026,
+      "futureIndexGrowthBps": 0,
+      "actualStateTaxPaidByYear": []
+    },
+    "worksheetSteps": [
+      "SALT cap 40,400 \u00d7 1.01 = 40,804; threshold 505,000 \u00d7 1.01 = 510,050.",
+      "All indexed-threshold growth is 0%; Medicare/NIIT thresholds are fixed; retain administered SDI 1.3% only as a projected assumption."
+    ],
+    "expected": {
+      "federal.salt.capCents": 4080400,
+      "federal.salt.phaseoutStartCents": 51005000,
+      "federal.standardDeductionCents": 3220000,
+      "federal.seniorDeduction.perFilerCents": 600000,
+      "federal.niit.thresholdCents": 25000000,
+      "payroll.additionalMedicareThresholdCents": 25000000,
+      "payroll.sdiRateBps": 130,
+      "retirement.electiveDeferralLimitCents": 2450000,
+      "retirement.mandatoryRothCatchup": true
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ],
+    "publicationYears": [
+      2025,
+      2026
+    ],
+    "reviewDate": "2026-10-12"
+  },
+  {
+    "id": "2028-enacted-salt-growth",
+    "taxYear": 2028,
+    "sources": [
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.irs.gov/pub/irs-drop/n-25-67.pdf",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-instructions.html",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
+      "https://edd.ca.gov/en/payroll_taxes/rates_and_withholding/",
+      "https://www.ssa.gov/oact/cola/cbb.html"
+    ],
+    "input": {
+      "baselineYear": 2026,
+      "futureIndexGrowthBps": 0,
+      "actualStateTaxPaidByYear": []
+    },
+    "worksheetSteps": [
+      "40,804 \u00d7 1.01 = 41,212.04; 510,050 \u00d7 1.01 = 515,150.50.",
+      "Temporary senior deduction still applies through 2028."
+    ],
+    "expected": {
+      "federal.salt.capCents": 4121204,
+      "federal.salt.phaseoutStartCents": 51515050,
+      "federal.seniorDeduction.perFilerCents": 600000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ],
+    "publicationYears": [
+      2025,
+      2026
+    ],
+    "reviewDate": "2026-10-12"
+  },
+  {
+    "id": "2029-senior-expiry-and-cent-rounding",
+    "taxYear": 2029,
+    "sources": [
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.irs.gov/pub/irs-drop/n-25-67.pdf",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-instructions.html",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
+      "https://edd.ca.gov/en/payroll_taxes/rates_and_withholding/",
+      "https://www.ssa.gov/oact/cola/cbb.html"
+    ],
+    "input": {
+      "baselineYear": 2026,
+      "futureIndexGrowthBps": 0,
+      "actualStateTaxPaidByYear": []
+    },
+    "worksheetSteps": [
+      "40,400 \u00d7 1.01^3 = 41,624.1604; settle to 4,162,416 cents.",
+      "505,000 \u00d7 1.01^3 = 520,302.005; settle ties away to 52,030,201 cents.",
+      "Senior deduction expires January 1, 2029."
+    ],
+    "expected": {
+      "federal.salt.capCents": 4162416,
+      "federal.salt.phaseoutStartCents": 52030201,
+      "federal.seniorDeduction.perFilerCents": 0
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ],
+    "publicationYears": [
+      2025,
+      2026
+    ],
+    "reviewDate": "2026-10-12"
+  },
+  {
+    "id": "2030-salt-reversion",
+    "taxYear": 2030,
+    "sources": [
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.irs.gov/pub/irs-drop/n-25-67.pdf",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-instructions.html",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
+      "https://edd.ca.gov/en/payroll_taxes/rates_and_withholding/",
+      "https://www.ssa.gov/oact/cola/cbb.html"
+    ],
+    "input": {
+      "baselineYear": 2026,
+      "futureIndexGrowthBps": 0,
+      "actualStateTaxPaidByYear": []
+    },
+    "worksheetSteps": [
+      "From 2030 the cap is 10,000 and income phasedown no longer applies.",
+      "No elective index-growth assumption can postpone the enacted sunset."
+    ],
+    "expected": {
+      "federal.salt.capCents": 1000000,
+      "federal.salt.reductionBps": 0,
+      "federal.salt.floorCents": 1000000,
+      "federal.seniorDeduction.perFilerCents": 0,
+      "payroll.additionalMedicareThresholdCents": 25000000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ],
+    "publicationYears": [
+      2025,
+      2026
+    ],
+    "reviewDate": "2026-10-12"
+  },
+  {
+    "id": "2027-two-percent-jurisdiction-rounding",
+    "taxYear": 2027,
+    "sources": [
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.irs.gov/pub/irs-drop/n-25-67.pdf",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-instructions.html",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
+      "https://edd.ca.gov/en/payroll_taxes/rates_and_withholding/",
+      "https://www.ssa.gov/oact/cola/cbb.html"
+    ],
+    "input": {
+      "baselineYear": 2026,
+      "futureIndexGrowthBps": 200,
+      "actualStateTaxPaidByYear": []
+    },
+    "worksheetSteps": [
+      "Apply forecast-only 1.02 factor to legally indexed amounts; this is a scenario, not published 2027 law.",
+      "Joint standard deduction floors to 100 dollars, MFJ brackets to 50 dollars, AMT nearest 100 dollars, California nearest dollar, SSA nearest 300 dollars.",
+      "Section 219(g)(8) requires NEAREST 1,000 dollars: 129,000 \u00d7 1.02 = 131,580 rounds to 132,000; add fixed covered phaseout width 20,000 gives 152,000.",
+      "Section 408A(c)(3)(D) requires NEAREST 1,000 dollars: 242,000 \u00d7 1.02 = 246,840 rounds to 247,000; add fixed 10,000 Roth phaseout width gives 257,000.",
+      "Enhanced catch-up inflation increase 225 dollars floors to zero in 500-dollar increments; retain 11,250 original amount.",
+      "QBI indexed threshold 403,500 \u00d7 1.02 floors to 411,550, then add fixed 150,000 phase-in width."
+    ],
+    "expected": {
+      "federal.standardDeductionCents": 3280000,
+      "federal.brackets.0.upperCents": 2525000,
+      "federal.amt.exemptionCents": 14300000,
+      "federal.qbi.phaseoutStartCents": 41155000,
+      "federal.qbi.phaseoutEndCents": 56155000,
+      "california.standardDeductionCents": 1203600,
+      "california.personalCreditPerFilerCents": 16100,
+      "payroll.socialSecurityWageBaseCents": 18810000,
+      "payroll.additionalMedicareThresholdCents": 25000000,
+      "retirement.iraDeductionCovered.startCents": 13200000,
+      "retirement.iraDeductionCovered.endCents": 15200000,
+      "retirement.rothIra.startCents": 24700000,
+      "retirement.rothIra.endCents": 25700000,
+      "retirement.enhancedCatchupCents": 1125000,
+      "retirement.iraLimitCents": 750000,
+      "federal.salt.capCents": 4080400
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ],
+    "publicationYears": [
+      2025,
+      2026
+    ],
+    "reviewDate": "2026-10-12"
+  },
+  {
+    "id": "2027-zero-percent-retains-fractional-enhanced-base",
+    "taxYear": 2027,
+    "sources": [
+      "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+      "https://www.irs.gov/pub/irs-drop/n-25-67.pdf",
+      "https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf",
+      "https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-instructions.html",
+      "https://www.ftb.ca.gov/forms/2025/2025-540-p-instructions.html",
+      "https://edd.ca.gov/en/payroll_taxes/rates_and_withholding/",
+      "https://www.ssa.gov/oact/cola/cbb.html"
+    ],
+    "input": {
+      "baselineYear": 2026,
+      "futureIndexGrowthBps": 0,
+      "actualStateTaxPaidByYear": []
+    },
+    "worksheetSteps": [
+      "Treasury final catch-up regulations round the inflation increase, preserving 11,250 rather than rounding the whole amount down to 11,000."
+    ],
+    "expected": {
+      "retirement.enhancedCatchupCents": 1125000,
+      "retirement.regularCatchupCents": 800000,
+      "retirement.rothCatchupPriorYearWageThresholdCents": 15000000
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ],
+    "publicationYears": [
+      2025,
+      2026
+    ],
+    "reviewDate": "2026-10-12"
+  },
+  {
+    "id": "2027-negative-index-statutory-no-decrease",
+    "taxYear": 2027,
+    "sources": [
+      "https://www.govinfo.gov/content/pkg/USCODE-2024-title26/html/USCODE-2024-title26-subtitleA-chap1-subchapA-partI-sec1.htm",
+      "https://www.ssa.gov/OACT/COLA/cbbdet.html"
+    ],
+    "input": {
+      "baselineYear": 2026,
+      "futureIndexGrowthBps": -200,
+      "actualStateTaxPaidByYear": []
+    },
+    "worksheetSteps": [
+      "Federal cost-of-living adjustment is the percentage increase, if any; a -2% scenario gives no federal decrease.",
+      "SSA contribution base formula retains the previous base when the calculated base would be lower.",
+      "Enacted SALT 1% growth applies independently of the negative assumption."
+    ],
+    "expected": {
+      "federal.standardDeductionCents": 3220000,
+      "payroll.socialSecurityWageBaseCents": 18450000,
+      "retirement.electiveDeferralLimitCents": 2450000,
+      "federal.salt.capCents": 4080400
+    },
+    "toleranceCents": 0,
+    "ruleVersions": [
+      "us-ca-2026.1"
+    ]
+  }
+]

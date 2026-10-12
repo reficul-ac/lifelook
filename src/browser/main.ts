@@ -1,3 +1,4 @@
+import {syncFormFeedback} from './form-feedback';
 import {createDisclosureController} from './disclosures';
 import {reviewTarget} from './navigation';
 import type {IssueViewContext} from './issue-presentation';
@@ -41,14 +42,17 @@ export function mountApp(root:HTMLElement,plan:PlanDocument,storage:StoragePort,
   });reader.addEventListener('error',()=>{backupStatus.textContent='The backup file could not be read. The current plan has been retained.';});reader.readAsText(file);});header.append(backup);root.append(header);
   const layout=element('div');layout.className='workspace-layout';const editor=element('section'),report=element('section');editor.setAttribute('aria-label','Financial inputs');report.setAttribute('aria-label','Saved projection');layout.append(editor,report);root.append(layout);
   const nav=element('nav');nav.setAttribute('aria-label','Input sections');editor.append(nav);
-  const sections:readonly [string,(root:HTMLElement,controller:WorkspaceController)=>void][]=[['Household',renderHouseholdForm],['Income',renderIncomeForm],['Expenses and debts',renderExpensesDebtsForm],['Investments',renderInvestmentsForm],['Properties',renderPropertiesForm]];
+  const sections:readonly [string,(root:HTMLElement,controller:WorkspaceController,ui?:IssueViewContext)=>void][]=[['Household',renderHouseholdForm],['Income',renderIncomeForm],['Expenses and debts',renderExpensesDebtsForm],['Investments',renderInvestmentsForm],['Properties',renderPropertiesForm]];
   const containers=sections.map(([label,renderer],index)=>{const container=element('section');container.hidden=index!==0;container.dataset.section=label;const tab=button(label,()=>{containers.forEach(c=>{if(c.container!==container)disclosures.closeWithin(c.container,false);c.container.hidden=c.container!==container;});nav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===tab)));});tab.setAttribute('aria-pressed',String(index===0));nav.append(tab);editor.append(container);return {container,renderer};});
   const projectionRoot=element('div'),issueRoot=element('div');report.append(projectionRoot,issueRoot);
   let savedIdentity:PlanDocument|undefined,draftKeys='';
   const render=()=>{const state=controller.getState(),keys=Object.keys(state.drafts).sort().join('|'),newKeys=Object.values(state.drafts).filter(d=>d.section!=='household'&&!(state.savedPlan[d.section] as readonly {id:string}[]).some(r=>r.id===d.recordId)).map(d=>d.recordId).sort().join('|'),changed=savedIdentity!==state.savedPlan;status.textContent=`${state.persisted?'Saved':'Unsaved'} · Saved input revision ${state.savedPlan.revision}${keys?' · Draft edits have not changed the saved projection.':''}`;
     renderIssues(issueRoot,state.issues,context);
     if(changed)renderProjection(projectionRoot,state.projection,context);
-    if(changed||draftKeys!==newKeys){for(const {container,renderer} of containers){disclosures.closeWithin(container,false);renderer(container,controller);}}
+    const active=document.activeElement instanceof HTMLInputElement||document.activeElement instanceof HTMLSelectElement?document.activeElement:undefined;const activeRecord=active?.closest<HTMLElement>('[data-record-id]')?.dataset.recordId,activeField=active?.dataset.field;const selection=active instanceof HTMLInputElement&&active.type==='text'?[active.selectionStart,active.selectionEnd] as const:undefined;
+    if(changed||draftKeys!==newKeys){for(const {container,renderer} of containers){disclosures.closeWithin(container,false);renderer(container,controller,context);}}
+    syncFormFeedback(editor,controller,context);
+    if(activeField&&activeRecord&&!active?.isConnected){const form=[...editor.querySelectorAll<HTMLElement>('[data-record-id]')].find(node=>node.dataset.recordId===activeRecord);const replacement=[...form?.querySelectorAll<HTMLInputElement|HTMLSelectElement>('[data-field]')??[]].find(node=>node.dataset.field===activeField);replacement?.focus();if(selection&&replacement instanceof HTMLInputElement&&replacement.type==='text')replacement.setSelectionRange(selection[0],selection[1]);}
     savedIdentity=state.savedPlan;draftKeys=newKeys;
   };
   const unsubscribe=controller.subscribe(render);cleanups.set(root,()=>{unsubscribe();disclosures.dispose();});render();return controller;

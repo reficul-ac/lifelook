@@ -19,7 +19,8 @@ function mount(plan=main(),subscribe=true) {
   return {root,controller,storage};
 }
 function set(root:HTMLElement,label:string,value:string) {
-  const control=getByLabelText(root,label) as HTMLInputElement|HTMLSelectElement;
+  const control=[...root.querySelectorAll<HTMLInputElement|HTMLSelectElement>('input,select')].find(node=>node.getAttribute('aria-label')===label)!;
+  if(!control)throw new Error(`Missing accessible control: ${label}`);
   fireEvent.input(control,{target:{value}});fireEvent.change(control,{target:{value}});
 }
 function click(root:HTMLElement,name:string) {fireEvent.click(getByRole(root,'button',{name}));}

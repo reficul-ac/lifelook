@@ -1,7 +1,8 @@
+import type {IssueViewContext} from '../issue-presentation';
 import { renderField, renderHistory, renderRecordSection, type FieldContext } from '../fields';
 import type { WorkspaceController } from '../state';
 
-export function renderExpensesDebtsForm(root: HTMLElement, controller: WorkspaceController): void {
+export function renderExpensesDebtsForm(root: HTMLElement, controller: WorkspaceController, ui?:IssueViewContext): void {
   root.replaceChildren(); const expenses = document.createElement('section'), debts = document.createElement('section'); root.append(expenses, debts);
   const plan = controller.getState().savedPlan, properties = [{ value: '', label: 'None' }, ...plan.properties.map(p => ({ value: p.id, label: p.name }))];
   renderRecordSection(expenses, controller, 'expenses', 'Expense', (body, ctx) => {
@@ -24,12 +25,12 @@ export function renderExpensesDebtsForm(root: HTMLElement, controller: Workspace
       }
     }
     if (ctx.draft.value.taxCategory === 'mortgage-insurance') renderHistory(body, ctx, ['mortgageInsuranceQualification'], 'Qualified mortgage insurance premiums', { kind: 'checkbox' });
-  });
+  },undefined,ui);
   renderRecordSection(debts, controller, 'debts', 'Debt', (body, ctx) => {
     renderField(body, ctx, ['name'], 'Debt name'); renderField(body, ctx, ['openingBalanceCents'], 'Debt opening balance ($)', { kind: 'money' });
     renderField(body, ctx, ['aprBps'], 'Debt nominal APR (%)', { kind: 'rate', hint: 'Nominal APR uses the declared monthly interest convention.' });
     renderField(body, ctx, ['monthlyPaymentCents'], 'Debt monthly payment ($)', { kind: 'money' });
     renderField(body, ctx, ['firstPaymentMonth'], 'Debt first payment month', { kind: 'month' });
     renderField(body, ctx, ['propertyId'], 'Debt property', { kind: 'select', options: properties, optional: true, hint: 'Enter each mortgage under its property once.' });
-  });
+  },undefined,ui);
 }

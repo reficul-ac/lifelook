@@ -1,7 +1,8 @@
+import type {IssueViewContext} from '../issue-presentation';
 import { renderField, renderRecordSection, renderRows, valueAt, type FieldContext } from '../fields';
 import type { RawObject, WorkspaceController } from '../state';
 
-export function renderIncomeForm(root: HTMLElement, controller: WorkspaceController): void {
+export function renderIncomeForm(root: HTMLElement, controller: WorkspaceController, ui?:IssueViewContext): void {
   root.replaceChildren();
   const salaries = document.createElement('section'), other = document.createElement('section'); root.append(salaries, other);
   const owners = controller.getState().savedPlan.household.filers.map(f => ({ value: f.id, label: f.name }));
@@ -26,7 +27,7 @@ export function renderIncomeForm(root: HTMLElement, controller: WorkspaceControl
       if (current.kind === 'percent') renderField(row, ctx, [...path, 'percentBps'], `Salary change percentage ${index + 1} (%)`, { kind: 'rate' });
       else renderField(row, ctx, [...path, 'annualGrossCents'], `Salary change annual amount ${index + 1} ($)`, { kind: 'money' });
     });
-  });
+  },undefined,ui);
   renderRecordSection(other, controller, 'otherIncome', 'Other income', (body, ctx) => {
     renderField(body, ctx, ['name'], 'Income name');
     renderField(body, ctx, ['amountCents'], 'Income amount ($)', { kind: 'money' });
@@ -46,5 +47,5 @@ export function renderIncomeForm(root: HTMLElement, controller: WorkspaceControl
     } else if (ctx.draft.value.classification === 'ordinary-taxable') {
       renderField(body, ctx, ['niitTreatment'], 'Income NIIT treatment', { kind: 'select', options: [{ value: 'unknown', label: 'Unknown' }, { value: 'included', label: 'Included: interest or ordinary dividends' }, { value: 'excluded', label: 'Excluded' }], hint: 'Qualified dividends and realized capital gains require support beyond this scenario.' });
     }
-  });
+  },undefined,ui);
 }

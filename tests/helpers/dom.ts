@@ -1,10 +1,11 @@
 import { fireEvent,within } from '@testing-library/dom';
-import { mountApp } from '../../src/browser/main';
+import { mountApp,unmountApp } from '../../src/browser/main';
 import type { PlanDocument } from '../../src/engine';
 import { loadRuleSet } from '../../src/engine';
 import type { StoragePort } from '../../src/browser/storage';
 
 export function mountWorkspace(doc:PlanDocument,storage?:StoragePort){
+  for(const old of document.querySelectorAll<HTMLElement>('.workspace'))unmountApp(old);
   const memory=new Map<string,string>();const root=document.createElement('main');document.body.replaceChildren(root);
   const controller=mountApp(root,doc,storage??{getItem:key=>memory.get(key)??null,setItem:(key,value)=>{memory.set(key,value);}},loadRuleSet());
   return {root,controller};

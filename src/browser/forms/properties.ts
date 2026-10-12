@@ -1,5 +1,7 @@
+import type {IssueViewContext} from '../issue-presentation';
+import {syncFormFeedback} from '../form-feedback';
 import { defaultRentalAllocation,initializePurchaseLoan,type Property,type RentalUnit,type TaxBook,type PurchaseLoanInput } from '../../engine';
-import { button,element,refreshFields,renderField,setAt,valueAt,type FieldContext,type FieldPath,type FieldOptions } from '../fields';
+import { button,element,refreshFields,renderField,renderBooleanHistory,setAt,valueAt,type FieldContext,type FieldPath,type FieldOptions } from '../fields';
 import { fromDraftValue,toDraftValue,type RawObject,type WorkspaceController } from '../state';
 
 const books:readonly [TaxBook,string][]=[['federal','Federal rental tax history'],['california','California rental tax history'],['federal-amt','Federal AMT rental tax history'],['california-amt','California AMT rental tax history']];
@@ -11,11 +13,10 @@ function details(root:HTMLElement,name:string):HTMLDetailsElement {const node=el
 function at(context:FieldContext,path:FieldPath):any{return valueAt(context.draft.value,path);}
 function field(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,options:FieldOptions={}):void {renderField(root,context,path,label,options);}
 function displayed(context:FieldContext,path:FieldPath,value:unknown,change:(value:unknown)=>void):FieldContext {
-  return {get draft(){return {...context.draft,value:setAt(context.draft.value,path,value)};},get issues(){return context.issues;},onChange(_path,value){change(value);},refresh(){context.refresh();}};
+  return {...(context.ui?{ui:context.ui}:{}),get draft(){return {...context.draft,value:setAt(context.draft.value,path,value)};},get issues(){return context.issues;},onChange(_path,value){change(value);},refresh(){context.refresh();}};
 }
 function booleanHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string):void {
-  const history=at(context,path) as {known?:boolean;value?:boolean}|undefined;
-  field(root,displayed(context,path,history?.known?String(history.value):'unknown',value=>context.onChange(path,value==='unknown'?unknown():{known:true,value:value==='true'})),path,label,{kind:'select',options:[{value:'unknown',label:'Unknown'},{value:'true',label:'Yes'},{value:'false',label:'No'}]});
+  renderBooleanHistory(root,context,path,label);
 }
 function moneyHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,estimate=false):void {
   const history=at(context,path) as {known?:boolean;value?:string}|undefined;
@@ -164,17 +165,16 @@ function propertyFields(root:HTMLElement,controller:WorkspaceController,context:
   root.append(button('Add property expense',()=>{context.onChange(['expenses'],[...(at(context,['expenses']) as readonly RawObject[]),{id:idFor(controller,context,'expense'),name:'Property expense',amountCents:'0.00',frequency:'monthly',startDate:`${controller.getState().savedPlan.startYear}-01-01`,annualGrowthBps:'0.00',propertyId:context.draft.recordId,use:'personal',taxCategory:'personal'}]);context.refresh();}));
 }
 /** Related property, loan, rental and expense rows remain one revisioned draft. */
-export function renderPropertiesForm(root:HTMLElement,controller:WorkspaceController):void {
-  root.replaceChildren();root.append(element('h2','Properties'));
+export function renderPropertiesForm(root:HTMLElement,controller:WorkspaceController,ui?:IssueViewContext):void {
+  ui?.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2','Properties'));
   const state=controller.getState(),ids=[...new Set([...state.savedPlan.properties.map(p=>p.id),...Object.values(state.drafts).filter(d=>d.section==='properties').map(d=>d.recordId)])];
   for(const id of ids){
-    const card=element('form');card.dataset.recordId=id;const body=element('div');card.append(element('h3',String(controller.getDraft('properties',id).value.property&& (controller.getDraft('properties',id).value.property as RawObject).name||'Property')),body);
-    const context:FieldContext={get draft(){return controller.getDraft('properties',id);},get issues(){return controller.getState().issues;},onChange(path,value){const draft=controller.getDraft('properties',id);controller.editDraft(id,{...draft,value:setAt(draft.value,path,value)});},refresh(){refreshFields(body,()=>propertyFields(body,controller,context));}};
+    const card=element('form');card.dataset.recordId=id;card.dataset.editableSection='properties';const body=element('div');card.append(element('h3',String(controller.getDraft('properties',id).value.property&& (controller.getDraft('properties',id).value.property as RawObject).name||'Property')),body);
+    const context:FieldContext={...(ui?{ui}:{}),get draft(){return controller.getDraft('properties',id);},get issues(){return controller.getState().issues;},onChange(path,value){const draft=controller.getDraft('properties',id);controller.editDraft(id,{...draft,value:setAt(draft.value,path,value)});},refresh(){ui?.disclosures.closeWithin(body,false);refreshFields(body,()=>propertyFields(body,controller,context));if(ui)syncFormFeedback(root,controller,ui);}};
     context.refresh();const save=element('button','Save property');save.type='submit';card.append(save,button('Remove property',()=>controller.removeRecord('properties',id)));card.addEventListener('submit',event=>{event.preventDefault();controller.saveProperty(id);});
-    card.append(button('Discard property edits and reload saved values',()=>{controller.discardDraft(id);renderPropertiesForm(root,controller);}));
-    const relatedIds=new Set([id,...(context.draft.value.property as any).loans.map((l:RawObject)=>l.id),...(context.draft.value.rentals as readonly RawObject[]).map(r=>r.id),...(context.draft.value.expenses as readonly RawObject[]).map(e=>e.id)]);
-    for(const issue of state.issues.filter(i=>i.recordId&&relatedIds.has(i.recordId)))card.append(element('p',`${issue.field??'Property'}: ${issue.explanation} ${issue.resolution}`));
+    card.append(button('Discard property edits and reload saved values',()=>{controller.discardDraft(id);renderPropertiesForm(root,controller,ui);}));
     root.append(card);
   }
+  if(ui)syncFormFeedback(root,controller,ui);
   root.append(button('Add property',()=>controller.beginAdd('properties')));
 }

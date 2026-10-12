@@ -1,7 +1,8 @@
+import type {IssueViewContext} from '../issue-presentation';
 import { element,renderField,renderHistory,renderRecordSection,renderRows,type FieldContext } from '../fields';
 import type { WorkspaceController } from '../state';
 
-export function renderHouseholdForm(root:HTMLElement,controller:WorkspaceController):void {
+export function renderHouseholdForm(root:HTMLElement,controller:WorkspaceController,ui?:IssueViewContext):void {
   renderRecordSection(root,controller,'household','Household',(body,context)=>{
     renderField(body,context,['startYear'],'Projection start year',{kind:'integer'});
     renderField(body,context,['horizonYears'],'Projection years',{kind:'integer',hint:'One to forty calendar years.'});
@@ -28,5 +29,5 @@ export function renderHouseholdForm(root:HTMLElement,controller:WorkspaceControl
     renderRows(policy,context,['taxPolicy','actualStateTaxPaidByYear'],'actual state tax payment',()=>({year:String(controller.getState().savedPlan.startYear),californiaIncomeTaxPaidCents:'',sdiPaidCents:''}),(row,path,i)=>{
       renderField(row,context,[...path,'year'],`State tax payment year ${i+1}`,{kind:'integer'});renderField(row,context,[...path,'californiaIncomeTaxPaidCents'],`California income tax actually paid ${i+1} ($)`,{kind:'money'});renderField(row,context,[...path,'sdiPaidCents'],`SDI actually paid ${i+1} ($)`,{kind:'money'});
     });body.append(policy);
-  });
+  },undefined,ui);
 }

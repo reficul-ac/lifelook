@@ -1,7 +1,8 @@
+import type {IssueViewContext} from '../issue-presentation';
 import { renderField, renderHistory, renderRecordSection, type FieldContext } from '../fields';
 import type { WorkspaceController } from '../state';
 
-export function renderInvestmentsForm(root: HTMLElement, controller: WorkspaceController): void {
+export function renderInvestmentsForm(root: HTMLElement, controller: WorkspaceController, ui?:IssueViewContext): void {
   root.replaceChildren(); const accounts = document.createElement('section'), contributions = document.createElement('section'); root.append(accounts, contributions);
   const plan = controller.getState().savedPlan, owners = plan.household.filers.map(f => ({ value: f.id, label: f.name }));
   renderRecordSection(accounts, controller, 'accounts', 'Account', (body, ctx) => {
@@ -10,7 +11,7 @@ export function renderInvestmentsForm(root: HTMLElement, controller: WorkspaceCo
     renderField(body, ctx, ['openingBalanceCents'], 'Account opening balance ($)', { kind: 'money' });
     renderField(body, ctx, ['annualGrowthBps'], 'Effective annual account return (%)', { kind: 'rate', hint: 'Unrealized growth; deposits enter at month end and grow in later months.' });
     if (ctx.draft.value.type === 'traditional-ira') renderHistory(body, ctx, ['openingIraBasis'], 'Opening traditional IRA basis', { kind: 'money', hint: 'Known zero differs from unknown; basis is not the account balance.' });
-  });
+  },undefined,ui);
   renderRecordSection(contributions, controller, 'contributions', 'Contribution', (body, ctx) => {
     renderField(body, ctx, ['accountId'], 'Contribution account', { kind: 'select', options: [{ value: '', label: 'Choose a saved account' }, ...plan.accounts.map(a => ({ value: a.id, label: a.name }))], refresh: true });
     renderField(body, ctx, ['priority'], 'Contribution priority', { kind: 'integer', hint: 'Lower numbers receive the owner’s shared legal limit first; ties use stable record order.' });
@@ -24,5 +25,5 @@ export function renderInvestmentsForm(root: HTMLElement, controller: WorkspaceCo
     }
     const account = plan.accounts.find(a => a.id === ctx.draft.value.accountId);
     if (account?.type === 'traditional-401k' || account?.type === 'roth-401k') renderField(body, ctx, ['sponsoringSalaryId'], 'Sponsoring salary', { kind: 'select', options: [{ value: '', label: 'Choose the sponsoring employer’s salary' }, ...plan.salaries.filter(s => s.ownerId === account.ownerId).map(s => ({ value: s.id, label: s.name }))], hint: 'The owner’s employer history determines catch-up eligibility.' });
-  });
+  },undefined,ui);
 }

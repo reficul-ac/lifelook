@@ -6,16 +6,16 @@ import { renderTaxExplanation } from './tax-explanation';
 const columns:readonly {key:MonetaryField;label:string}[]=[
   {key:'grossIncomeCents',label:'Gross income'},{key:'salaryCents',label:'Salary'},{key:'otherIncomeCents',label:'Other income'},{key:'rentCents',label:'Rent'},
   {key:'federalIncomeTaxCents',label:'Federal income tax'},{key:'californiaIncomeTaxCents',label:'California income tax'},{key:'socialSecurityCents',label:'Social Security'},{key:'medicareCents',label:'Medicare'},{key:'additionalMedicareCents',label:'Additional Medicare'},{key:'sdiCents',label:'SDI'},{key:'totalTaxCents',label:'Total tax'},
-  {key:'ordinaryExpensesCents',label:'Ordinary expenses'},{key:'propertyExpensesCents',label:'Property expenses'},{key:'expensesCents',label:'Expenses'},{key:'debtPaymentCents',label:'Debt payments'},{key:'interestCents',label:'Interest'},{key:'principalPaidCents',label:'Principal'},
+  {key:'ordinaryExpensesCents',label:'Ordinary expenses'},{key:'propertyExpensesCents',label:'Property expenses'},{key:'expensesCents',label:'Expenses'},{key:'debtPaymentCents',label:'Debt payments'},{key:'interestCents',label:'Interest'},{key:'principalPaidCents',label:'Principal paid'},
   {key:'requestedContributionCents',label:'Requested contributions'},{key:'eligibleContributionCents',label:'Eligible contributions'},{key:'preventedContributionCents',label:'Prevented contributions'},{key:'accountGrowthCents',label:'Account growth'},{key:'propertyGrowthCents',label:'Property growth'},
-  {key:'cashFlowCents',label:'Cash flow'},{key:'accountBalanceCents',label:'Accounts'},{key:'propertyValueCents',label:'Property value'},{key:'loanBalanceCents',label:'Loans'},{key:'equityCents',label:'Equity'},{key:'reserveCents',label:'Cash reserve'},{key:'netWorthCents',label:'Net worth'},
+  {key:'cashFlowCents',label:'Cash flow'},{key:'accountBalanceCents',label:'Account balance'},{key:'propertyValueCents',label:'Property value'},{key:'loanBalanceCents',label:'Loan balance'},{key:'equityCents',label:'Equity'},{key:'reserveCents',label:'Cash reserve'},{key:'netWorthCents',label:'Net worth'},
 ];
 const slug=(key:string)=>key.replace(/Cents$/,'').replace(/[A-Z]/g,c=>`-${c.toLowerCase()}`);
 function movementTable(root:HTMLElement,rows:readonly (AnnualProjection|MonthlyProjection)[],caption:string,context:IssueViewContext):void {
   const scroll=element('div');scroll.className='projection-table-wrap';scroll.style.overflowX='auto';
   const table=element('table');table.append(element('caption',caption));const head=element('thead'),header=element('tr');
   const period=element('th','Period');period.scope='col';header.append(period);
-  for(const column of columns){const cell=element('th',column.label);cell.scope='col';header.append(cell);}head.append(header);table.append(head);
+  for(const column of columns){const cell=element('th',column.label);cell.scope='col';if(column.key==='sdiCents')cell.append(context.disclosures.createTrigger({label:'ⓘ',accessibleLabel:'ⓘ About SDI',preview:'California State Disability Insurance deducted from wages.',title:'California SDI',renderDetails:node=>{node.textContent='California State Disability Insurance deducted from wages; separate from income tax.';}}));header.append(cell);}head.append(header);table.append(head);
   const body=element('tbody');
   for(const row of rows){
     const line=element('tr'),isMonth='month'in row,period=isMonth?row.date:String(row.year),prefix=isMonth?`monthly-${row.date}`:`annual-${row.year}`;
@@ -25,7 +25,8 @@ function movementTable(root:HTMLElement,rows:readonly (AnnualProjection|MonthlyP
   table.append(body);scroll.append(table);root.append(scroll);
 }
 function records(root:HTMLElement,row:AnnualProjection|MonthlyProjection,prefix:string,context:IssueViewContext):void {
-  const details=element('details');details.append(element('summary',`Account, property and loan detail for ${'date'in row?row.date:row.year}`));
+  if(!row.accounts.length&&!row.properties.length&&!row.loans.length)return;
+  const details=element('details');details.append(element('summary',`Asset and loan balances · ${'date'in row?row.date:row.year}`));
   function table(caption:string,headers:readonly string[]):{table:HTMLTableElement;body:HTMLTableSectionElement}{
     const table=element('table');table.append(element('caption',caption));const head=element('thead'),line=element('tr');for(const label of headers){const cell=element('th',label);cell.scope='col';line.append(cell);}head.append(line);table.append(head);const body=element('tbody');table.append(body);details.append(table);return{table,body};
   }
@@ -42,18 +43,20 @@ function expandButton(root:HTMLElement,label:string,hiddenLabel:string,target:HT
   button.addEventListener('click',()=>{if(!target.hidden)context.disclosures.closeWithin(target,false);target.hidden=!target.hidden;if(!target.hidden&&!rendered){render();rendered=true;}button.textContent=target.hidden?label:hiddenLabel;button.setAttribute('aria-expanded',String(!target.hidden));});root.append(button,target);
 }
 export function renderProjection(root:HTMLElement,result:ProjectionResult,context:IssueViewContext):void {
-  context.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2','Projection'),element('p',`Calculated from saved revision ${result.inputRevision}`),element('p','Annual income tax is reserved across months in proportion to positive gross cash income. Payroll taxes follow cumulative wages.'),element('p','Investment and property growth changes asset values; it does not add spendable cash.'),element('p','Contributions remain planned when cash is insufficient. Later balances are conditional on covering the cash gap; no borrowing, sales or withdrawals are added.'));
+  context.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2','Projection'),element('p',`Inputs v${result.inputRevision}`));
+  const how=element('details');how.append(element('summary','How calculated'),element('p','Annual income tax is reserved across months in proportion to positive gross cash income, or in equal monthly amounts when positive income is zero. Payroll taxes follow cumulative wages.'),element('p','Asset growth changes value, not spendable cash.'));root.append(how);
+  const assumptions=element('details');assumptions.append(element('summary','Forecast assumptions'),element('p','Contributions remain planned when cash is insufficient. Later balances are conditional on covering the cash gap; no borrowing, sales or withdrawals are added.'));root.append(assumptions);
   appendCoverage(root,result.coverage);appendProvenance(root,result.provenance);
   if(result.contributionSchedules.length){
-    const details=element('details');details.append(element('summary','Contribution request schedules'));details.open=result.contributionSchedules.some(schedule=>schedule.requests.status!=='available');
+    const details=element('details');details.append(element('summary','Contribution request schedules'));const failures=result.contributionSchedules.filter(schedule=>schedule.requests.status!=='available').length;if(failures)root.append(element('span',`${failures} contribution schedules unavailable · Open request schedules`));
     const table=element('table');table.append(element('caption','Contribution request schedules'));const head=element('thead'),header=element('tr');for(const label of ['Rule','Year','Request schedule']){const cell=element('th',label);cell.scope='col';header.append(cell);}head.append(header);table.append(head);const body=element('tbody');
-    for(const schedule of result.contributionSchedules){const row=element('tr'),cell=element('td');row.append(element('th',schedule.ruleId),element('td',String(schedule.year)));cell.dataset.testid=`contribution-schedule-${schedule.year}-${schedule.ruleId}`;if(schedule.requests.status==='available')cell.textContent=`${schedule.requests.value.length} monthly requests`;else appendAmount(cell,schedule.requests,context,{label:'Contribution request schedule',period:{year:schedule.year}});row.append(cell);body.append(row);}table.append(body);details.append(table);root.append(details);
+    for(const schedule of result.contributionSchedules){const row=element('tr'),cell=element('td');row.append(element('th',getRecordLabel(context.readState().savedPlan,schedule.ruleId)),element('td',String(schedule.year)));cell.dataset.testid=`contribution-schedule-${schedule.year}-${schedule.ruleId}`;if(schedule.requests.status==='available')cell.textContent=`${schedule.requests.value.length} monthly requests`;else appendAmount(cell,schedule.requests,context,{label:'Contribution request schedule',period:{year:schedule.year}});row.append(cell);body.append(row);}table.append(body);details.append(table);root.append(details);
   }
   for(const year of result.years){
     const section=element('section');section.append(element('h3',String(year.year)));
-    if(year.fundingStatus==='unavailable')section.append(element('p','Funding result unavailable'));
-    else if(!year.conditionalOnGap)section.append(element('p','Funded scenario'));
-    if(year.conditionalOnGap)section.append(element('p','Conditional after a cash gap'));
+    if(year.fundingStatus==='unavailable')section.append(element('p','Funding unknown'));
+    else if(!year.conditionalOnGap)section.append(element('p','No modeled cash gap'));
+    if(year.conditionalOnGap)section.append(element('p','Conditional: cash gap'));
     appendCoverage(section,year.coverage);movementTable(section,[year],'Annual flows and December balances',context);
     const ratios=element('dl');for(const [key,label]of [['expenseRatio','Expense / income'],['taxRatio','Tax / income'],['contributionRatio','Eligible contributions / income'],['cashFlowMargin','Cash flow / income']] as const){ratios.append(element('dt',label));const value=element('dd');appendAmount(value,year.ratios[key],context,{label,period:{year:year.year}},'ratio');ratios.append(value);}section.append(ratios);
     records(section,year,`annual-${year.year}`,context);

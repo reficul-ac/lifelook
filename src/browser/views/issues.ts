@@ -11,7 +11,7 @@ const coverageLabels:Record<string,string>={additionalIncome:'Additional income 
 export function issueLabel(issue:Issue):string {
   const field=issue.field?.split('.').pop()??'';
   if(coverageLabels[field])return coverageLabels[field]!;
-  const labels:Record<string,string>={'required-tax-coverage':'Tax coverage unconfirmed','required-history':'Missing history','required-age':'Age needed','required-workplace-coverage':'Workplace coverage needed','required-employer-history':'Employer history needed','contribution-capped':'Contribution limit reached','unsupported-tax-case':'Unsupported tax circumstance','provisional-rules':'Rule assumptions','cash-gap':'Cash gap','negative-amortization':'Payment below interest'};
+  const labels:Record<string,string>={'required-tax-coverage':'Tax coverage unconfirmed','required-history':'Missing history','required-age':'Age needed','required-workplace-coverage':'Workplace coverage needed','required-employer-history':'Employer history needed','contribution-capped':'Contribution limit reached','unsupported-tax-case':'Unsupported tax circumstance','provisional-rules':'Provisional rule assumptions','projected-rules':'Projected rule assumptions','cash-gap':'Cash gap','negative-amortization':'Payment below interest'};
   return labels[issue.code]??issue.explanation;
 }
 export function renderIssueDetails(root:HTMLElement,items:readonly IssueOccurrence[],context:IssueViewContext):void {
@@ -24,9 +24,10 @@ export function renderIssueDetails(root:HTMLElement,items:readonly IssueOccurren
   }
   function diagnostic(group:IssueGroup){const details=element('details');details.append(element('summary','Full cause and diagnostics'));for(const issue of group.issues){details.append(element('p',issue.explanation),element('p',issue.resolution),element('code',[issue.code,issue.recordId,issue.field,issue.year].filter(v=>v!==undefined).join(' · ')));}root.append(details);}
   if(coverage.length){root.append(element('h4','Household tax coverage is unconfirmed'));const list=element('ul');for(const group of coverage){list.append(element('li',`${issueLabel(group.issues[0]!)} · ${formatPeriods(group.periods)}`));}root.append(list,element('p','Confirm the three household tax answers before relying on total liability.'));actions([coverage[0]!.issues[0]!]);for(const group of coverage)diagnostic(group);}
-  for(const group of other){const issue=group.issues[0]!;root.append(element('h4',`${issueLabel(issue)}${issue.recordId?' · '+getRecordLabel(context.readState().savedPlan,issue.recordId):''}`));const period=formatPeriods(group.periods);if(period)root.append(element('p',period));root.append(element('p',issue.explanation),element('p',issue.resolution));actions([issue]);diagnostic(group);}
+  for(const group of other){const issue=group.issues[0]!;root.append(element('h4',`${issueLabel(issue)}${issue.recordId?' · '+getRecordLabel(context.readState().savedPlan,issue.recordId):''}`));const period=formatPeriods(group.periods);if(period)root.append(element('p',period));root.append(element('p',issue.explanation),element('p',/^(provisional|projected)-rules$/.test(issue.code)?'Inspect sources and assumptions for this tax scenario.':issue.resolution));actions([issue]);diagnostic(group);}
 }
 export function appendAmount(root:HTMLElement,value:Available<number>,context:IssueViewContext,scope:AmountScope,kind:'money'|'ratio'='money'):void {
+  if(kind==='ratio'&&value.status==='needs-data'&&value.issues.length>0&&value.issues.every(i=>i.code==='undefined-income-ratio')){const label=element('span','N/A · no income');label.title='Ratios require nonzero income; review the dollar amounts.';root.append(label);return;}
   if(value.status==='available'){root.append(element('span',kind==='money'?formatCents(value.value):percentage.format(value.value)));return;}
   const label=value.status==='needs-data'?'Needs data':'Unsupported',period=scope.period?formatPeriods([scope.period]):'',title=scope.label+(period?' · '+period:'');
   root.append(context.disclosures.createTrigger({label,accessibleLabel:`${label}: ${title}`,title,preview:value.issues.some(i=>i.code==='required-tax-coverage')?'Confirm 3 household tax answers.':value.issues[0]?issueLabel(value.issues[0]):'Supporting information is missing.',renderDetails:node=>{
@@ -39,11 +40,12 @@ export function moneyEntry(root:HTMLElement,label:string,value:Available<number>
   appendAmount(cell,typeof value==='number'?{status:'available',value}:value,context,{label});root.append(cell);
 }
 export function appendCoverage(root:HTMLElement,coverage:Coverage):void {
-  root.append(element('p',coverage.completeForModeledScope?'Complete modeled scenario':'Incomplete modeled scenario'),element('p',coverage.completeHouseholdLiability?'Complete household liability':'Incomplete household liability'));
+  const statuses=element('div');statuses.className='report-statuses';statuses.append(element('span',coverage.completeForModeledScope?'Modeled calculations complete':'Modeled calculations incomplete'),element('span',coverage.completeHouseholdLiability?'Household tax complete':'Household tax incomplete'));root.append(statuses);
 }
+function sourceTitle(url:string):string {const known:Record<string,string>={'rp-25-32.pdf':'IRS federal tax brackets and deductions','n-25-67.pdf':'IRS retirement contribution limits','p936':'IRS mortgage interest','p527':'IRS residential rental property','i6251':'IRS alternative minimum tax'};try{const parsed=new URL(url);return known[parsed.pathname.split('/').pop()??'']??`${parsed.hostname}${parsed.pathname}`;}catch{return url;}}
 export function appendProvenance(root:HTMLElement,provenance:readonly RuleProvenance[]):void {
   const statuses=[...new Set(provenance.map(p=>p.status))];
-  for(const status of statuses)root.append(element('p',status==='verified'?'Verified rules':status==='provisional'?'Provisional rules':'Projected rules'));
+  const indicator=element('div');indicator.className='report-statuses';for(const status of statuses)indicator.append(element('span',`${status[0]!.toUpperCase()+status.slice(1)} rule components`));root.append(indicator);
   const details=element('details');details.append(element('summary','Sources and rule assumptions'));
   if(!provenance.length)details.append(element('p','Rule provenance is unavailable for this result.'));
   else {
@@ -52,7 +54,7 @@ export function appendProvenance(root:HTMLElement,provenance:readonly RuleProven
     if(assumptions.length){const list=element('ul');for(const assumption of assumptions)list.append(element('li',assumption));details.append(list);}
     const list=element('ul');
     for(const url of [...new Set(provenance.flatMap(p=>p.sources))]){
-      const row=element('li');const link=element('a',url);link.href=url;link.target='_blank';link.rel='noopener noreferrer';row.append(link);list.append(row);
+      const row=element('li');const link=element('a',sourceTitle(url));link.href=url;link.target='_blank';link.rel='noopener noreferrer';row.append(link);list.append(row);
     }
     details.append(list);
   }

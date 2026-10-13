@@ -1,4 +1,4 @@
-import { calculateProjection,loadRuleSet,validatePlan,type Issue,type PlanDocument,type ProjectionResult,type RuleSet } from '../engine';
+import { calculateProjection,loadRuleSet,validatePlan,type Issue,type PlanDocument,type ProjectionResult,type RuleSet,type ValidatedPlan } from '../engine';
 import { exportPlan,savePlan,type StoragePort } from './storage';
 import { parseMoneyInput,parseRateInput } from './fields';
 import { Decimal } from '../engine/money';
@@ -9,8 +9,14 @@ export interface RecordDraft {readonly recordId:string;readonly section:Editable
 export interface CashFlowAllocationDraft {readonly recordId:string;readonly value:RawObject;readonly baseSnapshot:string}
 export interface WorkspaceState {readonly allocationDraft?:CashFlowAllocationDraft;readonly savedPlan:PlanDocument;readonly drafts:Readonly<Record<string,RecordDraft>>;readonly projection:ProjectionResult;readonly persisted:boolean;readonly issues:readonly Issue[];readonly persistenceIssues:readonly Issue[]}
 export interface SaveRecordResult {readonly accepted:boolean;readonly persisted:boolean;readonly issues:readonly Issue[];readonly persistenceIssues:readonly Issue[]}
+export type CashFlowAllocationPreview=Readonly<{status:'calculated';projection:ProjectionResult;inputRevision:number}>|Readonly<{status:'invalid'|'failed';issues:readonly Issue[];inputRevision:number}>;
 export interface WorkspaceController {
   getState():WorkspaceState;
+  getAllocationDraft():CashFlowAllocationDraft;
+  editAllocationDraft(draft:CashFlowAllocationDraft):void;
+  discardAllocationDraft():void;
+  previewAllocation():CashFlowAllocationPreview;
+  applyAllocation():SaveRecordResult;
   getDraft(section:EditableSection,recordId:string):RecordDraft;
   editDraft(recordId:string,draft:RecordDraft):void;
   discardDraft(recordId:string):void;
@@ -59,9 +65,21 @@ function decode(value:unknown,issues:Issue[],recordId:string,path:string,key='',
 export function fromDraftValue(value:RawObject,recordId:string):Readonly<{value:RawObject;issues:readonly Issue[]}>{const issues:Issue[]=[];return {value:decode(value,issues,recordId,'') as RawObject,issues};}
 function requiredPlan(plan:PlanDocument){const validation=validatePlan(plan);if(!validation.ok)throw new Error('Workspace requires a structurally valid saved plan.');return validation.plan;}
 
+/** Browser-only bridge: the worker receives the exact rules captured by its workspace. */
+export type PreparedAllocationPreview=Readonly<{status:'ready';plan:ValidatedPlan;ruleSet:RuleSet;inputRevision:number}>|Extract<CashFlowAllocationPreview,{status:'invalid'|'failed'}>;
+const allocationBridges=new WeakMap<WorkspaceController,{prepare():PreparedAllocationPreview;epoch():number}>();
+export function prepareAllocationPreview(controller:WorkspaceController):PreparedAllocationPreview {
+  const bridge=allocationBridges.get(controller);if(!bridge)throw new Error('Unknown allocation workspace.');return bridge.prepare();
+}
+export function allocationPreviewEpoch(controller:WorkspaceController):number {return allocationBridges.get(controller)?.epoch()??0;}
+export function allocationCalculationFailure(inputRevision:number):CashFlowAllocationPreview {
+  return {status:'failed',inputRevision,issues:[{code:'calculation-failed',field:'cashFlowAllocation',severity:'error',explanation:'These allocation inputs could not be calculated. The saved plan and projection have been retained.',resolution:'Correct the draft inputs and request a new preview or Apply again.'}]};
+}
+
 export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:RuleSet=loadRuleSet()):WorkspaceController {
   let savedPlan:PlanDocument=requiredPlan(plan),projection=calculateProjection(requiredPlan(plan),ruleSet),persisted=true,issues:readonly Issue[]=[],persistenceIssues:readonly Issue[]=[];
   let drafts:Record<string,RecordDraft>={};const bases=new Map<string,string>();const listeners=new Set<(operation?:WorkspaceOperation)=>void>();let sequence=0;
+  let allocationDraft:CashFlowAllocationDraft|undefined,allocationDefault:CashFlowAllocationDraft|undefined,allocationBase:string|undefined,allocationEpoch=0;
   let operationDepth=0;
   const notify=(operation?:WorkspaceOperation)=>{if(operationDepth===0||operation)listeners.forEach(listener=>listener(operation));};
   const operate=(kind:'save'|'remove',recordId:string,action:()=>SaveRecordResult):SaveRecordResult=>{operationDepth++;let outcome:SaveRecordResult;try{outcome=action();}finally{operationDepth--;}if(operationDepth===0)notify({kind,recordId,result:outcome});return outcome;};
@@ -69,18 +87,41 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
   const persistApplied=():SaveRecordResult=>{
     const saved=savePlan(storage,savedPlan);persisted=saved.persisted;persistenceIssues=saved.issues.filter(issue=>issue.code==='storage-write-failed');issues=[];notify();return result(true);
   };
-  const publish=(candidate:PlanDocument,clear:readonly string[]):SaveRecordResult=>{
+  const publish=(candidate:PlanDocument,clear:readonly string[],clearAllocation=false):SaveRecordResult=>{
     const validation=validatePlan(candidate);if(!validation.ok){issues=validation.issues;notify();return result(false);}
     let candidateProjection:ProjectionResult;
     try { candidateProjection=calculateProjection(validation.plan,ruleSet); }
     catch { issues=[{code:'calculation-failed',field:'plan',severity:'error',explanation:'These inputs could not be calculated. The saved plan and projection have been retained.',resolution:'Correct the draft inputs before saving again.'}];notify();return result(false); }
     savedPlan=validation.plan;projection=candidateProjection;
     const saved=savePlan(storage,savedPlan);persisted=saved.persisted;persistenceIssues=saved.issues.filter(issue=>issue.code==='storage-write-failed');issues=[];
-    drafts=Object.fromEntries(Object.entries(drafts).filter(([id])=>!clear.includes(id)));clear.forEach(id=>bases.delete(id));notify();return result(true);
+    drafts=Object.fromEntries(Object.entries(drafts).filter(([id])=>!clear.includes(id)));clear.forEach(id=>bases.delete(id));
+    if(clearAllocation){allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;}
+    notify();return result(true);
   };
   const householdValue=()=>({household:savedPlan.household,taxPolicy:savedPlan.taxPolicy,startYear:savedPlan.startYear,horizonYears:savedPlan.horizonYears,openingCashCents:savedPlan.openingCashCents});
   const propertyValue=(id:string)=>({property:savedPlan.properties.find(p=>p.id===id),rentals:savedPlan.rentals.filter(r=>r.propertyId===id),expenses:savedPlan.expenses.filter(e=>e.propertyId===id||e.rentalId&&savedPlan.rentals.some(r=>r.id===e.rentalId&&r.propertyId===id))});
-  const usedRecordIds=():Set<string>=>{const ids=new Set<string>();const visit=(value:unknown):void=>{if(!value||typeof value!=='object')return;if('id' in value&&typeof value.id==='string')ids.add(value.id);Object.values(value).forEach(visit);};visit(savedPlan);visit(drafts);Object.keys(drafts).forEach(id=>ids.add(id));return ids;};
+  const usedRecordIds=():Set<string>=>{const ids=new Set<string>();const visit=(value:unknown):void=>{if(!value||typeof value!=='object')return;if('id' in value&&typeof value.id==='string')ids.add(value.id);Object.values(value).forEach(visit);};visit(savedPlan);visit(drafts);visit(allocationDraft);visit(allocationDefault);Object.keys(drafts).forEach(id=>ids.add(id));if(allocationDraft)ids.add(allocationDraft.recordId);if(allocationDefault)ids.add(allocationDefault.recordId);return ids;};
+  const nextId=(prefix:string):string=>{const ids=usedRecordIds();let id:string;do{id=`${prefix}-${++sequence}`;}while(ids.has(id));return id;};
+  const allocationSnapshot=():string=>JSON.stringify(savedPlan.cashFlowAllocation??null);
+  const getAllocationDraft=():CashFlowAllocationDraft=>{
+    if(allocationDraft)return allocationDraft;
+    if(allocationDefault?.baseSnapshot===allocationSnapshot())return allocationDefault;
+    const policy=savedPlan.cashFlowAllocation;
+    const id=policy?.id??nextId('cash-flow-allocation');
+    // Reserve the policy ID before choosing an overflow ID.
+    allocationDefault={recordId:id,baseSnapshot:allocationSnapshot(),value:{id}};
+    allocationDefault={...allocationDefault,value:toDraftValue(policy??{id,entries:[],overflow:{id:nextId('cash-flow-overflow'),destination:{kind:'cash'}}})};
+    return allocationDefault;
+  };
+  const prepareAllocation=():PreparedAllocationPreview=>{
+    const inputRevision=savedPlan.revision,draft=getAllocationDraft();
+    if((allocationBase??draft.baseSnapshot)!==allocationSnapshot())return {status:'invalid',inputRevision,issues:[{code:'stale-record-draft',recordId:draft.recordId,field:'cashFlowAllocation',severity:'error',explanation:'A newer save changed the applied allocation while these edits were open. Your draft has been retained.',resolution:'Discard these edits and reload the applied allocation before editing again.'}]};
+    const decoded=fromDraftValue(draft.value,draft.recordId);
+    if(decoded.issues.length)return {status:'invalid',inputRevision,issues:decoded.issues};
+    if(decoded.value.id!==draft.recordId)return {status:'invalid',inputRevision,issues:[{code:'invalid-input',recordId:draft.recordId,field:'id',severity:'error',explanation:'The original allocation ID must remain unchanged.',resolution:'Keep the original allocation ID.'}]};
+    const validation=validatePlan({...savedPlan,cashFlowAllocation:decoded.value,revision:inputRevision+1});
+    return validation.ok?{status:'ready',plan:validation.plan,ruleSet,inputRevision}:{status:'invalid',inputRevision,issues:validation.issues};
+  };
   const draftFor=(id:string):RecordDraft|undefined=>Object.hasOwn(drafts,id)?drafts[id]:undefined;
   const snapshot=(section:EditableSection,id:string):string=>JSON.stringify(section==='household'?householdValue():section==='properties'?propertyValue(id):savedPlan[section].find(row=>row.id===id)??null);
   const stale=(section:EditableSection,id:string):boolean=>{
@@ -90,7 +131,11 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
   const rejectIdentity=(id:string,field:string):SaveRecordResult=>{issues=[{code:'invalid-input',recordId:id,field,severity:'error',explanation:'The original record ID must remain unchanged.',resolution:'Keep this record ID so its linked records continue to refer to the same record.'}];notify();return result(false);};
   const getDraft=(section:EditableSection,id:string):RecordDraft=>draftFor(id)??{recordId:id,section,baseSnapshot:snapshot(section,id),value:toDraftValue(section==='household'?householdValue():section==='properties'?propertyValue(id):savedPlan[section].find(row=>row.id===id)??{})};
   const controller:WorkspaceController={
-    getState:()=>({savedPlan,drafts,projection,persisted,issues,persistenceIssues}),getDraft,
+    getState:()=>({savedPlan,drafts,projection,persisted,issues,persistenceIssues,...(allocationDraft?{allocationDraft}:{})}),getDraft,getAllocationDraft,
+    editAllocationDraft(draft){if(allocationDraft&&allocationDraft.recordId!==draft.recordId)throw new Error('Allocation draft identity must remain stable.');if(allocationBase===undefined)allocationBase=draft.baseSnapshot;allocationDraft={...structuredClone(draft),baseSnapshot:allocationBase};issues=[];notify();},
+    discardAllocationDraft(){allocationEpoch++;allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;issues=[];notify();},
+    previewAllocation(){const prepared=prepareAllocation();if(prepared.status!=='ready')return prepared;try{return {status:'calculated',projection:calculateProjection(prepared.plan,prepared.ruleSet),inputRevision:prepared.inputRevision};}catch{return allocationCalculationFailure(prepared.inputRevision);}},
+    applyAllocation(){allocationEpoch++;const id=getAllocationDraft().recordId;return operate('save',id,()=>{const prepared=prepareAllocation();if(prepared.status!=='ready'){issues=prepared.issues;notify();return result(false);}return publish(prepared.plan,[],true);});},
     editDraft(id,draft){if(id!==draft.recordId)throw new Error('Draft record identity must remain stable.');if(!bases.has(id))bases.set(id,draft.baseSnapshot??snapshot(draft.section,id));drafts={...drafts,[id]:structuredClone(draft)};issues=[];notify();},
     discardDraft(id){drafts=Object.fromEntries(Object.entries(drafts).filter(([key])=>key!==id));bases.delete(id);issues=[];notify();},
     saveRecord(id){return operate('save',id,()=>{
@@ -116,6 +161,6 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
       bases.set(id,snapshot(section,id));drafts={...drafts,[id]:{recordId:id,section,value:toDraftValue(value??(section==='household'?householdValue():defaults[section]))}};issues=[];notify();return id;
     },
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},exportBackup:()=>exportPlan(savedPlan),
-    resetPlan(next,initial={persisted:true,persistenceIssues:[]}){const validated=requiredPlan(next),calculated=calculateProjection(validated,ruleSet);savedPlan=validated;projection=calculated;drafts={};bases.clear();persisted=initial.persisted;persistenceIssues=initial.persistenceIssues;issues=[];notify({kind:'restore',persisted});},
-  };return controller;
+    resetPlan(next,initial={persisted:true,persistenceIssues:[]}){const validated=requiredPlan(next),calculated=calculateProjection(validated,ruleSet);allocationEpoch++;savedPlan=validated;projection=calculated;drafts={};bases.clear();allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;persisted=initial.persisted;persistenceIssues=initial.persistenceIssues;issues=[];notify({kind:'restore',persisted});},
+  };allocationBridges.set(controller,{prepare:prepareAllocation,epoch:()=>allocationEpoch});return controller;
 }

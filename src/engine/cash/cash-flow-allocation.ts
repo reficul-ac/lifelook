@@ -256,7 +256,9 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
       const actualCents = sum([existingCents, amounts.percent, amounts.max, amounts.overflow]);
       return { accountId, targetCents, existingCents, percentageCents: amounts.percent, maximumCents: amounts.max, excessCents: amounts.overflow, actualCents, shortfallCents: Math.max(0, targetCents - actualCents), share: original > 0 ? available(new Decimal(actualCents).div(original).toNumber()) : { status: 'unsupported-case' as const, issues: [issue('allocation-no-surplus', 'There is no positive annual cash flow to allocate.')] }, reasons: uniqueReasons.filter(reason => [...adapter.sourceMap.values()].some(source => source.destination.kind === 'account' && source.destination.accountId === accountId && reason.field?.startsWith(`${source.fieldPrefix}.`))) };
     });
-    const conflict = sum(afterExisting) < 0 || accounts.some(account => account.shortfallCents > 0) || (cashEntry && explicitCash < (percentageTargets.get(cashEntry.id) ?? 0));
+    // Known target shortfalls still reconcile to the annual pool; only saved
+    // deposits exceeding that pool constitute an allocation funding conflict.
+    const conflict = sum(afterExisting) < 0;
     return available({ requests: acceptedRequests, report: { year: input.cash.year, status: original <= 0 ? 'no-surplus' : conflict ? 'funding-conflict' : 'funded', originalCashFlowCents: original, accounts, explicitCashCents: explicitCash, excessOfferedCents: excessOffered, excessAcceptedCents: excessAccepted, excessRetainedCents: excessOffered - excessAccepted, retainedCashCents: sum([original, -sum(accounts.map(account => account.actualCents))]), reasons: uniqueReasons } });
   }
   let household = evaluate(input.legacyRequests, resolveHousehold);

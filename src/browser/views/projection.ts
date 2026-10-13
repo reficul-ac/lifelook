@@ -2,6 +2,7 @@ import {getRecordLabel,type IssueViewContext} from '../issue-presentation';
 import type { AnnualProjection,MonthlyProjection,MonetaryField,ProjectionResult,RsuGrantMonth } from '../../engine';
 import { appendAmount,appendCoverage,appendProvenance,element,renderIssues } from './issues';
 import { renderTaxExplanation } from './tax-explanation';
+import { renderAllocationYears } from './cash-flow-allocation';
 
 const columns:readonly {key:MonetaryField;label:string}[]=[
   {key:'grossIncomeCents',label:'Gross income'},{key:'salaryCents',label:'Salary'},{key:'otherIncomeCents',label:'Other income'},{key:'rentCents',label:'Rent'},
@@ -65,6 +66,7 @@ function expandButton(root:HTMLElement,label:string,hiddenLabel:string,target:HT
 }
 export function renderProjection(root:HTMLElement,result:ProjectionResult,context:IssueViewContext):void {
   context.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2','Projection'),element('p',`Inputs v${result.inputRevision}`));
+  if(result.years.some(year=>year.cashFlowAllocation!==undefined)){const allocation=element('div');renderAllocationYears(allocation,result.years,context);root.append(allocation);}
   const hasRsu=context.readState().savedPlan.accounts.some(account=>account.type==='rsu');
   const how=element('details');how.append(element('summary','How calculated'),element('p',hasRsu?'Annual income tax is reserved across months in proportion to positive cash income and taxable RSU compensation, or in equal monthly amounts when both are zero. Payroll taxes follow combined cumulative salary and RSU wages. Shares sold for withholding fund the modeled tax reserve; withholding is not final tax liability.':'Annual income tax is reserved across months in proportion to positive gross cash income, or in equal monthly amounts when positive income is zero. Payroll taxes follow cumulative wages.'),element('p','Asset growth changes value, not spendable cash.'));root.append(how);
   const assumptions=element('details');assumptions.append(element('summary','Forecast assumptions'),element('p',hasRsu?'Contributions remain planned when cash is insufficient. Later balances are conditional on covering the cash gap; no borrowing, discretionary sales or withdrawals are added. Sell-to-cover follows the entered percentages.':'Contributions remain planned when cash is insufficient. Later balances are conditional on covering the cash gap; no borrowing, sales or withdrawals are added.'));root.append(assumptions);

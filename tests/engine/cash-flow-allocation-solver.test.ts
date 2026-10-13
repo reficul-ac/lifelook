@@ -83,7 +83,22 @@ describe('annual stage reservations',()=>{
   const input=fixture([percent('brokerage',8000),maximum('ira')]);
   const r=resolved({...syntheticCash(input,1000000),rules:{...input.rules,retirement:{...input.rules.retirement,iraLimitCents:300000}}},zeroTaxes);
   expect(r.report.accounts.find(a=>a.accountId==='ira')).toMatchObject({targetCents:300000,maximumCents:200000,shortfallCents:100000});
-  expect(r.report.status).toBe('funding-conflict');
+  expect(r.report.status).toBe('funded');
+  expect(r.report.accounts.find(a=>a.accountId==='brokerage')?.actualCents).toBe(800000);
+  expect(r.report.retainedCashCents).toBe(0);
+ });
+ it('reports a legally capped percentage as known partial funding in a reconciled pool',()=>{
+  const input=fixture([percent('ira',10000)]);
+  const r=resolved({...syntheticCash(input,1000000),rules:{...input.rules,retirement:{...input.rules.retirement,iraLimitCents:300000}}},zeroTaxes);
+  expect(r.report).toMatchObject({status:'funded',originalCashFlowCents:1000000,retainedCashCents:700000});
+  expect(r.report.accounts[0]).toMatchObject({targetCents:1000000,percentageCents:300000,actualCents:300000,shortfallCents:700000});
+  expect(r.report.accounts[0]!.reasons.some(issue=>issue.code==='ira-contribution-capped')).toBe(true);
+ });
+ it('reports an explicit cash shortfall after saved deposits without classifying a legacy conflict',()=>{
+  const input=fixture([percent('cash',5000)],'cash',{contributions:[{id:'saved',accountId:'brokerage',priority:1,startDate:'2026-01-01',amount:{kind:'fixed',monthlyCents:60000}}]});
+  const r=resolved(syntheticCash(input,1000000),zeroTaxes);
+  expect(r.report).toMatchObject({status:'funded',originalCashFlowCents:1000000,explicitCashCents:280000,retainedCashCents:280000,excessAcceptedCents:0});
+  expect(r.report.accounts[0]).toMatchObject({existingCents:720000,actualCents:720000,percentageCents:0});
  });
  it('reserves a December legacy IRA before January excess can use the shared owner cap',()=>{
   const base=makeAllocationPlan();const roth={...base.accounts[1]!,id:'roth',type:'roth-ira' as const};

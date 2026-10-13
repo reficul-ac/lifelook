@@ -1,4 +1,4 @@
-import type {Issue,PlanDocument} from '../engine';
+import type {AllocationDestination,Issue,PlanDocument} from '../engine';
 import type {DisclosureController} from './disclosures';
 import type {WorkspaceState} from './state';
 export type ReportPeriod=Readonly<{year:number;month?:number}>;
@@ -6,7 +6,8 @@ export type IssueOccurrence=Readonly<{issue:Issue;period?:ReportPeriod}>;
 export type IssueGroup=Readonly<{key:string;issues:readonly Issue[];periods:readonly ReportPeriod[]}>;
 export type InputSection='Household'|'Income'|'Expenses and debts'|'Investments'|'Properties';
 export type ReviewTarget=Readonly<{section:InputSection;recordId:string;field?:string;label:string}>;
-export interface IssueViewContext {readonly disclosures:DisclosureController;readonly readState:()=>Pick<WorkspaceState,'savedPlan'|'drafts'>;readonly review:(target:ReviewTarget)=>void}
+export type IssueViewState=Pick<WorkspaceState,'savedPlan'|'drafts'|'allocationDraft'>;
+export interface IssueViewContext {readonly disclosures:DisclosureController;readonly readState:()=>IssueViewState;readonly review:(target:ReviewTarget)=>void;/** Plan that produced a report, including a retained valid preview. */readonly allocationPlan?:PlanDocument}
 export type AmountScope=Readonly<{label:string;period?:ReportPeriod}>;
 export function groupIssueOccurrences(items:readonly IssueOccurrence[]):readonly IssueGroup[]{
   const groups=new Map<string,{key:string;issues:Issue[];periods:ReportPeriod[]}>();
@@ -40,6 +41,12 @@ export function findRecordPath(value:unknown,id:string,path=''):string|undefined
 }
 export function getRecordLabel(plan:PlanDocument,id:string):string{
   if(id===plan.id||id==='household')return 'Household';
+  const policy=plan.cashFlowAllocation;
+  if(policy){
+    if(id===policy.id)return 'Cash flow allocation';
+    const source=policy.entries.find(entry=>entry.id===id)??(policy.overflow.id===id?policy.overflow:undefined);
+    if(source)return `${source===policy.overflow?'Excess allocation':'Allocation'} · ${source.destination.kind==='cash'?'Cash / savings':getRecordLabel(plan,source.destination.accountId)}`;
+  }
   for(const record of [...plan.household.filers,...plan.salaries,...plan.otherIncome,...plan.expenses,...plan.debts,...plan.accounts,...plan.properties,...plan.properties.flatMap(p=>p.loans)])if(record.id===id)return record.name;
   for(const account of plan.accounts)for(const grant of account.rsu?.grants??[])if(grant.id===id)return grant.name;
   const rental=plan.rentals.find(r=>r.id===id);
@@ -47,8 +54,32 @@ export function getRecordLabel(plan:PlanDocument,id:string):string{
   const contribution=plan.contributions.find(c=>c.id===id);if(contribution)return `${plan.accounts.find(a=>a.id===contribution.accountId)?.name??'Account'} contribution`;
   return id;
 }
-export function resolveIssueTargets(issue:Issue,state:Pick<WorkspaceState,'savedPlan'|'drafts'>):readonly ReviewTarget[]{
+export function resolveIssueTargets(issue:Issue,state:IssueViewState,sourcePlan:PlanDocument=state.savedPlan):readonly ReviewTarget[]{
   const plan=state.savedPlan,id=issue.recordId,field=normalizeFieldPath(issue.field??'');
+  const policy=sourcePlan.cashFlowAllocation;
+  if(policy&&(id===policy.id||policy.entries.some(entry=>entry.id===id)||id===policy.overflow.id)){
+    const match=/^(?:cashFlowAllocation\.)?entries\.(\d+)(?:\.(.*))?$/.exec(field);
+    const overflow=/^(?:cashFlowAllocation\.)?overflow(?:\.(.*))?$/.exec(field);
+    const source=id===policy.id?(match?policy.entries[Number(match[1])]:overflow?policy.overflow:undefined):policy.entries.find(entry=>entry.id===id)??policy.overflow;
+    const suffix=match?match[2]??'':overflow?overflow[1]??'':field.replace(/^cashFlowAllocation\.?/,'');
+    const destination:AllocationDestination|undefined=source?.destination;
+    const account=destination?.kind==='account'?plan.accounts.find(a=>a.id===destination.accountId):undefined;
+    const salary=destination?.kind==='account'?plan.salaries.find(s=>s.id===destination.sponsoringSalaryId):undefined;
+    if(account&&/birthDate|workplaceCoverage|coverageByYear|employerAssumptionsByYear|spouse/.test(suffix)){
+      const {cashFlowAllocation:_,...document}=plan;
+      return resolveIssueTargets({...issue,recordId:source!.id,field:suffix},{...state,savedPlan:{...document,contributions:[...plan.contributions,{id:source!.id,accountId:account.id,priority:0,startDate:`${issue.year??plan.startYear}-01-01`,amount:{kind:'fixed',monthlyCents:0},...(salary?{sponsoringSalaryId:salary.id}:{} )}]}});
+    }
+    if(salary&&/sponsoringSalaryId|employerId|compensation|wages|startDate|endDate/.test(suffix))return [{section:'Income',recordId:salary.id,label:`Review ${salary.name}`}];
+    if(account&&issue.code==='mandatory-roth-catchup')return resolveIssueTargets({...issue,recordId:account.id,field:'type'},state);
+    if(account&&/^(openingIraBasis|ownerId|type|openingBalanceCents)(?:\.|$)/.test(suffix))return resolveIssueTargets({...issue,recordId:account.id,field:suffix},state);
+    const raw=state.allocationDraft?.recordId===policy.id?state.allocationDraft.value:plan.cashFlowAllocation;
+    const rows=raw?.entries;
+    const index=source&&Array.isArray(rows)?rows.findIndex(row=>row&&typeof row==='object'&&row.id===source.id):-1;
+    const isOverflow=source?.id===policy.overflow.id&&raw?.overflow&&typeof raw.overflow==='object'&&'id' in raw.overflow&&raw.overflow.id===source.id;
+    // A removed source has no field target; never substitute the row now at its old index.
+    const path=isOverflow?`overflow${suffix?'.'+suffix:''}`:index>=0?`entries.${index}${suffix?'.'+suffix:''}`:source||match||overflow?undefined:suffix;
+    return [{section:'Investments',recordId:policy.id,...(path?{field:path}:{}),label:`Review ${source?getRecordLabel(sourcePlan,source.id):'Cash flow allocation'}`}];
+  }
   const target=(section:InputSection,recordId:string,path?:string):ReviewTarget=>({section,recordId,...(path?{field:path}:{}),label:`Review ${section==='Household'?'Household':getRecordLabel(plan,id??recordId)}`});
   const household=Object.hasOwn(state.drafts,'household')?state.drafts.household!.value:{household:plan.household,taxPolicy:plan.taxPolicy,startYear:plan.startYear,horizonYears:plan.horizonYears,openingCashCents:plan.openingCashCents};
   const householdField=(ownerId:string,f:string)=>{const prefix=findRecordPath(household,ownerId);return prefix===undefined?undefined:`${prefix}.${f}`;};

@@ -17,7 +17,7 @@ export function issueLabel(issue:Issue):string {
 export function renderIssueDetails(root:HTMLElement,items:readonly IssueOccurrence[],context:IssueViewContext):void {
   const groups=groupIssueOccurrences(items),coverage=groups.filter(g=>g.issues[0]?.code==='required-tax-coverage'),other=groups.filter(g=>g.issues[0]?.code!=='required-tax-coverage');
   function actions(issues:readonly Issue[]){
-    const targets=issues.flatMap(issue=>resolveIssueTargets(issue,context.readState()));
+    const targets=issues.flatMap(issue=>resolveIssueTargets(issue,context.readState(),context.allocationPlan));
     for(const target of [...new Map(targets.map(target=>[JSON.stringify(target),target])).values()]){
       const button=element('button',target.label);button.type='button';button.addEventListener('click',()=>context.review(target));root.append(button);
     }

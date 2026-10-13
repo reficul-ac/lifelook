@@ -11,7 +11,7 @@ import {mustValidate} from '../helpers/plans';
 const policy=makeAllocationPolicy({entries:[{id:'stocks-entry',priority:1,destination:{kind:'account',accountId:'brokerage'},amount:{kind:'percent',percentBps:5000}},{id:'ira-entry',priority:2,destination:{kind:'account',accountId:'ira'},amount:{kind:'max-annual'}}],overflow:{id:'excess-entry',destination:{kind:'account',accountId:'ira'}}});
 const plan=makeAllocationPlan({cashFlowAllocation:policy});
 function account(overrides:Partial<AccountAllocationFunding>={}):AccountAllocationFunding{return {accountId:'brokerage',targetCents:5000,existingCents:1000,percentageCents:3000,maximumCents:0,excessCents:1000,actualCents:5000,shortfallCents:0,share:{status:'available',value:.5},reasons:[],...overrides};}
-function report(overrides:Partial<CashFlowAllocationYear>={}):CashFlowAllocationYear{return {year:2026,status:'funded',originalCashFlowCents:10000,accounts:[account(),account({accountId:'ira',targetCents:2500,existingCents:0,percentageCents:0,maximumCents:2000,excessCents:500,actualCents:2500,share:{status:'available',value:.25}})],explicitCashCents:1000,excessOfferedCents:3000,excessAcceptedCents:1500,excessRetainedCents:1500,retainedCashCents:2500,reasons:[],...overrides};}
+function report(overrides:Partial<CashFlowAllocationYear>={}):CashFlowAllocationYear{return {year:2026,status:'funded',originalCashFlowCents:10000,accounts:[account(),account({accountId:'ira',targetCents:2500,existingCents:0,percentageCents:0,maximumCents:2000,excessCents:500,actualCents:2500,share:{status:'available',value:.25}})],explicitCashTargetCents:1000,explicitCashCents:1000,explicitCashShortfallCents:0,excessOfferedCents:3000,excessAcceptedCents:1500,excessRetainedCents:1500,retainedCashCents:2500,reasons:[],...overrides};}
 const baseYear=calculateProjection(mustValidate(makeAllocationPlan()),loadRuleSet()).years[0]!;
 function year(value:CashFlowAllocationYear):AnnualProjection{return {...baseYear,year:value.year,cashFlowAllocation:{status:'available',value}};}
 function reason(code:string,field='cashFlowAllocation.overflow.destination'):Issue{return {code,recordId:policy.id,field,year:2026,severity:'warning',explanation:`Cause ${code}`,resolution:'Review the affected facts.'};}
@@ -94,5 +94,20 @@ describe('accepted allocation reporting',()=>{
   const {root,context}=mount();const projection=calculateProjection(mustValidate(makeAllocationPlan()),loadRuleSet());renderProjection(root,{...projection,years:[year(report())]},context);expect(within(root).getByRole('heading',{name:'Annual cash flow allocation'})).toBeVisible();
   const overview=within(root).getByRole('table',{name:'Annual financial overview'});expect([...overview.querySelectorAll('thead th')].map(n=>n.textContent)).toEqual(['Year','Net Worth','Total Income','Cash Income','Post Tax Income','Expenses','Cash Flow']);
   const {cashFlowAllocation:_,...withoutAllocation}=baseYear;renderAllocationYears(root,[withoutAllocation],context);expect(within(root).queryByRole('heading',{name:'Annual cash flow allocation'})).toBeNull();
+ });
+ it('shows the deliberate saving target, actual earmark and shortfall with current cash-source review',()=>{
+  const cashEntry={id:'cash-entry',priority:1,destination:{kind:'cash' as const},amount:{kind:'percent' as const,percentBps:5000}};
+  const p=makeAllocationPlan({cashFlowAllocation:{...policy,entries:[cashEntry,policy.entries[0]!]}}),{root,context,reviews}=mount(p);
+  const current={savedPlan:p,drafts:{},allocationDraft:{recordId:policy.id,baseSnapshot:'synthetic',value:{...p.cashFlowAllocation,entries:[policy.entries[0],cashEntry]}}};
+  const cashIssue=reason('allocation-cash-shortfall','cashFlowAllocation.entries.0.amount');
+  const value={...report({originalCashFlowCents:1000000,accounts:[account({targetCents:720000,actualCents:720000,existingCents:720000,percentageCents:0,excessCents:0,share:{status:'available',value:.72}})],explicitCashCents:280000,retainedCashCents:280000,excessOfferedCents:0,excessAcceptedCents:0,excessRetainedCents:0,reasons:[cashIssue]}),explicitCashTargetCents:500000,explicitCashShortfallCents:220000};
+  renderAllocationPie(root,{status:'available',value},p,{...context,readState:()=>current});
+  expect(within(root).getByRole('img')).toBeVisible();const row=within(root).getByRole('row',{name:/Cash \/ savings/});
+  expect(row).toHaveTextContent('$5,000.00');expect(row).toHaveTextContent('$2,800.00');expect(row).toHaveTextContent('$2,200.00');
+  const trigger=within(row).getByRole('button',{name:/Cash.*target funding/});expect(trigger).toHaveTextContent('Partially funded');
+  fireEvent.click(trigger);const panel=within(document.body).getByRole('region',{name:/Cash.*target funding/});
+  for(const amount of ['$5,000.00','$2,800.00','$2,200.00'])expect(panel).toHaveTextContent(amount);
+  expect(panel).not.toHaveTextContent('excess destination');fireEvent.click(within(panel).getByRole('button',{name:/Review Allocation.*Cash \/ savings/}));
+  expect(reviews[0]).toMatchObject({section:'Investments',recordId:policy.id,field:'entries.1.amount'});expect(within(root).queryByRole('button',{name:/cash retained/i})).toBeNull();
  });
 });

@@ -105,8 +105,9 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
     const percentageTargets = new Map(settleAllocationTargets(original, policy.entries).map(target => [target.entryId, target.targetCents]));
     const afterExisting = timing.preTransferCashByMonth.map((value, month) => sum([value, -sum(existing.contributions.filter(record => record.month === month + 1).map(record => record.eligibleCents.status === 'available' ? record.eligibleCents.value : 0))]));
     const cashEntry = policy.entries.find(entry => entry.destination.kind === 'cash');
-    const explicitCash = Math.min(cashEntry ? percentageTargets.get(cashEntry.id) ?? 0 : 0, Math.max(0, sum(afterExisting)));
-    const ceilings = allocationFundingCeilings(afterExisting, explicitCash);
+    const explicitCashTarget = cashEntry ? percentageTargets.get(cashEntry.id) ?? 0 : 0;
+    let explicitCash = 0;
+    let ceilings = allocationFundingCeilings(afterExisting, explicitCash);
     let targets: FundingTarget[] = [];
     let acceptedRequests: readonly ContributionRequest[] = input.legacyRequests;
     let protectedHousehold = existing;
@@ -211,9 +212,16 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
       protectionFloors.set(ruleId, Math.min(amount, eligible(trial.actual, ruleId)));
       return available(amount);
     }
-    const sorted = [...policy.entries].filter(entry => entry.destination.kind === 'account').sort((a, b) => Number(a.amount.kind === 'max-annual') - Number(b.amount.kind === 'max-annual') || a.priority - b.priority || a.id.localeCompare(b.id));
+    const sorted = [...policy.entries].sort((a, b) => Number(a.amount.kind === 'max-annual') - Number(b.amount.kind === 'max-annual') || a.priority - b.priority || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     for (const entry of sorted) {
-      if (entry.destination.kind !== 'account') continue;
+      if (entry.destination.kind === 'cash') {
+        // Cash competes in percentage order, then its actual earmark is
+        // protected from all later deposits without reducing earlier funding.
+        explicitCash = Math.min(explicitCashTarget, Math.max(0, sum([original, -eligible(protectedHousehold)])));
+        ceilings = allocationFundingCeilings(afterExisting, explicitCash);
+        if (explicitCash < explicitCashTarget) reasons.push({ ...issue('allocation-cash-shortfall', 'Available annual cash cannot meet the explicit saving target while preserving eligible saved deposits and earlier percentage allocations.'), field: `cashFlowAllocation.entries.${policy.entries.findIndex(source => source.id === entry.id)}.amount`, resolution: 'Review the saving percentage and visible percentage priorities; saved deposits and earlier funding remain protected.' });
+        continue;
+      }
       const accountId = entry.destination.accountId;
       const stage = entry.amount.kind === 'percent' ? 'percent' : 'max';
       let target = percentageTargets.get(entry.id) ?? 0;
@@ -259,7 +267,7 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
     // Known target shortfalls still reconcile to the annual pool; only saved
     // deposits exceeding that pool constitute an allocation funding conflict.
     const conflict = sum(afterExisting) < 0;
-    return available({ requests: acceptedRequests, report: { year: input.cash.year, status: original <= 0 ? 'no-surplus' : conflict ? 'funding-conflict' : 'funded', originalCashFlowCents: original, accounts, explicitCashCents: explicitCash, excessOfferedCents: excessOffered, excessAcceptedCents: excessAccepted, excessRetainedCents: excessOffered - excessAccepted, retainedCashCents: sum([original, -sum(accounts.map(account => account.actualCents))]), reasons: uniqueReasons } });
+    return available({ requests: acceptedRequests, report: { year: input.cash.year, status: original <= 0 ? 'no-surplus' : conflict ? 'funding-conflict' : 'funded', originalCashFlowCents: original, accounts, explicitCashTargetCents: explicitCashTarget, explicitCashCents: explicitCash, explicitCashShortfallCents: Math.max(0, explicitCashTarget - explicitCash), excessOfferedCents: excessOffered, excessAcceptedCents: excessAccepted, excessRetainedCents: excessOffered - excessAccepted, retainedCashCents: sum([original, -sum(accounts.map(account => account.actualCents))]), reasons: uniqueReasons } });
   }
   let household = evaluate(input.legacyRequests, resolveHousehold);
   let lastSignature: string | undefined;

@@ -19,7 +19,9 @@ export interface CashFlowAllocationYear {
   readonly status: 'funded' | 'no-surplus' | 'funding-conflict';
   readonly originalCashFlowCents: Cents;
   readonly accounts: readonly AccountAllocationFunding[];
+  readonly explicitCashTargetCents: Cents;
   readonly explicitCashCents: Cents;
+  readonly explicitCashShortfallCents: Cents;
   readonly excessOfferedCents: Cents;
   readonly excessAcceptedCents: Cents;
   readonly excessRetainedCents: Cents;

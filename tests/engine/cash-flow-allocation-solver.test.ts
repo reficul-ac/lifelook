@@ -97,8 +97,9 @@ describe('annual stage reservations',()=>{
  it('reports an explicit cash shortfall after saved deposits without classifying a legacy conflict',()=>{
   const input=fixture([percent('cash',5000)],'cash',{contributions:[{id:'saved',accountId:'brokerage',priority:1,startDate:'2026-01-01',amount:{kind:'fixed',monthlyCents:60000}}]});
   const r=resolved(syntheticCash(input,1000000),zeroTaxes);
-  expect(r.report).toMatchObject({status:'funded',originalCashFlowCents:1000000,explicitCashCents:280000,retainedCashCents:280000,excessAcceptedCents:0});
+  expect(r.report).toMatchObject({status:'funded',originalCashFlowCents:1000000,explicitCashTargetCents:500000,explicitCashCents:280000,explicitCashShortfallCents:220000,retainedCashCents:280000,excessAcceptedCents:0});
   expect(r.report.accounts[0]).toMatchObject({existingCents:720000,actualCents:720000,percentageCents:0});
+  expect(r.report.reasons).toContainEqual(expect.objectContaining({code:'allocation-cash-shortfall',recordId:input.plan.cashFlowAllocation!.id,field:'cashFlowAllocation.entries.0.amount',year:2026}));
  });
  it('reserves a December legacy IRA before January excess can use the shared owner cap',()=>{
   const base=makeAllocationPlan();const roth={...base.accounts[1]!,id:'roth',type:'roth-ira' as const};
@@ -293,4 +294,43 @@ it('isolates repeated solves when sponsoring employer catch-up history changes',
  expect(resolved(high).report.accounts.find(a=>a.accountId==='workplace')?.actualCents).toBe(2450000);
  expect(resolved(low).report.accounts.find(a=>a.accountId==='workplace')?.actualCents).toBe(3250000);
  expect(low.plan).toEqual(before);
+});
+
+describe('explicit cash competes in visible percentage order',()=>{
+ it.each([{cashFirst:false,brokerage:1032800,cash:0,cashShortfall:2568400},{cashFirst:true,brokerage:0,cash:1032800,cashShortfall:1535600}])('respects both real-resolver priorities with cashFirst=$cashFirst',({cashFirst,brokerage,cash,cashShortfall})=>{
+  const base=makeAllocationPlan();const input=fixture([percent('brokerage',5000,cashFirst?2:1),percent('cash',5000,cashFirst?1:2)],'cash',{accounts:[...base.accounts,{...base.accounts[0]!,id:'legacy-brokerage',name:'Legacy brokerage'}],contributions:[{id:'saved-legacy',accountId:'legacy-brokerage',priority:1,startDate:'2026-01-01',amount:{kind:'fixed',monthlyCents:342000}}]});
+  const savedRequests=structuredClone(input.legacyRequests),r=resolved(input);
+  expect(r.report).toMatchObject({status:'funded',originalCashFlowCents:5136800,explicitCashTargetCents:2568400,explicitCashCents:cash,explicitCashShortfallCents:cashShortfall,retainedCashCents:cash,excessOfferedCents:0,excessAcceptedCents:0,excessRetainedCents:0});
+  expect(r.report.accounts.find(a=>a.accountId==='brokerage')).toMatchObject({targetCents:2568400,actualCents:brokerage,percentageCents:brokerage,shortfallCents:2568400-brokerage});
+  expect(r.report.accounts.find(a=>a.accountId==='legacy-brokerage')).toMatchObject({existingCents:4104000,actualCents:4104000});
+  expect(r.requests.filter(q=>q.ruleId==='saved-legacy')).toEqual(savedRequests);expect(input.legacyRequests).toEqual(savedRequests);
+  expect(sum(r.report.accounts.map(a=>a.actualCents))+r.report.retainedCashCents).toBe(5136800);
+  let reserve=0;for(let month=1;month<=12;month++){
+   const deposits=sum(r.household.contributions.filter(c=>c.month===month).map(c=>c.eligibleCents.status==='available'?c.eligibleCents.value:0));
+   reserve+=r.preTransferCashByMonth[month-1]!-deposits;expect(reserve).toBeGreaterThanOrEqual(0);
+   expect(r.household.contributions.find(c=>c.ruleId==='saved-legacy'&&c.month===month)?.eligibleCents).toEqual({status:'available',value:342000});
+  }expect(reserve).toBe(cash);
+ });
+ it('reserves actual cash after earlier funding and protects it from later percentages, maximum and excess',()=>{
+  const input=fixture([percent('brokerage',2000,1),percent('cash',3000,2),percent('ira',5000,3),maximum('workplace',4)],'brokerage');
+  const r=resolved({...syntheticCash(input,1000000),rules:{...input.rules,retirement:{...input.rules.retirement,iraLimitCents:200000,electiveDeferralLimitCents:100000}}},zeroTaxes);
+  expect(r.report).toMatchObject({explicitCashTargetCents:300000,explicitCashCents:300000,explicitCashShortfallCents:0,excessOfferedCents:200000,excessAcceptedCents:200000,retainedCashCents:300000});
+  expect(r.report.accounts.find(a=>a.accountId==='brokerage')).toMatchObject({percentageCents:200000,excessCents:200000,actualCents:400000});
+  expect(r.report.accounts.find(a=>a.accountId==='ira')).toMatchObject({percentageCents:200000,shortfallCents:300000});
+  expect(r.report.accounts.find(a=>a.accountId==='workplace')?.maximumCents).toBe(100000);
+  expect(sum(r.report.accounts.map(a=>a.actualCents))+r.report.retainedCashCents).toBe(1000000);
+ });
+ it('preserves earlier traditional percentage funding and its final tax feedback before cash',()=>{
+  const base=makeAllocationPlan();const input=fixture([percent('workplace',5000,1),percent('cash',5000,2)],'cash',{accounts:[...base.accounts,{...base.accounts[0]!,id:'legacy-brokerage',name:'Legacy brokerage'}],contributions:[{id:'saved-legacy',accountId:'legacy-brokerage',priority:1,startDate:'2026-01-01',amount:{kind:'fixed',monthlyCents:342000}}]});
+  const r=resolved(input),workplace=r.report.accounts.find(a=>a.accountId==='workplace')!;
+  expect(workplace.percentageCents).toBeGreaterThan(1032800);expect(workplace.actualCents).toBe(r.report.originalCashFlowCents-4104000);
+  expect(r.report.explicitCashCents).toBe(0);expect(r.report.originalCashFlowCents).toBeGreaterThan(5136800);
+  expect(sum(r.incomeTaxByMonth)).toBeLessThan(326200);expect(r.requests.filter(q=>q.ruleId==='saved-legacy')).toEqual(input.legacyRequests);
+  const funded=sum(r.household.contributions.filter(c=>c.ruleId==='entry-workplace').map(c=>c.eligibleCents.status==='available'?c.eligibleCents.value:0));expect(funded).toBe(workplace.percentageCents);
+  expect(r.report.accounts.every(a=>a.actualCents>=a.existingCents)).toBe(true);
+ });
+ it('reports the cumulatively settled cash target without independently rounding its fractional cent',()=>{
+  const input=fixture([percent('brokerage',5000,1),percent('cash',5000,2)]);const r=resolved(syntheticCash(input,3),zeroTaxes);
+  expect(r.report).toMatchObject({originalCashFlowCents:3,explicitCashTargetCents:1,explicitCashCents:1,explicitCashShortfallCents:0,retainedCashCents:1});expect(r.report.accounts[0]?.actualCents).toBe(2);
+ });
 });

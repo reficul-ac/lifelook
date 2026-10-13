@@ -14,11 +14,17 @@ function note(issues:readonly Issue[],excess=true):string{
 function details(root:HTMLElement,issues:readonly Issue[],year:number,context:IssueViewContext):void{
   if(issues.length)renderIssueDetails(root,issues.map(issue=>({issue,period:{year}})),context);
 }
+function cashReasons(value:CashFlowAllocationYear,plan:PlanDocument):readonly Issue[]{
+  const policy=plan.cashFlowAllocation,entry=policy?.entries.find(entry=>entry.destination.kind==='cash');
+  if(!policy||!entry)return [];
+  const prefix=`cashFlowAllocation.entries.${policy.entries.findIndex(source=>source.id===entry.id)}.`;
+  return value.reasons.filter(issue=>issue.recordId===entry.id||issue.recordId===policy.id&&issue.field?.startsWith(prefix));
+}
 function fundingTable(root:HTMLElement,value:CashFlowAllocationYear,plan:PlanDocument,context:IssueViewContext):void{
   const wrap=element('div');wrap.className='allocation-table-wrap';
   const table=element('table');table.append(element('caption',`Actual allocation funding · ${value.year}`));
   const head=element('thead'),header=element('tr');
-  for(const label of ['Destination','Target','Actual funded','Actual share','Existing deposits','Percentage top up','Annual maximum','Excess funding','Shortfall']){const cell=element('th',label);cell.scope='col';header.append(cell);}head.append(header);table.append(head);
+  for(const label of ['Destination','Target','Actual funded / retained cash','Actual share','Existing deposits','Percentage top up / saving','Annual maximum','Excess funding','Shortfall']){const cell=element('th',label);cell.scope='col';header.append(cell);}head.append(header);table.append(head);
   const body=element('tbody');
   for(const account of value.accounts){
     const row=element('tr'),label=getRecordLabel(plan,account.accountId),title=element('th',label);title.scope='row';row.append(title);
@@ -31,9 +37,16 @@ function fundingTable(root:HTMLElement,value:CashFlowAllocationYear,plan:PlanDoc
     if(value.originalCashFlowCents>0)appendAmount(share,{status:'available',value:account.actualCents/value.originalCashFlowCents},context,{label:`${label} actual share`,period:{year:value.year}},'ratio');else share.textContent='N/A · no positive budget';row.append(share);
     amount(account.existingCents);amount(account.percentageCents);amount(account.maximumCents);amount(account.excessCents);amount(account.shortfallCents);body.append(row);
   }
-  const cash=element('tr'),name=element('th','Cash / savings');name.scope='row';cash.append(name,element('td','—'),element('td',formatCents(value.retainedCashCents)));
+  const cash=element('tr'),name=element('th','Cash / savings');name.scope='row';
+  if(value.explicitCashShortfallCents>0)name.append(context.disclosures.createTrigger({label:'Partially funded',accessibleLabel:`Cash / savings target funding details · ${value.year}`,title:`Cash / savings target funding · ${value.year}`,preview:`${formatCents(value.explicitCashShortfallCents)} below the saving target. ${note(cashReasons(value,plan),false)}`,renderDetails:node=>{
+    node.append(element('p',`Cash / savings · ${value.year}: saving target ${formatCents(value.explicitCashTargetCents)}, actual earmark ${formatCents(value.explicitCashCents)}, shortfall ${formatCents(value.explicitCashShortfallCents)}.`));details(node,cashReasons(value,plan),value.year,context);
+  }}));
+  const retained=element('td',formatCents(value.retainedCashCents));retained.append(element('div','Total retained'));
+  cash.append(name,element('td',formatCents(value.explicitCashTargetCents)),retained);
   const cashShare=element('td');if(value.originalCashFlowCents>0)appendAmount(cashShare,{status:'available',value:value.retainedCashCents/value.originalCashFlowCents},context,{label:'Cash actual share',period:{year:value.year}},'ratio');else cashShare.textContent='N/A · no positive budget';cash.append(cashShare);
-  const breakdown=element('td');breakdown.colSpan=5;breakdown.append(element('span',`Explicit saving: ${formatCents(value.explicitCashCents)}; other retained cash: ${formatCents(value.retainedCashCents-value.explicitCashCents-value.excessRetainedCents)}; excess retained: ${formatCents(value.excessRetainedCents)}.`));
+  cash.append(element('td','—'),element('td',`Explicit saving: ${formatCents(value.explicitCashCents)}`),element('td','—'),element('td','—'),element('td',formatCents(value.explicitCashShortfallCents)));body.append(cash);
+  const breakdownRow=element('tr'),breakdownLabel=element('th','Retained cash breakdown');breakdownLabel.scope='row';breakdownRow.append(breakdownLabel);
+  const breakdown=element('td');breakdown.colSpan=8;breakdown.append(element('span',`Explicit saving: ${formatCents(value.explicitCashCents)}; other retained cash: ${formatCents(value.retainedCashCents-value.explicitCashCents-value.excessRetainedCents)}; excess retained: ${formatCents(value.excessRetainedCents)}.`));
   const overflow=plan.cashFlowAllocation?.overflow;
   if(value.excessRetainedCents>0&&overflow?.destination.kind==='account'){
     const destination=getRecordLabel(plan,overflow.destination.accountId);
@@ -43,7 +56,7 @@ function fundingTable(root:HTMLElement,value:CashFlowAllocationYear,plan:PlanDoc
       if(!reasons.length){const button=element('button',`Review ${destination}`);button.type='button';button.addEventListener('click',()=>context.review({section:'Investments',recordId:overflow.destination.kind==='account'?overflow.destination.accountId:overflow.id,label:`Review ${destination}`}));node.append(button);}
     }}));
   }
-  cash.append(breakdown);body.append(cash);table.append(body);wrap.append(table);root.append(wrap);
+  breakdownRow.append(breakdown);body.append(breakdownRow);table.append(body);wrap.append(table);root.append(wrap);
 }
 export function renderAllocationPie(root:HTMLElement,report:Available<CashFlowAllocationYear>,plan:PlanDocument,context:IssueViewContext):void{
   context.disclosures.closeWithin(root,false);root.replaceChildren();const viewContext={...context,allocationPlan:plan};
@@ -72,7 +85,8 @@ export function renderAllocationPie(root:HTMLElement,report:Available<CashFlowAl
   }
   fundingTable(root,value,plan,viewContext);
   root.append(element('p',`Excess offered: ${formatCents(value.excessOfferedCents)} · Excess accepted: ${formatCents(value.excessAcceptedCents)} · Excess retained: ${formatCents(value.excessRetainedCents)}`));
-  const meaningfulReasons=value.reasons.filter(issue=>issue.code==='allocation-existing-above-target'||value.status!=='funded'||value.accounts.some(account=>account.shortfallCents>0&&account.reasons.some(reason=>reason.code===issue.code&&reason.recordId===issue.recordId&&reason.field===issue.field))||value.excessRetainedCents>0&&plan.cashFlowAllocation?.overflow.destination.kind==='account'&&(issue.recordId===plan.cashFlowAllocation.overflow.id||issue.field?.includes('overflow')));
+  const savingReasons=value.explicitCashShortfallCents>0?cashReasons(value,plan):[];
+  const meaningfulReasons=value.reasons.filter(issue=>savingReasons.includes(issue)||issue.code==='allocation-existing-above-target'||value.status!=='funded'||value.accounts.some(account=>account.shortfallCents>0&&account.reasons.some(reason=>reason.code===issue.code&&reason.recordId===issue.recordId&&reason.field===issue.field))||value.excessRetainedCents>0&&plan.cashFlowAllocation?.overflow.destination.kind==='account'&&(issue.recordId===plan.cashFlowAllocation.overflow.id||issue.field?.includes('overflow')));
   if(meaningfulReasons.length){const reasons=element('div');reasons.append(context.disclosures.createTrigger({label:'Allocation notes',accessibleLabel:`Allocation notes · ${value.year}`,title:`Allocation notes · ${value.year}`,preview:note(meaningfulReasons,value.excessRetainedCents>0&&plan.cashFlowAllocation?.overflow.destination.kind==='account'),renderDetails:node=>details(node,meaningfulReasons,value.year,viewContext)}));root.append(reasons);}
 }
 export function renderAllocationYears(root:HTMLElement,years:readonly AnnualProjection[],context:IssueViewContext):void{

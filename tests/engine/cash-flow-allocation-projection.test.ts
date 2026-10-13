@@ -135,3 +135,21 @@ describe('availability and independent schedules',()=>{
   expect(numericProjectionView(result,fixture.comparisonMode==='selected-numeric-rows'?fixture.expected:undefined)).toEqual(fixture.expected);
  });
 });
+
+describe('cash priority is posted once into accounts and retained reserves',()=>{
+ it.each([{cashFirst:false,brokerage:1032800,cash:0,shortfall:2568400},{cashFirst:true,brokerage:0,cash:1032800,shortfall:1535600}])('posts exact actual amounts for cashFirst=$cashFirst',({cashFirst,brokerage,cash,shortfall})=>{
+  const base=fixture(),doc={...base,accounts:[...base.accounts,{...base.accounts[0]!,id:'legacy-brokerage',name:'Legacy brokerage'}],contributions:[{id:'saved-legacy',accountId:'legacy-brokerage',priority:1,startDate:'2026-01-01',amount:{kind:'fixed' as const,monthlyCents:342000}}],cashFlowAllocation:makeAllocationPolicy({entries:[{...percent('brokerage',5000),priority:cashFirst?2:1},{...percent('cash',5000),priority:cashFirst?1:2}]})};
+  const saved=structuredClone(doc),result=project(doc),year=result.years[0]!;
+  expect(report(year)).toMatchObject({status:'funded',originalCashFlowCents:5136800,explicitCashTargetCents:2568400,explicitCashCents:cash,explicitCashShortfallCents:shortfall});
+  expect(money(year.accounts.find(a=>a.accountId==='brokerage')!.closingCents)).toBe(brokerage);
+  expect(money(year.accounts.find(a=>a.accountId==='legacy-brokerage')!.closingCents)).toBe(4104000);
+  expect(money(year.eligibleContributionCents)).toBe(4104000+brokerage);expect(money(year.reserveCents)).toBe(cash);expect(money(year.netWorthCents)).toBe(5136800);
+  const legacy=result.contributionSchedules.find(schedule=>schedule.ruleId==='saved-legacy')!;expect(legacy.requests.status).toBe('available');
+  if(legacy.requests.status==='available')expect(legacy.requests.value.map(request=>[request.month,request.requestedCents])).toEqual(Array.from({length:12},(_,i)=>[i+1,342000]));
+  let reserve=0;for(const month of result.months){
+   expect(money(month.accounts.find(a=>a.accountId==='legacy-brokerage')!.contributionCents)).toBe(342000);
+   reserve+=money(month.salaryCents)-money(month.totalTaxCents)-money(month.eligibleContributionCents);
+   expect(money(month.reserveCents)).toBe(reserve);expect(reserve).toBeGreaterThanOrEqual(0);
+  }expect(reserve).toBe(cash);expect(doc).toEqual(saved);reconcile(year);
+ });
+});

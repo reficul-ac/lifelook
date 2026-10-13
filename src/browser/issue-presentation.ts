@@ -77,7 +77,9 @@ export function resolveIssueTargets(issue:Issue,state:IssueViewState,sourcePlan:
     const index=source&&Array.isArray(rows)?rows.findIndex(row=>row&&typeof row==='object'&&row.id===source.id):-1;
     const isOverflow=source?.id===policy.overflow.id&&raw?.overflow&&typeof raw.overflow==='object'&&'id' in raw.overflow&&raw.overflow.id===source.id;
     // A removed source has no field target; never substitute the row now at its old index.
-    const path=isOverflow?`overflow${suffix?'.'+suffix:''}`:index>=0?`entries.${index}${suffix?'.'+suffix:''}`:source||match||overflow?undefined:suffix;
+    // Excess has an automatic amount; its destination is the editable remedy for amount limits.
+    const overflowSuffix=isOverflow&&/^amount(?:\.|$)/.test(suffix)?'destination':suffix;
+    const path=isOverflow?`overflow${overflowSuffix?'.'+overflowSuffix:''}`:index>=0?`entries.${index}${suffix?'.'+suffix:''}`:source||match||overflow?undefined:suffix;
     return [{section:'Investments',recordId:policy.id,...(path?{field:path}:{}),label:`Review ${source?getRecordLabel(sourcePlan,source.id):'Cash flow allocation'}`}];
   }
   const target=(section:InputSection,recordId:string,path?:string):ReviewTarget=>({section,recordId,...(path?{field:path}:{}),label:`Review ${section==='Household'?'Household':getRecordLabel(plan,id??recordId)}`});

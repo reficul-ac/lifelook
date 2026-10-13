@@ -1,3 +1,4 @@
+import {mountCashFlowAllocationEditor} from './cash-flow-allocation';
 import type {IssueViewContext} from '../issue-presentation';
 import { renderField, renderHistory, renderRecordSection, type FieldContext } from '../fields';
 import type { WorkspaceController } from '../state';
@@ -32,3 +33,6 @@ export function renderInvestmentsForm(root: HTMLElement, controller: WorkspaceCo
     if (account?.type === 'traditional-401k' || account?.type === 'roth-401k') renderField(body, ctx, ['sponsoringSalaryId'], 'Sponsoring salary', { kind: 'select', options: [{ value: '', label: 'Choose the sponsoring employer’s salary' }, ...plan.salaries.filter(s => s.ownerId === account.ownerId).map(s => ({ value: s.id, label: s.name }))], hint: 'Use this account owner’s sponsoring employer salary.' });
   },undefined,ui);
 }
+
+/** Main owns this stable sibling host above the replaceable investment records. */
+export const mountInvestmentAllocation=mountCashFlowAllocationEditor;

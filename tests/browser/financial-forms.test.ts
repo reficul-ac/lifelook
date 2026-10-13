@@ -7,6 +7,7 @@ import { renderInvestmentsForm } from '../../src/browser/forms/investments';
 import { createWorkspace, type WorkspaceController } from '../../src/browser/state';
 import { calculateProjection, loadRuleSet, validatePlan, type PlanDocument } from '../../src/engine';
 import { makePlan } from '../helpers/plans';
+import { makeEstimatedMortgagePlan } from '../helpers/estimated-mortgage';
 import { loadReferences } from '../helpers/references';
 
 function mount(renderer: (root: HTMLElement, controller: WorkspaceController) => void, plan = makePlan()) {
@@ -121,4 +122,37 @@ it('keeps short labels, entry consequences and eligibility guidance attached to 
   setField(salary,'Salary end date','2026-12-31');fireEvent.click(within(salary).getByText('Save salary',{selector:'button'}));expect(controller.getState().savedPlan.salaries.find(s=>s.id===fixture.salaries[0]!.id)?.endDate).toBe('2026-12-31');sameCalculation(controller);
   nav.getByRole('button',{name:'Expenses and debts'}).click();const expense=root.querySelector<HTMLElement>('[data-section="Expenses and debts"]')!;expect(expense.querySelector('[data-field="startDate"]')).toHaveAccessibleDescription(/Payments repeat on this date/);expect(expense).toHaveTextContent('Add each mortgage once, under its property.');
   nav.getByRole('button',{name:'Investments'}).click();const investments=root.querySelector<HTMLElement>('[data-section="Investments"]')!;expect(investments).toHaveTextContent('Different from account balance; enter 0 only if confirmed.');expect(investments).toHaveTextContent('Lower numbers receive available contribution limits first.');
+});
+
+it('keeps qualified schedule-estimated mortgages usable for taxes, ratios and cash funding', () => {
+  const { root } = mountWorkspace(makeEstimatedMortgagePlan());
+  const queries = within(root);
+  const money = /^\$[\d,]+\.\d{2}$/;
+  for (const year of [2026, 2027, 2028]) {
+    const federal = queries.getByTestId(`annual-${year}-federal-income-tax`);
+    const annual = within(federal.closest('section')!);
+    expect(federal).toHaveTextContent(money);
+    expect(queries.getByTestId(`annual-${year}-california-income-tax`)).toHaveTextContent(money);
+    expect(queries.getByTestId(`annual-${year}-cash-flow`)).toHaveTextContent(money);
+    expect(queries.getByTestId(`annual-${year}-gross-income`)).toHaveTextContent('$240,000.00');
+    for (const label of ['Tax / income', 'Cash flow / income']) {
+      expect(annual.getByText(label, { selector: 'dt' }).nextElementSibling).toHaveTextContent(/^\d+(?:\.\d{1,2})?%$/);
+    }
+    expect(annual.getByText('No modeled cash gap')).toBeVisible();
+    expect(annual.queryByText('Funding unknown')).toBeNull();
+    fireEvent.click(annual.getByRole('button', { name: `Tax explanation for ${year}` }));
+    expect(queries.getByTestId(`tax-${year}-federal-total`)).toHaveTextContent(money);
+    expect(queries.getByTestId(`tax-${year}-california-total`)).toHaveTextContent(money);
+    const explanation = root.querySelector<HTMLElement>(`#tax-explanation-${year}`)!;
+    const sources = within(explanation).getByText('Sources and rule assumptions', { selector: 'summary' });
+    fireEvent.click(sources);
+    expect(within(sources.parentElement!).getByText(/Mortgage interest.*forecast estimates.*loan schedule/, { selector: 'li' })).toBeVisible();
+  }
+  fireEvent.click(within(root.querySelector('nav')!).getByRole('button', { name: 'Properties' }));
+  const summary = queries.getByText(/^Loan — Synthetic fixed mortgage/, { selector: 'summary' });
+  expect(summary).toHaveTextContent('Opening balance estimated');
+  fireEvent.click(summary);
+  expect(queries.getByText(/Saved opening balance: estimated; saved payment: estimated/)).toBeVisible();
+  expect(queries.getByLabelText('Opening mortgage balance history')).toHaveValue('unknown');
+  expect(queries.getByLabelText('Opening principal-and-interest payment history')).toHaveValue('unknown');
 });

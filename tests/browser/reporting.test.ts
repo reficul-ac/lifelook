@@ -25,7 +25,8 @@ describe('traceable projection reporting',()=>{
       const value=year[key];if(value.status!=='available')throw new Error('Complete worksheet required');
       expect(queries.getByTestId(`annual-2026-${slug(key)}`)).toHaveTextContent(currency(value.value));
     }
-    for(const label of ['Gross income','Federal income tax','California income tax','Social Security','Medicare','Additional Medicare','SDI','Expenses','Debt payments','Eligible contributions','Prevented contributions','Account growth','Property growth','Cash flow','Cash reserve','Net worth'])expect(queries.getByRole('columnheader',{name:label==='SDI'?/^SDI/:label})).toBeVisible();
+    const flows=within(queries.getByRole('table',{name:'Annual flows and December balances'}));
+    for(const label of ['Gross income','Federal income tax','California income tax','Social Security','Medicare','Additional Medicare','SDI','Expenses','Debt payments','Eligible contributions','Prevented contributions','Account growth','Property growth','Cash flow','Cash reserve','Net worth'])expect(flows.getByRole('columnheader',{name:label==='SDI'?/^SDI/:label})).toBeVisible();
   });
   it('expands monthly amounts with a native labeled button and visible account/property/loan detail',()=>{
     const c=fixture('two-salaries-home-adu'),node=root();renderProjection(node,result(c.id),context);const queries=within(node);
@@ -54,7 +55,7 @@ describe('traceable projection reporting',()=>{
     renderProjection(node,{...projection,contributionSchedules:[{ruleId:'large-rule',year:2026,requests:{status:'unsupported-case',issues:[issue]}}],issues:[...projection.issues,issue]},context);
     fireEvent.click(within(node).getByText('Contribution request schedules',{selector:'summary'}));
     const cell=within(node).getByTestId('contribution-schedule-2026-large-rule');
-    expect(cell).toHaveTextContent('Unsupported');fireEvent.click(within(cell).getByRole('button'));const panel=within(document.body).getByRole('region');expect(panel).toHaveTextContent(issue.explanation);expect(panel).toHaveTextContent(issue.resolution);expect(cell.textContent).not.toContain('$0.00');
+    expect(cell).toHaveTextContent('Unsupported');fireEvent.click(within(cell).getByRole('button'));const panel=within(document.body).getByRole('region',{name:'Contribution request schedule · 2026'});expect(panel).toHaveTextContent(issue.explanation);expect(panel).toHaveTextContent(issue.resolution);expect(cell.textContent).not.toContain('$0.00');
     expect(within(node).getByRole('table',{name:'Contribution request schedules'})).toHaveTextContent('large-rule');
   });
   it('shows selected tax methods, four comparisons, components and assessed/paid tax assumptions',()=>{
@@ -92,7 +93,7 @@ describe('traceable projection reporting',()=>{
   });
   it('keeps independent results visible and explains unavailable values without numeric placeholders',()=>{
     const c=fixture('unknown-rental-history-two-years'),node=root();renderProjection(node,result(c.id),context);const queries=within(node);
-    const unknown=queries.getByTestId('annual-2026-net-worth');expect(unknown).toHaveTextContent('Needs data');expect(unknown.textContent).not.toContain('$0.00');fireEvent.click(within(unknown).getByRole('button'));expect(within(document.body).getByRole('region')).toHaveTextContent('Supply');
+    const unknown=queries.getByTestId('annual-2026-net-worth');expect(unknown).toHaveTextContent('Needs data');expect(unknown.textContent).not.toContain('$0.00');fireEvent.click(within(unknown).getByRole('button'));expect(within(document.body).getByRole('region',{name:'Net worth · 2026'})).toHaveTextContent('Supply');
     const salary=c.expected.years[0]!.salaryCents;if(salary.status!=='available')throw new Error('Known salary required');
     expect(queries.getByTestId('annual-2026-salary')).toHaveTextContent(currency(salary.value));
     expect(queries.getAllByText('Household tax incomplete')[0]).toBeVisible();
@@ -120,6 +121,15 @@ describe('traceable projection reporting',()=>{
 });
 
 describe('compact report hierarchy',()=>{
+  it('keeps a cash-gap assumption visible alongside the overview and clears it for funded forecasts',()=>{
+    const node=root();renderProjection(node,result('cash-only-funding-gap'),context);
+    const notice=within(node).getByRole('status');
+    expect(notice).toHaveTextContent(/balances.*cash gap/i);
+    const table=within(node).getByRole('table',{name:'Annual financial overview'});
+    expect(notice.compareDocumentPosition(table)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    renderProjection(node,result('cash-only'),context);
+    expect(within(node).queryByRole('status')).toBeNull();
+  });
   it('routes an unknown owner IRA basis to the account history that establishes it',()=>{
     const plan=makePlan({accounts:[{id:'basis-account',name:'IRA history',ownerId:'owner-a',type:'traditional-ira',openingBalanceCents:10000,annualGrowthBps:0,openingIraBasis:{known:false}}]});const {root:node,context:ui,reviews}=mountPresentation(plan);
     renderTaxExplanation(node,calculateProjection(mustValidate(plan),loadRuleSet()).years[0]!,ui);fireEvent.click(within(node).getByText('Contributions',{selector:'summary'}));fireEvent.click(within(within(node).getByTestId('ira-2026-owner-a-basis')).getByRole('button'));

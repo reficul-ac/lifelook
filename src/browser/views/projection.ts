@@ -2,6 +2,9 @@ import {getRecordLabel,type IssueViewContext} from '../issue-presentation';
 import type { AnnualProjection,MonthlyProjection,MonetaryField,ProjectionResult,RsuGrantMonth } from '../../engine';
 import { appendAmount,appendCoverage,appendProvenance,element,renderIssues } from './issues';
 import { renderTaxExplanation } from './tax-explanation';
+import { projectionSummary } from '../projection-summary';
+import { renderForecastSummary } from './forecast-summary';
+import { renderForecastPlots } from './forecast-plots';
 import { renderAllocationYears } from './cash-flow-allocation';
 
 const columns:readonly {key:MonetaryField;label:string}[]=[
@@ -70,11 +73,14 @@ function expandButton(root:HTMLElement,label:string,hiddenLabel:string,target:HT
 }
 export function renderProjection(root:HTMLElement,result:ProjectionResult,context:IssueViewContext):void {
   context.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2','Projection'),element('p',`Inputs v${result.inputRevision}`));
+  appendCoverage(root,result.coverage);
+  if(result.years.some(year=>year.conditionalOnGap)){const notice=element('p','Some balances depend on covering a modeled cash gap.');notice.setAttribute('role','status');notice.className='forecast-conditional';root.append(notice);}
+  const overview=result.years.map(projectionSummary);renderForecastSummary(root,overview,context);renderForecastPlots(root,overview,context);
   if(result.years.some(year=>year.cashFlowAllocation!==undefined)){const allocation=element('div');renderAllocationYears(allocation,result.years,context);root.append(allocation);}
   const hasRsu=context.readState().savedPlan.accounts.some(account=>account.type==='rsu');
   const how=element('details');how.append(element('summary','How calculated'),element('p',hasRsu?'Annual income tax is reserved across months in proportion to positive cash income and taxable RSU compensation, or in equal monthly amounts when both are zero. Payroll taxes follow combined cumulative salary and RSU wages. Shares sold for withholding fund the modeled tax reserve; withholding is not final tax liability.':'Annual income tax is reserved across months in proportion to positive gross cash income, or in equal monthly amounts when positive income is zero. Payroll taxes follow cumulative wages.'),element('p','Asset growth changes value, not spendable cash.'));root.append(how);
   const assumptions=element('details');assumptions.append(element('summary','Forecast assumptions'),element('p',hasRsu?'Contributions remain planned when cash is insufficient. Later balances are conditional on covering the cash gap; no borrowing, discretionary sales or withdrawals are added. Sell-to-cover follows the entered percentages.':'Contributions remain planned when cash is insufficient. Later balances are conditional on covering the cash gap; no borrowing, sales or withdrawals are added.'));root.append(assumptions);
-  appendCoverage(root,result.coverage);appendProvenance(root,result.provenance);
+  appendProvenance(root,result.provenance);
   const independent=result.rsuSchedules?.filter(schedule=>schedule.schedule.status!=='available'||result.years.find(year=>year.year===schedule.year)?.rsu?.status!=='available')??[];
   if(independent.length){const schedules=element('details');schedules.append(element('summary','Independent RSU schedules'));for(const schedule of independent){schedules.append(element('h3',`${getRecordLabel(context.readState().savedPlan,schedule.accountId)} · ${schedule.year}`));if(schedule.schedule.status==='available')rsuGrantTable(schedules,schedule.schedule.value,`independent-${schedule.year}`,context,true);else appendAmount(schedules,schedule.schedule,context,{label:'Independent RSU schedule',period:{year:schedule.year}});}root.append(schedules);}
   if(result.contributionSchedules.length){

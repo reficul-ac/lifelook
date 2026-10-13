@@ -42,6 +42,44 @@ describe('qualified personal deductions', () => {
     expect(r).not.toHaveProperty('value');
     expect(input.loans![0]!.months[0]!.paymentCents).toBe(500000);
   });
+  it.each(['federal', 'california'] as const)('uses qualified schedule-estimated balances for %s forecast deductions', jurisdiction => {
+    const input=loadReferences<Input,unknown>('itemized-2026').find(c=>c.id==='post-2017-interest-only-federal')!.input;
+    const loans=input.loans!.map(loan=>({...loan,openingProvenance:'estimated' as const}));
+    const r=calculateMortgageDeduction(input.property!,loans,jurisdiction,rules);
+    expect(r.status).toBe('available');
+    if(r.status!=='available')return;
+    expect(r.value.averageQualifiedDebtCents).toBe(100000000);
+    expect(r.value.allowedInterestCents).toBe(jurisdiction==='federal'?4500000:6000000);
+    expect(r.value.issues).toContainEqual(expect.objectContaining({code:'estimated-mortgage-deduction',severity:'info',recordId:loans[0]!.loanId,field:'openingBalance'}));
+    expect(r.value.provenance.assumptions.some(a=>a.includes('loan schedule'))).toBe(true);
+    const confirmed=calculateMortgageDeduction(input.property!,input.loans!,jurisdiction,rules);
+    expect(confirmed.status).toBe('available');
+    if(confirmed.status==='available')expect(r.value.provenance.status).toBe(confirmed.value.provenance.status);
+  });
+  it('keeps payment-only estimates visible without replacing a known opening balance', () => {
+    const input=loadReferences<Input,unknown>('itemized-2026').find(c=>c.id==='post-2017-interest-only-federal')!.input;
+    const loans=input.loans!.map(loan=>({...loan,paymentProvenance:'estimated' as const}));
+    const r=calculateMortgageDeduction(input.property!,loans,'federal',rules);
+    expect(r.status).toBe('available');
+    if(r.status!=='available')return;
+    expect(r.value.allowedInterestCents).toBe(4500000);
+    expect(r.value.issues).toContainEqual(expect.objectContaining({code:'estimated-mortgage-deduction',field:'openingPayment'}));
+    expect(loans[0]!.openingProvenance).toBe('known');
+  });
+  it('still requires annual balance evidence for an estimated qualified mortgage', () => {
+    const input=loadReferences<Input,unknown>('itemized-2026').find(c=>c.id==='post-2017-interest-only-federal')!.input;
+    const loans=input.loans!.map(loan=>({...loan,openingProvenance:'estimated' as const,averageBalanceEvidence:[]}));
+    const r=calculateMortgageDeduction(input.property!,loans,'federal',rules);
+    expect(r.status).toBe('needs-data');
+    expect(r).not.toHaveProperty('value');
+    if(r.status!=='available')expect(r.issues).toContainEqual(expect.objectContaining({code:'required-mortgage-average-balance'}));
+  });
+  it('does not label confirmed loan inputs as estimated', () => {
+    const input=loadReferences<Input,unknown>('itemized-2026').find(c=>c.id==='post-2017-interest-only-federal')!.input;
+    const r=calculateMortgageDeduction(input.property!,input.loans!,'federal',rules);
+    expect(r.status).toBe('available');
+    if(r.status==='available')expect(r.value.issues.some(i=>i.code==='estimated-mortgage-deduction')).toBe(false);
+  });
   it('California standard is independent of unknown filer ages', () => {
     const filers=makePlan().household.filers.map(f=>({...f,birthDate:{known:false as const}}));
     expect(standardDeduction(filers,2026,'california',rules)).toEqual({status:'available',value:1180000});
@@ -58,6 +96,17 @@ describe('independent jurisdiction candidates',()=>{
   const facts:ItemizedFacts={year:2026,federalAgiCents:{status:'available',value:16000000},saltMagiCents:{status:'available',value:16000000},niitOtherIncomeCents:{status:'available',value:0},rental:{federal:{status:'available',value:{allowedRentalCents:6000000}}}};
   function property(mip=0):PropertyYearFacts{return {...seed.property!,personal:{...seed.property!.personal,propertyTaxPaidCents:1000000,homeownersInsuranceCents:200000,mortgageInsuranceCents:mip}};}
   function mortgages(p:PropertyYearFacts){return {federal:calculateMortgageDeduction(p,seed.loans!,'federal',rules),california:calculateMortgageDeduction(p,seed.loans!,'california',rules)};}
+  it.each(['federal', 'california'] as const)('retains loan estimate assumptions in %s itemization', jurisdiction=>{
+    const p=property();
+    const loans=seed.loans!.map(loan=>({...loan,openingProvenance:'estimated' as const}));
+    const mortgage={federal:calculateMortgageDeduction(p,loans,'federal',rules),california:calculateMortgageDeduction(p,loans,'california',rules)};
+    const candidate=buildItemizedCandidate(facts,p,mortgage,{status:'available',value:{californiaIncomeTaxPaidCents:1000000,sdiPaidCents:100000,source:'actual-override'}},rules)[jurisdiction];
+    expect(candidate.status).toBe('available');
+    if(candidate.status!=='available')return;
+    expect(candidate.value.allowedCents).toBe(jurisdiction==='federal'?6600000:7000000);
+    expect(candidate.value.reasons).toContainEqual(expect.objectContaining({code:'estimated-mortgage-deduction',severity:'info'}));
+    expect(candidate.value.provenance.assumptions.some(a=>a.includes('loan schedule'))).toBe(true);
+  });
   it('uses actual paid state taxes, excludes homeowners insurance, and allocates NIIT taxes',()=>{
     const p=property();const c=buildItemizedCandidate(facts,p,mortgages(p),{status:'available',value:{californiaIncomeTaxPaidCents:1000000,sdiPaidCents:100000,source:'actual-override'}},rules);
     expect(c.federal.status).toBe('available');expect(c.california.status).toBe('available');

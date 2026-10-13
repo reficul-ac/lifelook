@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { allocateAnnualTax, calculateProjection } from '../../src/engine/projection';
 import { MAX_CENTS } from '../../src/engine/money';
 import { makePlan, mustValidate } from '../helpers/plans';
+import { makeEstimatedMortgagePlan } from '../helpers/estimated-mortgage';
 import { loadRuleSet } from '../../src/engine/rules/registry';
 import type { PlanDocument } from '../../src/engine/model/plan';
 import fixtureRows from '../../fixtures/math/projection.json';
@@ -30,6 +31,18 @@ describe('annual income-tax reserve allocation',()=>{
 });
 
 describe('chronological household projection and reconciliation',()=>{
+  it('retains mortgage comparison estimate assumptions in monthly, annual and overall reporting',()=>{
+    const plan=makeEstimatedMortgagePlan();
+    const loan=plan.properties[0]!.loans[0]!;
+    const result=calculateProjection(mustValidate({...plan,properties:[{...plan.properties[0]!,loans:[{...loan,originalPrincipalCents:1000000,proceedsQualification:{...loan.proceedsQualification,qualifiedPrincipalCents:{known:true,value:1000000}}}]}]}),loadRuleSet());
+    for(const year of result.years){
+      expect(year.tax.status).toBe('available');
+      if(year.tax.status==='available')expect(year.tax.value.selectedMethods).toEqual({federal:'standard',california:'standard'});
+    }
+    for(const report of [...result.months,...result.years,result]){
+      expect(report.provenance.flatMap(p=>p.assumptions)).toContain('Mortgage interest and average qualified debt are forecast estimates based on the loan schedule; actual balances or payments may differ.');
+    }
+  });
   it('keeps a fixed taxable deposit when an income stream overflows',()=>{
     const plan=gapPlan();
     const result=calculateProjection(mustValidate({...plan,otherIncome:[{id:'overflowing-income',name:'Income',amountCents:MAX_CENTS,frequency:'monthly',startDate:'2026-01-01',annualGrowthBps:0,classification:'ordinary-taxable',niitTreatment:'included'}]}),loadRuleSet());

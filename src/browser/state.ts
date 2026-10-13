@@ -6,7 +6,8 @@ import { Decimal } from '../engine/money';
 export type EditableSection='household'|'salaries'|'otherIncome'|'expenses'|'debts'|'accounts'|'contributions'|'properties'|'rentals';
 export type RawObject=Record<string,unknown>;
 export interface RecordDraft {readonly recordId:string;readonly section:EditableSection;readonly value:RawObject;readonly baseSnapshot?:string}
-export interface WorkspaceState {readonly savedPlan:PlanDocument;readonly drafts:Readonly<Record<string,RecordDraft>>;readonly projection:ProjectionResult;readonly persisted:boolean;readonly issues:readonly Issue[];readonly persistenceIssues:readonly Issue[]}
+export interface CashFlowAllocationDraft {readonly recordId:string;readonly value:RawObject;readonly baseSnapshot:string}
+export interface WorkspaceState {readonly allocationDraft?:CashFlowAllocationDraft;readonly savedPlan:PlanDocument;readonly drafts:Readonly<Record<string,RecordDraft>>;readonly projection:ProjectionResult;readonly persisted:boolean;readonly issues:readonly Issue[];readonly persistenceIssues:readonly Issue[]}
 export interface SaveRecordResult {readonly accepted:boolean;readonly persisted:boolean;readonly issues:readonly Issue[];readonly persistenceIssues:readonly Issue[]}
 export interface WorkspaceController {
   getState():WorkspaceState;

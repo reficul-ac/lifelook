@@ -1,3 +1,4 @@
+import type { CashFlowAllocationYear } from './cash/allocation-types';
 import type { Cents } from './model/plan';
 import type { Available, Coverage, Issue, RuleProvenance } from './model/results';
 import type { HouseholdTaxState } from './model/tax-state';
@@ -64,6 +65,7 @@ export interface MonthlyProjection extends ProjectionAmounts,ProjectionMetadata 
   readonly rsu?:Available<RsuPeriod>;
 }
 export interface AnnualProjection extends ProjectionAmounts,ProjectionMetadata {
+  readonly cashFlowAllocation?:Available<CashFlowAllocationYear>;
   readonly year:number;
   readonly fundingStatus:FundingStatus;
   readonly conditionalOnGap:boolean;

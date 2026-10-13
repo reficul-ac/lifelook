@@ -3,6 +3,7 @@ import { exportPlan, loadPlan, PLAN_STORAGE_KEY, restorePlan, savePlan, type Sto
 import { createPlan } from '../../src/engine/validation';
 import type { PlanDocument } from '../../src/engine/model/plan';
 import { makePlan } from '../helpers/plans';
+import { makeAllocationPlan, makeAllocationPolicy } from '../helpers/allocations';
 import { loadReferences } from '../helpers/references';
 
 function memoryStorage() {
@@ -92,5 +93,34 @@ describe('versioned atomic plan storage', () => {
     expect(result).toMatchObject({ accepted: true, persisted: true, plan: fixture });
     expect(storage.writes()).toBe(1);
     expect(JSON.parse(storage.values.get(PLAN_STORAGE_KEY)!)).toEqual(fixture);
+  });
+});
+
+// Policies remain ordinary schema-v1 inputs; restores share the whole-plan validator.
+describe('allocation backup compatibility', () => {
+  it('accepts old backups without adding allocation data', () => {
+    const storage = memoryStorage(), old = makePlan();
+    const restored = restorePlan(exportPlan(old), makePlan({ revision: 3 }), storage.port);
+    expect(restored).toMatchObject({ accepted: true, persisted: true, plan: old });
+    expect(JSON.parse(exportPlan(restored.plan))).not.toHaveProperty('cashFlowAllocation');
+  });
+  it('round-trips applied policy inputs', () => {
+    const storage = memoryStorage(), plan = makeAllocationPlan({ cashFlowAllocation: makeAllocationPolicy({ entries: [{ id: 'cash-row', priority: 0, destination: { kind: 'cash' }, amount: { kind: 'percent', percentBps: 10000 } }] }) });
+    expect(restorePlan(exportPlan(plan), makePlan(), storage.port).accepted).toBe(true);
+    expect(loadPlan(storage.port)).toMatchObject({ status: 'loaded', plan });
+    expect(JSON.parse(exportPlan(plan))).toEqual(plan);
+  });
+  it('retains current plan and recoverable invalid policy bytes', () => {
+    const storage = memoryStorage(), current = makePlan({ revision: 8 });
+    savePlan(storage.port, current);
+    const invalid = makeAllocationPlan({ cashFlowAllocation: makeAllocationPolicy({ entries: [{ id: 'bad-row', priority: 0, destination: { kind: 'cash' }, amount: { kind: 'percent', percentBps: 10001 } }] }) });
+    const raw = JSON.stringify(invalid), before = storage.values.get(PLAN_STORAGE_KEY);
+    expect(restorePlan(raw, current, storage.port)).toMatchObject({ accepted: false, plan: current });
+    expect(storage.values.get(PLAN_STORAGE_KEY)).toBe(before);
+    expect(storage.writes()).toBe(1);
+    storage.values.set(PLAN_STORAGE_KEY, raw);
+    expect(loadPlan(storage.port)).toMatchObject({ status: 'invalid', raw });
+    expect(storage.values.get(PLAN_STORAGE_KEY)).toBe(raw);
+    expect(storage.writes()).toBe(1);
   });
 });

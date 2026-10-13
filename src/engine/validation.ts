@@ -103,6 +103,74 @@ class Validator {
   }
 }
 
+/** Saved allocation links are validated against the current saved account and salary records. */
+function validateCashFlowAllocation(v: Validator, value: unknown, accounts: ReadonlyMap<string, Obj>, salaries: ReadonlyMap<string, Obj>): void {
+  const field = 'cashFlowAllocation';
+  const policy = v.object(value, field, v.planId);
+  if (!policy) return;
+  const policyId = recordId(policy) || v.planId;
+  const identity = (o: Obj, path: string): string | undefined => {
+    const id = typeof o.id === 'string' ? o.id : policyId;
+    if (!v.text(o.id, `${path}.id`, id)) return id;
+    if (v.ids.has(o.id) || o.id === v.planId) v.issue(`${path}.id`, id, 'IDs must be unique across all document records.', 'duplicate-id');
+    else v.ids.set(o.id, path);
+    return id;
+  };
+  identity(policy, field);
+  const sponsors = new Map<string, unknown>();
+  const destination = (value: unknown, path: string, id: string | undefined): Obj | undefined => {
+    const dest = v.object(value, path, id);
+    if (!dest) return;
+    v.enum(dest.kind, ['cash', 'account'], `${path}.kind`, id);
+    if (dest.kind === 'cash') {
+      if (dest.sponsoringSalaryId !== undefined) v.issue(`${path}.sponsoringSalaryId`, id, 'Cash cannot reference a sponsoring salary.');
+      if (dest.accountId !== undefined) v.issue(`${path}.accountId`, id, 'Cash cannot reference an investment account.');
+    }
+    if (dest.kind !== 'account') return dest;
+    if (!v.text(dest.accountId, `${path}.accountId`, id)) return dest;
+    const account = accounts.get(dest.accountId);
+    if (!account) v.issue(`${path}.accountId`, id, 'The referenced account does not exist.', 'dangling-reference');
+    else if (account.type === 'rsu') v.issue(`${path}.accountId`, id, 'RSU accounts cannot receive cash allocations.');
+    const workplace = account?.type === 'traditional-401k' || account?.type === 'roth-401k';
+    if (workplace) {
+      if (v.text(dest.sponsoringSalaryId, `${path}.sponsoringSalaryId`, id)) {
+        const salary = salaries.get(dest.sponsoringSalaryId);
+        if (!salary) v.issue(`${path}.sponsoringSalaryId`, id, 'The referenced salary does not exist.', 'dangling-reference');
+        else if (salary.ownerId !== account.ownerId) v.issue(`${path}.sponsoringSalaryId`, id, 'The sponsoring salary must belong to the account owner.');
+      }
+      if (sponsors.has(dest.accountId) && sponsors.get(dest.accountId) !== dest.sponsoringSalaryId) v.issue(`${path}.sponsoringSalaryId`, id, 'Repeated workplace destinations must use the same sponsoring salary.');
+      sponsors.set(dest.accountId, dest.sponsoringSalaryId);
+    } else if (dest.sponsoringSalaryId !== undefined) v.issue(`${path}.sponsoringSalaryId`, id, 'Only workplace accounts may reference a sponsoring salary.');
+    return dest;
+  };
+  const seen = new Set<string>();
+  let percentTotal = new Decimal(0);
+  v.array(policy.entries, `${field}.entries`, policyId).forEach((value, index) => {
+    const path = `${field}.entries[${index}]`;
+    const entry = v.object(value, path, policyId);
+    if (!entry) return;
+    const id = identity(entry, path);
+    v.integer(entry.priority, `${path}.priority`, id, 0);
+    const dest = destination(entry.destination, `${path}.destination`, id);
+    const key = dest?.kind === 'cash' ? 'cash' : dest?.kind === 'account' && typeof dest.accountId === 'string' ? `account:${dest.accountId}` : undefined;
+    if (key !== undefined) {
+      if (seen.has(key)) v.issue(`${path}.destination`, id, 'Only one primary entry is allowed per destination.');
+      seen.add(key);
+    }
+    const amount = v.object(entry.amount, `${path}.amount`, id);
+    if (!amount) return;
+    v.enum(amount.kind, ['percent', 'max-annual'], `${path}.amount.kind`, id);
+    if (amount.kind === 'percent' && v.integer(amount.percentBps, `${path}.amount.percentBps`, id, 0, 10000)) percentTotal = percentTotal.plus(amount.percentBps as number);
+    if (amount.kind === 'max-annual') {
+      const account = dest?.kind === 'account' && typeof dest.accountId === 'string' ? accounts.get(dest.accountId) : undefined;
+      if (!account || !['traditional-401k', 'roth-401k', 'traditional-ira', 'roth-ira'].includes(String(account.type))) v.issue(`${path}.amount.kind`, id, 'Annual maximums require a supported retirement account.');
+    }
+  });
+  if (percentTotal.gt(10000)) v.issue(`${field}.entries`, policyId, 'Percentage targets cannot total more than 100%.');
+  const overflow = v.object(policy.overflow, `${field}.overflow`, policyId);
+  if (overflow) destination(overflow.destination, `${field}.overflow.destination`, identity(overflow, `${field}.overflow`));
+}
+
 function deepFreeze<T>(value: T): T {
   if (value !== null && typeof value === 'object') { Object.values(value).forEach(deepFreeze); Object.freeze(value); }
   return value;
@@ -454,6 +522,8 @@ export function validatePlan(raw: unknown): ValidationResult {
       catch (error) { if (!(error instanceof RangeError)) throw error; v.issue(expense.allocationOverride ? 'allocationOverride' : 'use', expense.id, error.message); }
     }
   }
+
+  if (root.cashFlowAllocation !== undefined) validateCashFlowAllocation(v, root.cashFlowAllocation, accountById, salaryById);
 
   // Aggregate checks use decimals; individually valid amounts must not overflow a subtotal.
   if (v.issues.length === 0) {

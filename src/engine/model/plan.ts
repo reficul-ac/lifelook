@@ -136,6 +136,18 @@ export interface ContributionRule {
   readonly amount: ContributionAmount;
   readonly sponsoringSalaryId?: string;
 }
+export type AllocationDestination = Readonly<{ kind: 'cash' }> | Readonly<{ kind: 'account'; accountId: string; sponsoringSalaryId?: string }>;
+export interface CashFlowAllocationEntry {
+  readonly id: string;
+  readonly priority: number;
+  readonly destination: AllocationDestination;
+  readonly amount: Readonly<{ kind: 'percent'; percentBps: BasisPoints }> | Readonly<{ kind: 'max-annual' }>;
+}
+export interface CashFlowAllocationPolicy {
+  readonly id: string;
+  readonly entries: readonly CashFlowAllocationEntry[];
+  readonly overflow: Readonly<{ id: string; destination: AllocationDestination }>;
+}
 export interface Debt {
   readonly id: string;
   readonly name: string;
@@ -255,6 +267,7 @@ export interface PlanDocument {
   readonly expenses: readonly Expense[];
   readonly accounts: readonly Account[];
   readonly contributions: readonly ContributionRule[];
+  readonly cashFlowAllocation?: CashFlowAllocationPolicy;
   readonly debts: readonly Debt[];
   readonly properties: readonly Property[];
   readonly rentals: readonly RentalUnit[];

@@ -13,6 +13,7 @@ import { allocationFundingCeilings, scheduleAllocationFunding, settleAllocationT
 import { allocateAnnualTax } from './tax-timing';
 import { resolveWorkplaceContributions } from '../tax/workplace';
 import { Decimal, settleCents, assertMonetaryRange } from '../money';
+import { backdoorRothReadiness } from './backdoor-roth';
 
 
 export interface AllocationYearInput {
@@ -20,6 +21,7 @@ export interface AllocationYearInput {
  readonly property: PropertyYearFacts; readonly loans: readonly LoanSchedule[]; readonly opening: HouseholdTaxState; readonly rules: YearRules;
  readonly cashIncomeByMonth: readonly Cents[]; readonly expensesByMonth: readonly Cents[]; readonly debtPaymentsByMonth: readonly Cents[];
  readonly rsuWithholdingByMonth: readonly Cents[]; readonly taxWeightsByMonth: readonly Cents[];
+ readonly openingAccountBalances?: ReadonlyMap<string, Available<Cents>>;
 }
 export interface ResolvedAllocationYear {
  readonly household: HouseholdYear; readonly requests: readonly ContributionRequest[]; readonly report: CashFlowAllocationYear;
@@ -46,15 +48,16 @@ function cashTiming(input: AllocationYearInput, household: HouseholdYear) {
   const preTransferCashByMonth = input.cashIncomeByMonth.map((value, month) => sum([value, -input.expensesByMonth[month]!, -input.debtPaymentsByMonth[month]!, -household.payroll.months[month]!.totalCents, -incomeTaxByMonth[month]!, input.rsuWithholdingByMonth[month]!]));
   return { incomeTaxByMonth, preTransferCashByMonth };
 }
-function requestsFor(adapter: AllocationAdapter, year: number, targets: readonly FundingTarget[], ceilings: readonly Cents[], employers: readonly EmployerFundingBudget[]): readonly ContributionRequest[] {
+function requestsFor(adapter: AllocationAdapter, year: number, targets: readonly FundingTarget[], ceilings: readonly Cents[], employers: readonly EmployerFundingBudget[], routeReadiness: ReadonlyMap<string, Available<true>>): readonly ContributionRequest[] {
   const schedule = scheduleAllocationFunding(targets, ceilings, employers);
   return targets.flatMap(target => {
     const source = adapter.sourceMap.get(target.ruleId)!;
     if (source.destination.kind !== 'account') return [];
     const destination = source.destination;
-    const account = adapter.plan.accounts.find(account => account.id === destination.accountId)!;
+    const account = adapter.plan.accounts.find(account => account.id === (destination.backdoorRoth?.traditionalIraAccountId ?? destination.accountId))!;
     const sponsor = adapter.plan.salaries.find(salary => salary.id === destination.sponsoringSalaryId);
     return schedule.requestsByRule.get(target.ruleId)!.flatMap((requestedCents, index) => requestedCents ? [{ ruleId: target.ruleId, accountId: account.id, ownerId: account.ownerId, year, month: index + 1, priority: target.priority, requestedCents,
+      ...(destination.backdoorRoth ? { backdoorRoth: { rothIraAccountId: destination.accountId, readiness: routeReadiness.get(target.ruleId)! } } : {}),
       ...(sponsor ? { sponsoringSalaryId: sponsor.id, employerId: sponsor.employerId } : {}) }] : []);
   });
 }
@@ -88,6 +91,7 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
   const existingBaseline = evaluate(input.legacyRequests);
   const existingMissing = readiness(existingBaseline);
   if (existingMissing) return existingMissing;
+  const routeReadiness = new Map([...adapter.sourceMap].map(([id, source]) => [id, backdoorRothReadiness(input.plan, source, input.cash.year, input.opening, existingBaseline.contributions, input.openingAccountBalances)]));
   const workplace = resolveWorkplaceContributions(adapter.plan, input.cash, input.legacyRequests, input.rules);
   const employers = workplace.compensationByEmployer.map(employer => ({ key: JSON.stringify([employer.ownerId, employer.employerId]), monthlyCents: employer.monthlyCents.map((amount, month) => Math.max(0, amount - sum(workplace.records.filter(record => record.ownerId === employer.ownerId && record.month === month + 1 && input.legacyRequests.find(request => request.ruleId === record.ruleId)?.employerId === employer.employerId).map(record => record.eligibleCents.status === 'available' ? record.eligibleCents.value : 0)))) }));
   const locate = (issues: readonly Issue[], ruleId: string) => {
@@ -151,7 +155,7 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
           return { ...prior, allowedMonths: prior.allowedMonths.filter(month => month < firstMonth || (month === firstMonth && sameMonthFirst)) };
         });
         const candidate = [...earlier, { ...target, requestedCents: amount, allowedMonths: target.allowedMonths.filter(month => month >= firstMonth) }];
-        const requests = [...input.legacyRequests, ...requestsFor(adapter, input.cash.year, candidate, limits, employers)];
+        const requests = [...input.legacyRequests, ...requestsFor(adapter, input.cash.year, candidate, limits, employers, routeReadiness)];
         const actual = evaluate(requests);
         const contextual = support.length ? evaluate([...requests, ...support]) : actual;
         const household = support.length ? { ...contextual, contributions: contextual.contributions.filter(record => !supportIds.has(record.ruleId)) } : actual;
@@ -320,7 +324,7 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
       if (verifiedSignature !== signature) return nonconvergence();
       const depositsMatch = verified.contributions.filter(record => adapter.sourceMap.has(record.ruleId)).every(record => record.eligibleCents.status === 'available' && record.eligibleCents.value === record.requestedCents);
       const reportMatches = verification.value.report.originalCashFlowCents === sum(verifiedTiming.preTransferCashByMonth)
-        && verification.value.report.accounts.every(account => account.actualCents === sum(verified.contributions.filter(record => record.accountId === account.accountId).map(record => record.eligibleCents.status === 'available' ? record.eligibleCents.value : 0)));
+        && verification.value.report.accounts.every(account => account.actualCents === sum(verified.contributions.filter(record => (record.conversionRothAccountId ?? record.accountId) === account.accountId).map(record => record.eligibleCents.status === 'available' ? record.eligibleCents.value : 0)));
       const legacyPreserved = existingBaseline.contributions.every(record => verified.contributions.some(final => final.ruleId === record.ruleId && final.month === record.month && final.eligibleCents.status === 'available' && record.eligibleCents.status === 'available' && final.eligibleCents.value >= record.eligibleCents.value));
       if (!depositsMatch || !reportMatches || !legacyPreserved) return nonconvergence();
       return available({ household: verified, requests: verification.value.requests, report: verification.value.report, ...verifiedTiming });

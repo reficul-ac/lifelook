@@ -17,6 +17,8 @@ export interface ContributionRecord {
   readonly nondeductibleCents: Available<Cents>;
   readonly preventedCents: Available<Cents>;
   readonly reasons: readonly Issue[];
+  /** An accepted same-year conversion of this contribution; never a second cash deposit. */
+  readonly conversionRothAccountId?: string;
 }
 export interface IncomeAdjustments {
   readonly federalCents: Cents;

@@ -136,7 +136,12 @@ export interface ContributionRule {
   readonly amount: ContributionAmount;
   readonly sponsoringSalaryId?: string;
 }
-export type AllocationDestination = Readonly<{ kind: 'cash' }> | Readonly<{ kind: 'account'; accountId: string; sponsoringSalaryId?: string }>;
+export interface BackdoorRothRoute {
+  readonly traditionalIraAccountId: string;
+  /** Confirms no other traditional/SEP/SIMPLE IRA balances, rollovers, prior basis, or federal/CA basis differences. */
+  readonly cleanIraHistory: History<boolean>;
+}
+export type AllocationDestination = Readonly<{ kind: 'cash' }> | Readonly<{ kind: 'account'; accountId: string; sponsoringSalaryId?: string; backdoorRoth?: BackdoorRothRoute }>;
 export interface CashFlowAllocationEntry {
   readonly id: string;
   readonly priority: number;

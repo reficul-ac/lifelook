@@ -78,9 +78,11 @@ export function resolveIraContributions(plan: ValidatedPlan, facts: PreIraFacts,
     if (account?.type === 'traditional-401k' || account?.type === 'roth-401k') continue;
     const rule = plan.contributions.find(r => r.id === request.ruleId);
     const budget = budgets.get(request.ownerId);
+    const conversionTarget = request.backdoorRoth ? plan.accounts.find(account => account.id === request.backdoorRoth!.rothIraAccountId) : undefined;
     const reasons: Issue[] = [];
     let eligibleCents: Available<Cents>;
-    if (!account || !rule || !budget || rule.accountId !== account.id || account.ownerId !== request.ownerId || request.year !== year || !Number.isInteger(request.month) || request.month < 1 || request.month > 12 || !Number.isSafeInteger(request.requestedCents) || request.requestedCents < 0) {
+    if (!account || !rule || !budget || rule.accountId !== account.id || account.ownerId !== request.ownerId || request.year !== year || !Number.isInteger(request.month) || request.month < 1 || request.month > 12 || !Number.isSafeInteger(request.requestedCents) || request.requestedCents < 0
+      || (request.backdoorRoth && (account.type !== 'traditional-ira' || conversionTarget?.type !== 'roth-ira' || conversionTarget.ownerId !== request.ownerId))) {
       reasons.push(problem(request.ruleId, 'unsupported-contribution-link', 'accountId', 'The request has conflicting owner, account, rule, year or month facts.', 'Regenerate requests from the validated plan.'));
       eligibleCents = { status: 'unsupported-case', issues: reasons };
     } else if (account.type === 'taxable-brokerage') eligibleCents = available(request.requestedCents);
@@ -96,15 +98,22 @@ export function resolveIraContributions(plan: ValidatedPlan, facts: PreIraFacts,
         unresolvedPriorFunding = reasons;
       } else {
         const funded = Math.min(request.requestedCents, capacity.value);
-        eligibleCents = available(funded);
-        ownerUsed.set(request.ownerId, sumCents([ownerUsed.get(request.ownerId) ?? 0, funded]));
-        jointUsed = sumCents([jointUsed, funded]);
-        if (account.type === 'roth-ira') rothUsed.set(request.ownerId, sumCents([rothUsed.get(request.ownerId) ?? 0, funded]));
+        if (funded > 0 && request.backdoorRoth && request.backdoorRoth.readiness.status !== 'available') {
+          eligibleCents = request.backdoorRoth.readiness;
+          reasons.push(...request.backdoorRoth.readiness.issues);
+          unresolvedPriorFunding = reasons;
+        } else {
+          eligibleCents = available(funded);
+          ownerUsed.set(request.ownerId, sumCents([ownerUsed.get(request.ownerId) ?? 0, funded]));
+          jointUsed = sumCents([jointUsed, funded]);
+          if (account.type === 'roth-ira') rothUsed.set(request.ownerId, sumCents([rothUsed.get(request.ownerId) ?? 0, funded]));
+        }
       }
     }
     if (eligibleCents.status === 'available' && eligibleCents.value < request.requestedCents) reasons.push(problem(request.ruleId, 'ira-contribution-capped', 'amount', 'The request exceeds the owner IRA, compensation or Roth income-eligibility limit.', 'Reduce this rule or adjust its priority; prevented cents remain in cash.'));
     const preventedCents = mapAvailableCents(eligibleCents, value => request.requestedCents - value);
-    records.push({ ruleId: request.ruleId, accountId: request.accountId, ownerId: request.ownerId, year, month: request.month, requestedCents: request.requestedCents, eligibleCents, deductibleCents: available(0), nondeductibleCents: eligibleCents, preventedCents, reasons });
+    records.push({ ruleId: request.ruleId, accountId: request.accountId, ownerId: request.ownerId, year, month: request.month, requestedCents: request.requestedCents, eligibleCents, deductibleCents: available(0), nondeductibleCents: eligibleCents, preventedCents, reasons,
+      ...(request.backdoorRoth ? { conversionRothAccountId: request.backdoorRoth.rothIraAccountId } : {}) });
   }
   // Deduction priority is applied to funded traditional deposits only. Coverage
   // can block the deduction without preventing otherwise legal funding.
@@ -112,6 +121,17 @@ export function resolveIraContributions(plan: ValidatedPlan, facts: PreIraFacts,
   const finalized = records.map(record => {
     const account = plan.accounts.find(a => a.id === record.accountId);
     if (account?.type !== 'traditional-ira') return record;
+    // Explicit nondeductible election applies independently to federal and CA.
+    if (record.conversionRothAccountId) {
+      if (record.eligibleCents.status === 'available' && record.eligibleCents.value > 0 && records.some(other => other.ownerId === record.ownerId && !other.conversionRothAccountId
+        && plan.accounts.find(account => account.id === other.accountId)?.type === 'traditional-ira'
+        && (other.eligibleCents.status !== 'available' || other.eligibleCents.value > 0))) {
+        const reason = problem(record.ruleId, 'unsupported-backdoor-other-ira-funding', 'destination.backdoorRoth', 'Other traditional IRA funding in this year requires a broader basis and conversion calculation.', 'Use only the clean contribution-and-conversion route or supply a separately supported pro-rata calculation.');
+        const unresolved: Available<Cents> = { status: 'unsupported-case', issues: [reason] };
+        return { ...record, eligibleCents: unresolved, nondeductibleCents: unresolved, preventedCents: unresolved, reasons: [...record.reasons, reason] };
+      }
+      return record;
+    }
     const budget = budgets.get(record.ownerId)!.deduction;
     const deductibleCents = record.eligibleCents.status === 'available' && record.eligibleCents.value === 0 ? available(0) : combineAvailableCents([record.eligibleCents, budget], values => Math.min(values[0]!, Math.max(0, values[1]! - (deductibleUsed.get(record.ownerId) ?? 0))));
     if (deductibleCents.status === 'available') deductibleUsed.set(record.ownerId, sumCents([deductibleUsed.get(record.ownerId) ?? 0, deductibleCents.value]));
@@ -125,7 +145,8 @@ export function resolveIraContributions(plan: ValidatedPlan, facts: PreIraFacts,
     const deduction = combineAvailableCents(traditional.map(record => record.deductibleCents));
     const newBasisCents = combineAvailableCents(traditional.map(record => record.nondeductibleCents));
     const openingBasis: History<Cents> = rental.closing.iraBasisByOwner[filer.id] ?? { known: false };
-    const closingBasis: History<Cents> = openingBasis.known && newBasisCents.status === 'available' ? { known: true, value: sumCents([openingBasis.value, newBasisCents.value]) } : { known: false };
+    const convertedBasisCents = combineAvailableCents(traditional.filter(record => record.conversionRothAccountId).map(record => record.eligibleCents));
+    const closingBasis: History<Cents> = openingBasis.known && newBasisCents.status === 'available' && convertedBasisCents.status === 'available' ? { known: true, value: sumCents([openingBasis.value, newBasisCents.value, -convertedBasisCents.value]) } : { known: false };
     const budget = budgets.get(filer.id)!;
     return { ownerId: filer.id, compensationCents: budget.compensation, ownerLimitCents: budget.limit, traditionalDeductionLimitCents: budget.deduction, rothContributionLimitCents: budget.roth, eligibleCents: combineAvailableCents(ownerRecords.map(record => record.eligibleCents)), federalDeductibleCents: deduction, californiaDeductibleCents: deduction, nondeductibleCents: combineAvailableCents(ownerRecords.map(record => record.nondeductibleCents)), newBasisCents, openingBasis, closingBasis };
   });

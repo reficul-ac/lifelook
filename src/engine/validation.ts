@@ -118,11 +118,14 @@ function validateCashFlowAllocation(v: Validator, value: unknown, accounts: Read
   };
   identity(policy, field);
   const sponsors = new Map<string, unknown>();
+  const routes: { source: string; target: string; path: string; id: string | undefined }[] = [];
+  const directTargets = new Set<string>();
   const destination = (value: unknown, path: string, id: string | undefined): Obj | undefined => {
     const dest = v.object(value, path, id);
     if (!dest) return;
     v.enum(dest.kind, ['cash', 'account'], `${path}.kind`, id);
     if (dest.kind === 'cash') {
+      if (dest.backdoorRoth !== undefined) v.issue(`${path}.backdoorRoth`, id, 'A backdoor route requires a Roth IRA destination.');
       if (dest.sponsoringSalaryId !== undefined) v.issue(`${path}.sponsoringSalaryId`, id, 'Cash cannot reference a sponsoring salary.');
       if (dest.accountId !== undefined) v.issue(`${path}.accountId`, id, 'Cash cannot reference an investment account.');
     }
@@ -131,6 +134,19 @@ function validateCashFlowAllocation(v: Validator, value: unknown, accounts: Read
     const account = accounts.get(dest.accountId);
     if (!account) v.issue(`${path}.accountId`, id, 'The referenced account does not exist.', 'dangling-reference');
     else if (account.type === 'rsu') v.issue(`${path}.accountId`, id, 'RSU accounts cannot receive cash allocations.');
+    if (dest.backdoorRoth !== undefined) {
+      const route = v.object(dest.backdoorRoth, `${path}.backdoorRoth`, id);
+      if (account?.type !== 'roth-ira') v.issue(`${path}.backdoorRoth`, id, 'A backdoor route requires a Roth IRA destination.');
+      if (route) {
+        v.booleanHistory(route.cleanIraHistory, `${path}.backdoorRoth.cleanIraHistory`, id);
+        if (v.text(route.traditionalIraAccountId, `${path}.backdoorRoth.traditionalIraAccountId`, id)) {
+          const source = accounts.get(route.traditionalIraAccountId);
+          if (!source) v.issue(`${path}.backdoorRoth.traditionalIraAccountId`, id, 'The linked traditional IRA does not exist.', 'dangling-reference');
+          else if (source.type !== 'traditional-ira' || source.ownerId !== account?.ownerId) v.issue(`${path}.backdoorRoth.traditionalIraAccountId`, id, 'The linked account must be a traditional IRA belonging to the Roth IRA owner.');
+          routes.push({ source: route.traditionalIraAccountId, target: dest.accountId, path, id });
+        }
+      }
+    } else directTargets.add(dest.accountId);
     const workplace = account?.type === 'traditional-401k' || account?.type === 'roth-401k';
     if (workplace) {
       if (v.text(dest.sponsoringSalaryId, `${path}.sponsoringSalaryId`, id)) {
@@ -169,6 +185,10 @@ function validateCashFlowAllocation(v: Validator, value: unknown, accounts: Read
   if (percentTotal.gt(10000)) v.issue(`${field}.entries`, policyId, 'Percentage targets cannot total more than 100%.');
   const overflow = v.object(policy.overflow, `${field}.overflow`, policyId);
   if (overflow) destination(overflow.destination, `${field}.overflow.destination`, identity(overflow, `${field}.overflow`));
+  for (const route of routes) {
+    if (directTargets.has(route.source)) v.issue(`${route.path}.backdoorRoth.traditionalIraAccountId`, route.id, 'The conversion source cannot also receive a direct cash allocation.');
+    if (routes.some(other => other.source === route.source && other.target !== route.target)) v.issue(`${route.path}.backdoorRoth.traditionalIraAccountId`, route.id, 'A traditional IRA source cannot fund different backdoor Roth destinations.');
+  }
 }
 
 function deepFreeze<T>(value: T): T {

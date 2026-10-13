@@ -1,0 +1,2 @@
+# Preserve the downloaded government source byte-for-byte, including its whitespace.
+sources/2025-reference/irs-i8606.html -whitespace

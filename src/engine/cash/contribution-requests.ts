@@ -2,11 +2,14 @@ import type { Cents, ValidatedPlan } from '../model/plan';
 import { Decimal, settleSeries } from '../money';
 import { calendarDate, daysInMonth } from '../dates';
 import type { CashYear } from './income';
+import type { Available } from '../model/results';
 
 export interface ContributionRequest {
   readonly ruleId: string; readonly accountId: string; readonly ownerId: string;
   readonly year: number; readonly month: number; readonly priority: number; readonly requestedCents: Cents;
   readonly sponsoringSalaryId?: string; readonly employerId?: string;
+  /** Generated allocation request only: elect nondeductible treatment in both books and immediately convert accepted funding. */
+  readonly backdoorRoth?: Readonly<{ rothIraAccountId: string; readiness: Available<true> }>;
 }
 export function requestContributions(plan: ValidatedPlan, cash: CashYear): readonly ContributionRequest[] {
   const requests:ContributionRequest[]=[];

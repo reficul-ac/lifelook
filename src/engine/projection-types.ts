@@ -22,6 +22,8 @@ export interface AccountProjection {
   readonly closingCents:Available<Cents>;
   readonly vestedCents?:Available<Cents>;
   readonly withholdingCents?:Available<Cents>;
+  readonly conversionInCents?:Available<Cents>;
+  readonly conversionOutCents?:Available<Cents>;
 }
 export interface RsuPeriod {
   readonly taxableIncomeCents:Cents;

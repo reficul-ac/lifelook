@@ -7,6 +7,7 @@ import { projectRsuAccounts, type RsuGrantMonth, type RsuProjection } from './eq
 import { addRsuWages } from './tax/rsu-income';
 import { requestContributions, type ContributionRequest } from './cash/contribution-requests';
 import { resolveAllocationYear, type ResolvedAllocationYear } from './cash/cash-flow-allocation';
+import { backdoorRothProvenance } from './cash/backdoor-roth';
 import { calculateLoanSchedule, type LoanSchedule, type OpeningLoanProvenance } from './property/loans';
 import { buildPropertyFacts } from './property/facts';
 import { growMonth, propertyRate } from './growth';
@@ -160,6 +161,7 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
           const property=buildPropertyFacts(plan,taxCash.value,loans,opening,rules.value);
           const total=(values:readonly Cents[])=>settleCents(values.reduce((sum,value)=>sum.plus(value),new Decimal(0)));
           return resolveAllocationYear({plan,cash:taxCash.value,legacyRequests:knownRequests,property,loans,opening,rules:rules.value,
+            openingAccountBalances:new Map([...accountExact].map(([id,balance])=>[id,balance.status==='available'?available(settleCents(balance.value)):balance])),
             cashIncomeByMonth:cash.value.months.map(m=>m.grossIncomeCents),expensesByMonth:cash.value.months.map(m=>m.expensesCents),
             debtPaymentsByMonth:Array.from({length:12},(_,i)=>total(yearLoans.map(s=>{if(s.status!=='available')throw new Error('Unavailable loan');return s.value.months[i]!.paymentCents;}))),
             rsuWithholdingByMonth:Array.from({length:12},(_,i)=>total(rsuYear.value.filter(g=>g.month===i+1).map(g=>g.withholdingCents))),
@@ -214,8 +216,9 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
     const baseCoverage=household.status==='available'?household.value.coverage:checkCoverage(plan,year);
     const coverage:Coverage={completeForModeledScope:baseCoverage.completeForModeledScope&&household.status==='available',completeHouseholdLiability:baseCoverage.completeHouseholdLiability&&household.status==='available'&&carriedDistributionIssues.length===0,issues:uniqueIssues([...baseCoverage.issues,...carriedDistributionIssues,...(household.status==='available'?[]:household.issues)])};
     const rsuProvenance:RuleProvenance[] = rsuAccounts.length?[{status:'projected',ruleVersion:'rsu-settle-at-vest.1',baselineYear:2026,applicableYear:year,sources:['https://www.irs.gov/pub/irs-pdf/p5992.pdf','https://www.irs.gov/publications/p15','https://www.irs.gov/publications/p15a','https://www.irs.gov/publications/p551','https://www.ftb.ca.gov/forms/misc/1004.html','https://edd.ca.gov/en/payroll_taxes/What_Are_Wages'],assumptions:['RSU shares are delivered at each vest; deferred settlement tax timing requires a separate model.','Current share price is assumed on January 1 of the forecast start year, compounds between any entered price targets, and uses the entered effective annual rate after the final target or throughout when no targets are entered.','Sell-to-cover uses the entered fractional-share percentage at the vest valuation with no capital gain or fee; its proceeds fund assessed tax reserves rather than establish a final tax rate.','Income-tax reserve timing is a planning allocation, not an actual payroll-remittance or refund schedule.']}]:[];
-    allProvenance.push(...rsuProvenance);
-    const provenance=uniqueProvenance([...(rules.status==='available'?Object.values(rules.value.provenance):[]),...rsuProvenance]);
+    const conversionProvenance=allocationSources.some(source=>source.destination.kind==='account'&&source.destination.backdoorRoth)?[backdoorRothProvenance(year)]:[];
+    allProvenance.push(...rsuProvenance,...conversionProvenance);
+    const provenance=uniqueProvenance([...(rules.status==='available'?Object.values(rules.value.provenance):[]),...rsuProvenance,...conversionProvenance]);
     const yearMonths:MonthlyProjection[]=[];
     for(let month=1;month<=12;month++){
       const fieldIssuesStart=allIssues.length,i=month-1;
@@ -246,16 +249,22 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
           return {accountId:account.id,openingCents:amount('openingValueCents'),contributionCents:available(0),growthCents:amount('growthCents'),closingCents:amount('closingValueCents'),vestedCents:amount('vestedValueCents'),withholdingCents:amount('withholdingCents')};
         }
         const previous=accountExact.get(account.id)!;
-        const unresolved=[...plan.contributions.filter(c=>c.accountId===account.id).map(c=>requestResults.get(c.id)!),...allocationSources.filter(source=>source.destination.kind==='account'&&source.destination.accountId===account.id).map(source=>requestResults.get(source.id)!)].filter(r=>r.status!=='available');
+        const unresolved=[...plan.contributions.filter(c=>c.accountId===account.id).map(c=>requestResults.get(c.id)!),...allocationSources.filter(source=>source.destination.kind==='account'&&(source.destination.backdoorRoth?.traditionalIraAccountId??source.destination.accountId)===account.id).map(source=>requestResults.get(source.id)!)].filter(r=>r.status!=='available');
         const contributionCents=sum([...monthlyRecords.filter(r=>r.accountId===account.id).map(r=>r.eligibleCents),...unresolved],year,'contributionCents',account.id);
+        const conversionSources=allocationSources.filter(source=>source.destination.kind==='account'&&source.destination.backdoorRoth&&(source.destination.accountId===account.id||source.destination.backdoorRoth.traditionalIraAccountId===account.id));
+        const unresolvedConversions=conversionSources.map(source=>requestResults.get(source.id)!).filter(r=>r.status!=='available');
+        const conversionInCents=sum([...monthlyRecords.filter(r=>r.conversionRothAccountId===account.id).map(r=>r.eligibleCents),...unresolvedConversions],year,'conversionInCents',account.id);
+        const conversionOutCents=sum([...monthlyRecords.filter(r=>r.accountId===account.id&&r.conversionRothAccountId).map(r=>r.eligibleCents),...unresolvedConversions],year,'conversionOutCents',account.id);
+        const conversions=conversionSources.length?{conversionInCents,conversionOutCents}:{};
+        const netDepositCents=sum([contributionCents,conversionInCents,conversionOutCents.status==='available'?available(-conversionOutCents.value):conversionOutCents],year,'netDepositCents',account.id);
         const openingCents=previous.status==='available'?range(account.id,year,'openingCents',()=>settleCents(previous.value)):previous;
-        if(previous.status!=='available')return {accountId:account.id,openingCents,contributionCents,growthCents:previous,closingCents:previous};
-        const growth=range(account.id,year,'growthCents',()=>growMonth(previous.value,account.annualGrowthBps,contributionCents.status==='available'?contributionCents.value:0));
+        if(previous.status!=='available')return {accountId:account.id,openingCents,contributionCents,growthCents:previous,closingCents:previous,...conversions};
+        const growth=range(account.id,year,'growthCents',()=>growMonth(previous.value,account.annualGrowthBps,netDepositCents.status==='available'?netDepositCents.value:0));
         const growthCents=growth.status==='available'?available(growth.value.growthCents):growth;
-        const closingCents:Available<Cents>=growth.status!=='available'?growth:contributionCents.status!=='available'?contributionCents:available(growth.value.closingCents);
-        if(growth.status==='available'&&contributionCents.status==='available')accountExact.set(account.id,available(growth.value.closingExact));
+        const closingCents:Available<Cents>=growth.status!=='available'?growth:netDepositCents.status!=='available'?netDepositCents:available(growth.value.closingCents);
+        if(growth.status==='available'&&netDepositCents.status==='available')accountExact.set(account.id,available(growth.value.closingExact));
         else if(closingCents.status!=='available')accountExact.set(account.id,closingCents);
-        return {accountId:account.id,openingCents,contributionCents,growthCents,closingCents};
+        return {accountId:account.id,openingCents,contributionCents,growthCents,closingCents,...conversions};
       });
       const loans:LoanProjection[]=declaredLoans.map(({loan},index)=>{
         const schedule=yearLoans[index]!;

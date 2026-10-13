@@ -23,7 +23,7 @@ export function createAllocationAdapter(plan: ValidatedPlan, year: number): Allo
     // Policy IDs are globally unique. Removing the policy before validation lets
     // descriptors reuse their source IDs without changing saved document identity.
     sourceMap.set(source.id, { policyId: policy.id, sourceId: source.id, fieldPrefix: source.fieldPrefix, destination: source.destination });
-    contributions.push({ id: source.id, accountId: source.destination.accountId, priority: source.priority,
+    contributions.push({ id: source.id, accountId: source.destination.backdoorRoth?.traditionalIraAccountId ?? source.destination.accountId, priority: source.priority,
       startDate: `${year}-01-01`, endDate: `${year}-12-31`, amount: { kind: 'fixed', monthlyCents: 0 },
       ...(source.destination.sponsoringSalaryId ? { sponsoringSalaryId: source.destination.sponsoringSalaryId } : {}) });
   }

@@ -551,6 +551,16 @@
       "retrievedOn": "2026-10-12",
       "sha256": "f48d4cb1dd14d1cc56975e57473690759b3cc1334c3e5c74b48c53e77c10a602",
       "bytes": 66069
+    },
+    {
+      "id": "irs-i8606-2025",
+      "url": "https://www.irs.gov/instructions/i8606",
+      "snapshot": "2025-reference/irs-i8606.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-13",
+      "sha256": "f75196570eef35092d75a95bbdc85712fe0223515a798c1e934d7ac8e5cb7b57",
+      "bytes": 287122
     }
   ]
 }

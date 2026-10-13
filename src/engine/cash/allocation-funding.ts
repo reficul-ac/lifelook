@@ -69,6 +69,7 @@ export function allocationFundingCeilings(cashAfterExisting: readonly Cents[], e
 interface Edge {
   readonly to: number;
   readonly reverseIndex: number;
+  capacity: Cents;
   remaining: Cents;
 }
 
@@ -82,8 +83,8 @@ class FundingNetwork {
   }
 
   connect(from: number, to: number, capacity: Cents): Edge {
-    const forward: Edge = { to, reverseIndex: this.nodes[to]!.length, remaining: capacity };
-    const reverse: Edge = { to: from, reverseIndex: this.nodes[from]!.length, remaining: 0 };
+    const forward: Edge = { to, reverseIndex: this.nodes[to]!.length, capacity, remaining: capacity };
+    const reverse: Edge = { to: from, reverseIndex: this.nodes[from]!.length, capacity: 0, remaining: 0 };
     this.nodes[from]!.push(forward);
     this.nodes[to]!.push(reverse);
     return forward;
@@ -134,6 +135,8 @@ const stageOrder = { percent: 0, max: 1, overflow: 2 } as const;
  * Each new target is the only flow source. Reverse edges can move earlier
  * deposits, but conservation at earlier target nodes preserves their annual
  * funded totals. No saved contribution requests or legal rules are changed here.
+ * A second pass spreads those accepted annual totals evenly across eligible
+ * months. Only constraints that prevent this cadence relax the monthly quotas.
  */
 export function scheduleAllocationFunding(targets: readonly FundingTarget[], ceilings: readonly Cents[], employers: readonly EmployerFundingBudget[]): FundingSchedule {
   checkMonths(ceilings, true);
@@ -152,44 +155,71 @@ export function scheduleAllocationFunding(targets: readonly FundingTarget[], cei
     }
   }
 
-  const network = new FundingNetwork();
-  const monthNodes = Array.from({ length: 12 }, () => network.node());
-  const sink = network.node();
-  monthNodes.forEach((node, month) => network.connect(node, monthNodes[month + 1] ?? sink, ceilings[month]!));
-  const employerNodes = new Map<string, readonly number[]>();
-  for (const employer of [...employers].sort((a, b) => compareId(a.key, b.key))) {
-    checkMonths(employer.monthlyCents, true);
-    if (employerNodes.has(employer.key)) throw new RangeError('Employer budget keys must be unique.');
-    const nodes = employer.monthlyCents.map((capacity, month) => {
-      const node = network.node();
-      network.connect(node, monthNodes[month]!, capacity);
-      return node;
-    });
-    employerNodes.set(employer.key, nodes);
+  function route(annualTargets: readonly FundingTarget[], balance: boolean): FundingSchedule {
+    const network = new FundingNetwork();
+    const monthNodes = Array.from({ length: 12 }, () => network.node());
+    const sink = network.node();
+    monthNodes.forEach((node, month) => network.connect(node, monthNodes[month + 1] ?? sink, ceilings[month]!));
+    const employerNodes = new Map<string, readonly number[]>();
+    for (const employer of [...employers].sort((a, b) => compareId(a.key, b.key))) {
+      checkMonths(employer.monthlyCents, true);
+      if (employerNodes.has(employer.key)) throw new RangeError('Employer budget keys must be unique.');
+      const nodes = employer.monthlyCents.map((capacity, month) => {
+        const node = network.node();
+        network.connect(node, monthNodes[month]!, capacity);
+        return node;
+      });
+      employerNodes.set(employer.key, nodes);
+    }
+
+    const fundedByRule = new Map<string, Cents>();
+    const edgesByRule = new Map<string, ReadonlyMap<number, Edge>>();
+    const addedTargets: FundingTarget[] = [];
+    for (const target of annualTargets) {
+      const source = network.node();
+      const edges = new Map<number, Edge>();
+      const eligible = [...new Set(target.allowedMonths)].sort((a, b) => a - b);
+      // Round exact cumulative fractions rather than repeatedly adding a rounded
+      // repeating decimal (for example, six installments of 13 / 12 cents).
+      const monthly = balance ? eligible.map((_, index) =>
+        settleCents(new Decimal(target.requestedCents).mul(index + 1).div(eligible.length))
+        - settleCents(new Decimal(target.requestedCents).mul(index).div(eligible.length))) : [];
+      for (const [index, month] of eligible.entries()) {
+        const destination = target.employerKey === undefined ? monthNodes[month - 1]
+          : employerNodes.get(target.employerKey)?.[month - 1];
+        if (destination !== undefined) edges.set(month, network.connect(source, destination, balance ? monthly[index]! : target.requestedCents));
+      }
+      edgesByRule.set(target.ruleId, edges);
+      addedTargets.push(target);
+      let funded = network.fund(source, sink, target.requestedCents);
+      if (balance && funded < target.requestedCents) {
+        // A later restricted payroll window can require moving earlier flexible
+        // funding. Relax all existing targets, preserving the quota flow already
+        // achieved and their independently established annual funded totals.
+        for (const prior of addedTargets) {
+          for (const edge of edgesByRule.get(prior.ruleId)!.values()) {
+            edge.remaining += prior.requestedCents - edge.capacity;
+            edge.capacity = prior.requestedCents;
+          }
+        }
+        funded += network.fund(source, sink, target.requestedCents - funded);
+      }
+      fundedByRule.set(target.ruleId, funded);
+    }
+    // Read schedules only after every stage has had the opportunity to reroute.
+    const requestsByRule = new Map<string, readonly Cents[]>();
+    for (const target of annualTargets) {
+      const edges = edgesByRule.get(target.ruleId)!;
+      requestsByRule.set(target.ruleId, Array.from({ length: 12 }, (_, index) => {
+        const edge = edges.get(index + 1);
+        return edge ? edge.capacity - edge.remaining : 0;
+      }));
+    }
+    return { requestsByRule, fundedByRule };
   }
 
-  const fundedByRule = new Map<string, Cents>();
-  const edgesByRule = new Map<string, ReadonlyMap<number, Edge>>();
-  for (const target of sorted) {
-    const source = network.node();
-    const edges = new Map<number, Edge>();
-    const eligible = [...new Set(target.allowedMonths)].sort((a, b) => a - b);
-    for (const month of eligible) {
-      const destination = target.employerKey === undefined ? monthNodes[month - 1]
-        : employerNodes.get(target.employerKey)?.[month - 1];
-      if (destination !== undefined) edges.set(month, network.connect(source, destination, target.requestedCents));
-    }
-    edgesByRule.set(target.ruleId, edges);
-    fundedByRule.set(target.ruleId, network.fund(source, sink, target.requestedCents));
-  }
-  // Read schedules only after every stage has had the opportunity to reroute.
-  const requestsByRule = new Map<string, readonly Cents[]>();
-  for (const target of sorted) {
-    const edges = edgesByRule.get(target.ruleId)!;
-    requestsByRule.set(target.ruleId, Array.from({ length: 12 }, (_, index) => {
-      const edge = edges.get(index + 1);
-      return edge ? target.requestedCents - edge.remaining : 0;
-    }));
-  }
-  return { requestsByRule, fundedByRule };
+  // Establish priorities without monthly quotas first: cadence must never
+  // reduce the annual funding that the cash and employer constraints permit.
+  const annual = route(sorted, false);
+  return route(sorted.map(target => ({ ...target, requestedCents: annual.fundedByRule.get(target.ruleId)! })), true);
 }

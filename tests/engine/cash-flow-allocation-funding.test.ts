@@ -64,6 +64,33 @@ describe('allocation cumulative funding ceilings', () => {
 });
 
 describe('allocation monthly funding', () => {
+  it('spreads full-year percentage, maximum and overflow funding evenly across twelve months', () => {
+    const schedule = scheduleAllocationFunding([
+      target('primary', 1200),
+      target('retirement', 600, { stage: 'max', employerKey: 'employer' }),
+      target('excess', 360, { stage: 'overflow' }),
+    ], Array.from({ length: 12 }, (_, i) => 180 * (i + 1)), [
+      { key: 'employer', monthlyCents: Array(12).fill(100) },
+    ]);
+    expect([...schedule.fundedByRule]).toEqual([['primary', 1200], ['retirement', 600], ['excess', 360]]);
+    expect(schedule.requestsByRule.get('primary')).toEqual(Array(12).fill(100));
+    expect(schedule.requestsByRule.get('retirement')).toEqual(Array(12).fill(50));
+    expect(schedule.requestsByRule.get('excess')).toEqual(Array(12).fill(30));
+  });
+  it('preserves the annual total while settling fractional monthly cents cumulatively', () => {
+    const schedule = scheduleAllocationFunding([target('brokerage', 13)],
+      Array.from({ length: 12 }, (_, i) => 2 * (i + 1)), []);
+    expect(schedule.fundedByRule.get('brokerage')).toBe(13);
+    expect(schedule.requestsByRule.get('brokerage')).toEqual([1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1]);
+  });
+  it('balances accepted partial annual funding rather than the unfunded requested target', () => {
+    const schedule = scheduleAllocationFunding([
+      target('primary', 240), target('excess', 60, { stage: 'overflow' }),
+    ], Array.from({ length: 12 }, (_, i) => 10 * (i + 1)), []);
+    expect([...schedule.fundedByRule]).toEqual([['primary', 120], ['excess', 0]]);
+    expect(schedule.requestsByRule.get('primary')).toEqual(Array(12).fill(10));
+    expect(schedule.requestsByRule.get('excess')).toEqual(Array(12).fill(0));
+  });
   it('moves flexible brokerage funding later to preserve an early payroll window', () => {
     const schedule = scheduleAllocationFunding([
       target('brokerage', 100, { allowedMonths: [1, 12] }),

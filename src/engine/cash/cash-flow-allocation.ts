@@ -224,6 +224,9 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
           else if (displaced) {
             const account = adapter.plan.accounts.find(account => account.id === record.accountId)!;
             reasons.push(...locate([{ ...issue('allocation-protected-limit', `Additional funding here would reduce protected deposits for ${account.name}. Those deposits retain their funding.`), field: 'destination' }], ruleId));
+            // Monthly funding can consume shared capacity before a later saved
+            // deposit, so its authoritative cap also explains this refusal.
+            if (record.reasons.some(reason => reason.code === 'contribution-capped')) reasons.push(...locate([{ ...issue('contribution-capped', `Additional funding here would cap protected deposits for ${account.name}. Those deposits retain their funding.`), field: 'destination' }], ruleId));
             reasons.push(...locate(record.reasons.map(reason => ({ ...reason, explanation: `A rejected additional allocation would reduce these protected deposits. ${reason.explanation}` })), record.ruleId));
           }
         }

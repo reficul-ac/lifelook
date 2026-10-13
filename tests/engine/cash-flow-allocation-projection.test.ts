@@ -36,6 +36,12 @@ describe('allocation forecasts post only accepted annual funding',()=>{
   expect(money(year.reserveCents)).toBe(1085940);expect(money(year.netWorthCents)).toBe(5429700);
   expect(result.contributionSchedules.filter(s=>s.ruleId==='excess')).toHaveLength(1);
   expect(result.contributionSchedules.reduce((s,c)=>s+(c.requests.status==='available'?c.requests.value.reduce((n,r)=>n+r.requestedCents,0):0),0)).toBe(4343760);
+  // Every accepted full-year rule is funded in twelve nearly equal installments.
+  for(const accountId of ['brokerage','workplace']){
+   const deposits=result.months.map(month=>money(month.accounts.find(account=>account.accountId===accountId)!.contributionCents));
+   expect(deposits.every(amount=>amount>0)).toBe(true);
+   expect(Math.max(...deposits)-Math.min(...deposits)).toBeLessThanOrEqual(1);
+  }
   expect(result.months.every(m=>money(m.reserveCents)>=0)).toBe(true);expect(doc).toEqual(saved);reconcile(year);
  });
  it('recalculates three years of changing salary and legal limits and grows accepted deposits',()=>{
@@ -45,16 +51,27 @@ describe('allocation forecasts post only accepted annual funding',()=>{
   expect(result.years.map(y=>report(y).accounts.find(a=>a.accountId==='workplace')!.maximumCents)).toEqual([2450000,2650000,2950000]);
   let reserve=0,broker=0;
   for(const year of result.years){reconcile(year);reserve+=report(year).retainedCashCents;expect(money(year.reserveCents)).toBe(reserve);const a=year.accounts.find(a=>a.accountId==='brokerage')!;expect(money(a.closingCents)).toBe(broker+money(a.contributionCents)+money(a.growthCents));if(year.year>2026)expect(money(a.growthCents)).toBeGreaterThan(0);broker=money(a.closingCents);}
-  // The accepted brokerage schedule funds in December; the next January grows that deposit.
-  expect(money(result.years[0]!.accounts.find(a=>a.accountId==='brokerage')!.growthCents)).toBe(0);
-  expect(result.months.slice(0,11).every(m=>money(m.accounts.find(a=>a.accountId==='brokerage')!.contributionCents)===0)).toBe(true);
+  // Month-end deposits compound in later months of the same year. Independently
+  // applying q=1.12^(1/12) to the twelve installments gives $19,957.86.
+  expect(money(result.years[0]!.accounts.find(a=>a.accountId==='brokerage')!.growthCents)).toBe(102026);
+  expect(result.months.slice(0,12).every(m=>money(m.accounts.find(a=>a.accountId==='brokerage')!.contributionCents)>0)).toBe(true);
   const january=result.months.find(m=>m.date==='2027-01')!.accounts.find(a=>a.accountId==='brokerage')!;
-  // $18,937.60 * ((1.12)^(1/12)-1), rounded to cents = $179.69.
-  expect(january).toMatchObject({openingCents:{status:'available',value:1893760},growthCents:{status:'available',value:17969}});
+  // The carried exact balance earns $189.38 before January's installment.
+  expect(january).toMatchObject({openingCents:{status:'available',value:1995786},growthCents:{status:'available',value:18938}});
   expect(result.years[1]!.provenance).toContainEqual(expect.objectContaining({applicableYear:2027,status:'projected',sources:expect.any(Array)}));
   expect(result.years[1]!.provenance.some(p=>p.applicableYear===2027&&p.status==='provisional')).toBe(true);
   expect(result.years.every(y=>y.coverage.completeForModeledScope)).toBe(true);
   for(const month of result.months){const a=month.accounts.find(a=>a.accountId==='brokerage')!;expect(money(a.closingCents)).toBe(money(a.openingCents)+money(a.contributionCents)+money(a.growthCents));}
+ });
+ it('compounds twelve $1000 month-end allocations instead of one year-end deposit',()=>{
+  const doc=fixture({salaries:[],otherIncome:[{id:'cash-receipt',name:'Monthly cash',amountCents:100000,frequency:'monthly',startDate:'2026-01-01',annualGrowthBps:0,classification:'non-taxable'}],cashFlowAllocation:makeAllocationPolicy({entries:[percent('brokerage',10000)]})});
+  const result=project({...doc,accounts:doc.accounts.map(account=>account.id==='brokerage'?{...account,annualGrowthBps:1200}:account)});
+  expect(result.months.map(month=>money(month.accounts.find(account=>account.accountId==='brokerage')!.contributionCents))).toEqual(Array(12).fill(100000));
+  const account=result.years[0]!.accounts.find(account=>account.accountId==='brokerage')!;
+  // $1000 * (1.12 - 1) / (1.12^(1/12) - 1) = $12,646.50.
+  expect(money(account.contributionCents)).toBe(1200000);
+  expect(money(account.closingCents)).toBe(1264650);
+  expect(money(account.growthCents)).toBe(64650);
  });
  it('counts every personal debt payment against allocatable cash',()=>{
   const result=project(fixture({debts:[{id:'personal-debt',name:'Debt',openingBalanceCents:1200000,aprBps:0,monthlyPaymentCents:100000,firstPaymentMonth:'2026-01'}]}));

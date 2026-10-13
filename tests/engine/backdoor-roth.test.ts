@@ -44,6 +44,7 @@ describe('clean same-year backdoor Roth allocation', () => {
     expect(money(traditional.conversionOutCents!)).toBe(750000);
     expect(money(roth.contributionCents)).toBe(0);
     expect(money(roth.conversionInCents!)).toBe(750000);
+    expect(result.months.map(month => money(month.accounts.find(account => account.accountId === 'roth-ira')!.conversionInCents!))).toEqual(Array(12).fill(62500));
     expect(money(year.accountBalanceCents)).toBe(750000);
     expect(money(year.cashFlowCents)).toBe(money(year.salaryCents) - money(year.totalTaxCents) - 750000);
     if (year.cashFlowAllocation?.status !== 'available') throw new Error('allocation');
@@ -55,6 +56,8 @@ describe('clean same-year backdoor Roth allocation', () => {
   it('repeats conversion with fresh projected annual limits and carries only Roth assets for two years', () => {
     const plan = fixture(), result = project({ ...plan, horizonYears: 2, taxPolicy: { ...plan.taxPolicy, futureIndexGrowthBps: 1000 }, accounts: plan.accounts.map(account => ({ ...account, annualGrowthBps: 1200 })) });
     expect(result.years.map(year => money(year.eligibleContributionCents))).toEqual([750000, 800000]);
+    // $625 month-end conversions grow to $7,904.06 at 12% effective annual growth.
+    expect(money(result.years[0]!.accounts.find(account => account.accountId === 'roth-ira')!.growthCents)).toBe(40406);
     for (const year of result.years) {
       expect(money(year.accounts.find(account => account.accountId === 'ira')!.closingCents)).toBe(0);
       const roth = year.accounts.find(account => account.accountId === 'roth-ira')!;

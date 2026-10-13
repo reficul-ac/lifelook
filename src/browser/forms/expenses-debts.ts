@@ -8,8 +8,8 @@ export function renderExpensesDebtsForm(root: HTMLElement, controller: Workspace
   const plan = controller.getState().savedPlan, properties = [{ value: '', label: 'None' }, ...plan.properties.map(p => ({ value: p.id, label: p.name }))];
   renderRecordSection(expenses, controller, 'expenses', 'Expense', (body, ctx) => {
     renderField(body, ctx, ['name'], 'Expense name'); renderField(body, ctx, ['amountCents'], 'Expense amount ($)', { kind: 'money' });
-    renderField(body, ctx, ['frequency'], 'Expense frequency', { kind: 'select', options: ['monthly', 'annual'] });
-    renderField(body, ctx, ['startDate'], 'Expense start date', { kind: 'date', hint: 'Payments repeat on this date each month or year; no daily proration.' });
+    renderField(body, ctx, ['frequency'], 'Expense frequency', { kind: 'select', options: ['monthly', 'annual'], hint: 'Annual amounts are divided by 12 and budgeted monthly.' });
+    renderField(body, ctx, ['startDate'], 'Expense start date', { kind: 'date', hint: 'Monthly budgets begin on this date; no daily proration. Shorter months use their last day.' });
     renderField(body, ctx, ['endDate'], 'Expense end date', { kind: 'date', optional: true,hint:'Includes this date. Blank means no end.' });
     renderField(body, ctx, ['annualGrowthBps'], 'Expense annual growth (%)', { kind: 'rate' });
     renderField(body, ctx, ['propertyId'], 'Expense property', { kind: 'select', options: properties, optional: true, refresh: true });

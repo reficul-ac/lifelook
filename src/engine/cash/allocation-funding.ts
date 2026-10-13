@@ -90,6 +90,13 @@ class FundingNetwork {
     return forward;
   }
 
+  checkpoint(): () => void {
+    const remaining = this.nodes.map(edges => edges.map(edge => edge.remaining));
+    return () => this.nodes.forEach((edges, node) => edges.forEach((edge, index) => {
+      edge.remaining = remaining[node]![index]!;
+    }));
+  }
+
   fund(source: number, sink: number, requested: Cents): Cents {
     let funded = 0;
     while (funded < requested) {
@@ -191,11 +198,26 @@ export function scheduleAllocationFunding(targets: readonly FundingTarget[], cei
       }
       edgesByRule.set(target.ruleId, edges);
       addedTargets.push(target);
+      const restore = balance ? network.checkpoint() : undefined;
       let funded = network.fund(source, sink, target.requestedCents);
       if (balance && funded < target.requestedCents) {
-        // A later restricted payroll window can require moving earlier flexible
-        // funding. Relax all existing targets, preserving the quota flow already
-        // achieved and their independently established annual funded totals.
+        // Vary only this target's cadence first. Restore its quota trial and
+        // offer each eligible month in order so available cash is invested at
+        // that month end rather than accumulating for a December catch-up.
+        // Earlier balanced targets retain their installment capacities.
+        restore!();
+        for (const edge of edges.values()) { edge.capacity = 0; edge.remaining = 0; }
+        funded = 0;
+        for (const edge of edges.values()) {
+          edge.capacity = target.requestedCents;
+          edge.remaining = target.requestedCents;
+          funded += network.fund(source, sink, target.requestedCents - funded);
+        }
+      }
+      if (balance && funded < target.requestedCents) {
+        // A restricted payroll window can require moving earlier flexible
+        // funding. Relax prior quotas only after changing the current cadence
+        // proved insufficient, preserving every accepted annual funded total.
         for (const prior of addedTargets) {
           for (const edge of edgesByRule.get(prior.ruleId)!.values()) {
             edge.remaining += prior.requestedCents - edge.capacity;

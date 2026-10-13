@@ -8481,7 +8481,8 @@
       "Expected output is a numerical/status view: unavailable values retain status with no number; source explanations, rule provenance and issues are asserted independently of this numerical oracle.",
       "Primary main worksheet: settled annual wages=10397487 cents; rental profit=2400000 rent-100000 rental property tax-30000 rental insurance-115000 first-year depreciation=2155000 cents.",
       "401(k) wage deduction=600000 cents; deductible traditional IRA=120000 cents; AGI=11832487 cents; both jurisdictions choose standard; federal liability=983900 cents; California liability=304600 cents; AMT/surtax/NIIT all zero.",
-      "Independent first-month net worth=25088377 cents; December net worth=36353605 cents."
+      "Independent first-month net worth=25455044 cents; December net worth=36353605 cents.",
+      "Monthly expense-budget worksheet (2026-10-13): the 400000-cent annual property tax settles as [33333,33334,33333,33333,33334,33333,33333,33334,33333,33333,33334,33333]. Replace each former January charge with that month installment; cash flow changes by old expense minus installment, and cash/net worth by 400000 minus cumulative installments. Annual expenses, annual taxes, December balances and asset schedules retain their independently checked original values."
     ],
     "expected": {
       "planId": "two-salaries-home-adu",
@@ -8513,11 +8514,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 410000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 410000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -8597,15 +8598,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 221377
+            "value": 588044
           },
           "reserveCents": {
             "status": "available",
-            "value": 1221377
+            "value": 1588044
           },
           "netWorthCents": {
             "status": "available",
-            "value": 25088377
+            "value": 25455044
           },
           "fundingStatus": "funded",
           "accounts": [
@@ -8805,11 +8806,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -8889,15 +8890,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 621376
+            "value": 588042
           },
           "reserveCents": {
             "status": "available",
-            "value": 1842753
+            "value": 2176086
           },
           "netWorthCents": {
             "status": "available",
-            "value": 26077817
+            "value": 26411150
           },
           "fundingStatus": "funded",
           "accounts": [
@@ -9097,11 +9098,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -9181,15 +9182,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 632480
+            "value": 599147
           },
           "reserveCents": {
             "status": "available",
-            "value": 2475233
+            "value": 2775233
           },
           "netWorthCents": {
             "status": "available",
-            "value": 27079423
+            "value": 27379423
           },
           "fundingStatus": "funded",
           "accounts": [
@@ -9389,11 +9390,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -9473,15 +9474,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 641623
+            "value": 608290
           },
           "reserveCents": {
             "status": "available",
-            "value": 3116856
+            "value": 3383523
           },
           "netWorthCents": {
             "status": "available",
-            "value": 28091243
+            "value": 28357910
           },
           "fundingStatus": "funded",
           "accounts": [
@@ -9681,11 +9682,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -9765,15 +9766,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 641621
+            "value": 608287
           },
           "reserveCents": {
             "status": "available",
-            "value": 3758477
+            "value": 3991810
           },
           "netWorthCents": {
             "status": "available",
-            "value": 29104137
+            "value": 29337470
           },
           "fundingStatus": "funded",
           "accounts": [
@@ -9973,11 +9974,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -10057,15 +10058,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 644777
+            "value": 611444
           },
           "reserveCents": {
             "status": "available",
-            "value": 4403254
+            "value": 4603254
           },
           "netWorthCents": {
             "status": "available",
-            "value": 30121710
+            "value": 30321710
           },
           "fundingStatus": "funded",
           "accounts": [
@@ -10265,11 +10266,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -10349,15 +10350,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 656040
+            "value": 622707
           },
           "reserveCents": {
             "status": "available",
-            "value": 5059294
+            "value": 5225961
           },
           "netWorthCents": {
             "status": "available",
-            "value": 31152023
+            "value": 31318690
           },
           "fundingStatus": "funded",
           "accounts": [
@@ -10557,11 +10558,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -10641,15 +10642,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 656041
+            "value": 622707
           },
           "reserveCents": {
             "status": "available",
-            "value": 5715335
+            "value": 5848668
           },
           "netWorthCents": {
             "status": "available",
-            "value": 32183434
+            "value": 32316767
           },
           "fundingStatus": "funded",
           "accounts": [
@@ -10849,11 +10850,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -10933,15 +10934,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 661033
+            "value": 627700
           },
           "reserveCents": {
             "status": "available",
-            "value": 6376368
+            "value": 6476368
           },
           "netWorthCents": {
             "status": "available",
-            "value": 33220935
+            "value": 33320935
           },
           "fundingStatus": "funded",
           "accounts": [
@@ -11141,11 +11142,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -11225,15 +11226,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 661035
+            "value": 627702
           },
           "reserveCents": {
             "status": "available",
-            "value": 7037403
+            "value": 7104070
           },
           "netWorthCents": {
             "status": "available",
-            "value": 34259546
+            "value": 34326213
           },
           "fundingStatus": "funded",
           "accounts": [
@@ -11433,11 +11434,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -11517,15 +11518,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 676950
+            "value": 643616
           },
           "reserveCents": {
             "status": "available",
-            "value": 7714353
+            "value": 7747686
           },
           "netWorthCents": {
             "status": "available",
-            "value": 35306016
+            "value": 35339349
           },
           "fundingStatus": "funded",
           "accounts": [
@@ -11725,11 +11726,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -11809,7 +11810,7 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 676949
+            "value": 643616
           },
           "reserveCents": {
             "status": "available",
@@ -12288,7 +12289,8 @@
     "toleranceCents": 0,
     "ruleVersions": [
       "us-ca-2026.1",
-      "2026-primary-worksheet-v1"
+      "2026-primary-worksheet-v1",
+      "us-ca-2026.2"
     ],
     "comparisonMode": "full-numeric-view",
     "expectedIssueCodes": [],
@@ -14957,7 +14959,8 @@
       "Month cash flow=income-tax-expense-full debt payment-final eligible deposits; signed reserve carries forward. Net worth=reserve+accounts+one combined value per property-all unique debts.",
       "Annual flows sum twelve monthly fields; account/property/loan opening is January opening and closing is December closing. Personal/rental linked costs and ADU asset value appear once.",
       "Expected output is a numerical/status view: unavailable values retain status with no number; source explanations, rule provenance and issues are asserted independently of this numerical oracle.",
-      "The declared opening federal rental book is unknown and remains unavailable in the next year. Brokerage-only deposits and all existing growth-only accounts remain independent; no unresolved IRA eligibility is used to fund an account. Federal/CA liabilities, cash flow, reserve and net worth have statusneeds-data without numeric placeholders."
+      "The declared opening federal rental book is unknown and remains unavailable in the next year. Brokerage-only deposits and all existing growth-only accounts remain independent; no unresolved IRA eligibility is used to fund an account. Federal/CA liabilities, cash flow, reserve and net worth have statusneeds-data without numeric placeholders.",
+      "Monthly expense-budget worksheet (2026-10-13): the 400000-cent annual property tax settles as [33333,33334,33333,33333,33334,33333,33333,33334,33333,33333,33334,33333]. Replace each former January charge with that month installment; cash flow changes by old expense minus installment, and cash/net worth by 400000 minus cumulative installments. Annual expenses, annual taxes, December balances and asset schedules retain their independently checked original values."
     ],
     "expected": {
       "planId": "unknown-rental-history-two-years",
@@ -14989,11 +14992,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 410000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 410000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -15275,11 +15278,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -15561,11 +15564,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -15847,11 +15850,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -16133,11 +16136,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -16419,11 +16422,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -16705,11 +16708,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -16991,11 +16994,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -17277,11 +17280,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -17563,11 +17566,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -17849,11 +17852,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -18135,11 +18138,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -18421,11 +18424,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 410000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 410000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -18707,11 +18710,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -18993,11 +18996,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -19279,11 +19282,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -19565,11 +19568,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -19851,11 +19854,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -20137,11 +20140,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -20423,11 +20426,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -20709,11 +20712,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -20995,11 +20998,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -21281,11 +21284,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -21567,11 +21570,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -22402,7 +22405,8 @@
     "toleranceCents": 0,
     "ruleVersions": [
       "us-ca-2026.1",
-      "2026-primary-worksheet-v1"
+      "2026-primary-worksheet-v1",
+      "us-ca-2026.2"
     ],
     "comparisonMode": "full-numeric-view",
     "expectedIssueCodes": [
@@ -23471,7 +23475,8 @@
       "Expected output is a numerical/status view: unavailable values retain status with no number; source explanations, rule provenance and issues are asserted independently of this numerical oracle.",
       "Whole rental is available January2026 but lease starts January2027. First-year rent0-operatingexpenses520000-first-year depreciation115000=-635000 cents. Wages17500000 exceed the15000000 passive-allowance ceiling: allowed rental0 and closing passive carry635000 in all four independent books. At-risk investment3300000 covers the entire loss.",
       "Second-year rent3600000-operatingexpenses520000-full-year depreciation120000=2960000 cents. Release prior passive635000 from that income: allowed rental2325000, closing passivecarry0. AGI19825000 cents; no IRA/workplace deposits, QBI, NIIT, AMT or surtax. Future indexed growth0 carries the primary2026 thresholds as explicit projections. Personal property-tax deduction remains0 because the property is a whole rental.",
-      "Independent annual tax worksheets: [{\"agiCents\": 17500000, \"californiaTaxCents\": 749700, \"federalTaxCents\": 2084000, \"rentalProfitCents\": 0, \"traditional401kCents\": 0, \"traditionalIraCents\": 0, \"wages\": 17500000, \"year\": 2026}, {\"agiCents\": 19825000, \"californiaTaxCents\": 965900, \"federalTaxCents\": 2595500, \"rentalProfitCents\": 2325000, \"traditional401kCents\": 0, \"traditionalIraCents\": 0, \"wages\": 17500000, \"year\": 2027}]"
+      "Independent annual tax worksheets: [{\"agiCents\": 17500000, \"californiaTaxCents\": 749700, \"federalTaxCents\": 2084000, \"rentalProfitCents\": 0, \"traditional401kCents\": 0, \"traditionalIraCents\": 0, \"wages\": 17500000, \"year\": 2026}, {\"agiCents\": 19825000, \"californiaTaxCents\": 965900, \"federalTaxCents\": 2595500, \"rentalProfitCents\": 2325000, \"traditional401kCents\": 0, \"traditionalIraCents\": 0, \"wages\": 17500000, \"year\": 2027}]",
+      "Monthly expense-budget worksheet (2026-10-13): the 400000-cent annual property tax settles as [33333,33334,33333,33333,33334,33333,33333,33334,33333,33333,33334,33333]. Replace each former January charge with that month installment; cash flow changes by old expense minus installment, and cash/net worth by 400000 minus cumulative installments. Annual expenses, annual taxes, December balances and asset schedules retain their independently checked original values."
     ],
     "expected": {
       "planId": "two-year-known-rental-loss-release",
@@ -23503,11 +23508,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 410000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 410000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -23587,15 +23592,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 681670
+            "value": 1048337
           },
           "reserveCents": {
             "status": "available",
-            "value": 1681670
+            "value": 2048337
           },
           "netWorthCents": {
             "status": "available",
-            "value": 11681670
+            "value": 12048337
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -23652,11 +23657,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -23736,15 +23741,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1081672
+            "value": 1048338
           },
           "reserveCents": {
             "status": "available",
-            "value": 2763342
+            "value": 3096675
           },
           "netWorthCents": {
             "status": "available",
-            "value": 12763342
+            "value": 13096675
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -23801,11 +23806,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -23885,15 +23890,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1081670
+            "value": 1048337
           },
           "reserveCents": {
             "status": "available",
-            "value": 3845012
+            "value": 4145012
           },
           "netWorthCents": {
             "status": "available",
-            "value": 13845012
+            "value": 14145012
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -23950,11 +23955,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -24034,15 +24039,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1081671
+            "value": 1048338
           },
           "reserveCents": {
             "status": "available",
-            "value": 4926683
+            "value": 5193350
           },
           "netWorthCents": {
             "status": "available",
-            "value": 14926683
+            "value": 15193350
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -24099,11 +24104,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -24183,15 +24188,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1081672
+            "value": 1048338
           },
           "reserveCents": {
             "status": "available",
-            "value": 6008355
+            "value": 6241688
           },
           "netWorthCents": {
             "status": "available",
-            "value": 16008355
+            "value": 16241688
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -24248,11 +24253,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -24332,15 +24337,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1081670
+            "value": 1048337
           },
           "reserveCents": {
             "status": "available",
-            "value": 7090025
+            "value": 7290025
           },
           "netWorthCents": {
             "status": "available",
-            "value": 17090025
+            "value": 17290025
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -24397,11 +24402,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -24481,15 +24486,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1081670
+            "value": 1048337
           },
           "reserveCents": {
             "status": "available",
-            "value": 8171695
+            "value": 8338362
           },
           "netWorthCents": {
             "status": "available",
-            "value": 18171695
+            "value": 18338362
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -24546,11 +24551,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -24630,15 +24635,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1081672
+            "value": 1048338
           },
           "reserveCents": {
             "status": "available",
-            "value": 9253367
+            "value": 9386700
           },
           "netWorthCents": {
             "status": "available",
-            "value": 19253367
+            "value": 19386700
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -24695,11 +24700,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -24779,15 +24784,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1081670
+            "value": 1048337
           },
           "reserveCents": {
             "status": "available",
-            "value": 10335037
+            "value": 10435037
           },
           "netWorthCents": {
             "status": "available",
-            "value": 20335037
+            "value": 20435037
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -24844,11 +24849,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -24928,15 +24933,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1081671
+            "value": 1048338
           },
           "reserveCents": {
             "status": "available",
-            "value": 11416708
+            "value": 11483375
           },
           "netWorthCents": {
             "status": "available",
-            "value": 21416708
+            "value": 21483375
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -24993,11 +24998,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -25077,15 +25082,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1081672
+            "value": 1048338
           },
           "reserveCents": {
             "status": "available",
-            "value": 12498380
+            "value": 12531713
           },
           "netWorthCents": {
             "status": "available",
-            "value": 22498380
+            "value": 22531713
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -25142,11 +25147,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -25226,7 +25231,7 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1081670
+            "value": 1048337
           },
           "reserveCents": {
             "status": "available",
@@ -25291,11 +25296,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 410000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 410000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -25375,15 +25380,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 921028
+            "value": 1287695
           },
           "reserveCents": {
             "status": "available",
-            "value": 14501078
+            "value": 14867745
           },
           "netWorthCents": {
             "status": "available",
-            "value": 24501078
+            "value": 24867745
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -25440,11 +25445,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -25524,15 +25529,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1321031
+            "value": 1287697
           },
           "reserveCents": {
             "status": "available",
-            "value": 15822109
+            "value": 16155442
           },
           "netWorthCents": {
             "status": "available",
-            "value": 25822109
+            "value": 26155442
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -25589,11 +25594,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -25673,15 +25678,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1321028
+            "value": 1287695
           },
           "reserveCents": {
             "status": "available",
-            "value": 17143137
+            "value": 17443137
           },
           "netWorthCents": {
             "status": "available",
-            "value": 27143137
+            "value": 27443137
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -25738,11 +25743,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -25822,15 +25827,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1321029
+            "value": 1287696
           },
           "reserveCents": {
             "status": "available",
-            "value": 18464166
+            "value": 18730833
           },
           "netWorthCents": {
             "status": "available",
-            "value": 28464166
+            "value": 28730833
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -25887,11 +25892,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -25971,15 +25976,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1321031
+            "value": 1287697
           },
           "reserveCents": {
             "status": "available",
-            "value": 19785197
+            "value": 20018530
           },
           "netWorthCents": {
             "status": "available",
-            "value": 29785197
+            "value": 30018530
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -26036,11 +26041,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -26120,15 +26125,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1321028
+            "value": 1287695
           },
           "reserveCents": {
             "status": "available",
-            "value": 21106225
+            "value": 21306225
           },
           "netWorthCents": {
             "status": "available",
-            "value": 31106225
+            "value": 31306225
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -26185,11 +26190,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -26269,15 +26274,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1321028
+            "value": 1287695
           },
           "reserveCents": {
             "status": "available",
-            "value": 22427253
+            "value": 22593920
           },
           "netWorthCents": {
             "status": "available",
-            "value": 32427253
+            "value": 32593920
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -26334,11 +26339,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -26418,15 +26423,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1321031
+            "value": 1287697
           },
           "reserveCents": {
             "status": "available",
-            "value": 23748284
+            "value": 23881617
           },
           "netWorthCents": {
             "status": "available",
-            "value": 33748284
+            "value": 33881617
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -26483,11 +26488,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -26567,15 +26572,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1321028
+            "value": 1287695
           },
           "reserveCents": {
             "status": "available",
-            "value": 25069312
+            "value": 25169312
           },
           "netWorthCents": {
             "status": "available",
-            "value": 35069312
+            "value": 35169312
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -26632,11 +26637,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -26716,15 +26721,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1321029
+            "value": 1287696
           },
           "reserveCents": {
             "status": "available",
-            "value": 26390341
+            "value": 26457008
           },
           "netWorthCents": {
             "status": "available",
-            "value": 36390341
+            "value": 36457008
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -26781,11 +26786,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43334
           },
           "debtPaymentCents": {
             "status": "available",
@@ -26865,15 +26870,15 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1321031
+            "value": 1287697
           },
           "reserveCents": {
             "status": "available",
-            "value": 27711372
+            "value": 27744705
           },
           "netWorthCents": {
             "status": "available",
-            "value": 37711372
+            "value": 37744705
           },
           "fundingStatus": "funded",
           "accounts": [],
@@ -26930,11 +26935,11 @@
           },
           "propertyExpensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "expensesCents": {
             "status": "available",
-            "value": 10000
+            "value": 43333
           },
           "debtPaymentCents": {
             "status": "available",
@@ -27014,7 +27019,7 @@
           },
           "cashFlowCents": {
             "status": "available",
-            "value": 1321028
+            "value": 1287695
           },
           "reserveCents": {
             "status": "available",
@@ -27354,7 +27359,8 @@
     "toleranceCents": 0,
     "ruleVersions": [
       "us-ca-2026.1",
-      "2026-primary-worksheet-v1"
+      "2026-primary-worksheet-v1",
+      "us-ca-2026.2"
     ],
     "comparisonMode": "full-numeric-view",
     "expectedIssueCodes": [],

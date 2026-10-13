@@ -11,5 +11,5 @@ export function deepFreeze<T>(value: T): T {
   }
   return value;
 }
-const baseline: RuleSet = deepFreeze({ version: 'us-ca-2026.1', baselineYear: 2026, federal: federal2026, california: california2026, payroll: payroll2026, retirement: retirement2026 });
+const baseline: RuleSet = deepFreeze({ version: 'us-ca-2026.2', baselineYear: 2026, federal: federal2026, california: california2026, payroll: payroll2026, retirement: retirement2026 });
 export function loadRuleSet(): RuleSet { return baseline; }

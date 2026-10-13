@@ -73,6 +73,35 @@ describe('allocation forecasts post only accepted annual funding',()=>{
   expect(money(account.closingCents)).toBe(1264650);
   expect(money(account.growthCents)).toBe(64650);
  });
+ it('keeps both backdoor Roths and workplace maximums monthly when excess cash arrives unevenly',()=>{
+  const base=makeAllocationPlan();
+  const rothA={...base.accounts[1]!,id:'roth-a',type:'roth-ira' as const,annualGrowthBps:770};
+  const rothB={...rothA,id:'roth-b',ownerId:'owner-b'};
+  const sourceB={...base.accounts[1]!,id:'ira-b',ownerId:'owner-b'};
+  const maximum=(id:string,accountId:string,priority:number,traditionalIraAccountId?:string):CashFlowAllocationEntry=>({
+   id,priority,destination:{kind:'account',accountId,...(traditionalIraAccountId?{backdoorRoth:{traditionalIraAccountId,cleanIraHistory:{known:true,value:true}}}:{sponsoringSalaryId:'salary-a'})},amount:{kind:'max-annual'},
+  });
+  const doc:PlanDocument={...base,openingCashCents:5000000,accounts:[...base.accounts,rothA,rothB,sourceB],
+   household:{...base.household,filers:[{...base.household.filers[0],workplaceCoverage:{known:true,value:true}},base.household.filers[1]]},
+   otherIncome:[{id:'december-cash',name:'December cash',amountCents:1200000,frequency:'annual',startDate:'2026-12-01',annualGrowthBps:0,classification:'non-taxable'}],
+   cashFlowAllocation:makeAllocationPolicy({entries:[maximum('max-roth-a','roth-a',1,'ira'),maximum('max-roth-b','roth-b',2,'ira-b'),maximum('max-workplace','workplace',3)],overflow:{id:'excess',destination:{kind:'account',accountId:'brokerage'}}}),
+  };
+  const result=project(doc),year=result.years[0]!;
+  for(const id of ['roth-a','roth-b']){
+   expect(result.months.map(m=>money(m.accounts.find(a=>a.accountId===id)!.conversionInCents!))).toEqual(Array(12).fill(62500));
+   const account=year.accounts.find(a=>a.accountId===id)!;
+   // Independent effective-rate annuity: $625 * (1.077 - 1) / (1.077^(1/12) - 1).
+   expect(money(account.closingCents)).toBe(776114);expect(money(account.growthCents)).toBe(26114);
+   expect(money(result.months[0]!.accounts.find(a=>a.accountId===id)!.growthCents)).toBe(0);
+  }
+  expect(result.months.map(m=>money(m.accounts.find(a=>a.accountId==='workplace')!.contributionCents)))
+   .toEqual([204167,204166,204167,204167,204166,204167,204167,204166,204167,204167,204166,204167]);
+  const brokerage=result.months.map(m=>money(m.accounts.find(a=>a.accountId==='brokerage')!.contributionCents));
+  expect(brokerage.every(amount=>amount>0)).toBe(true);expect(brokerage[11]).toBeGreaterThan(brokerage[0]!);
+  expect(result.months.every(m=>money(m.reserveCents)>=5000000)).toBe(true);
+  expect(money(year.eligibleContributionCents)).toBe(report(year).originalCashFlowCents);
+  expect(money(year.reserveCents)).toBe(5000000);expect(result.closingTaxState.iraBasisByOwner).toEqual({'owner-a':{known:true,value:0},'owner-b':{known:true,value:0}});
+ });
  it('counts every personal debt payment against allocatable cash',()=>{
   const result=project(fixture({debts:[{id:'personal-debt',name:'Debt',openingBalanceCents:1200000,aprBps:0,monthlyPaymentCents:100000,firstPaymentMonth:'2026-01'}]}));
   const year=result.years[0]!;expect(money(year.debtPaymentCents)).toBe(1200000);expect(report(year).originalCashFlowCents).toBe(4229700);reconcile(year);

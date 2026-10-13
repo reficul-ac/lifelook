@@ -74,6 +74,8 @@ it('saves monthly and annual expenses and a separate nominal APR debt', () => {
   click(root, 'Add debt'); fill(root, 'Debt name', 'Personal debt'); fill(root, 'Debt opening balance ($)', '1000');
   fill(root, 'Debt nominal APR (%)', '6.00'); fill(root, 'Debt monthly payment ($)', '100'); click(root, 'Save debt');
   expect(controller.getState().savedPlan.expenses.map(e => e.frequency)).toEqual(['monthly', 'annual']);
+  expect(controller.getState().projection.months.map(month => month.expensesCents)).toEqual(Array(12).fill({ status: 'available', value: 20000 }));
+  expect(controller.getState().projection.years[0]?.expensesCents).toEqual({ status: 'available', value: 240000 });
   expect(controller.getState().savedPlan.debts[0]).toMatchObject({ openingBalanceCents: 100000, aprBps: 600, monthlyPaymentCents: 10000 });
   expect(controller.getState().savedPlan.revision).toBe(3); sameCalculation(controller);
 });
@@ -120,7 +122,7 @@ it('keeps short labels, entry consequences and eligibility guidance attached to 
   const name=salary.querySelector<HTMLElement>('[data-field="name"]')!;expect(name.closest('[data-field-wrapper]')!.querySelector('label')).toHaveTextContent(/^name$/i);expect(name).toHaveAccessibleName('Salary name');
   expect(salary.querySelector('[data-field="endDate"]')).toHaveAccessibleDescription('Includes this date. Blank means no end.');expect(salary.querySelector('[data-field="raiseDay"]')).toHaveAccessibleDescription('Shorter months use their last day.');
   setField(salary,'Salary end date','2026-12-31');fireEvent.click(within(salary).getByText('Save salary',{selector:'button'}));expect(controller.getState().savedPlan.salaries.find(s=>s.id===fixture.salaries[0]!.id)?.endDate).toBe('2026-12-31');sameCalculation(controller);
-  nav.getByRole('button',{name:'Expenses and debts'}).click();const expense=root.querySelector<HTMLElement>('[data-section="Expenses and debts"]')!;expect(expense.querySelector('[data-field="startDate"]')).toHaveAccessibleDescription(/Payments repeat on this date/);expect(expense).toHaveTextContent('Add each mortgage once, under its property.');
+  nav.getByRole('button',{name:'Expenses and debts'}).click();const expense=root.querySelector<HTMLElement>('[data-section="Expenses and debts"]')!;expect(expense.querySelector('[data-field="startDate"]')).toHaveAccessibleDescription(/Monthly budgets begin on this date/);expect(expense).toHaveTextContent('Add each mortgage once, under its property.');
   nav.getByRole('button',{name:'Investments'}).click();const investments=root.querySelector<HTMLElement>('[data-section="Investments"]')!;expect(investments).toHaveTextContent('Different from account balance; enter 0 only if confirmed.');expect(investments).toHaveTextContent('Lower numbers receive available contribution limits first.');
 });
 

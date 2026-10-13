@@ -47,7 +47,7 @@ describe('atomic property, loan and rental workflows',()=>{
     expect(state.projection).toEqual(direct(state.savedPlan));
     expect(state.projection.months[0]!.properties).toHaveLength(1);
     expect(state.projection.months[0]!.loans.filter(l=>l.loanId==='home-loan')).toHaveLength(1);
-    expect(state.projection.months[0]!.netWorthCents).toEqual({status:'available',value:25088377});
+    expect(state.projection.months[0]!.netWorthCents).toEqual({status:'available',value:25455044});
     expect(state.projection.years[0]!.netWorthCents).toEqual({status:'available',value:36353605});
   });
 
@@ -165,7 +165,7 @@ describe('atomic property, loan and rental workflows',()=>{
     const {root,controller}=mount();set(root,'Opening mortgage balance ($)','250000.00');set(root,'Opening principal-and-interest payment ($)','1250.00');click(root,'Save property');
     const state=controller.getState();expect(state.savedPlan.properties[0]!.loans[0]).toMatchObject({openingBalance:{known:true,value:25000000},openingPayment:{known:true,value:125000}});
     expect(state.projection.months[0]!.loans.find(loan=>loan.loanId==='home-loan')).toMatchObject({openingPrincipalCents:{status:'available',value:25000000},paymentCents:{status:'available',value:125000},closingPrincipalCents:{status:'available',value:24875000}});
-    expect(state.projection.months[0]!.netWorthCents).toEqual({status:'available',value:30088377});
+    expect(state.projection.months[0]!.netWorthCents).toEqual({status:'available',value:30455044});
   });
 
   it('initializes an ordinary purchase loan from entered terms while retaining unknown history',()=>{

@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { resolveCashYear } from '../../src/engine/cash/income';
 import { requestContributions } from '../../src/engine/cash/contribution-requests';
 import { makePlan, mustValidate } from '../helpers/plans';
-import type { Salary } from '../../src/engine/model/plan';
+import type { Expense, Salary } from '../../src/engine/model/plan';
 import type { CashYear } from '../../src/engine/cash/income';
 import type { PlanDocument } from '../../src/engine/model/plan';
 import { loadReferences } from '../helpers/references';
 
 const salary = (o: Partial<Salary> = {}): Salary => ({ id: 'salary', name: 'Salary', ownerId: 'owner-a', employerId: 'employer-a', annualGrossCents: 100001, startDate: '2026-01-01', annualRaiseBps: 0, raiseMonth: 1, raiseDay: 1, changes: [], ...o });
+const expense = (o: Partial<Expense> = {}): Expense => ({ id: 'expense', name: 'Expense', amountCents: 120000, frequency: 'annual', startDate: '2026-01-01', annualGrowthBps: 0, use: 'personal', taxCategory: 'personal', ...o });
 const annual = (p: ReturnType<typeof makePlan>, y = p.startYear) => resolveCashYear(mustValidate(p), y);
 
 describe('dated cash streams', () => {
@@ -47,10 +48,49 @@ describe('dated cash streams', () => {
   it('clamps scheduled payment dates and grows only after stream start', () => {
     const c = annual(makePlan({ startYear: 2027, otherIncome: [{ id: 'other', name: 'Other', amountCents: 10000, frequency: 'monthly', startDate: '2026-01-31', annualGrowthBps: 1000, classification: 'non-taxable' }], expenses: [{ id: 'expense', name: 'Expense', amountCents: 500, frequency: 'annual', startDate: '2024-02-29', annualGrowthBps: 0, use: 'personal', taxCategory: 'personal' }] }));
     expect(c.months.map(m => m.otherIncomeCents)).toEqual(Array(12).fill(11000));
-    expect(c.months[1]!.expensesCents).toBe(500);
+    expect(c.months.map(m => m.expensesCents)).toEqual([42,41,42,42,41,42,42,41,42,42,41,42]);
     expect(c.annual.expensesCents).toBe(500);
     expect(c.annual.ordinaryTaxableCents).toBe(0);
     expect(c.annual.nonTaxableCents).toBe(132000);
+  });
+  it('budgets an annual expense monthly without replacing its saved annual amount', () => {
+    const plan = mustValidate(makePlan({ expenses: [expense()] }));
+    const c = resolveCashYear(plan, 2026);
+    expect(c.months.map(m => m.expensesCents)).toEqual(Array(12).fill(10000));
+    expect(c.annual.expensesCents).toBe(120000);
+    expect(plan.expenses[0]).toMatchObject({ amountCents: 120000, frequency: 'annual' });
+  });
+  it.each([
+    { amountCents: 100, expected: [8,9,8,8,9,8,8,9,8,8,9,8] },
+    { amountCents: 13, expected: [1,1,1,1,1,2,1,1,1,1,1,1] },
+  ])('preserves the annual $amountCents-cent expense with cumulative half-up settlement', ({ amountCents, expected }) => {
+    const c = annual(makePlan({ expenses: [expense({ amountCents })] }));
+    expect(c.months.map(m => m.expensesCents)).toEqual(expected);
+    expect(c.annual.expensesCents).toBe(amountCents);
+  });
+  it('grows the annual expense budget on January 1 after its start year', () => {
+    const plan = makePlan({ expenses: [expense({ startDate: '2026-06-15', annualGrowthBps: 1000 })] });
+    expect(annual(plan).months.map(m => m.expensesCents)).toEqual([0,0,0,0,0,10000,10000,10000,10000,10000,10000,10000]);
+    expect(annual(plan).annual.expensesCents).toBe(70000);
+    expect(annual(plan, 2027).months.map(m => m.expensesCents)).toEqual(Array(12).fill(11000));
+    expect(annual(plan, 2027).annual.expensesCents).toBe(132000);
+  });
+  it.each([
+    { endDate: '2026-03-30', expected: [10000,10000,0,0,0,0,0,0,0,0,0,0], total: 20000 },
+    { endDate: '2026-03-31', expected: [10000,10000,10000,0,0,0,0,0,0,0,0,0], total: 30000 },
+  ])('retains the monthly start-day anchor and inclusive $endDate expense end', ({ endDate, expected, total }) => {
+    const c = annual(makePlan({ expenses: [expense({ startDate: '2026-01-31', endDate })] }));
+    expect(c.months.map(m => m.expensesCents)).toEqual(expected);
+    expect(c.annual.expensesCents).toBe(total);
+  });
+  it('retains monthly expense amounts and annual other-income payment timing', () => {
+    const plan = makePlan({
+      expenses: [expense({ amountCents: 10000, frequency: 'monthly', startDate: '2026-02-15', endDate: '2026-04-14' })],
+      otherIncome: [{ id: 'other', name: 'Annual cash income', amountCents: 120000, frequency: 'annual', startDate: '2026-06-15', annualGrowthBps: 1000, classification: 'non-taxable' }],
+    });
+    expect(annual(plan).months.map(m => m.expensesCents)).toEqual([0,10000,10000,0,0,0,0,0,0,0,0,0]);
+    expect(annual(plan).months.map(m => m.otherIncomeCents)).toEqual([0,0,0,0,0,120000,0,0,0,0,0,0]);
+    expect(annual(plan, 2027).months.map(m => m.otherIncomeCents)).toEqual([0,0,0,0,0,132000,0,0,0,0,0,0]);
   });
   it('aggregates other wage income by owner/employer without taxing nontaxable cash', () => {
     const c = annual(makePlan({ salaries: [salary()], otherIncome: [{ id: 'wage', name: 'Wage', amountCents: 100, frequency: 'monthly', startDate: '2026-01-01', annualGrowthBps: 0, classification: 'wage', ownerId: 'owner-a', employerId: 'employer-a' }] }));

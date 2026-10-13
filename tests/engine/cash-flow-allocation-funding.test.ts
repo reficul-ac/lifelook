@@ -91,6 +91,30 @@ describe('allocation monthly funding', () => {
     expect(schedule.requestsByRule.get('primary')).toEqual(Array(12).fill(10));
     expect(schedule.requestsByRule.get('excess')).toEqual(Array(12).fill(0));
   });
+  it('preserves earlier monthly installments when seasonal excess needs a different cadence', () => {
+    const schedule = scheduleAllocationFunding([
+      target('primary', 600),
+      target('retirement', 600, { stage: 'max', employerKey: 'employer' }),
+      target('excess', 2200, { stage: 'overflow' }),
+    ], [...Array.from({ length: 11 }, (_, i) => 200 * (i + 1)), 3400], [
+      { key: 'employer', monthlyCents: Array(12).fill(100) },
+    ]);
+    expect([...schedule.fundedByRule]).toEqual([['primary', 600], ['retirement', 600], ['excess', 2200]]);
+    expect(schedule.requestsByRule.get('primary')).toEqual(Array(12).fill(50));
+    expect(schedule.requestsByRule.get('retirement')).toEqual(Array(12).fill(50));
+    expect(schedule.requestsByRule.get('excess')).toEqual([...Array(11).fill(100), 1100]);
+  });
+  it('keeps prior retirement installments when excess shares seasonal sponsoring wages', () => {
+    const schedule = scheduleAllocationFunding([
+      target('retirement', 1200, { stage: 'max', employerKey: 'employer' }),
+      target('excess', 2200, { stage: 'overflow', employerKey: 'employer' }),
+    ], Array.from({ length: 12 }, (_, i) => 1000 * (i + 1)), [
+      { key: 'employer', monthlyCents: [...Array(11).fill(200), 1200] },
+    ]);
+    expect([...schedule.fundedByRule]).toEqual([['retirement', 1200], ['excess', 2200]]);
+    expect(schedule.requestsByRule.get('retirement')).toEqual(Array(12).fill(100));
+    expect(schedule.requestsByRule.get('excess')).toEqual([...Array(11).fill(100), 1100]);
+  });
   it('moves flexible brokerage funding later to preserve an early payroll window', () => {
     const schedule = scheduleAllocationFunding([
       target('brokerage', 100, { allowedMonths: [1, 12] }),

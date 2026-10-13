@@ -160,16 +160,38 @@ test('applies 93% stocks with an automatic IRA maximum and posts shared excess o
   await entry(page, 0).getByLabel('Allocation percentage (%)', { exact: true }).fill('93.00');
   await entry(page, 1).getByLabel('Max out for the year', { exact: true }).uncheck();
   await entry(page, 1).getByLabel('Max out for the year', { exact: true }).check();
-  await editor(page).getByLabel('Excess allocation account', { exact: true }).selectOption('excess-brokerage');
+  await editor(page).getByLabel('Excess allocation account', { exact: true }).selectOption('account:excess-brokerage');
   await apply(page, true);
   const applied = await savedPlan(page);
   await expectBaseUI(page);
   expect(await savedPlan(page)).toEqual(applied);
   await capture(page, 'desktop-editor.png');
-  await editor(page).getByLabel('Excess allocation account', { exact: true }).selectOption('stocks');
+  await editor(page).getByLabel('Excess allocation account', { exact: true }).selectOption('account:stocks');
   await apply(page);
   const shared = { ...allocationPlan(), cashFlowAllocation: { ...allocationPlan().cashFlowAllocation!, overflow: { id: 'allocation-excess', destination: { kind: 'account' as const, accountId: 'stocks' } } } };
   await expectBaseUI(page, shared, true);
+});
+
+test('selects the cash account in native controls and restores reversed same-ID entries', async ({ page }) => {
+  const base = allocationPlan(), plan = { ...base, accounts: [...base.accounts, { ...base.accounts[0]!, id: 'cash', name: 'Named cash brokerage' }] };
+  await preload(page, plan);
+  await entry(page, 0).getByLabel('Allocation destination', { exact: true }).selectOption({ label: 'Named cash brokerage' });
+  await editor(page).getByLabel('Excess allocation account', { exact: true }).selectOption({ label: 'Named cash brokerage' });
+  await apply(page);
+  const saved = await savedPlan(page);
+  expect(saved.cashFlowAllocation!.entries[0]!.destination).toEqual({ kind: 'account', accountId: 'cash' });
+  expect(saved.cashFlowAllocation!.overflow.destination).toEqual({ kind: 'account', accountId: 'cash' });
+  await expect(page.getByTestId('annual-2026-account-cash-closing')).toHaveText('$143,868.00');
+  const exported = JSON.parse(await backup(page)) as PlanDocument;
+  const restored = { ...exported, cashFlowAllocation: { ...exported.cashFlowAllocation!, entries: [...exported.cashFlowAllocation!.entries].reverse() } };
+  await page.getByLabel('Import JSON backup', { exact: true }).setInputFiles({ name: 'reordered-allocation.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(restored)) });
+  await expect(editor(page).locator('[data-allocation-status]')).toHaveText('Applied allocation');
+  await expect(entry(page, 0).locator('legend')).toHaveText('Allocation 1');
+  await expect(entry(page, 0).getByLabel('Allocation destination', { exact: true }).locator('option:checked')).toHaveText('Roth IRA');
+  await expect(entry(page, 1).getByLabel('Allocation destination', { exact: true }).locator('option:checked')).toHaveText('Named cash brokerage');
+  await expect(editor(page).getByLabel('Excess allocation account', { exact: true }).locator('option:checked')).toHaveText('Named cash brokerage');
+  await expect(entry(page, 1).getByLabel('Allocation percentage (%)', { exact: true })).toHaveAttribute('data-field', 'entries.1.amount.percentBps');
+  expect(await savedPlan(page)).toEqual(restored);
 });
 
 // Catches adding a full percentage target on top of saved deposits to that account.
@@ -215,7 +237,7 @@ for (const monthly of [200000, 205000]) test(`retains refused workplace excess w
   }
   // Start with a different destination, then use the native employer/sponsor controls.
   await preload(page, { ...plan, cashFlowAllocation: { ...plan.cashFlowAllocation!, overflow: allocationPlan().cashFlowAllocation!.overflow } });
-  await editor(page).getByLabel('Excess allocation account', { exact: true }).selectOption('workplace');
+  await editor(page).getByLabel('Excess allocation account', { exact: true }).selectOption('account:workplace');
   await editor(page).getByLabel('Excess sponsoring salary', { exact: true }).selectOption('salary-a');
   await apply(page);
   for (const want of wants) {

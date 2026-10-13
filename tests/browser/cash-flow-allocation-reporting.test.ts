@@ -20,6 +20,32 @@ function mount(p:PlanDocument=plan){const result=mountPresentation(p);contexts.p
 afterEach(()=>{contexts.forEach(c=>c.disclosures.dispose());contexts=[];document.body.replaceChildren();});
 
 describe('accepted allocation reporting',()=>{
+ it.each([{gross:25200000,target:0},{gross:24700000,target:375000}])('discloses a real Roth phaseout maximum of $target cents and routes review to its source',({gross,target})=>{
+  const base=makeAllocationPlan(),p=makeAllocationPlan({accounts:[...base.accounts,{...base.accounts[1]!,id:'roth',name:'Roth IRA',type:'roth-ira'}],salaries:[{...base.salaries[0]!,annualGrossCents:gross}],cashFlowAllocation:makeAllocationPolicy({entries:[{id:'roth-max',priority:1,destination:{kind:'account',accountId:'roth'},amount:{kind:'max-annual'}}]})});
+  const result=calculateProjection(mustValidate(p),loadRuleSet()).years[0]!.cashFlowAllocation!;
+  expect(result.status).toBe('available');if(result.status!=='available')throw new Error('allocation');
+  if(target===0)expect(result.value.originalCashFlowCents).toBe(18100700);
+  expect(result.value.accounts[0]).toMatchObject({targetCents:target,actualCents:target,shortfallCents:0});
+  expect(result.value.accounts[0]!.reasons).toContainEqual(expect.objectContaining({code:'ira-contribution-capped',field:'cashFlowAllocation.entries.0.amount'}));
+  const {root,context,reviews}=mount(p);renderAllocationPie(root,result,p,context);
+  const row=within(root).getByRole('row',{name:/Roth IRA/});expect(row).toHaveTextContent(target===0?'$0.00':'$3,750.00');
+  fireEvent.click(within(row).getByRole('button',{name:/Roth IRA.*funding/}));
+  const panel=within(document.body).getByRole('region',{name:/Roth IRA.*2026/});
+  expect(panel).toHaveTextContent(/income.eligibility limit/i);expect(panel).toHaveTextContent(target===0?'$0.00':'$3,750.00');
+  expect(panel).toHaveTextContent(/computed annual maximum/i);
+  fireEvent.click(within(panel).getByRole('button',{name:/Review Allocation.*Roth IRA/}));
+  expect(reviews[0]).toMatchObject({section:'Investments',recordId:p.cashFlowAllocation!.id,field:'entries.0.amount'});
+  const notes=within(root).getByRole('button',{name:/Allocation notes/});fireEvent.mouseEnter(notes);
+  expect(within(document.body).getByRole('tooltip')).toHaveTextContent(/annual maximum/i);
+  expect(within(document.body).getByRole('tooltip')).not.toHaveTextContent(/prevented the full target/i);
+ });
+ it('keeps refused excess distinct from a fully funded maximum at the same account',()=>{
+  const {root,context}=mount(),overflow=reason('ira-contribution-capped','cashFlowAllocation.overflow.amount');
+  renderAllocationPie(root,{status:'available',value:report({accounts:[account({accountId:'ira',reasons:[overflow]})],reasons:[overflow]})},plan,context);
+  expect(within(root).queryByRole('button',{name:/IRA funding/})).toBeNull();
+  fireEvent.mouseEnter(within(root).getByRole('button',{name:/Allocation notes/}));
+  expect(within(document.body).getByRole('tooltip')).toHaveTextContent(/excess deposit/i);
+ });
  it('aggregates components into one amount-derived account slice plus cash',()=>{
   const {root,context}=mount();renderAllocationPie(root,{status:'available',value:report()},plan,context);
   const svg=within(root).getByRole('img',{name:/2026.*allocation/i});
@@ -84,6 +110,13 @@ describe('accepted allocation reporting',()=>{
   renderAllocationPie(root,{status:'available',value:report({accounts:[account({reasons:[probe]})],excessRetainedCents:0,retainedCashCents:5000,reasons:[probe]})},plan,context);
   expect(within(root).queryByRole('button',{name:/Stocks funding/})).toBeNull();expect(within(root).queryByRole('button',{name:/cash retained/i})).toBeNull();
   expect(within(root).queryByRole('button',{name:/Allocation notes/})).toBeNull();
+ });
+ it('explains an actual cash shortfall separately from the legal maximum at the same source',()=>{
+  const {root,context}=mount(),cap={...reason('ira-contribution-capped','cashFlowAllocation.entries.1.amount'),explanation:'This restriction determines the computed annual maximum. Roth income limits restrict further contributions.'},cash=reason('allocation-cash-shortfall','cashFlowAllocation.entries.1.destination');
+  renderAllocationPie(root,{status:'available',value:report({accounts:[account({accountId:'ira',targetCents:3000,actualCents:2000,shortfallCents:1000,reasons:[cap,cash]})],reasons:[cap,cash],excessRetainedCents:0})},plan,context);
+  fireEvent.mouseEnter(within(root).getByRole('button',{name:/IRA funding/}));
+  expect(within(document.body).getByRole('tooltip')).toHaveTextContent(/available annual cash/i);
+  expect(within(document.body).getByRole('tooltip')).not.toHaveTextContent(/confirmed contribution limit.*prevented/i);
  });
  it('keeps a reconciled partial annual maximum visible as actual funded shares',()=>{
   const {root,context}=mount();renderAllocationPie(root,{status:'available',value:report({accounts:[account({accountId:'ira',targetCents:3000,existingCents:0,percentageCents:0,maximumCents:2000,excessCents:0,actualCents:2000,shortfallCents:1000,share:{status:'available',value:.2},reasons:[reason('allocation-cash-shortfall','cashFlowAllocation.entries.1.destination')]})],retainedCashCents:8000,excessRetainedCents:0})},plan,context);

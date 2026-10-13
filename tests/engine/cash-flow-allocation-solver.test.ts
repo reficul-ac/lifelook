@@ -108,6 +108,8 @@ describe('annual stage reservations',()=>{
   expect(r.report.accounts.find(a=>a.accountId==='ira')?.existingCents).toBe(500000);
   expect(r.report.accounts.find(a=>a.accountId==='roth')?.excessCents).toBe(250000);
   expect(r.household.contributions.find(c=>c.ruleId==='december'&&c.month===12)?.eligibleCents).toEqual({status:'available',value:500000});
+  expect(r.report.reasons).toContainEqual(expect.objectContaining({code:'allocation-protected-limit',field:'cashFlowAllocation.overflow.destination'}));
+  expect(r.report.reasons).toContainEqual(expect.objectContaining({code:'ira-contribution-capped',recordId:'december',field:'amount'}));
  });
  it('protects primary IRA compensation against traditional workplace excess',()=>{
   const base=makeAllocationPlan();const input=fixture([maximum('ira')],'workplace',{salaries:[{...base.salaries[0]!,annualGrossCents:1000000}]});
@@ -283,6 +285,14 @@ it('funds traditional catch-up at a second employer after protected regular defe
  const opening=structuredClone(input.opening),r=resolved(input);
  expect(r.report.accounts.find(a=>a.accountId==='workplace')).toMatchObject({targetCents:2450000,maximumCents:2450000,actualCents:2450000,shortfallCents:0});
  expect(r.report.accounts.find(a=>a.accountId==='workplace-second')).toMatchObject({targetCents:800000,maximumCents:800000,actualCents:800000,shortfallCents:0});
+ expect(r.report.accounts.find(a=>a.accountId==='workplace')?.reasons).toContainEqual(expect.objectContaining({code:'mandatory-roth-catchup',field:'cashFlowAllocation.entries.0.accountId'}));
+ // The same recovered chronology at fully funded percentage targets has no
+ // maximum discovery to explain and must not publish abandoned trial failures.
+ const percentPlan={...input.plan,cashFlowAllocation:{...input.plan.cashFlowAllocation!,entries:entries.map((entry,i)=>({...entry,amount:{kind:'percent' as const,percentBps:i?800:2450}}))}};
+ const recovered=resolved(syntheticCash({...input,plan:mustValidate(percentPlan)},10000000),zeroTaxes);
+ expect(recovered.report.accounts.map(a=>a.actualCents)).toEqual([2450000,800000]);
+ expect(recovered.report.reasons).toEqual([]);
+ expect(r.report.accounts.find(a=>a.accountId==='workplace-second')?.reasons.some(reason=>reason.code==='mandatory-roth-catchup')).toBe(false);
  expect(r.household.contributions.every(c=>c.eligibleCents.status==='available'&&c.eligibleCents.value===c.requestedCents)).toBe(true);
  // AGI $87,500: federal taxable midpoint $55,325 => $2,480 + .12*$30,525 = $6,143.
  // CA taxable $75,700: round($229.12 + $628.04 + .04*$21,386) - $316 = $1,397.

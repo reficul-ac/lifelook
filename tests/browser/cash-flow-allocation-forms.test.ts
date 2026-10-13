@@ -18,10 +18,36 @@ const row=(editor:HTMLElement,index=1)=>within(editor).getByRole('group',{name:`
 const click=(root:HTMLElement,name:string)=>fireEvent.click(within(root).getByRole('button',{name}));
 
 describe('native allocation policy editor',()=>{
+ it.each(['primary','excess'])('selects an account named cash in the %s destination without selecting savings',kind=>{
+  const base=makeAllocationPlan(),{controller,editor}=setup(makeAllocationPlan({accounts:[...base.accounts,{...base.accounts[0]!,id:'cash',name:'Named cash brokerage'}]}));
+  click(editor,'Add allocation');const host=kind==='primary'?row(editor):editor,label=kind==='primary'?'Allocation destination':'Excess allocation account';
+  const select=within(host).getByLabelText(label) as HTMLSelectElement,option=within(select).getByRole('option',{name:'Named cash brokerage'}) as HTMLOptionElement;
+  fireEvent.change(select,{target:{value:option.value}});
+  const draft=controller.getAllocationDraft().value;
+  expect(kind==='primary'?(draft.entries as any[])[0].destination:(draft.overflow as any).destination).toEqual({kind:'account',accountId:'cash'});
+  expect(select.selectedOptions[0]).toHaveTextContent('Named cash brokerage');
+  click(editor,'Apply allocation');const saved=controller.getState().savedPlan.cashFlowAllocation!;
+  expect(kind==='primary'?saved.entries[0]!.destination:saved.overflow.destination).toEqual({kind:'account',accountId:'cash'});
+ });
+ it('restores an account with ID cash distinctly in both native destination controls',()=>{
+  const base=makeAllocationPlan(),{controller,editor}=setup();
+  controller.resetPlan(makeAllocationPlan({accounts:[...base.accounts,{...base.accounts[0]!,id:'cash',name:'Named cash brokerage'}],cashFlowAllocation:makeAllocationPolicy({entries:[{id:'cash-account-row',priority:1,destination:{kind:'account',accountId:'cash'},amount:{kind:'percent',percentBps:1000}}],overflow:{id:'cash-account-excess',destination:{kind:'account',accountId:'cash'}}})}));
+  for(const select of [within(row(editor)).getByLabelText('Allocation destination'),within(editor).getByLabelText('Excess allocation account')])expect((select as HTMLSelectElement).selectedOptions[0]).toHaveTextContent('Named cash brokerage');
+ });
+ it('restores same-ID entries in document order while retaining controls and field routing',()=>{
+  const plan=makeAllocationPlan({cashFlowAllocation:makeAllocationPolicy({entries:[{id:'stocks-row',priority:1,destination:{kind:'account',accountId:'brokerage'},amount:{kind:'percent',percentBps:1000}},{id:'cash-row',priority:2,destination:{kind:'cash'},amount:{kind:'percent',percentBps:2000}}]})});
+  const {controller,editor}=setup(plan),first=row(editor),second=row(editor,2),text=within(second).getByLabelText('Allocation percentage (%)');
+  controller.resetPlan({...plan,cashFlowAllocation:{...plan.cashFlowAllocation!,entries:[...plan.cashFlowAllocation!.entries].reverse()}});
+  expect([...editor.querySelectorAll('fieldset')]).toEqual([second,first]);
+  expect(within(row(editor)).getByLabelText('Allocation percentage (%)')).toBe(text);
+  expect(text).toHaveAttribute('data-field','entries.0.amount.percentBps');
+  setField(second,'Allocation percentage (%)','23.45');
+  expect(controller.getAllocationDraft().value.entries).toMatchObject([{id:'cash-row',amount:{percentBps:'23.45'}},{id:'stocks-row',amount:{percentBps:'10.00'}}]);
+ });
  it('adds stable rows, applies a separate transaction, and discards independently',()=>{
   const {root,controller,editor}=setup();expect(editor).not.toHaveAttribute('data-editable-section');
-  expect(within(editor).getByLabelText('Allocation year')).toHaveValue('2026');expect(within(editor).getByLabelText('Excess allocation account')).toHaveValue('cash');
-  const unrelated=controller.beginAdd('expenses');click(editor,'Add allocation');const first=row(editor);setField(first,'Allocation destination','brokerage');setField(first,'Allocation priority','3');setField(first,'Allocation percentage (%)','12.34');
+  expect(within(editor).getByLabelText('Allocation year')).toHaveValue('2026');expect(within(editor).getByLabelText('Excess allocation account')).toHaveValue('cash:');
+  const unrelated=controller.beginAdd('expenses');click(editor,'Add allocation');const first=row(editor);setField(first,'Allocation destination','account:brokerage');setField(first,'Allocation priority','3');setField(first,'Allocation percentage (%)','12.34');
   const draft=controller.getAllocationDraft();expect(draft.value.entries).toMatchObject([{id:expect.any(String),priority:'3',amount:{kind:'percent',percentBps:'12.34'}}]);expect(within(root).getByTestId('draft-status')).toHaveTextContent('Allocation edits not applied');
   click(editor,'Apply allocation');expect(controller.getState().savedPlan.cashFlowAllocation?.entries[0]).toMatchObject({id:(draft.value.entries as any[])[0].id,priority:3,amount:{kind:'percent',percentBps:1234}});expect(controller.getState().drafts[unrelated]).toBeDefined();expect(within(root).getByTestId('save-announcement')).toHaveTextContent('Allocation applied');
   click(editor,'Add allocation');click(editor,'Discard allocation edits');expect(controller.getState().allocationDraft).toBeUndefined();expect(within(editor).getAllByRole('group',{name:/^Allocation \d+$/})).toHaveLength(1);
@@ -39,13 +65,13 @@ describe('native allocation policy editor',()=>{
   const {editor}=setup();click(editor,'Add allocation');setField(row(editor),'Allocation percentage (%)','101.00');flush();const text=within(row(editor)).getByLabelText('Allocation percentage (%)');expect(text).toHaveValue('101.00');expect(text).toHaveAccessibleDescription('Enter a percentage from 0% to 100%.');
  });
  it('restricts maximum mode to retirement destinations and salary choices to the account owner',()=>{
-  const {controller,editor}=setup();click(editor,'Add allocation');const first=row(editor);setField(first,'Allocation destination','brokerage');expect(within(first).queryByLabelText('Max out for the year')).toBeNull();setField(first,'Allocation destination','workplace');
+  const {controller,editor}=setup();click(editor,'Add allocation');const first=row(editor);setField(first,'Allocation destination','account:brokerage');expect(within(first).queryByLabelText('Max out for the year')).toBeNull();setField(first,'Allocation destination','account:workplace');
   const sponsor=within(first).getByLabelText('Allocation sponsoring salary');expect(within(sponsor).getByRole('option',{name:'salary-a'})).toBeDefined();expect(within(sponsor).queryByRole('option',{name:'salary-b'})).toBeNull();setField(first,'Allocation sponsoring salary','salary-a');fireEvent.click(within(first).getByLabelText('Max out for the year'));
   expect(controller.getAllocationDraft().value.entries).toMatchObject([{destination:{accountId:'workplace',sponsoringSalaryId:'salary-a'},amount:{kind:'max-annual'}}]);expect(within(first).queryByRole('slider')).toBeNull();flush();expect(first).toHaveTextContent('Automatic annual maximum');
-  setField(first,'Allocation destination','cash');expect(within(first).queryByLabelText('Max out for the year')).toBeNull();expect(controller.getAllocationDraft().value.entries).toMatchObject([{amount:{kind:'percent',percentBps:'0.00'}}]);
+  setField(first,'Allocation destination','cash:');expect(within(first).queryByLabelText('Max out for the year')).toBeNull();expect(controller.getAllocationDraft().value.entries).toMatchObject([{amount:{kind:'percent',percentBps:'0.00'}}]);
  });
  it('keeps annual maximum as a policy mode across selected years and Apply',()=>{
-  const {controller,editor}=setup();click(editor,'Add allocation');setField(row(editor),'Allocation destination','ira');fireEvent.click(within(row(editor)).getByLabelText('Max out for the year'));flush();const draft=controller.getAllocationDraft();setField(editor,'Allocation year','2027');expect(controller.getAllocationDraft()).toBe(draft);expect(row(editor)).toHaveTextContent('Automatic annual maximum');expect(row(editor)).toHaveTextContent('$7,500.00');click(editor,'Apply allocation');expect(controller.getState().savedPlan.cashFlowAllocation?.entries[0]?.amount).toEqual({kind:'max-annual'});
+  const {controller,editor}=setup();click(editor,'Add allocation');setField(row(editor),'Allocation destination','account:ira');fireEvent.click(within(row(editor)).getByLabelText('Max out for the year'));flush();const draft=controller.getAllocationDraft();setField(editor,'Allocation year','2027');expect(controller.getAllocationDraft()).toBe(draft);expect(row(editor)).toHaveTextContent('Automatic annual maximum');expect(row(editor)).toHaveTextContent('$7,500.00');click(editor,'Apply allocation');expect(controller.getState().savedPlan.cashFlowAllocation?.entries[0]?.amount).toEqual({kind:'max-annual'});
  });
  it('retains invalid raw text and last valid preview with honest stale status and actionable errors',()=>{
   const {root,controller,editor}=setup();click(editor,'Add allocation');setField(row(editor),'Allocation percentage (%)','20.00');flush();expect(editor.querySelector('svg')).not.toBeNull();const applied=controller.getState().projection;
@@ -62,7 +88,7 @@ describe('native allocation policy editor',()=>{
   const {editor}=setup(plan);expect(row(editor)).toHaveTextContent('Requested: 50.00%');expect(row(editor)).toHaveTextContent('Existing deposits included: $1,200.00');expect(row(editor)).toHaveTextContent('Actual funded: $7,500.00');expect(row(editor)).toHaveTextContent('Actual share:');expect(editor).toHaveTextContent('Remaining before excess:');expect(editor).not.toHaveTextContent('Remaining before excess: $0.00');
  });
  it('updates destination eligibility and sponsor choices from latest saved account types and ownership',()=>{
-  const {controller,editor}=setup();click(editor,'Add allocation');const first=row(editor);setField(first,'Allocation destination','workplace');setField(first,'Allocation sponsoring salary','salary-a');
+  const {controller,editor}=setup();click(editor,'Add allocation');const first=row(editor);setField(first,'Allocation destination','account:workplace');setField(first,'Allocation sponsoring salary','salary-a');
   const account=controller.getDraft('accounts','workplace');controller.editDraft(account.recordId,{...account,value:{...account.value,ownerId:'owner-b'}});controller.saveRecord(account.recordId);expect(within(within(first).getByLabelText('Allocation sponsoring salary')).queryByRole('option',{name:'salary-a'})).toBeNull();expect(within(first).getByLabelText('Allocation sponsoring salary')).toHaveValue('salary-a');
   const brokerage=controller.getDraft('accounts','brokerage');controller.editDraft(brokerage.recordId,{...brokerage,value:{...brokerage.value,type:'rsu',openingIraBasis:{known:false},rsu:{employerId:'employer-0',currentSharePriceCents:'100.00',grants:[]}}});expect(controller.saveRecord(brokerage.recordId).accepted).toBe(true);expect(within(within(first).getByLabelText('Allocation destination')).queryByRole('option',{name:'Stocks'})).toBeNull();
  });

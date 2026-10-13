@@ -8,6 +8,7 @@ function note(issues:readonly Issue[],excess=true):string{
   const deposit=excess?'excess deposit':'full target';
   if(issues.some(i=>/^required-|missing|unknown|needs-data/.test(i.code)))return `Eligibility information is missing; the ${deposit} could not be confirmed.`;
   if(issues.some(i=>/timing|compensation|payroll/.test(i.code)))return `Compensation timing prevented the ${deposit}.`;
+  if(issues.some(i=>i.code==='allocation-cash-shortfall'))return 'Available annual cash could not fully fund the target while preserving earlier allocations.';
   if(issues.some(i=>/capped|limit|ineligible|phaseout|catchup-not-offered|mandatory-roth/.test(i.code)))return `A confirmed contribution limit or eligibility restriction prevented the ${deposit}.`;
   return excess?'The excess destination could not accept the full amount; the remainder stays in cash.':'Available annual cash could not fully fund the target while preserving earlier allocations.';
 }
@@ -20,6 +21,13 @@ function cashReasons(value:CashFlowAllocationYear,plan:PlanDocument):readonly Is
   const prefix=`cashFlowAllocation.entries.${policy.entries.findIndex(source=>source.id===entry.id)}.`;
   return value.reasons.filter(issue=>issue.recordId===entry.id||issue.recordId===policy.id&&issue.field?.startsWith(prefix));
 }
+function isMaximumExplanation(issue:Issue,plan:PlanDocument):boolean{
+  const policy=plan.cashFlowAllocation;
+  return !!policy?.entries.some((entry,index)=>entry.amount.kind==='max-annual'&&(issue.recordId===entry.id||issue.recordId===policy.id&&issue.field?.startsWith(`cashFlowAllocation.entries.${index}.`)));
+}
+function hasMaximumExplanation(account:CashFlowAllocationYear['accounts'][number],plan:PlanDocument):boolean{
+  return account.reasons.some(issue=>isMaximumExplanation(issue,plan));
+}
 function fundingTable(root:HTMLElement,value:CashFlowAllocationYear,plan:PlanDocument,context:IssueViewContext):void{
   const wrap=element('div');wrap.className='allocation-table-wrap';
   const table=element('table');table.append(element('caption',`Actual allocation funding · ${value.year}`));
@@ -28,7 +36,7 @@ function fundingTable(root:HTMLElement,value:CashFlowAllocationYear,plan:PlanDoc
   const body=element('tbody');
   for(const account of value.accounts){
     const row=element('tr'),label=getRecordLabel(plan,account.accountId),title=element('th',label);title.scope='row';row.append(title);
-    if(account.shortfallCents>0||account.reasons.some(i=>i.code==='allocation-existing-above-target'))title.append(context.disclosures.createTrigger({label:account.shortfallCents>0?'Partially funded':'ⓘ',accessibleLabel:`${label} funding details · ${value.year}`,title:`${label} funding · ${value.year}`,preview:account.shortfallCents>0?`${formatCents(account.shortfallCents)} below target. ${note(account.reasons,false)}`:note(account.reasons,false),renderDetails:node=>{
+    if(account.shortfallCents>0||hasMaximumExplanation(account,plan)||account.reasons.some(i=>i.code==='allocation-existing-above-target'))title.append(context.disclosures.createTrigger({label:account.shortfallCents>0?'Partially funded':'ⓘ',accessibleLabel:`${label} funding details · ${value.year}`,title:`${label} funding · ${value.year}`,preview:hasMaximumExplanation(account,plan)&&account.shortfallCents===0?'The annual maximum reflects confirmed contribution limits and eligibility.':account.shortfallCents>0?`${formatCents(account.shortfallCents)} below target. ${note(account.reasons,false)}`:note(account.reasons,false),renderDetails:node=>{
       node.append(element('p',`${label} · ${value.year}: target ${formatCents(account.targetCents)}, actual funded ${formatCents(account.actualCents)}, shortfall ${formatCents(account.shortfallCents)}.`));details(node,account.reasons,value.year,context);
     }}));
     function amount(cents:number){const cell=element('td');appendAmount(cell,{status:'available',value:cents},context,{label,period:{year:value.year}});row.append(cell);}
@@ -86,8 +94,9 @@ export function renderAllocationPie(root:HTMLElement,report:Available<CashFlowAl
   fundingTable(root,value,plan,viewContext);
   root.append(element('p',`Excess offered: ${formatCents(value.excessOfferedCents)} · Excess accepted: ${formatCents(value.excessAcceptedCents)} · Excess retained: ${formatCents(value.excessRetainedCents)}`));
   const savingReasons=value.explicitCashShortfallCents>0?cashReasons(value,plan):[];
-  const meaningfulReasons=value.reasons.filter(issue=>savingReasons.includes(issue)||issue.code==='allocation-existing-above-target'||value.status!=='funded'||value.accounts.some(account=>account.shortfallCents>0&&account.reasons.some(reason=>reason.code===issue.code&&reason.recordId===issue.recordId&&reason.field===issue.field))||value.excessRetainedCents>0&&plan.cashFlowAllocation?.overflow.destination.kind==='account'&&(issue.recordId===plan.cashFlowAllocation.overflow.id||issue.field?.includes('overflow')));
-  if(meaningfulReasons.length){const reasons=element('div');reasons.append(context.disclosures.createTrigger({label:'Allocation notes',accessibleLabel:`Allocation notes · ${value.year}`,title:`Allocation notes · ${value.year}`,preview:note(meaningfulReasons,value.excessRetainedCents>0&&plan.cashFlowAllocation?.overflow.destination.kind==='account'),renderDetails:node=>details(node,meaningfulReasons,value.year,viewContext)}));root.append(reasons);}
+  const meaningfulReasons=value.reasons.filter(issue=>savingReasons.includes(issue)||issue.code==='allocation-existing-above-target'||value.status!=='funded'||value.accounts.some(account=>(account.shortfallCents>0||hasMaximumExplanation(account,plan))&&account.reasons.some(reason=>reason.code===issue.code&&reason.recordId===issue.recordId&&reason.field===issue.field))||value.excessRetainedCents>0&&plan.cashFlowAllocation?.overflow.destination.kind==='account'&&(issue.recordId===plan.cashFlowAllocation.overflow.id||issue.field?.includes('overflow')));
+  const maximumOnly=meaningfulReasons.length>0&&meaningfulReasons.every(issue=>isMaximumExplanation(issue,plan)&&value.accounts.some(account=>account.shortfallCents===0&&hasMaximumExplanation(account,plan)&&account.reasons.some(reason=>reason.code===issue.code&&reason.recordId===issue.recordId&&reason.field===issue.field)));
+  if(meaningfulReasons.length){const reasons=element('div');reasons.append(context.disclosures.createTrigger({label:'Allocation notes',accessibleLabel:`Allocation notes · ${value.year}`,title:`Allocation notes · ${value.year}`,preview:maximumOnly?'Confirmed contribution limits and eligibility determine the annual maximum.':note(meaningfulReasons,value.excessRetainedCents>0&&plan.cashFlowAllocation?.overflow.destination.kind==='account'),renderDetails:node=>details(node,meaningfulReasons,value.year,viewContext)}));root.append(reasons);}
 }
 export function renderAllocationYears(root:HTMLElement,years:readonly AnnualProjection[],context:IssueViewContext):void{
   context.disclosures.closeWithin(root,false);root.replaceChildren();const reports=years.filter(year=>year.cashFlowAllocation!==undefined);if(!reports.length)return;

@@ -91,8 +91,13 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
   const workplace = resolveWorkplaceContributions(adapter.plan, input.cash, input.legacyRequests, input.rules);
   const employers = workplace.compensationByEmployer.map(employer => ({ key: JSON.stringify([employer.ownerId, employer.employerId]), monthlyCents: employer.monthlyCents.map((amount, month) => Math.max(0, amount - sum(workplace.records.filter(record => record.ownerId === employer.ownerId && record.month === month + 1 && input.legacyRequests.find(request => request.ruleId === record.ruleId)?.employerId === employer.employerId).map(record => record.eligibleCents.status === 'available' ? record.eligibleCents.value : 0)))) }));
   const locate = (issues: readonly Issue[], ruleId: string) => {
-    const source = adapter.sourceMap.get(ruleId)!;
-    return issues.map(issue => ({ ...issue, recordId: source.policyId, field: `${source.fieldPrefix}.${issue.field ?? 'destination'}` }));
+    return issues.map(issue => {
+      // Legal facts belong to their producing rule, including protected legacy
+      // rules. Only allocation-owned records need a policy field translation.
+      const source = adapter.sourceMap.get(issue.recordId ?? ruleId)
+        ?? (issue.recordId === policy.id ? adapter.sourceMap.get(ruleId) : undefined);
+      return source ? { ...issue, recordId: source.policyId, field: `${source.fieldPrefix}.${issue.field ?? 'destination'}` } : issue;
+    });
   };
   const issue = (code: string, explanation: string): Issue => ({ code, recordId: policy.id, year: input.cash.year, field: 'cashFlowAllocation', severity: 'warning', explanation, resolution: 'Adjust allocation targets or supply the required legal and tax facts.' });
   const nonconvergence = (): Available<never> => ({ status: 'unsupported-case', issues: [issue('allocation-nonconvergence', 'Annual allocation and taxes did not reach a verified stable result.')] });
@@ -154,13 +159,12 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
         const requested = sum(requests.filter(request => request.ruleId === ruleId).map(request => request.requestedCents));
         const preserves = [...protectedTotals].every(([id, value]) => eligible(household, id) >= value)
           && existing.contributions.every(record => household.contributions.some(other => other.ruleId === record.ruleId && other.month === record.month && other.eligibleCents.status === 'available' && record.eligibleCents.status === 'available' && other.eligibleCents.value >= record.eligibleCents.value));
-        return { candidate, requests, household, actual, unavailable, requested, preserves, valid: !unavailable && preserves && eligible(household, ruleId) === requested };
+        return { candidate, requests, household, actual, unavailable, requested, preserves, firstMonth, orderRegularFirst, valid: !unavailable && preserves && eligible(household, ruleId) === requested };
       };
       let trial = probe(desired);
       const scheduledDesired = trial.requested;
       if (trial.unavailable && trial.unavailable.status !== 'available') return { ...trial.unavailable, issues: locate(trial.unavailable.issues, ruleId) };
       if (!trial.valid) {
-        reasons.push(...locate(trial.household.contributions.flatMap(record => record.reasons), ruleId));
         const initial = trial;
         let best = probe(0);
         // Employer-specific restrictions can reserve regular funding for an
@@ -202,6 +206,24 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
         trial = best;
       }
       const amount = eligible(trial.household, ruleId);
+      if (amount < scheduledDesired) {
+        // Diagnose only the marginal refusal in the recovered schedule. Initial
+        // discovery/chronology failures do not explain an accepted result.
+        // This extra read-only probe never changes targets or accepted requests.
+        const boundary = probe(amount + 1, trial.firstMonth, trial.orderRegularFirst);
+        for (const record of boundary.household.contributions) {
+          const savedMonth = existing.contributions.find(saved => saved.ruleId === record.ruleId && saved.month === record.month);
+          const displaced = record.ruleId !== ruleId && (
+            eligible(boundary.household, record.ruleId) < (protectedTotals.get(record.ruleId) ?? 0)
+            || savedMonth?.eligibleCents.status === 'available' && record.eligibleCents.status === 'available' && record.eligibleCents.value < savedMonth.eligibleCents.value);
+          if (record.ruleId === ruleId && record.eligibleCents.status === 'available' && record.eligibleCents.value < record.requestedCents) reasons.push(...locate(record.reasons, ruleId));
+          else if (displaced) {
+            const account = adapter.plan.accounts.find(account => account.id === record.accountId)!;
+            reasons.push(...locate([{ ...issue('allocation-protected-limit', `Additional funding here would reduce protected deposits for ${account.name}. Those deposits retain their funding.`), field: 'destination' }], ruleId));
+            reasons.push(...locate(record.reasons.map(reason => ({ ...reason, explanation: `A rejected additional allocation would reduce these protected deposits. ${reason.explanation}` })), record.ruleId));
+          }
+        }
+      }
       if (amount === scheduledDesired && scheduledDesired < desired) reasons.push(...locate([{ ...issue(sponsor ? 'allocation-compensation-timing' : 'allocation-cash-shortfall', sponsor ? 'Available cash and sponsoring monthly wages cannot fund the complete target together.' : 'Available cash cannot fund the complete target while preserving earlier allocations.'), field: 'destination' }], ruleId));
       targets = trial.candidate.map(candidate => candidate.ruleId === ruleId ? { ...candidate, requestedCents: amount } : candidate);
       acceptedRequests = trial.requests;
@@ -232,12 +254,16 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
         const owner = previous.ira.owners.find(owner => owner.ownerId === account.ownerId)!;
         const limit = account.type.endsWith('-ira') ? owner.ownerLimitCents : available(sum(workplace.compensationByOwner.map(owner => owner.annualCents)));
         if (limit.status !== 'available') return { ...limit, issues: locate(limit.issues, entry.id) };
-        const saved = { targets, acceptedRequests, protectedHousehold, protectionFloors: new Map(protectionFloors) };
+        const saved = { targets, acceptedRequests, protectedHousehold, protectionFloors: new Map(protectionFloors), reasonCount: reasons.length };
         const unlimited = Array<Cents>(12).fill(sum([limit.value, ...targets.map(target => target.requestedCents)]));
         const capacity = add(entry.id, stage, entry.priority, limit.value, unlimited);
+        // Retain only the capacity explanation produced by the marginal legal
+        // refusal, including a known zero maximum; restore all discovery state.
+        const capacityReasons = reasons.splice(saved.reasonCount);
         targets = saved.targets; acceptedRequests = saved.acceptedRequests; protectedHousehold = saved.protectedHousehold; protectionFloors = saved.protectionFloors;
         if (capacity.status !== 'available') return capacity;
         target = sum([existingByAccount(accountId), capacity.value]);
+        reasons.push(...capacityReasons.map(reason => ({ ...reason, explanation: `This restriction determines the computed annual maximum. ${reason.explanation}` })));
       }
       accountTargets.set(accountId, target);
       if (existingByAccount(accountId) > target) reasons.push(...locate([{ ...issue('allocation-existing-above-target', 'Eligible saved deposits exceed the configured target; those deposits keep their saved amounts and dates.'), field: 'amount' }], entry.id));

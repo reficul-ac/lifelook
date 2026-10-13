@@ -40,11 +40,12 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
   const overflow=field(overflowHost,'Excess allocation account','overflow.destination.accountId','select',value=>edit(['overflow','destination'],destination(String(value))));
   overflow.node.parentElement!.dataset.fieldGroup='overflow.destination';overflow.node.parentElement!.dataset.groupLabel='Excess allocation account';
   const overflowSponsorHost=element('div');overflowHost.append(overflowSponsorHost);let overflowSponsor:Control|undefined;
-  function options(control:Control,choices:readonly {value:string;label:string}[],value:string){
-    const node=control.node as HTMLSelectElement,next=[...choices];if(!next.some(choice=>choice.value===value))next.push({value,label:`Unavailable (${value||'no selection'})`});
+  function options(control:Control,choices:readonly {value:string;label:string}[],value:string,missingLabel=value){
+    const node=control.node as HTMLSelectElement,next=[...choices];if(!next.some(choice=>choice.value===value))next.push({value,label:`Unavailable (${missingLabel||'no selection'})`});
     const signature=JSON.stringify(next);if(node.dataset.options!==signature){node.replaceChildren(...next.map(choice=>{const option=element('option',choice.label);option.value=choice.value;return option;}));node.dataset.options=signature;}if(node.value!==value)node.value=value;
   }
-  function destination(value:string):RawObject{return value==='cash'?{kind:'cash'}:{kind:'account',accountId:value};}
+  function destination(value:string):RawObject{return value==='cash:'?{kind:'cash'}:{kind:'account',accountId:value.startsWith('account:')?value.slice('account:'.length):''};}
+  const destinationValue=(dest:RawObject)=>dest.kind==='cash'?'cash:':`account:${String(dest.accountId??'')}`;
   function add(){
     const used=new Set<string>();const scan=(value:unknown)=>{if(!value||typeof value!=='object')return;const raw=object(value);if(typeof raw.id==='string')used.add(raw.id);Object.values(raw).forEach(scan);};scan(controller.getState());scan(draft().value);let id:string;do{id=`allocation-entry-${++sequence}`;}while(used.has(id));
     edit(['entries'],[...entries(draft().value),{id,priority:String(entries(draft().value).length+1),destination:{kind:'cash'},amount:{kind:'percent',percentBps:'0.00'}}]);
@@ -52,7 +53,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
   function createRow(id:string):Row{
     const row=element('fieldset'),legend=element('legend');row.append(legend);
     const dest=field(row,'Allocation destination','','select',value=>{
-      const i=index(id);if(i<0)return;const current=draft(),next=setAt(current.value,['entries',i,'destination'],destination(String(value))),account=controller.getState().savedPlan.accounts.find(a=>a.id===value);
+      const i=index(id);if(i<0)return;const current=draft(),next=setAt(current.value,['entries',i,'destination'],destination(String(value))),account=controller.getState().savedPlan.accounts.find(a=>a.id===destination(String(value)).accountId);
       if(object(entries(next)[i]?.amount).kind==='max-annual'&&!retirement(account?.type))entries(next)[i]!.amount={kind:'percent',percentBps:'0.00'};
       controller.editAllocationDraft({...current,value:next});
     });
@@ -69,12 +70,15 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
   function syncControls(){
     const state=controller.getState(),current=draft(),plan=state.savedPlan;form.dataset.recordId=current.recordId;
     selectedYear=Math.max(plan.startYear,Math.min(plan.startYear+plan.horizonYears-1,selectedYear));options(year,Array.from({length:plan.horizonYears},(_,i)=>({value:String(plan.startYear+i),label:String(plan.startYear+i)})),String(selectedYear));
-    const choices=[{value:'cash',label:'Cash / savings'},...plan.accounts.filter(a=>a.type!=='rsu').map(a=>({value:a.id,label:a.name}))],active=new Set<string>();
+    const choices=[{value:'cash:',label:'Cash / savings'},...plan.accounts.filter(a=>a.type!=='rsu').map(a=>({value:`account:${a.id}`,label:a.name}))],active=new Set<string>();
     entries(current.value).forEach((entry,i)=>{
-      const id=String(entry.id);active.add(id);let row=rows.get(id);if(!row){row=createRow(id);rows.set(id,row);rowHost.append(row.root);}row.legend.textContent=`Allocation ${i+1}`;
+      const id=String(entry.id);active.add(id);let row=rows.get(id);if(!row){row=createRow(id);rows.set(id,row);}
+      // Move only on a changed document order; ordinary edits keep focus/cursor.
+      if(rowHost.children[i]!==row.root)rowHost.insertBefore(row.root,rowHost.children[i]??null);
+      row.legend.textContent=`Allocation ${i+1}`;
       const prefix=`entries.${i}`,dest=object(entry.destination),amount=object(entry.amount),account=plan.accounts.find(a=>a.id===dest.accountId);
       row.amountHost.dataset.fieldGroup=`${prefix}.amount`;row.amountHost.dataset.groupLabel='Allocation amount';
-      row.destination.node.parentElement!.dataset.fieldGroup=`${prefix}.destination`;row.destination.setPath(`${prefix}.destination.accountId`);options(row.destination,choices,dest.kind==='cash'?'cash':String(dest.accountId??''));row.priority.setPath(`${prefix}.priority`);if(row.priority.node.value!==String(entry.priority??''))row.priority.node.value=String(entry.priority??'');
+      row.destination.node.parentElement!.dataset.fieldGroup=`${prefix}.destination`;row.destination.setPath(`${prefix}.destination.accountId`);options(row.destination,choices,destinationValue(dest),String(dest.accountId??''));row.priority.setPath(`${prefix}.priority`);if(row.priority.node.value!==String(entry.priority??''))row.priority.node.value=String(entry.priority??'');
       row.sponsor=syncSponsor(row.sponsorHost,row.sponsor,dest,`${prefix}.destination.sponsoringSalaryId`,'Allocation sponsoring salary',value=>edit(['entries',index(id),'destination','sponsoringSalaryId'],value||undefined));
       const mode=`${retirement(account?.type)}:${amount.kind}`;
       if(row.mode!==mode){
@@ -92,7 +96,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
       row.percent?.setPath(`${prefix}.amount.percentBps`);if(row.percent){const raw=String(amount.percentBps??'');if(row.percent.node.value!==raw)row.percent.node.value=raw;const parsed=parseRateInput(raw);if(parsed.status==='available'&&parsed.value>=0&&parsed.value<=10000&&row.slider)row.slider.node.value=String(parsed.value/100);}
     });
     for(const [id,row] of rows)if(!active.has(id)){context.disclosures.closeWithin(row.root,false);row.root.remove();rows.delete(id);}
-    const dest=object(object(current.value.overflow).destination);options(overflow,choices,dest.kind==='cash'?'cash':String(dest.accountId??''));overflowSponsor=syncSponsor(overflowSponsorHost,overflowSponsor,dest,'overflow.destination.sponsoringSalaryId','Excess sponsoring salary',value=>edit(['overflow','destination','sponsoringSalaryId'],value||undefined));
+    const dest=object(object(current.value.overflow).destination);options(overflow,choices,destinationValue(dest),String(dest.accountId??''));overflowSponsor=syncSponsor(overflowSponsorHost,overflowSponsor,dest,'overflow.destination.sponsoringSalaryId','Excess sponsoring salary',value=>edit(['overflow','destination','sponsoringSalaryId'],value||undefined));
   }
   function syncFeedback(issues:readonly Issue[]){
     context.disclosures.closeWithin(feedback,false);feedback.replaceChildren();for(const control of form.querySelectorAll<HTMLElement>('[data-field]')){control.removeAttribute('aria-invalid');control.removeAttribute('aria-describedby');}for(const error of form.querySelectorAll<HTMLElement>('[data-allocation-field-error]'))error.replaceChildren();

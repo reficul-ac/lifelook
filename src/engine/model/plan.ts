@@ -90,6 +90,13 @@ export interface Expense extends RecurringPayment {
   readonly taxCategory: 'property-tax' | 'homeowners-insurance' | 'mortgage-insurance' | 'repair' | 'operating' | 'capital' | 'personal';
   readonly mortgageInsuranceQualification?: History<boolean>;
 }
+/** Fixed age-based household spending; this does not establish tax dependent eligibility. */
+export interface ChildPlan {
+  readonly id: string;
+  readonly name: string;
+  readonly birthMonth: YearMonth;
+  readonly includeAge18: boolean;
+}
 export interface RsuGrant {
   readonly id: string;
   readonly name: string;
@@ -272,6 +279,8 @@ export interface PlanDocument {
   readonly salaries: readonly Salary[];
   readonly otherIncome: readonly OtherIncome[];
   readonly expenses: readonly Expense[];
+  /** Optional for compatibility with existing schema-version-1 plans. */
+  readonly children?: readonly ChildPlan[];
   readonly accounts: readonly Account[];
   readonly contributions: readonly ContributionRule[];
   readonly cashFlowAllocation?: CashFlowAllocationPolicy;

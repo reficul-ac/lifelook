@@ -281,6 +281,7 @@ export function validatePlan(raw: unknown): ValidationResult {
   const salaries = records(v, root, 'salaries');
   const otherIncome = records(v, root, 'otherIncome');
   const expenses = records(v, root, 'expenses');
+  const children = root.children === undefined ? [] : records(v, root, 'children');
   const accounts = records(v, root, 'accounts');
   const contributions = records(v, root, 'contributions', false);
   const debts = records(v, root, 'debts');
@@ -290,6 +291,11 @@ export function validatePlan(raw: unknown): ValidationResult {
   const rentalById = new Map(rentals.map(o => [recordId(o), o]));
   const accountById = new Map(accounts.map(o => [recordId(o), o]));
   const salaryById = new Map(salaries.map(o => [recordId(o), o]));
+  children.forEach(child => {
+    const id = recordId(child);
+    if (!isValidYearMonth(child.birthMonth)) v.issue('birthMonth', id, 'Use a valid birth month (YYYY-MM).');
+    v.bool(child.includeAge18, 'includeAge18', id);
+  });
   const loanById = new Map<string, Obj>();
   const reference = (value: unknown, set: ReadonlySet<string> | ReadonlyMap<string, unknown>, field: string, id: string): void => {
     if (v.text(value, field, id) && !set.has(value)) v.issue(field, id, 'The referenced record does not exist.', 'dangling-reference');
@@ -585,6 +591,6 @@ export function createPlan(today: ISODate, id: string): PlanDocument {
       coverageAnswers: { additionalIncome: unknown, additionalCredits: unknown, qualifiedDividendsOrCapitalGains: unknown, retirementDistributions: unknown, priorFederalMinimumTaxCredits: unknown, priorCaliforniaMinimumTaxCredits: unknown },
     },
     taxPolicy: { baselineYear: 2026, futureIndexGrowthBps: 0, actualStateTaxPaidByYear: [] },
-    salaries: [], otherIncome: [], expenses: [], accounts: [], contributions: [], debts: [], properties: [], rentals: [],
+    salaries: [], otherIncome: [], expenses: [], children: [], accounts: [], contributions: [], debts: [], properties: [], rentals: [],
   });
 }

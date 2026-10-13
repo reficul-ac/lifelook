@@ -2,6 +2,7 @@ import type { Cents, ISODate, Salary, ValidatedPlan } from '../model/plan';
 import { Decimal, settleCents, settleSeries } from '../money';
 import { calendarDate, daysInMonth, parseISODate } from '../dates';
 import { expenseAmounts, recurringAmounts } from './expenses';
+import { childExpenseAmounts } from '../children/planning';
 
 export interface CashTotals {
   readonly salaryCents: Cents; readonly otherIncomeCents: Cents; readonly rentCents: Cents;
@@ -89,6 +90,10 @@ export function resolveCashYear(plan: ValidatedPlan, year: number): CashYear {
   for(const e of [...plan.expenses].sort((a,b)=>a.id.localeCompare(b.id))) {
     const months=expenseAmounts(e,year);
     streams.push({id:e.id,kind:'expense',months,annualCents:sum(months),...(e.propertyId?{propertyId:e.propertyId}:{})});
+  }
+  for(const child of [...(plan.children??[])].sort((a,b)=>a.id.localeCompare(b.id))) {
+    const months=childExpenseAmounts(child,year);
+    streams.push({id:child.id,kind:'expense',months,annualCents:sum(months)});
   }
   for(const r of [...plan.rentals].sort((a,b)=>a.id.localeCompare(b.id))) {
     const startYear=Number(r.rentStartDate.slice(0,4));

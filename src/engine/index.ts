@@ -3,6 +3,8 @@ export { calculateProjection, allocateAnnualTax } from './projection';
 export { summarizeYear, summarizeProjectionYear } from './reporting';
 export { createPlan, validatePlan } from './validation';
 export { loadRuleSet } from './rules/registry';
+export { childCostBands, CHILD_PLANNING_MODEL_VERSION } from './rules/child-planning-v1';
+export type { ChildCostBand } from './rules/child-planning-v1';
 export { initializePurchaseLoan, defaultRentalAllocation } from './property/input-defaults';
 export { rsuVestingEvents, projectRsuAccounts } from './equity/rsu';
 export type * from './equity/rsu';

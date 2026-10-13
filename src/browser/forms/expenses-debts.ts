@@ -2,9 +2,10 @@ import {getRecordLabel} from '../issue-presentation';
 import type {IssueViewContext} from '../issue-presentation';
 import { taxCategoryOptions,renderField, renderHistory, renderRecordSection, type FieldContext } from '../fields';
 import type { WorkspaceController } from '../state';
+import { renderChildPlanningForm } from './children';
 
 export function renderExpensesDebtsForm(root: HTMLElement, controller: WorkspaceController, ui?:IssueViewContext): void {
-  root.replaceChildren(); const expenses = document.createElement('section'), debts = document.createElement('section'); root.append(expenses, debts);
+  root.replaceChildren(); const expenses = document.createElement('section'), children = document.createElement('section'), debts = document.createElement('section'); root.append(expenses, children, debts);
   const plan = controller.getState().savedPlan, properties = [{ value: '', label: 'None' }, ...plan.properties.map(p => ({ value: p.id, label: p.name }))];
   renderRecordSection(expenses, controller, 'expenses', 'Expense', (body, ctx) => {
     renderField(body, ctx, ['name'], 'Expense name'); renderField(body, ctx, ['amountCents'], 'Expense amount ($)', { kind: 'money' });
@@ -27,6 +28,7 @@ export function renderExpensesDebtsForm(root: HTMLElement, controller: Workspace
     }
     if (ctx.draft.value.taxCategory === 'mortgage-insurance') renderHistory(body, ctx, ['mortgageInsuranceQualification'], 'Qualified mortgage insurance premiums', { kind: 'checkbox' });
   },undefined,ui);
+  renderChildPlanningForm(children, controller, ui);
   renderRecordSection(debts, controller, 'debts', 'Debt', (body, ctx) => {
     renderField(body, ctx, ['name'], 'Debt name'); renderField(body, ctx, ['openingBalanceCents'], 'Debt opening balance ($)', { kind: 'money' });
     renderField(body, ctx, ['aprBps'], 'Debt nominal APR (%)', { kind: 'rate', hint: 'APR is an annual percentage.',help:'How interest is calculated: nominal APR divided by 12, settled monthly; this forecast does not reconstruct daily or variable-rate contract interest.' });

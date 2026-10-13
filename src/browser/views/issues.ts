@@ -54,7 +54,12 @@ export function appendProvenance(root:HTMLElement,provenance:readonly RuleProven
     if(assumptions.length){const list=element('ul');for(const assumption of assumptions)list.append(element('li',assumption));details.append(list);}
     const list=element('ul');
     for(const url of [...new Set(provenance.flatMap(p=>p.sources))]){
-      const row=element('li');const link=element('a',sourceTitle(url));link.href=url;link.target='_blank';link.rel='noopener noreferrer';row.append(link);list.append(row);
+      const row=element('li');let protocol:string|undefined;
+      try{protocol=new URL(url).protocol;}catch{/* Entered model references may be plain text. */}
+      if(protocol==='https:'||protocol==='http:'){
+        const link=element('a',sourceTitle(url));link.href=url;link.target='_blank';link.rel='noopener noreferrer';row.append(link);
+      }else row.append(element('span',sourceTitle(url)));
+      list.append(row);
     }
     details.append(list);
   }

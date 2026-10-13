@@ -3,7 +3,7 @@ import { exportPlan,savePlan,type StoragePort } from './storage';
 import { parseMoneyInput,parseRateInput } from './fields';
 import { Decimal } from '../engine/money';
 
-export type EditableSection='household'|'salaries'|'otherIncome'|'expenses'|'debts'|'accounts'|'contributions'|'properties'|'rentals';
+export type EditableSection='household'|'salaries'|'otherIncome'|'expenses'|'children'|'debts'|'accounts'|'contributions'|'properties'|'rentals';
 export type RawObject=Record<string,unknown>;
 export interface RecordDraft {readonly recordId:string;readonly section:EditableSection;readonly value:RawObject;readonly baseSnapshot?:string}
 export interface CashFlowAllocationDraft {readonly recordId:string;readonly value:RawObject;readonly baseSnapshot:string}
@@ -123,13 +123,13 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
     return validation.ok?{status:'ready',plan:validation.plan,ruleSet,inputRevision}:{status:'invalid',inputRevision,issues:validation.issues};
   };
   const draftFor=(id:string):RecordDraft|undefined=>Object.hasOwn(drafts,id)?drafts[id]:undefined;
-  const snapshot=(section:EditableSection,id:string):string=>JSON.stringify(section==='household'?householdValue():section==='properties'?propertyValue(id):savedPlan[section].find(row=>row.id===id)??null);
+  const snapshot=(section:EditableSection,id:string):string=>JSON.stringify(section==='household'?householdValue():section==='properties'?propertyValue(id):(savedPlan[section]??[]).find(row=>row.id===id)??null);
   const stale=(section:EditableSection,id:string):boolean=>{
     if(!bases.has(id)||bases.get(id)===snapshot(section,id))return false;
     issues=[{code:'stale-record-draft',recordId:id,field:section,severity:'error',explanation:'A newer save changed this record or its linked records while these edits were open. Your draft has been retained.',resolution:'Discard these edits and reload the saved values, then reapply your changes before saving.'}];notify();return true;
   };
   const rejectIdentity=(id:string,field:string):SaveRecordResult=>{issues=[{code:'invalid-input',recordId:id,field,severity:'error',explanation:'The original record ID must remain unchanged.',resolution:'Keep this record ID so its linked records continue to refer to the same record.'}];notify();return result(false);};
-  const getDraft=(section:EditableSection,id:string):RecordDraft=>draftFor(id)??{recordId:id,section,baseSnapshot:snapshot(section,id),value:toDraftValue(section==='household'?householdValue():section==='properties'?propertyValue(id):savedPlan[section].find(row=>row.id===id)??{})};
+  const getDraft=(section:EditableSection,id:string):RecordDraft=>draftFor(id)??{recordId:id,section,baseSnapshot:snapshot(section,id),value:toDraftValue(section==='household'?householdValue():section==='properties'?propertyValue(id):(savedPlan[section]??[]).find(row=>row.id===id)??{})};
   const controller:WorkspaceController={
     getState:()=>({savedPlan,drafts,projection,persisted,issues,persistenceIssues,...(allocationDraft?{allocationDraft}:{})}),getDraft,getAllocationDraft,
     editAllocationDraft(draft){if(allocationDraft&&allocationDraft.recordId!==draft.recordId)throw new Error('Allocation draft identity must remain stable.');if(allocationBase===undefined)allocationBase=draft.baseSnapshot;allocationDraft={...structuredClone(draft),baseSnapshot:allocationBase};issues=[];notify();},
@@ -142,12 +142,12 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
       const edited=draftFor(id),retry=persistenceIssues.some(issue=>issue.code==='storage-write-failed');
       if(!edited&&id==='household'&&retry)return persistApplied();
       const draft=edited??(id==='household'?getDraft('household',id):undefined);
-      if(!draft){const sections=['salaries','otherIncome','expenses','debts','accounts','contributions','properties','rentals'] as const;return sections.some(section=>savedPlan[section].some(record=>record.id===id))?persistApplied():result(false);}
+      if(!draft){const sections=['salaries','otherIncome','expenses','children','debts','accounts','contributions','properties','rentals'] as const;return sections.some(section=>(savedPlan[section]??[]).some(record=>record.id===id))?persistApplied():result(false);}
       if(draft.section==='properties')return controller.saveProperty(id);
       if(stale(draft.section,id))return result(false);
       const decoded=fromDraftValue(draft.value,id);if(decoded.issues.length){issues=decoded.issues;notify();return result(false);}
       if(draft.section!=='household'&&decoded.value.id!==id)return rejectIdentity(id,'id');
-      const candidate:PlanDocument=draft.section==='household'?{...savedPlan,...decoded.value,revision:savedPlan.revision+1}:{...savedPlan,[draft.section]:[...savedPlan[draft.section].filter(row=>row.id!==id),decoded.value],revision:savedPlan.revision+1};
+      const candidate:PlanDocument=draft.section==='household'?{...savedPlan,...decoded.value,revision:savedPlan.revision+1}:{...savedPlan,[draft.section]:[...(savedPlan[draft.section]??[]).filter(row=>row.id!==id),decoded.value],revision:savedPlan.revision+1};
       return publish(candidate,[id]);
     });},
     saveProperty(id){return operate('save',id,()=>{if(!draftFor(id)&&savedPlan.properties.some(property=>property.id===id)&&persistenceIssues.some(issue=>issue.code==='storage-write-failed'))return persistApplied();const draft=draftFor(id)??getDraft('properties',id);if(stale('properties',id))return result(false);const decoded=fromDraftValue(draft.value,id);if(decoded.issues.length){issues=decoded.issues;notify();return result(false);}
@@ -155,9 +155,9 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
       const existingRentalIds=new Set(savedPlan.rentals.filter(r=>r.propertyId===id).map(r=>r.id));
       return publish({...savedPlan,revision:savedPlan.revision+1,properties:[...savedPlan.properties.filter(p=>p.id!==id),decoded.value.property as PlanDocument['properties'][number]],rentals:[...savedPlan.rentals.filter(r=>r.propertyId!==id),...decoded.value.rentals as PlanDocument['rentals']],expenses:[...savedPlan.expenses.filter(e=>e.propertyId!==id&&(!e.rentalId||!existingRentalIds.has(e.rentalId))),...decoded.value.expenses as PlanDocument['expenses']]},[id]);
     });},
-    removeRecord(section,id){return operate('remove',id,()=>{if(section==='household')return result(false);if(!savedPlan[section].some(row=>row.id===id)){controller.discardDraft(id);return result(true);}return publish({...savedPlan,[section]:savedPlan[section].filter(row=>row.id!==id),revision:savedPlan.revision+1},[id]);});},
+    removeRecord(section,id){return operate('remove',id,()=>{if(section==='household')return result(false);if(!(savedPlan[section]??[]).some(row=>row.id===id)){controller.discardDraft(id);return result(true);}return publish({...savedPlan,[section]:(savedPlan[section]??[]).filter(row=>row.id!==id),revision:savedPlan.revision+1},[id]);});},
     beginAdd(section,value){const existingIds=usedRecordIds();let id:string;do{id=`${section}-${++sequence}`;}while(existingIds.has(id));const date=`${savedPlan.startYear}-01-01`,owner=savedPlan.household.filers[0].id;
-      const defaults:Record<Exclude<EditableSection,'household'>,RawObject>={salaries:{id,name:'New salary',ownerId:owner,employerId:`employer-${sequence}`,annualGrossCents:0,startDate:date,annualRaiseBps:0,raiseMonth:1,raiseDay:1,changes:[]},otherIncome:{id,name:'Other income',amountCents:0,frequency:'monthly',startDate:date,annualGrowthBps:0,classification:'ordinary-taxable',niitTreatment:'unknown'},expenses:{id,name:'Expense',amountCents:0,frequency:'monthly',startDate:date,annualGrowthBps:0,use:'personal',taxCategory:'personal'},debts:{id,name:'Debt',openingBalanceCents:0,aprBps:0,monthlyPaymentCents:0,firstPaymentMonth:date.slice(0,7)},accounts:{id,name:'Account',ownerId:owner,type:'taxable-brokerage',openingBalanceCents:0,annualGrowthBps:0,openingIraBasis:{known:false}},contributions:{id,accountId:savedPlan.accounts.find(account=>account.type!=='rsu')?.id??'',priority:1,startDate:date,amount:{kind:'fixed',monthlyCents:0}},properties:{property:{id,name:'Property',role:'primary',purchaseDate:date,purchasePriceCents:0,downPaymentCents:0,openingValueCents:0,appreciationBps:0,appreciationOverrides:[],loans:[]},rentals:[],expenses:[]},rentals:{id,propertyId:savedPlan.properties[0]?.id??''}};
+      const defaults:Record<Exclude<EditableSection,'household'>,RawObject>={salaries:{id,name:'New salary',ownerId:owner,employerId:`employer-${sequence}`,annualGrossCents:0,startDate:date,annualRaiseBps:0,raiseMonth:1,raiseDay:1,changes:[]},otherIncome:{id,name:'Other income',amountCents:0,frequency:'monthly',startDate:date,annualGrowthBps:0,classification:'ordinary-taxable',niitTreatment:'unknown'},expenses:{id,name:'Expense',amountCents:0,frequency:'monthly',startDate:date,annualGrowthBps:0,use:'personal',taxCategory:'personal'},children:{id,name:'Child',birthMonth:date.slice(0,7),includeAge18:false},debts:{id,name:'Debt',openingBalanceCents:0,aprBps:0,monthlyPaymentCents:0,firstPaymentMonth:date.slice(0,7)},accounts:{id,name:'Account',ownerId:owner,type:'taxable-brokerage',openingBalanceCents:0,annualGrowthBps:0,openingIraBasis:{known:false}},contributions:{id,accountId:savedPlan.accounts.find(account=>account.type!=='rsu')?.id??'',priority:1,startDate:date,amount:{kind:'fixed',monthlyCents:0}},properties:{property:{id,name:'Property',role:'primary',purchaseDate:date,purchasePriceCents:0,downPaymentCents:0,openingValueCents:0,appreciationBps:0,appreciationOverrides:[],loans:[]},rentals:[],expenses:[]},rentals:{id,propertyId:savedPlan.properties[0]?.id??''}};
       bases.set(id,snapshot(section,id));drafts={...drafts,[id]:{recordId:id,section,value:toDraftValue(value??(section==='household'?householdValue():defaults[section]))}};issues=[];notify();return id;
     },
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},exportBackup:()=>exportPlan(savedPlan),

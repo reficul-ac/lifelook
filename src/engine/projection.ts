@@ -8,6 +8,7 @@ import { addRsuWages } from './tax/rsu-income';
 import { requestContributions, type ContributionRequest } from './cash/contribution-requests';
 import { resolveAllocationYear, type ResolvedAllocationYear } from './cash/cash-flow-allocation';
 import { backdoorRothProvenance } from './cash/backdoor-roth';
+import { childPlanningProvenance } from './rules/child-planning-v1';
 import { calculateLoanSchedule, type LoanSchedule, type OpeningLoanProvenance } from './property/loans';
 import { buildPropertyFacts } from './property/facts';
 import { growMonth, propertyRate } from './growth';
@@ -42,7 +43,7 @@ function withoutAllocation(plan:ValidatedPlan):PlanDocument {
 
 /** A validated derived scenario is used only to recover a failed year's independent streams. */
 function streamScenario(plan:ValidatedPlan,kind:CashStream['kind'],id:string):ValidatedPlan {
-  const document:PlanDocument={...withoutAllocation(plan),contributions:[],salaries:kind==='salary'?plan.salaries.filter(s=>s.id===id):[],otherIncome:kind==='other-income'?plan.otherIncome.filter(s=>s.id===id):[],expenses:kind==='expense'?plan.expenses.filter(s=>s.id===id):[],rentals:plan.rentals.map(r=>kind==='rent'&&r.id===id?r:{...r,monthlyRentCents:0,rentGrowthBps:0})};
+  const document:PlanDocument={...withoutAllocation(plan),contributions:[],salaries:kind==='salary'?plan.salaries.filter(s=>s.id===id):[],otherIncome:kind==='other-income'?plan.otherIncome.filter(s=>s.id===id):[],expenses:kind==='expense'?plan.expenses.filter(s=>s.id===id):[],children:kind==='expense'?(plan.children??[]).filter(child=>child.id===id):[],rentals:plan.rentals.map(r=>kind==='rent'&&r.id===id?r:{...r,monthlyRentCents:0,rentGrowthBps:0})};
   const result=validatePlan(document);
   if(!result.ok)throw new Error('Independent cash recovery produced an invalid derived scenario.');
   return result.plan;
@@ -50,13 +51,13 @@ function streamScenario(plan:ValidatedPlan,kind:CashStream['kind'],id:string):Va
 
 /** Unlinked living expenses do not enter taxable income or property deductions. */
 function taxCashScenario(plan:ValidatedPlan):ValidatedPlan {
-  const result=validatePlan({...withoutAllocation(plan),expenses:plan.expenses.filter(e=>e.propertyId||e.rentalId)});
+  const result=validatePlan({...withoutAllocation(plan),expenses:plan.expenses.filter(e=>e.propertyId||e.rentalId),children:[]});
   if(!result.ok)throw new Error('Tax cash recovery produced an invalid derived scenario.');
   return result.plan;
 }
 
 function wageCashScenario(plan:ValidatedPlan):ValidatedPlan {
-  const result=validatePlan({...withoutAllocation(plan),contributions:[],otherIncome:plan.otherIncome.filter(o=>o.classification==='wage'),expenses:[],rentals:plan.rentals.map(r=>({...r,monthlyRentCents:0,rentGrowthBps:0}))});
+  const result=validatePlan({...withoutAllocation(plan),contributions:[],otherIncome:plan.otherIncome.filter(o=>o.classification==='wage'),expenses:[],children:[],rentals:plan.rentals.map(r=>({...r,monthlyRentCents:0,rentGrowthBps:0}))});
   if(!result.ok)throw new Error('Payroll cash recovery produced an invalid derived scenario.');
   return result.plan;
 }
@@ -93,7 +94,7 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
   const declaredLoans=[...plan.properties.flatMap(p=>p.loans.map(loan=>({loan,propertyId:p.id}))),...plan.debts.map(loan=>({loan,...(loan.propertyId?{propertyId:loan.propertyId}:{})}))].sort((a,b)=>a.loan.id.localeCompare(b.loan.id));
   const loanClosing=new Map<string,Available<Cents>>(),loanOrigin=new Map<string,{opening:OpeningLoanProvenance;payment:OpeningLoanProvenance}>();
   const openingTaxState=initialTaxState(plan);let taxState=openingTaxState,reserve:Available<Cents>=available(plan.openingCashCents),conditionalOnGap=false;
-  const streamDefinitions=[...plan.salaries.map(s=>({id:s.id,kind:'salary' as const})),...plan.otherIncome.map(s=>({id:s.id,kind:'other-income' as const})),...plan.expenses.map(s=>({id:s.id,kind:'expense' as const})),...plan.rentals.map(s=>({id:s.id,kind:'rent' as const}))].sort((a,b)=>a.kind.localeCompare(b.kind)||a.id.localeCompare(b.id));
+  const streamDefinitions=[...plan.salaries.map(s=>({id:s.id,kind:'salary' as const})),...plan.otherIncome.map(s=>({id:s.id,kind:'other-income' as const})),...plan.expenses.map(s=>({id:s.id,kind:'expense' as const})),...(plan.children??[]).map(child=>({id:child.id,kind:'expense' as const})),...plan.rentals.map(s=>({id:s.id,kind:'rent' as const}))].sort((a,b)=>a.kind.localeCompare(b.kind)||a.id.localeCompare(b.id));
   for(let year=plan.startYear;year<plan.startYear+plan.horizonYears;year++) {
     const issueStart=allIssues.length,opening=taxState;
     const rsuByAccount=new Map<string,Available<readonly RsuGrantMonth[]>>();
@@ -219,8 +220,9 @@ export function calculateProjection(plan:ValidatedPlan,ruleSet:RuleSet):Projecti
     const deductionProvenance=household.status==='available'?household.value.candidates.flatMap(candidate=>Object.values(candidate.deductions).flatMap(deduction=>deduction.status==='available'&&deduction.value.detail?[deduction.value.detail.provenance]:[])):[];
     const taxProvenance=tax.status==='available'?[tax.value.provenance]:[];
     const conversionProvenance=allocationSources.some(source=>source.destination.kind==='account'&&source.destination.backdoorRoth)?[backdoorRothProvenance(year)]:[];
-    allProvenance.push(...rsuProvenance,...taxProvenance,...deductionProvenance,...conversionProvenance);
-    const provenance=uniqueProvenance([...(rules.status==='available'?Object.values(rules.value.provenance):[]),...rsuProvenance,...taxProvenance,...deductionProvenance,...conversionProvenance]);
+    const childProvenance=plan.children?.length?[childPlanningProvenance(year)]:[];
+    allProvenance.push(...rsuProvenance,...taxProvenance,...deductionProvenance,...conversionProvenance,...childProvenance);
+    const provenance=uniqueProvenance([...(rules.status==='available'?Object.values(rules.value.provenance):[]),...rsuProvenance,...taxProvenance,...deductionProvenance,...conversionProvenance,...childProvenance]);
     const yearMonths:MonthlyProjection[]=[];
     for(let month=1;month<=12;month++){
       const fieldIssuesStart=allIssues.length,i=month-1;

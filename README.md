@@ -30,6 +30,21 @@ In **Income**, the optional **Automatic salary raise cap ($)** limits the annual
 
 Expenses use monthly budgets for this version. An entered annual expense is divided by twelve and spread over active months, including property and rental expenses. Cumulative cent rounding preserves the full-year annual total. Growth applies on January 1; start and end dates bound the active monthly budgets without daily proration. Saved annual amounts and frequencies retain their entered units, so existing plans and backups automatically use this budgeting model when recalculated. Detailed bill-payment schedules can be added later.
 
+In **Expenses and debts**, open **Child planning** and choose **Add child**. Enter a name and **Birth month**, then use the child's Save, discard or remove action. Each child has an independent schedule: budgeting starts in the birth month and changes in each birthday month. By default, budgeting ends before the 18th birthday month. **Include full year at age 18** extends it through the month before the 19th birthday month.
+
+| Age | Annual budget per child |
+| --- | ---: |
+| 0 | $9,000 |
+| 1–2 | $8,000 |
+| 3–5 | $8,500 |
+| 6–8 | $10,000 |
+| 9–11 | $11,000 |
+| 12–14 | $12,000 |
+| 15 | $12,500 |
+| 16–18 | $16,000 |
+
+This user-supplied modeled Oceanside budget stays fixed in today's dollars without inflation. **It excludes housing, medical costs, education (including college), and day care**, as well as lost income. Each annual amount is divided by twelve, with cumulative cent rounding preserving each full age-year total. The complete ages 0–17 schedule totals $194,000 per child; including age 18 totals $210,000. Child records do not establish tax-dependent status or model child tax credits. Saved plans and JSON backups retain the optional `children` records with `id`, `name`, `birthMonth` (`YYYY-MM`) and `includeAge18`; older backups without children remain compatible with schema version 1 and the existing storage key.
+
 Save validates effective shared and loan allocations and calculates the candidate projection before replacing saved state. A property draft includes its linked rental and expense records. If another Save changes one of those records, the older draft is retained and its Save is rejected. Use the record's **Discard edits** action, then reapply changes to the newer saved inputs. Unrelated drafts and saves remain independent.
 
 Plans retain JSON schema version 1 and browser storage key `lifelook.foundation.plan.v1`. Browser storage belongs to the current origin: development on port 1421 and preview on port 4174 have separate saved plans. Use export and restore to move a plan between origins. Download a backup to retain the current in-memory inputs and revision. Backups contain applied inputs and exclude record drafts and calculated results; results are recalculated with this package's rule version. An accepted restore replaces all inputs and discards record drafts. Restore validates the entire document before replacement. Malformed JSON, unsupported schema versions and invalid references leave the current plan intact. Corrupt stored documents remain recoverable instead of being silently overwritten.

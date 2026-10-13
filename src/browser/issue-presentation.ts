@@ -47,7 +47,7 @@ export function getRecordLabel(plan:PlanDocument,id:string):string{
     const source=policy.entries.find(entry=>entry.id===id)??(policy.overflow.id===id?policy.overflow:undefined);
     if(source)return `${source===policy.overflow?'Excess allocation':'Allocation'} · ${source.destination.kind==='cash'?'Cash / savings':getRecordLabel(plan,source.destination.accountId)}`;
   }
-  for(const record of [...plan.household.filers,...plan.salaries,...plan.otherIncome,...plan.expenses,...plan.debts,...plan.accounts,...plan.properties,...plan.properties.flatMap(p=>p.loans)])if(record.id===id)return record.name;
+  for(const record of [...plan.household.filers,...plan.salaries,...plan.otherIncome,...plan.expenses,...plan.children??[],...plan.debts,...plan.accounts,...plan.properties,...plan.properties.flatMap(p=>p.loans)])if(record.id===id)return record.name;
   for(const account of plan.accounts)for(const grant of account.rsu?.grants??[])if(grant.id===id)return grant.name;
   const rental=plan.rentals.find(r=>r.id===id);
   if(rental){const property=plan.properties.find(p=>p.id===rental.propertyId);return `${property?.role==='primary-with-adu'?'ADU':'Rental'} ${plan.rentals.filter(r=>r.propertyId===rental.propertyId).findIndex(r=>r.id===id)+1} — ${property?.name??'Property'}`;}
@@ -119,7 +119,7 @@ export function resolveIssueTargets(issue:Issue,state:IssueViewState,sourcePlan:
   }
   const property=plan.properties.find(p=>p.id===id||p.loans.some(l=>l.id===id)||plan.rentals.some(r=>r.id===id&&r.propertyId===p.id));
   if(property){const raw=Object.hasOwn(state.drafts,property.id)?state.drafts[property.id]!.value:{property,rentals:plan.rentals.filter(r=>r.propertyId===property.id),expenses:plan.expenses.filter(e=>e.propertyId===property.id)};const prefix=findRecordPath(raw,id);return [target('Properties',property.id,field.startsWith('property.')||field.startsWith('rentals.')?field:prefix===undefined?undefined:field?`${prefix}.${field}`:prefix)];}
-  const sections=[['salaries','Income'],['otherIncome','Income'],['expenses','Expenses and debts'],['debts','Expenses and debts'],['accounts','Investments'],['contributions','Investments']] as const;
-  for(const [key,section] of sections)if(plan[key].some(r=>r.id===id)||Object.hasOwn(state.drafts,id)&&state.drafts[id]!.section===key)return [target(section,id,field)];
+  const sections=[['salaries','Income'],['otherIncome','Income'],['expenses','Expenses and debts'],['children','Expenses and debts'],['debts','Expenses and debts'],['accounts','Investments'],['contributions','Investments']] as const;
+  for(const [key,section] of sections)if((plan[key]??[]).some(r=>r.id===id)||Object.hasOwn(state.drafts,id)&&state.drafts[id]!.section===key)return [target(section,id,field)];
   return [];
 }

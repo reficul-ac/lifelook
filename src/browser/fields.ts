@@ -71,14 +71,14 @@ export function renderRows(root:HTMLElement,context:FieldContext,path:FieldPath,
   (rows??[]).forEach((_,index)=>{const row=element('fieldset');row.append(element('legend',`${label} ${index+1}`));renderRow(row,[...path,index],index);row.append(button(`Remove ${label} ${index+1}`,()=>{context.onChange(path,(valueAt(context.draft.value,path) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));group.append(row);});
   group.append(button(`Add ${label}`,()=>{context.onChange(path,[...((valueAt(context.draft.value,path) as readonly RawObject[])??[]),makeRow()]);context.refresh();}));root.append(group);
 }
-export function renderRecordSection(root:HTMLElement,controller:WorkspaceController,section:EditableSection,title:string,render:(root:HTMLElement,context:FieldContext)=>void,makeNew?:()=>RawObject,ui?:IssueViewContext):void {
-  ui?.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2',title));
-  const state=controller.getState();const records=section==='household'?['household']:[...new Set([...(state.savedPlan[section] as readonly {id:string}[]).map(r=>r.id),...Object.values(state.drafts).filter(d=>d.section===section).map(d=>d.recordId)])];
+export function renderRecordSection(root:HTMLElement,controller:WorkspaceController,section:EditableSection,title:string,render:(root:HTMLElement,context:FieldContext)=>void,makeNew?:()=>RawObject,ui?:IssueViewContext,heading=title):void {
+  ui?.disclosures.closeWithin(root,false);root.replaceChildren();if(heading)root.append(element('h2',heading));
+  const state=controller.getState();const records=section==='household'?['household']:[...new Set([...((state.savedPlan[section]??[]) as readonly {id:string}[]).map(r=>r.id),...Object.values(state.drafts).filter(d=>d.section===section).map(d=>d.recordId)])];
   for(const id of records){const card=element('form');card.dataset.recordId=id;card.dataset.editableSection=section;card.append(element('h3',section==='household'?'Applied household inputs':String(controller.getDraft(section,id).value.name??'New record')));const body=element('div');body.className='record-fields';card.append(body);
     const context:FieldContext={...(ui?{ui}:{}),get draft(){return controller.getDraft(section,id);},get issues(){return controller.getState().issues.filter(i=>i.recordId===id||section==='household');},onChange(path,value){const draft=controller.getDraft(section,id);controller.editDraft(id,{...draft,value:setAt(draft.value,path,value)});},refresh(){ui?.disclosures.closeWithin(body,false);refreshFields(body,()=>render(body,context));if(ui)syncFormFeedback(root,controller,ui);}};
     context.refresh();
     const save=element('button',section==='household'?'Save household':`Save ${title==='Income'?'income':title==='Investments'?'investment':title.toLowerCase()}`);save.type='submit';card.append(save);card.addEventListener('submit',event=>{event.preventDefault();controller.saveRecord(id);});
-    card.append(element('small','Discards this draft and reloads applied inputs.'),button('Discard edits',()=>{controller.discardDraft(id);renderRecordSection(root,controller,section,title,render,makeNew,ui);}));
+    card.append(element('small','Discards this draft and reloads applied inputs.'),button('Discard edits',()=>{controller.discardDraft(id);renderRecordSection(root,controller,section,title,render,makeNew,ui,heading);}));
     if(section!=='household')card.append(button(`Remove ${String(controller.getDraft(section,id).value.name??'record')}`,()=>controller.removeRecord(section,id)));
     root.append(card);
   }

@@ -167,6 +167,26 @@ describe('annual stage reservations',()=>{
 });
 
 describe('monthly legal feasibility and disclosures',()=>{
+ // The initial wage schedule can request much more than the remaining shared
+ // annual cap. A nonbinding timing ceiling must not explain that legal refusal.
+ it.each([
+  {year:2026,monthly:200000,total:15429700,offered:4564850,accepted:50000,retained:4514850},
+  {year:2027,monthly:200000,total:25429700,offered:9564850,accepted:50000,retained:9514850},
+  {year:2026,monthly:205000,total:15429700,offered:4514850,accepted:0,retained:4514850},
+  {year:2027,monthly:205000,total:25429700,offered:9514850,accepted:0,retained:9514850},
+ ])('explains the binding annual cap for $year with $monthly saved monthly cents',({year,monthly,total,offered,accepted,retained})=>{
+  const base=makeAllocationPlan(),roth={...base.accounts[1]!,id:'roth',type:'roth-ira' as const};
+  const input=fixture([percent('brokerage',5000),maximum('roth')],'workplace',{
+   startYear:year,accounts:[...base.accounts,roth],
+   otherIncome:[{id:'scenario-receipt',name:'Synthetic non-taxable receipt',amountCents:year===2026?10000000:20000000,frequency:'annual',startDate:`${year}-01-01`,endDate:`${year}-12-31`,annualGrowthBps:0,classification:'non-taxable'}],
+   contributions:[{id:'legacy-workplace',accountId:'workplace',priority:0,startDate:'2026-01-01',amount:{kind:'fixed',monthlyCents:monthly},sponsoringSalaryId:'salary-a'}],
+  });
+  const r=resolved(input),overflowReasons=r.report.reasons.filter(reason=>reason.field?.includes('overflow'));
+  expect(r.report).toMatchObject({originalCashFlowCents:total,excessOfferedCents:offered,excessAcceptedCents:accepted,excessRetainedCents:retained,retainedCashCents:retained});
+  expect(r.report.accounts.find(a=>a.accountId==='workplace')).toMatchObject({existingCents:monthly===200000?2400000:2450000,excessCents:accepted,actualCents:2450000});
+  expect(overflowReasons.some(reason=>reason.code==='contribution-capped')).toBe(true);
+  expect(overflowReasons.some(reason=>reason.code==='allocation-compensation-timing')).toBe(false);
+ });
  function catchupFixture() {
   const base=makeAllocationPlan(),roth={...base.accounts[2]!,id:'workplace-roth',type:'roth-401k' as const};
   return fixture([maximum('workplace',1),maximum('workplace-roth',2)],'cash',{accounts:[...base.accounts,roth],household:{...base.household,filers:[{...base.household.filers[0],birthDate:{known:true,value:'1970-01-01'},workplaceCoverage:{known:true,value:true},employerAssumptionsByYear:[{year:2026,employerId:'employer-0',priorYearWagesCents:{known:true,value:20000000},planCatchUpAvailable:{known:true,value:true},rothCatchUpAvailable:{known:true,value:true}}]},base.household.filers[1]]}});
@@ -191,6 +211,8 @@ describe('monthly legal feasibility and disclosures',()=>{
   const r=resolved({...input,cashIncomeByMonth:[0,0,0,0,0,0,0,0,0,0,0,1000000]},zeroTaxes);
   expect(r.report.excessAcceptedCents).toBe(0);expect(r.report.excessRetainedCents).toBe(1000000);
   expect(r.report.reasons.some(reason=>reason.code==='allocation-compensation-timing')).toBe(true);
+  expect(r.report.originalCashFlowCents).toBe(1000000);
+  expect(r.report.reasons).toContainEqual(expect.objectContaining({code:'allocation-compensation-timing',field:'cashFlowAllocation.overflow.destination'}));
  });
  it('explains saved deposits above target without changing the configured target',()=>{
   const input=fixture([percent('brokerage',1000)],'cash',{contributions:[{id:'saved',accountId:'brokerage',priority:1,startDate:'2026-01-01',amount:{kind:'fixed',monthlyCents:100000}}]});

@@ -202,7 +202,7 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
         trial = best;
       }
       const amount = eligible(trial.household, ruleId);
-      if (amount < desired && scheduledDesired < desired) reasons.push(...locate([{ ...issue(sponsor ? 'allocation-compensation-timing' : 'allocation-cash-shortfall', sponsor ? 'Available cash and sponsoring monthly wages cannot fund the complete target together.' : 'Available cash cannot fund the complete target while preserving earlier allocations.'), field: 'destination' }], ruleId));
+      if (amount === scheduledDesired && scheduledDesired < desired) reasons.push(...locate([{ ...issue(sponsor ? 'allocation-compensation-timing' : 'allocation-cash-shortfall', sponsor ? 'Available cash and sponsoring monthly wages cannot fund the complete target together.' : 'Available cash cannot fund the complete target while preserving earlier allocations.'), field: 'destination' }], ruleId));
       targets = trial.candidate.map(candidate => candidate.ruleId === ruleId ? { ...candidate, requestedCents: amount } : candidate);
       acceptedRequests = trial.requests;
       protectedHousehold = trial.household;

@@ -260,3 +260,22 @@ it('funds traditional catch-up at a second employer after protected regular defe
  }
  expect(cash).toBe(6922000);expect(input.opening).toEqual(opening);
 });
+
+it('isolates repeated solves when the opening IRA basis changes',()=>{
+ const base=makeAllocationPlan(),input=fixture([maximum('ira')],'cash',{salaries:[{...base.salaries[0]!,annualGrossCents:20000000}]});
+ const opening=structuredClone(input.opening),changed={...input,opening:{...input.opening,iraBasisByOwner:{...input.opening.iraBasisByOwner,'owner-a':{known:true as const,value:12345}}}};
+ expect(resolved(input).household.closingTaxState.iraBasisByOwner['owner-a']).toEqual({known:true,value:750000});
+ expect(resolved(changed).household.closingTaxState.iraBasisByOwner['owner-a']).toEqual({known:true,value:762345});
+ expect(resolved(input).household.closingTaxState.iraBasisByOwner['owner-a']).toEqual({known:true,value:750000});
+ expect(input.opening).toEqual(opening);expect(changed.opening.iraBasisByOwner['owner-a']).toEqual({known:true,value:12345});
+});
+
+it('isolates repeated solves when sponsoring employer catch-up history changes',()=>{
+ const base=makeAllocationPlan();
+ const inputFor=(wages:number)=>fixture([maximum('workplace')],'cash',{household:{...base.household,filers:[{...base.household.filers[0],birthDate:{known:true,value:'1970-01-01'},workplaceCoverage:{known:true,value:true},employerAssumptionsByYear:[{year:2026,employerId:'employer-0',priorYearWagesCents:{known:true,value:wages},planCatchUpAvailable:{known:true,value:true},rothCatchUpAvailable:{known:true,value:true}}]},base.household.filers[1]]}});
+ const low=inputFor(0),high=inputFor(20000000),before=structuredClone(low.plan);
+ expect(resolved(low).report.accounts.find(a=>a.accountId==='workplace')?.actualCents).toBe(3250000);
+ expect(resolved(high).report.accounts.find(a=>a.accountId==='workplace')?.actualCents).toBe(2450000);
+ expect(resolved(low).report.accounts.find(a=>a.accountId==='workplace')?.actualCents).toBe(3250000);
+ expect(low.plan).toEqual(before);
+});

@@ -69,7 +69,22 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
   if (!savedPolicy) throw new Error('Allocation requires a policy.');
   const policy = savedPolicy;
   const adapter = createAllocationAdapter(input.plan, input.cash.year);
-  const evaluate = (requests: readonly ContributionRequest[], evaluator = resolveHouseholdYear) => evaluator(adapter.plan, input.cash, requests, input.property, input.loans, input.opening, input.rules);
+  // All other household inputs are fixed within this one year solve. Keep the
+  // complete request order in the key: monthly chronology can change legality.
+  const searchResults = new Map<string, HouseholdYear>();
+  const evaluate = (requests: readonly ContributionRequest[], evaluator?: typeof resolveHouseholdYear): HouseholdYear => {
+    // Explicit outer and final verification calls must always execute freshly,
+    // even when their evaluator is the authoritative default function.
+    if (evaluator) return evaluator(adapter.plan, input.cash, requests, input.property, input.loans, input.opening, input.rules);
+    const key = JSON.stringify(requests);
+    const cached = searchResults.get(key);
+    if (cached) return cached;
+    const result = resolveHouseholdYear(adapter.plan, input.cash, requests, input.property, input.loans, input.opening, input.rules);
+    // Eviction only recomputes pure search work; it never truncates the search.
+    if (searchResults.size >= 256) searchResults.delete(searchResults.keys().next().value!);
+    searchResults.set(key, result);
+    return result;
+  };
   const existingBaseline = evaluate(input.legacyRequests);
   const existingMissing = readiness(existingBaseline);
   if (existingMissing) return existingMissing;

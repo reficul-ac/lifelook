@@ -122,11 +122,10 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
         return [{ ruleId: record.ruleId, accountId: record.accountId, ownerId: record.ownerId, year: record.year, month: record.month, priority: descriptor.priority, requestedCents: record.eligibleCents.value, sponsoringSalaryId: salary.id, employerId: salary.employerId }];
       }) : [];
       const supportIds = new Set(support.map(request => request.ruleId));
+      const regularFirstRules = new Set<string>();
       const probe = (amount: Cents, firstMonth = 1, orderRegularFirst = false) => {
         const earlier = targets.map(prior => {
-          const descriptor = adapter.plan.contributions.find(rule => rule.id === prior.ruleId)!;
-          const account = adapter.plan.accounts.find(account => account.id === descriptor.accountId)!;
-          if (!orderRegularFirst || account.type !== 'traditional-401k' || account.ownerId !== sponsor?.ownerId) return prior;
+          if (!orderRegularFirst || !regularFirstRules.has(prior.ruleId)) return prior;
           const sameMonthFirst = prior.priority < priority || (prior.priority === priority && prior.ruleId.localeCompare(ruleId) < 0);
           return { ...prior, allowedMonths: prior.allowedMonths.filter(month => month < firstMonth || (month === firstMonth && sameMonthFirst)) };
         });
@@ -148,17 +147,23 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
         reasons.push(...locate(trial.household.contributions.flatMap(record => record.reasons), ruleId));
         const initial = trial;
         let best = probe(0);
-        // A Roth catch-up must follow protected traditional regular funding.
-        // Month order is statutory resolver order, so reducing only the annual
-        // amount can incorrectly conclude that every Roth cent displaces it.
-        const needsLaterWindow = sponsor && adapter.plan.accounts.find(account => source.destination.kind === 'account' && account.id === source.destination.accountId)?.type === 'roth-401k' && initial.household.contributions.some(record => record.reasons.some(reason => reason.code === 'mandatory-roth-catchup'));
+        // Employer-specific restrictions can reserve regular funding for an
+        // earlier traditional account while a later employer permits either
+        // Roth or traditional catch-up. Discover the displaced regular rules
+        // from authoritative eligibility; account type alone is insufficient.
+        for (const record of initial.household.contributions) {
+          const protectedAmount = protectedTotals.get(record.ruleId) ?? 0;
+          if (sponsor && record.ownerId === sponsor.ownerId && protectedAmount > eligible(initial.household, record.ruleId)
+            && record.reasons.some(reason => reason.code === 'mandatory-roth-catchup')) regularFirstRules.add(record.ruleId);
+        }
+        const needsLaterWindow = regularFirstRules.size > 0;
         for (let firstMonth = 1; firstMonth <= (needsLaterWindow ? 12 : 1); firstMonth++) {
           const ordered = !!needsLaterWindow;
           const empty = probe(0, firstMonth, ordered);
-          // Restricting a regular window cannot be rescued by adding Roth
-          // demand. Traditional demand can itself restore saved IRA eligibility,
-          // so unrestricted trials must still test their full funded amount.
-          if (ordered && !empty.valid) continue;
+          // Later demand cannot restore regular funding excluded by this
+          // window, but traditional catch-up can restore saved IRA eligibility.
+          // Skip only windows that already lose the protected regular amounts.
+          if (ordered && [...regularFirstRules].some(id => eligible(empty.actual, id) < (protectedTotals.get(id) ?? 0))) continue;
           const full = firstMonth === 1 && !ordered ? initial : probe(desired, firstMonth, ordered);
           let candidate = full;
           if (!candidate.valid && candidate.preserves && !candidate.unavailable) {

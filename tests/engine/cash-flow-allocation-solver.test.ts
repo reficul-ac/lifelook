@@ -232,3 +232,31 @@ it('subtracts restored saved Roth funding from its primary top-up exactly once',
  expect(r.report.retainedCashCents).toBe(1800000);
  expect(r.requests.filter(q=>q.ruleId==='saved-roth')).toEqual(input.legacyRequests);
 });
+
+it('funds traditional catch-up at a second employer after protected regular deferrals',()=>{
+ const base=makeAllocationPlan(),second={...base.accounts[2]!,id:'workplace-second'};
+ const employerFacts=(employerId:string,priorYearWagesCents:number)=>({year:2026,employerId,priorYearWagesCents:{known:true as const,value:priorYearWagesCents},planCatchUpAvailable:{known:true as const,value:true},rothCatchUpAvailable:{known:true as const,value:true}});
+ const entries:readonly CashFlowAllocationEntry[]=[maximum('workplace',1),{id:'entry-second',priority:2,destination:{kind:'account',accountId:'workplace-second',sponsoringSalaryId:'salary-second'},amount:{kind:'max-annual'}}];
+ const input=fixture(entries,'cash',{
+  accounts:[...base.accounts,second],
+  salaries:[{...base.salaries[0]!,annualGrossCents:6000000},{...base.salaries[0]!,id:'salary-second',employerId:'employer-second',annualGrossCents:6000000}],
+  household:{...base.household,filers:[{...base.household.filers[0],birthDate:{known:true,value:'1970-01-01'},workplaceCoverage:{known:true,value:true},employerAssumptionsByYear:[employerFacts('employer-0',20000000),employerFacts('employer-second',0)]},base.household.filers[1]]},
+ });
+ const opening=structuredClone(input.opening),r=resolved(input);
+ expect(r.report.accounts.find(a=>a.accountId==='workplace')).toMatchObject({targetCents:2450000,maximumCents:2450000,actualCents:2450000,shortfallCents:0});
+ expect(r.report.accounts.find(a=>a.accountId==='workplace-second')).toMatchObject({targetCents:800000,maximumCents:800000,actualCents:800000,shortfallCents:0});
+ expect(r.household.contributions.every(c=>c.eligibleCents.status==='available'&&c.eligibleCents.value===c.requestedCents)).toBe(true);
+ // AGI $87,500: federal taxable midpoint $55,325 => $2,480 + .12*$30,525 = $6,143.
+ // CA taxable $75,700: round($229.12 + $628.04 + .04*$21,386) - $316 = $1,397.
+ expect(sum(r.incomeTaxByMonth)).toBe(754000);
+ expect(r.household.payroll.annual.totalCents).toBe(1074000);
+ expect(r.report).toMatchObject({status:'funded',originalCashFlowCents:10172000,retainedCashCents:6922000});
+ let cash=0;
+ for(let month=1;month<=12;month++){
+  const deposits=r.requests.filter(q=>q.month===month);
+  cash+=r.preTransferCashByMonth[month-1]!-sum(deposits.map(q=>q.requestedCents));
+  expect(cash).toBeGreaterThanOrEqual(0);
+  for(const employer of ['employer-0','employer-second'])expect(sum(deposits.filter(q=>q.employerId===employer).map(q=>q.requestedCents))).toBeLessThanOrEqual(500000);
+ }
+ expect(cash).toBe(6922000);expect(input.opening).toEqual(opening);
+});

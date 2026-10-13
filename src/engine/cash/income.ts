@@ -39,10 +39,10 @@ const maxDate = (a: ISODate, b: ISODate) => a > b ? a : b;
 function earnedSalary(salary: Salary, year: number): { months: readonly Cents[]; periods: readonly SalaryPeriod[] } {
   const yearEnd = calendarDate(year,12,31);
   const explicit = new Map(salary.changes.map(c => [c.date,c]));
-  const events = salary.changes.map(c => ({date:c.date, change:c}));
+  const events = salary.changes.map(c => ({date:c.date, change:c, automatic:false}));
   for (let y=Number(salary.startDate.slice(0,4)); y<=year; y++) {
     const date=calendarDate(y,salary.raiseMonth,salary.raiseDay);
-    if(date>salary.startDate && date<=yearEnd && !explicit.has(date)) events.push({date,change:{ date,kind:'percent',percentBps:salary.annualRaiseBps }});
+    if(date>salary.startDate && date<=yearEnd && !explicit.has(date)) events.push({date,change:{ date,kind:'percent',percentBps:salary.annualRaiseBps },automatic:true});
   }
   events.sort((a,b)=>a.date.localeCompare(b.date));
   const periods: SalaryPeriod[]=[];
@@ -66,7 +66,10 @@ function earnedSalary(salary: Salary, year: number): { months: readonly Cents[];
       const before=d>1?calendarDate(y,m,d-1):m>1?calendarDate(y,m-1,daysInMonth(y,m-1)):calendarDate(y-1,12,31);
       addPeriod(current,before,rate);
     }
-    rate=e.change.kind==='amount'?new Decimal(e.change.annualGrossCents):rate.mul(new Decimal(1).plus(new Decimal(e.change.percentBps).div(10000)));
+    const nextRate=e.change.kind==='amount'?new Decimal(e.change.annualGrossCents):rate.mul(new Decimal(1).plus(new Decimal(e.change.percentBps).div(10000)));
+    // Automatic growth must neither exceed its ceiling nor lower an explicit override.
+    rate=e.automatic&&salary.annualRaiseCapCents!==undefined&&nextRate.gt(rate)
+      ?Decimal.min(nextRate,Decimal.max(rate,salary.annualRaiseCapCents)):nextRate;
     current=e.date;
   }
   if(current<=end)addPeriod(current,end,rate);

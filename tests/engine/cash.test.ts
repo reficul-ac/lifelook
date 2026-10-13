@@ -39,6 +39,61 @@ describe('dated cash streams', () => {
     const first = annual(makePlan({ salaries: [salary({ annualGrossCents: 12000000, annualRaiseBps: 1000 })] }));
     expect(first.months[0]!.salaryCents).toBe(1000000);
   });
+  it('stops automatic raises at the cap before and throughout the forecast', () => {
+    const plan = makePlan({ startYear: 2027, salaries: [salary({ annualGrossCents: 12000000, annualRaiseBps: 2000, raiseMonth: 7, annualRaiseCapCents: 15000000 })] });
+    const cash = annual(plan);
+    expect(cash.months.map(m => m.salaryCents)).toEqual([...Array(6).fill(1200000), ...Array(6).fill(1250000)]);
+    expect(cash.annual.salaryCents).toBe(14700000);
+    expect(annual(plan, 2030).months.map(m => m.salaryCents)).toEqual(Array(12).fill(1250000));
+    expect(annual(plan, 2030).salaryPeriods.every(p => p.annualGrossCents === 15000000)).toBe(true);
+  });
+  it('lets dated percentage and amount changes override the automatic raise cap', () => {
+    const plan = makePlan({ salaries: [salary({
+      annualGrossCents: 12000000, annualRaiseBps: 2000, raiseMonth: 2, annualRaiseCapCents: 12600000,
+      changes: [{ date: '2026-03-01', kind: 'percent', percentBps: 2000 }, { date: '2026-07-01', kind: 'amount', annualGrossCents: 18000000 }],
+    })] });
+    const cash = annual(plan);
+    expect(cash.months[1]!.salaryCents).toBe(1050000);
+    expect(cash.months[2]!.salaryCents).toBe(1260000);
+    expect(cash.months[6]!.salaryCents).toBe(1500000);
+    expect(annual(plan, 2027).months.map(m => m.salaryCents)).toEqual(Array(12).fill(1500000));
+  });
+  it('uses the capped salary for reductions and resumes automatic raises below the cap', () => {
+    const plan = makePlan({ salaries: [salary({
+      annualGrossCents: 12000000, annualRaiseBps: 2000, raiseMonth: 2, annualRaiseCapCents: 12600000,
+      changes: [{ date: '2026-06-01', kind: 'percent', percentBps: -1000 }],
+    })] });
+    expect(annual(plan).months[5]!.salaryCents).toBe(945000);
+    expect(annual(plan, 2027).months[0]!.salaryCents).toBe(945000);
+    expect(annual(plan, 2027).months[1]!.salaryCents).toBe(1050000);
+  });
+  it('preserves a dated change on the automatic raise date even above the cap', () => {
+    const plan = makePlan({ salaries: [salary({
+      annualGrossCents: 12000000, annualRaiseBps: 2000, raiseMonth: 2, annualRaiseCapCents: 12600000,
+      changes: [{ date: '2026-02-01', kind: 'amount', annualGrossCents: 18000000 }],
+    })] });
+    expect(annual(plan).months[1]!.salaryCents).toBe(1500000);
+    expect(annual(plan, 2027).months[1]!.salaryCents).toBe(1500000);
+  });
+  it('leaves automatic salary reductions unaffected by a raise cap', () => {
+    const plan = makePlan({ startYear: 2027, salaries: [salary({
+      annualGrossCents: 12000000, annualRaiseBps: -1000, raiseMonth: 2, annualRaiseCapCents: 12600000,
+      changes: [{ date: '2026-07-01', kind: 'amount', annualGrossCents: 18000000 }],
+    })] });
+    expect(annual(plan).months[0]!.salaryCents).toBe(1500000);
+    expect(annual(plan).months[1]!.salaryCents).toBe(1350000);
+  });
+  it('prorates a midmonth capped raise before requesting salary percentage contributions', () => {
+    const plan = makePlan({ startYear: 2028, salaries: [salary({
+      startDate: '2028-01-01', annualGrossCents: 12000000, annualRaiseBps: 2000, raiseMonth: 2, raiseDay: 15, annualRaiseCapCents: 12600000,
+    })], accounts: [{ id: 'account', name: 'Brokerage', ownerId: 'owner-a', type: 'taxable-brokerage', openingBalanceCents: 0, annualGrowthBps: 0, openingIraBasis: { known: false } }], contributions: [{
+      id: 'percent', accountId: 'account', priority: 1, startDate: '2028-02-15', endDate: '2028-02-29', amount: { kind: 'salary-percent', salaryId: 'salary', percentBps: 1000 },
+    }] });
+    const cash = annual(plan);
+    expect(cash.months[1]!.salaryCents).toBe(1025862);
+    expect(cash.months[2]!.salaryCents).toBe(1050000);
+    expect(requestContributions(mustValidate(plan), cash).find(r => r.month === 2)?.requestedCents).toBe(54310);
+  });
   it('zero replacement and inclusive salary end stop earned wages', () => {
     const zero = annual(makePlan({ salaries: [salary({ annualGrossCents: 12000000, changes: [{ date: '2026-02-01', kind: 'amount', annualGrossCents: 0 }] })] }));
     expect(zero.annual.salaryCents).toBe(1000000);

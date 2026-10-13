@@ -14,6 +14,7 @@ export function renderIncomeForm(root: HTMLElement, controller: WorkspaceControl
     renderField(body, ctx, ['startDate'], 'Salary start date', { kind: 'date' });
     renderField(body, ctx, ['endDate'], 'Salary end date', { kind: 'date', optional: true, hint: 'Includes this date. Blank means no end.' });
     renderField(body, ctx, ['annualRaiseBps'], 'Annual salary raise (%)', { kind: 'rate' });
+    renderField(body, ctx, ['annualRaiseCapCents'], 'Automatic salary raise cap ($)', { kind: 'money', optional: true, hint: 'Annual gross salary ceiling for automatic raises only. Blank means unlimited. Must be at least the initial annual gross salary; dated salary changes may exceed it.' });
     renderField(body, ctx, ['raiseMonth'], 'Salary raise month', { kind: 'integer' });
     renderField(body, ctx, ['raiseDay'], 'Salary raise day', { kind: 'integer', hint: 'Shorter months use their last day.' });
     renderRows(body, ctx, ['changes'], 'salary change', () => ({ date: '', kind: 'percent', percentBps: '' }), (row, path, index) => {

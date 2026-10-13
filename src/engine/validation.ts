@@ -299,6 +299,9 @@ export function validatePlan(raw: unknown): ValidationResult {
     const id = recordId(o);
     reference(o.ownerId, owners, 'ownerId', id); v.text(o.employerId, 'employerId', id);
     v.cents(o.annualGrossCents, 'annualGrossCents', id); v.range(o, 'startDate', 'endDate', id);
+    if (o.annualRaiseCapCents !== undefined && v.cents(o.annualRaiseCapCents, 'annualRaiseCapCents', id)) {
+      if (typeof o.annualGrossCents === 'number' && o.annualRaiseCapCents < o.annualGrossCents) v.issue('annualRaiseCapCents', id, 'The automatic raise cap must be at least the starting annual salary.');
+    }
     v.rate(o.annualRaiseBps, 'annualRaiseBps', id); v.integer(o.raiseMonth, 'raiseMonth', id, 1, 12); v.integer(o.raiseDay, 'raiseDay', id, 1, 31);
     const changes = v.array(o.changes, 'changes', id);
     const seen = new Set<string>();

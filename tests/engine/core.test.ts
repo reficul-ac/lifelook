@@ -91,6 +91,17 @@ describe('plan structural validation', () => {
   it('rejects repeated same-date explicit salary changes', () => {
     reject(makePlan({ salaries: [{ ...salary, changes: [{ date: '2026-02-01', kind: 'percent', percentBps: 100 }, { date: '2026-02-01', kind: 'amount', annualGrossCents: 2 }] }] }), 'salary-a', 'changes[1].date');
   });
+  it.each([-1, 1.5, null, '12000000', 100000000000000])('rejects invalid automatic salary raise cap %s', annualRaiseCapCents => {
+    reject({ ...makePlan(), salaries: [{ ...salary, annualRaiseCapCents }] }, 'salary-a', 'annualRaiseCapCents');
+  });
+  it('rejects a raise cap below the initial salary', () => {
+    reject(makePlan({ salaries: [{ ...salary, annualRaiseCapCents: 100000 }] }), 'salary-a', 'annualRaiseCapCents');
+  });
+  it('allows an omitted or equal raise cap and dated overrides above it', () => {
+    expect(validatePlan(makePlan({ salaries: [salary] })).ok).toBe(true);
+    expect(validatePlan(makePlan({ salaries: [{ ...salary, annualRaiseCapCents: 100001, changes: [{ date: '2026-02-01', kind: 'amount', annualGrossCents: 200000 }] }] })).ok).toBe(true);
+    expect(validatePlan(makePlan({ salaries: [{ ...salary, annualGrossCents: 0, annualRaiseCapCents: 0 }] })).ok).toBe(true);
+  });
   it.each([-1, Number.MAX_SAFE_INTEGER, 100000000000000, 1.5, NaN])('rejects invalid nonnegative amount %s', amount => {
     reject(makePlan({ accounts: [{ ...account, openingBalanceCents: amount }] }), 'account-a', 'openingBalanceCents');
   });

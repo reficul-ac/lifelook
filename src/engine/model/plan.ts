@@ -61,6 +61,8 @@ export interface Salary {
   readonly startDate: ISODate;
   readonly endDate?: ISODate;
   readonly annualRaiseBps: BasisPoints;
+  /** Annual gross ceiling for automatic raises; dated changes may exceed it. */
+  readonly annualRaiseCapCents?: Cents;
   readonly raiseMonth: number;
   readonly raiseDay: number;
   readonly changes: readonly SalaryChange[];

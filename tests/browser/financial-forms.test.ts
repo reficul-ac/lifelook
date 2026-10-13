@@ -5,6 +5,7 @@ import { renderIncomeForm } from '../../src/browser/forms/income';
 import { renderExpensesDebtsForm } from '../../src/browser/forms/expenses-debts';
 import { renderInvestmentsForm } from '../../src/browser/forms/investments';
 import { createWorkspace, type WorkspaceController } from '../../src/browser/state';
+import { restorePlan } from '../../src/browser/storage';
 import { calculateProjection, loadRuleSet, validatePlan, type PlanDocument } from '../../src/engine';
 import { makePlan } from '../helpers/plans';
 import { makeEstimatedMortgagePlan } from '../helpers/estimated-mortgage';
@@ -51,6 +52,60 @@ it('saves two salaries and dated percentage and amount raises as atomic records'
   fireEvent.click(within(draftForm(root, 'Save salary')).getByRole('button', { name: 'Save salary' }));
   expect(controller.getState().savedPlan.salaries).toHaveLength(2);
   expect(controller.getState().savedPlan.revision).toBe(2); sameCalculation(controller);
+});
+
+// Catches missing cap entry, dollar/cent conversion loss, backup omission, and a
+// cleared optional field becoming zero or retaining the old cap.
+it('saves and restores an automatic salary raise cap and clears it to unlimited', () => {
+  const { root, controller } = mount(renderIncomeForm, makePlan({ horizonYears: 3 }));
+  click(root, 'Add salary');
+  fill(root, 'Annual gross salary ($)', '120000');
+  fill(root, 'Annual salary raise (%)', '10');
+  fill(root, 'Automatic salary raise cap ($)', '130000.25');
+  click(root, 'Save salary');
+  expect(controller.getState().savedPlan.salaries[0]).toMatchObject({ annualRaiseCapCents: 13000025 });
+  expect(controller.getState().projection.years.map(year => year.grossIncomeCents)).toEqual([
+    { status: 'available', value: 12000000 },
+    { status: 'available', value: 13000025 },
+    { status: 'available', value: 13000025 },
+  ]);
+
+  const backup = controller.exportBackup();
+  expect(JSON.parse(backup).salaries[0].annualRaiseCapCents).toBe(13000025);
+  controller.resetPlan(makePlan({ horizonYears: 3 }));
+  const restored = restorePlan(backup, controller.getState().savedPlan, { getItem: () => null, setItem: () => {} });
+  expect(restored.accepted).toBe(true);
+  controller.resetPlan(restored.plan);
+  expect(within(root).getByLabelText('Automatic salary raise cap ($)')).toHaveValue('130000.25');
+
+  fill(root, 'Automatic salary raise cap ($)', '');
+  click(root, 'Save salary');
+  expect(controller.getState().savedPlan.salaries[0]).not.toHaveProperty('annualRaiseCapCents');
+  expect(JSON.parse(controller.exportBackup()).salaries[0]).not.toHaveProperty('annualRaiseCapCents');
+  expect(controller.getState().projection.years.map(year => year.grossIncomeCents)).toEqual([
+    { status: 'available', value: 12000000 },
+    { status: 'available', value: 13200000 },
+    { status: 'available', value: 14520000 },
+  ]);
+  expect(controller.getState().savedPlan.revision).toBe(2); sameCalculation(controller);
+});
+
+// Catches publishing a cap below the entered initial salary, or losing the
+// rejected draft while replacing the saved plan or its projection.
+it('retains the saved salary and projection when its automatic raise cap is too low', () => {
+  const { root, controller } = mount(renderIncomeForm);
+  click(root, 'Add salary');
+  fill(root, 'Annual gross salary ($)', '120000');
+  click(root, 'Save salary');
+  const { savedPlan, projection } = controller.getState();
+  fill(root, 'Automatic salary raise cap ($)', '119999.99');
+  click(root, 'Save salary');
+  expect(controller.getState().savedPlan).toBe(savedPlan);
+  expect(controller.getState().projection).toBe(projection);
+  expect(within(root).getByLabelText('Automatic salary raise cap ($)')).toHaveValue('119999.99');
+  expect(controller.getState().issues).toContainEqual(expect.objectContaining({
+    field: 'annualRaiseCapCents', recordId: savedPlan.salaries[0]!.id, severity: 'error',
+  }));
 });
 
 it('requires wage ownership and employer while retaining entered recurrence units', () => {

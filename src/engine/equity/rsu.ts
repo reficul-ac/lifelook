@@ -87,11 +87,32 @@ export function projectRsuAccounts(plan: PlanDocument): RsuProjection {
     effectiveMonthlyRate(account.annualGrowthBps);
     const annualFactor = new Decimal(1).plus(new Decimal(account.annualGrowthBps).div(10000));
     const openingPrice = new Decimal(account.rsu.currentSharePriceCents);
-    const priceAt = (year: number, month: number, day = 1): Decimal => {
-      const elapsedMonths = new Decimal((year - plan.startYear) * 12 + month - 1)
+    const elapsedMonthsAt = (year: number, month: number, day = 1): Decimal =>
+      new Decimal((year - plan.startYear) * 12 + month - 1)
         .plus(day === 1 ? 0 : new Decimal(day - 1).div(daysInMonth(year, month)));
+    const priceTargets = (account.rsu.priceTargets ?? []).map(target => {
+      const date = parseISODate(target.date);
+      return {
+        elapsedMonths: elapsedMonthsAt(date.year, date.month, date.day),
+        price: new Decimal(target.sharePriceCents),
+      };
+    });
+    const priceAt = (year: number, month: number, day = 1): Decimal => {
+      const elapsedMonths = elapsedMonthsAt(year, month, day);
+      let segmentStartMonths = new Decimal(0), segmentStartPrice = openingPrice;
+      for (const target of priceTargets) {
+        if (elapsedMonths.eq(target.elapsedMonths)) return target.price;
+        if (elapsedMonths.lt(target.elapsedMonths)) {
+          const progress = elapsedMonths.minus(segmentStartMonths)
+            .div(target.elapsedMonths.minus(segmentStartMonths));
+          // Interpolate prices directly so each target is exact without rounding a rate.
+          return segmentStartPrice.mul(target.price.div(segmentStartPrice).pow(progress));
+        }
+        segmentStartMonths = target.elapsedMonths;
+        segmentStartPrice = target.price;
+      }
       // A per-share price is internal; range-check the actual share-value products.
-      return openingPrice.mul(annualFactor.pow(elapsedMonths.div(12)));
+      return segmentStartPrice.mul(annualFactor.pow(elapsedMonths.minus(segmentStartMonths).div(12)));
     };
 
     for (const [grantIndex, grant] of account.rsu.grants.entries()) {
@@ -169,7 +190,7 @@ export function projectRsuAccounts(plan: PlanDocument): RsuProjection {
               code: 'monetary-overflow', recordId: account.id, year,
               field: 'rsu.currentSharePriceCents', severity: 'warning',
               explanation: 'The unvested RSU paper value exceeds the supported monetary range. Compensation and held assets remain independently calculated.',
-              resolution: 'Reduce the current share-price or annual-growth assumption to bring the unvested value within the supported monetary range.',
+              resolution: 'Reduce the current share-price, share-price targets or annual-growth assumption to bring the unvested value within the supported monetary range.',
             };
             paperOverflowIssues.set(key, unvestedValueIssue);
             issues.push(unvestedValueIssue);

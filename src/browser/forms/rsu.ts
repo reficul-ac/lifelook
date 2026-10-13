@@ -39,11 +39,21 @@ function renderGrantPreview(root:HTMLElement,context:FieldContext,path:FieldPath
     summary.textContent=`Awarded shares: ${awardedShares(grant)} · Final vest date: ${end??'Unavailable'} · Years left at forecast start: ${years}`;};
   root.addEventListener('input',update);root.addEventListener('change',update);update();
 }
+function newRsuPriceTarget(context:FieldContext,startYear:number):RawObject {
+  const targets=valueAt(context.draft.value,['rsu','priceTargets']) as readonly RawObject[]|undefined,last=targets?.at(-1)?.date;
+  const year=Math.max(startYear+4,isValidISODate(last)?parseISODate(last).year+1:0);
+  return {date:year<=9999?calendarDate(year,1,1):'',sharePriceCents:'0.00'};
+}
 export function renderRsuFields(root:HTMLElement,controller:WorkspaceController,context:FieldContext):void {
   const startYear=controller.getState().savedPlan.startYear;
   renderField(root,context,['rsu','employerId'],'RSU employer ID',{hint:'Use the same employer ID as this owner’s salary when both come from the same employer.'});
   renderField(root,context,['rsu','currentSharePriceCents'],'Current share price ($)',{kind:'money',hint:`Assumed on Jan 1, ${startYear}. Grant prices determine awarded shares independently.`});
-  renderField(root,context,['annualGrowthBps'],'Effective annual share price growth (%)',{kind:'rate',hint:'Price growth changes held asset value without generating cash.'});
+  renderField(root,context,['annualGrowthBps'],'Effective annual share price growth (%)',{kind:'rate',hint:`Applies after the last share price target, or from Jan 1, ${startYear} when no targets are entered. Price growth changes held asset value without generating cash.`});
+  root.append(element('p','Optional share price targets set the expected price on future dates. Between dates, the price grows or falls at a steady compound rate to reach each target.'));
+  renderRows(root,context,['rsu','priceTargets'],'Share price target',()=>newRsuPriceTarget(context,startYear),(body,path)=>{
+    renderField(body,context,[...path,'date'],'Target date',{kind:'date',hint:`After Jan 1, ${startYear} and later than the previous target.`});
+    renderField(body,context,[...path,'sharePriceCents'],'Target share price ($)',{kind:'money'});
+  });
   renderRows(root,context,['rsu','grants'],'RSU grant',()=>newRsuGrant(controller,context),(body,path)=>{
     renderField(body,context,[...path,'name'],'Grant name');renderField(body,context,[...path,'startDate'],'Vesting start date',{kind:'date',hint:'First vest occurs after the first monthly, quarterly or annual interval.'});
     renderField(body,context,[...path,'grantValueCents'],'Grant value ($)',{kind:'money'});renderField(body,context,[...path,'grantSharePriceCents'],'Grant share price ($)',{kind:'money',hint:'Award reference price; this is not an exercise price.'});
@@ -57,6 +67,6 @@ export function renderRsuFields(root:HTMLElement,controller:WorkspaceController,
     renderHistory(body,context,[...path,'openingBasis'],'Opening held-share basis ($)',{kind:'money',hint:'Unknown basis still permits held-value forecasts. Enter 0 only if confirmed.'});
     renderGrantPreview(body,context,path,startYear);
   });
-  const assumptions=element('details');assumptions.append(element('summary','RSU valuation and tax assumptions'),element('p','Delivered stock creates compensation and held assets without creating spendable wage cash. Shares sold for withholding offset the modeled tax reserve; final federal, California and employee payroll liability uses combined salary and RSU wages.'),element('p','The withholding percentage is a withholding assumption, not a tax rate. Sale proceeds are valued at the vest price with no transaction fee or capital gain. Vesting and withholding use fractional-share estimates; actual broker rounding may differ. Remaining unvested and deferred unsettled shares are excluded from available assets.'),element('p','The reserve plans assessed liability; it does not forecast actual payroll remittances or refund dates.'),element('p','The share price grows from January 1 of the forecast start year, including before future grants start. Later discretionary sales and deferred-settlement tax timing are outside this forecast.'));
+  const assumptions=element('details');assumptions.append(element('summary','RSU valuation and tax assumptions'),element('p','Delivered stock creates compensation and held assets without creating spendable wage cash. Shares sold for withholding offset the modeled tax reserve; final federal, California and employee payroll liability uses combined salary and RSU wages.'),element('p','The withholding percentage is a withholding assumption, not a tax rate. Sale proceeds are valued at the vest price with no transaction fee or capital gain. Vesting and withholding use fractional-share estimates; actual broker rounding may differ. Remaining unvested and deferred unsettled shares are excluded from available assets.'),element('p','The reserve plans assessed liability; it does not forecast actual payroll remittances or refund dates.'),element('p','Share price targets start from the current price on January 1 of the forecast start year and use compound growth between target dates. After the last target, the effective annual share price growth applies; without targets, it applies from the forecast start. This price path also applies before future grants start. Later discretionary sales and deferred-settlement tax timing are outside this forecast.'));
   for(const [label,url] of [['IRS RSU audit guide','https://www.irs.gov/pub/irs-pdf/p5992.pdf'],['IRS employee withholding guidance','https://www.irs.gov/publications/p15'],['IRS deferred compensation payroll guidance','https://www.irs.gov/publications/p15a'],['California equity compensation guidance','https://www.ftb.ca.gov/forms/misc/1004.html']]){const link=element('a',label);link.href=url!;link.target='_blank';link.rel='noopener noreferrer';assumptions.append(link,element('br'));}root.append(assumptions);
 }

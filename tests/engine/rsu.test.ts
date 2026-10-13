@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Account, RsuGrant } from '../../src/engine/model/plan';
 import { CalculationRangeError, MAX_CENTS } from '../../src/engine/money';
 import { projectRsuAccounts, rsuVestingEvents, type RsuGrantMonth } from '../../src/engine/equity/rsu';
-import { makePlan } from '../helpers/plans';
+import { makePlan, mustValidate } from '../helpers/plans';
 
 function grant(overrides: Partial<RsuGrant> = {}): RsuGrant {
   return {
@@ -88,6 +88,95 @@ describe('independent RSU vesting dates and quantities', () => {
 });
 
 describe('RSU share holdings, compensation and valuation', () => {
+  it('reaches $170 from $95 exactly over four years before resuming 7.7% annual growth', () => {
+    const historical = grant({
+      startDate: '2024-01-01', grantValueCents: 10000000, openingHeldShares: 10000,
+      openingBasis: { known: true, value: 95000000 },
+    });
+    const result = projectRsuAccounts(mustValidate(makePlan({ horizonYears: 5, accounts: [account([historical], {
+      annualGrowthBps: 770,
+      rsu: {
+        employerId: 'employer', currentSharePriceCents: 9500, grants: [historical],
+        priceTargets: [{ date: '2030-01-01', sharePriceCents: 17000 }],
+      },
+    })] })));
+    // Independent 80-digit calculation of 95,000,000 * (170 / 95)^(year / 4).
+    expect([2026, 2027, 2028, 2029, 2030].map(year => row(result.months, 12, year).closingValueCents))
+      .toEqual([109876530, 127082650, 146983164, 170000000, 183090000]);
+    expect(row(result.months, 1)).toMatchObject({ openingValueCents: 95000000, heldShares: 10000 });
+    expect(row(result.months, 1, 2030)).toMatchObject({ openingValueCents: 170000000, heldShares: 10000 });
+    expect(result.months.every(value => value.vestedShares === 0 && value.taxableIncomeCents === 0)).toBe(true);
+  });
+
+  it('uses fractional months between multiple targets for vest income and held valuations', () => {
+    const initial = grant({
+      startDate: '2026-06-16', vestingMonths: 1, grantValueCents: 10000,
+    });
+    const before = grant({
+      id: 'before-target', startDate: '2026-05-16', vestingMonths: 1,
+      grantValueCents: 1000, withholdingBps: 0,
+    });
+    const after = grant({
+      id: 'after-target', startDate: '2026-08-16', vestingMonths: 1,
+      grantValueCents: 1000, withholdingBps: 0,
+    });
+    const grants = [initial, before, after];
+    const result = projectRsuAccounts(makePlan({ horizonYears: 2, accounts: [account(grants, {
+      annualGrowthBps: 10000,
+      rsu: {
+        employerId: 'employer', currentSharePriceCents: 1000, grants,
+        priceTargets: [
+          { date: '2026-07-16', sharePriceCents: 2000 },
+          { date: '2027-01-01', sharePriceCents: 1000 },
+        ],
+      },
+    })] }));
+    expect(row(result.months, 7)).toMatchObject({
+      vestedShares: 10, withheldShares: 2.5, heldShares: 7.5,
+      vestedValueCents: 20000, taxableIncomeCents: 20000, withholdingCents: 5000,
+      closingValueCents: 14058, basis: { known: true, value: 15000 },
+    });
+    // June 16 precedes July 16 by fractional months: 1000 * 2^(341/402).
+    expect(row(result.months, 6, 2026, 'before-target').taxableIncomeCents).toBe(1800);
+    // September 16 lies on the descending segment: 2000 * 2^(-125/342).
+    expect(row(result.months, 9, 2026, 'after-target').taxableIncomeCents).toBe(1552);
+    expect(row(result.months, 12)).toMatchObject({ closingValueCents: 7500, heldShares: 7.5 });
+    expect(row(result.months, 1, 2027)).toMatchObject({ openingValueCents: 7500, closingValueCents: 7946 });
+    expect(row(result.months, 12, 2027)).toMatchObject({ closingValueCents: 15000, heldShares: 7.5 });
+  });
+
+  it('shares the forecast target curve across grants starting at different future dates', () => {
+    const early = grant({
+      startDate: '2026-06-01', vestingMonths: 1, grantValueCents: 10000, withholdingBps: 0,
+    });
+    const later = grant({
+      id: 'later', startDate: '2026-12-01', vestingMonths: 1,
+      grantValueCents: 10000, withholdingBps: 0,
+    });
+    const grants = [early, later];
+    const result = projectRsuAccounts(makePlan({ horizonYears: 2, accounts: [account(grants, {
+      rsu: {
+        employerId: 'employer', currentSharePriceCents: 1000, grants,
+        priceTargets: [{ date: '2027-01-01', sharePriceCents: 2000 }],
+      },
+    })] }));
+    expect(row(result.months, 7)).toMatchObject({ vestedShares: 10, taxableIncomeCents: 14142 });
+    expect(row(result.months, 12)).toMatchObject({ heldShares: 10, closingValueCents: 20000 });
+    expect(row(result.months, 11, 2026, 'later')).toMatchObject({ unvestedShares: 0, unvestedValueCents: 0 });
+    expect(row(result.months, 12, 2026, 'later')).toMatchObject({ unvestedShares: 10, unvestedValueCents: 20000 });
+    expect(row(result.months, 1, 2027, 'later')).toMatchObject({ vestedShares: 10, heldShares: 10, taxableIncomeCents: 20000 });
+  });
+
+  it('keeps constant growth identical when targets are omitted or empty', () => {
+    const initial = grant({ startDate: '2026-06-16', vestingMonths: 1, grantValueCents: 10000 });
+    const original = account([initial], { annualGrowthBps: 10000 });
+    const empty = { ...original, rsu: { ...original.rsu!, priceTargets: [] } };
+    const omittedResult = projectRsuAccounts(makePlan({ accounts: [original] }));
+    const emptyResult = projectRsuAccounts(makePlan({ accounts: [empty] }));
+    expect(emptyResult).toEqual(omittedResult);
+    expect(row(emptyResult.months, 7)).toMatchObject({ taxableIncomeCents: 14543, withholdingCents: 3636, closingValueCents: 11237 });
+  });
+
   it('never taxes or holds an award when the grant is created', () => {
     const result = projectRsuAccounts(makePlan({ accounts: [account([grant()])] }));
     expect(result.issues).toEqual([]);

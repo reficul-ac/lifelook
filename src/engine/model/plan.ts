@@ -103,10 +103,16 @@ export interface RsuGrant {
   readonly openingHeldShares: number;
   readonly openingBasis: History<Cents>;
 }
+export interface RsuPriceTarget {
+  readonly date: ISODate;
+  readonly sharePriceCents: Cents;
+}
 export interface RsuAccountDetails {
   readonly employerId: string;
   /** Share valuation assumed on January 1 of the forecast start year. */
   readonly currentSharePriceCents: Cents;
+  /** Ordered future price targets; annualGrowthBps applies after the final target. */
+  readonly priceTargets?: readonly RsuPriceTarget[];
   readonly grants: readonly RsuGrant[];
 }
 export type AccountType = 'taxable-brokerage' | 'traditional-401k' | 'roth-401k' | 'traditional-ira' | 'roth-ira' | 'rsu';

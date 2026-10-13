@@ -9,3 +9,10 @@ coverage/
 test-results/
 playwright-report/
 *.lifelook
+
+# Local financial profiles and exported backups.
+lifelook-*.json
+*-profile.json
+*-profile-notes.txt
+/profiles/
+/backups/

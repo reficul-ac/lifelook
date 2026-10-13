@@ -23,6 +23,40 @@ function rejected(value: unknown, field: string, recordId = account.id, code?: s
 }
 
 describe('RSU account and nested grant validation', () => {
+  const withTargets = (priceTargets: unknown) => ({ ...account, rsu: { ...account.rsu!, priceTargets } }) as Account;
+  it('preserves valid ordered price targets and freezes their saved inputs', () => {
+    const priceTargets = [
+      { date: '2030-01-01', sharePriceCents: 17000 },
+      { date: '2031-06-15', sharePriceCents: 16000 },
+    ];
+    const result = validatePlan(makePlan({ accounts: [withTargets(priceTargets)] }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.issues));
+    const saved = result.plan.accounts[0]?.rsu as unknown as { priceTargets: unknown[] };
+    expect(saved.priceTargets).toEqual(priceTargets);
+    expect(Object.isFrozen(saved.priceTargets[0])).toBe(true);
+  });
+  it('accepts an empty target list for the constant-growth path', () => {
+    expect(validatePlan(makePlan({ accounts: [withTargets([])] })).ok).toBe(true);
+  });
+  it.each([null, {}, 'targets'])('rejects a non-array price target list: %s', priceTargets => {
+    rejected(withTargets(priceTargets), 'rsu.priceTargets');
+  });
+  it.each([null, 'target', 17000])('rejects a non-object target: %s', target => {
+    rejected(withTargets([target]), 'rsu.priceTargets[0]');
+  });
+  it.each(['2030-02-29', '2030-01', '', '2026-01-01', '2025-12-31'])('rejects invalid or nonfuture target date: %s', date => {
+    rejected(withTargets([{ date, sharePriceCents: 17000 }]), 'rsu.priceTargets[0].date');
+  });
+  it.each(['2030-01-01', '2029-12-31'])('rejects duplicate or unordered target dates: %s', date => {
+    rejected(withTargets([
+      { date: '2030-01-01', sharePriceCents: 17000 },
+      { date, sharePriceCents: 18000 },
+    ]), 'rsu.priceTargets[1].date');
+  });
+  it.each([0, -1, 0.5, MAX_CENTS + 1, '17000'])('rejects an invalid target share price: %s', sharePriceCents => {
+    rejected(withTargets([{ date: '2030-01-01', sharePriceCents }]), 'rsu.priceTargets[0].sharePriceCents');
+  });
   it('accepts multiple grants with independent terms and preserves explicit unknown basis', () => {
     const result = validatePlan(makePlan({ accounts: [{ ...account, rsu: { ...account.rsu!, grants: [grant, { ...grant, id: 'refresher', name: 'Refresher', startDate: '2027-02-01', vestingMonths: 14, cliffMonths: 0, vestingFrequency: 'monthly', awardedShares: 99.123456, openingHeldShares: 0, openingBasis: { known: true, value: 0 } }] } }] }));
     expect(result.ok).toBe(true);

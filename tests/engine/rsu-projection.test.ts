@@ -11,6 +11,21 @@ const project=(overrides:Partial<PlanDocument>={})=>calculateProjection(mustVali
 function money(value:{status:string;value?:number}):number {expect(value.status).toBe('available');return value.value!;}
 
 describe('RSU compensation, tax funding and asset integration',()=>{
+  it('uses a target vest price for wages, withholding, tax funding and retained assets',()=>{
+    const initial=grant({startDate:'2026-06-01',vestingMonths:1,grantValueCents:1000000});
+    const equity=project({accounts:[account([initial],{rsu:{employerId:'employer',currentSharePriceCents:10000,grants:[initial],priceTargets:[{date:'2026-07-01',sharePriceCents:20000}]}})]});
+    const wages=calculateProjection(mustValidate(makePlan({otherIncome:[{id:'wages',name:'Wages',amountCents:2000000,frequency:'annual',startDate:'2026-07-01',annualGrowthBps:0,classification:'wage',ownerId:'owner-a',employerId:'employer'}]})),loadRuleSet());
+    const year=equity.years[0]!;
+    expect(year.tax).toEqual(wages.years[0]!.tax);
+    expect(money(equity.months[6]!.grossIncomeCents)).toBe(2000000);
+    expect(money(year.grossIncomeCents)).toBe(2000000);
+    if(year.rsu?.status!=='available')throw new Error('RSU summary missing');
+    expect(year.rsu.value).toMatchObject({taxableIncomeCents:2000000,withholdingCents:600000,unvestedValueCents:0});
+    expect(year.rsu.value.grants[0]).toMatchObject({heldShares:70,basis:{known:true,value:1400000}});
+    expect(money(year.accountBalanceCents)).toBe(1400000);
+    expect(money(year.cashFlowCents)).toBe(600000-money(year.totalTaxCents));
+    expect(money(year.netWorthCents)).toBe(2000000-money(year.totalTaxCents));
+  });
   it('records sourced settlement and forecast assumptions in RSU scenario provenance',()=>{
     const equity=project();
     expect(equity.years[0]!.provenance).toContainEqual(expect.objectContaining({ruleVersion:'rsu-settle-at-vest.1',sources:expect.arrayContaining(['https://www.irs.gov/pub/irs-pdf/p5992.pdf']),assumptions:expect.arrayContaining(['RSU shares are delivered at each vest; deferred settlement tax timing requires a separate model.'])}));

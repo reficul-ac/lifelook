@@ -25,6 +25,14 @@ describe('RSU nested drafts and compatible JSON backups', () => {
     expect(draft.rsu.currentSharePriceCents).toBe('150.25');
     expect(fromDraftValue(draft, account.id)).toEqual({ value: account, issues: [] });
   });
+  it('round-trips dated share price targets with exact dollar-to-cent conversion', () => {
+    const staged: Account = { ...account, rsu: { ...account.rsu!, priceTargets: [{ date: '2030-01-01', sharePriceCents: 17025 }, { date: '2032-07-01', sharePriceCents: 19550 }] } };
+    const draft = toDraftValue(staged);
+    expect(draft.rsu.priceTargets).toEqual([{ date: '2030-01-01', sharePriceCents: '170.25' }, { date: '2032-07-01', sharePriceCents: '195.50' }]);
+    expect(fromDraftValue(draft, account.id)).toEqual({ value: staged, issues: [] });
+    draft.rsu.priceTargets[1].sharePriceCents = '195.501';
+    expect(fromDraftValue(draft, account.id).issues).toContainEqual(expect.objectContaining({ recordId: account.id, field: 'rsu.priceTargets.1.sharePriceCents', severity: 'error' }));
+  });
   it('keeps explicit unknown opening basis during draft conversion', () => {
     expect(fromDraftValue(toDraftValue({ openingBasis: { known: false } }), account.id)).toEqual({ value: { openingBasis: { known: false } }, issues: [] });
   });
@@ -43,12 +51,13 @@ describe('RSU nested drafts and compatible JSON backups', () => {
     expect(controller.getDraft('contributions', id).value.accountId).toBe(ordinary.id);
   });
   it('saves and restores nested RSU inputs at the existing version and storage key', () => {
-    const port = storage(), plan = makePlan({ accounts: [account] });
+    const staged: Account = { ...account, rsu: { ...account.rsu!, priceTargets: [{ date: '2030-01-01', sharePriceCents: 17025 }] } };
+    const port = storage(), plan = makePlan({ accounts: [staged] });
     expect(savePlan(port, plan).persisted).toBe(true);
     expect(JSON.parse(port.getItem(PLAN_STORAGE_KEY)!)).toEqual(plan);
     const loaded = loadPlan(port); expect(loaded.status).toBe('loaded');
     if (loaded.status !== 'loaded') throw new Error(JSON.stringify(loaded));
-    expect(loaded.plan.accounts[0]?.rsu).toEqual(account.rsu);
+    expect(loaded.plan.accounts[0]?.rsu).toEqual(staged.rsu);
     const restored = restorePlan(exportPlan(loaded.plan), makePlan(), storage());
     expect(restored.accepted).toBe(true); expect(restored.plan).toEqual(plan);
   });

@@ -254,6 +254,22 @@ export function validatePlan(raw: unknown): ValidationResult {
     if (!rsu) return;
     v.text(rsu.employerId, 'rsu.employerId', id);
     const priceValid = v.integer(rsu.currentSharePriceCents, 'rsu.currentSharePriceCents', id, 1, MAX_CENTS);
+    if (rsu.priceTargets !== undefined) {
+      let previousDate = forecastStart;
+      v.array(rsu.priceTargets, 'rsu.priceTargets', id).forEach((value, index) => {
+        const field = `rsu.priceTargets[${index}]`, target = v.object(value, field, id);
+        if (!target) return;
+        if (v.date(target.date, `${field}.date`, id)) {
+          if (startValid && target.date <= forecastStart) {
+            v.issue(`${field}.date`, id, 'A share price target must follow January 1 of the forecast start year.');
+          } else if (target.date <= previousDate) {
+            v.issue(`${field}.date`, id, 'Share price targets must have distinct dates in increasing order.');
+          }
+          previousDate = target.date;
+        }
+        v.integer(target.sharePriceCents, `${field}.sharePriceCents`, id, 1, MAX_CENTS);
+      });
+    }
     v.array(rsu.grants, 'rsu.grants', id).forEach((value, index) => {
       const field = `rsu.grants[${index}]`, grant = v.object(value, field, id);
       if (!grant) return;

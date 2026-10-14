@@ -6,6 +6,7 @@ import type { Cents, History, ValidatedPlan } from '../model/plan';
 import type { Available, Coverage, Issue, RuleProvenance } from '../model/results';
 import type { HouseholdTaxState } from '../model/tax-state';
 import type { PropertyYearFacts } from '../property/facts';
+import {finishAduTaxYear} from '../property/adu-tax';
 import type { LoanSchedule } from '../property/loans';
 import type { YearRules } from '../rules/types';
 import { calculateCaliforniaTax, type CaliforniaTaxResult } from './california';
@@ -83,6 +84,7 @@ function unsupportedCoverage(plan:ValidatedPlan,year:number):Available<never>|un
 
 /** Resolve annual eligibility first; compare complete legal tax candidates without mutation. */
 export function resolveHouseholdYear(plan:ValidatedPlan,cash:CashYear,requests:readonly ContributionRequest[],property:PropertyYearFacts,loans:readonly LoanSchedule[],opening:HouseholdTaxState,rules:YearRules):HouseholdYear {
+  opening=property.adu?.opening??opening;
   const workplace=resolveWorkplaceContributions(plan,cash,requests,rules);
   const payroll=calculatePayroll(cash,workplace,rules);
   const preIra=buildPreIraFacts(cash,workplace,property);
@@ -139,7 +141,8 @@ export function resolveHouseholdYear(plan:ValidatedPlan,cash:CashYear,requests:r
     for(const book of ['california','california-amt'] as const){const state=tax.value.california.closingState.rentals[id]?.[book];if(state)closingRentals[id]![book]=state;}
   }
   const qbi=resolveRentalQbi(facts,opening,rules);
-  const closingTaxState:HouseholdTaxState={...rental.closing,year:cash.year,rentals:closingRentals,iraBasisByOwner:ira.closingIraBasisByOwner,qbiLossVintages:qbi.status==='available'?qbi.value.closingLossVintagesByRental:Object.fromEntries(Object.keys(rental.closing.qbiLossVintages).map(id=>[id,{known:false} as const])),minimumTaxCreditCoverage:{federal:credit('federal'),california:credit('california')}};
+  const carriedTaxState:HouseholdTaxState={...rental.closing,year:cash.year,rentals:closingRentals,iraBasisByOwner:ira.closingIraBasisByOwner,qbiLossVintages:qbi.status==='available'?qbi.value.closingLossVintagesByRental:Object.fromEntries(Object.keys(rental.closing.qbiLossVintages).map(id=>[id,{known:false} as const])),minimumTaxCreditCoverage:{federal:credit('federal'),california:credit('california')}};
+  const closingTaxState=property.adu?finishAduTaxYear(property.adu,carriedTaxState):carriedTaxState;
   const baseCoverage=checkCoverage(plan,cash.year);
   const issueList=[...workplace.issues,...rental.issues,...ira.issues,...facts.issues,...baseCoverage.issues,...(tax.status==='available'?[...tax.value.federal.issues,...tax.value.california.issues]:tax.issues)];
   if(tax.status==='available'&&tax.value.provenance.status!=='verified')issueList.push({code:tax.value.provenance.status==='provisional'?'provisional-rules':'projected-rules',year:cash.year,severity:tax.value.provenance.status==='provisional'?'warning':'info',explanation:`This numerical tax scenario uses ${tax.value.provenance.status} sourced rules and explicit assumptions.`,resolution:'Inspect the tax explanation and source register; rerun fixtures when final applicable publications are available.'});

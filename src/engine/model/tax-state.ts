@@ -2,7 +2,13 @@ import { Decimal, settleCents } from '../money';
 import type { Cents, History, QbiLossVintage, RentalBookState, TaxBook, ValidatedPlan } from './plan';
 import type { Available } from './results';
 
+export interface AduCapitalBookState {
+  readonly capitalizedBuildingCents:Cents;
+  readonly nondepreciableBasisCents:Cents;
+  readonly recoveryActivated:boolean;
+}
 export interface HouseholdTaxState {
+  readonly aduProjects?:Readonly<Record<string,Readonly<Record<TaxBook,Available<AduCapitalBookState>>>>>;
   readonly year: number;
   readonly rentals: Readonly<Record<string, Readonly<Record<TaxBook, Available<RentalBookState>>>>>;
   readonly qbiLossVintages: Readonly<Record<string, History<readonly QbiLossVintage[]>>>;
@@ -33,6 +39,7 @@ export function initialTaxState(plan: ValidatedPlan): HouseholdTaxState {
   }));
   return {
     year: plan.startYear - 1, rentals, qbiLossVintages, iraBasisByOwner,
+    ...(plan.properties.some(p=>p.aduProject)?{aduProjects:Object.fromEntries(plan.properties.flatMap(p=>p.aduProject?[[p.aduProject.id,Object.fromEntries(books.map(book=>[book,{status:'available' as const,value:{capitalizedBuildingCents:0,nondepreciableBasisCents:0,recoveryActivated:false}}]))]]:[])) as NonNullable<HouseholdTaxState['aduProjects']>}:{}),
     minimumTaxCreditCoverage: { federal: plan.household.coverageAnswers.priorFederalMinimumTaxCredits, california: plan.household.coverageAnswers.priorCaliforniaMinimumTaxCredits },
   };
 }

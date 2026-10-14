@@ -1,4 +1,5 @@
 import { parseISODate } from './dates';
+import {aduTaxActivityStarted} from './property/adu-tax';
 import type { History, ValidatedPlan } from './model/plan';
 import type { Coverage, Issue } from './model/results';
 import { rsuVestingEvents } from './equity/rsu';
@@ -60,6 +61,8 @@ export function checkCoverage(plan: ValidatedPlan, year: number): Coverage {
     if (loan.proceedsQualification.kind !== 'acquisition' && (loan.proceedsQualification.kind === 'unknown' || !loan.proceedsQualification.historyComplete.known || !loan.proceedsQualification.historyComplete.value)) add('unsupported-tax-case', loan.id, 'proceedsQualification', 'Advanced mortgage qualification requires complete qualifying proceeds history.', 'Supply supported financing and acquisition history before claiming mortgage deductions.');
   }));
   plan.rentals.forEach(rental => {
+    const property=plan.properties.find(p=>p.aduProject?.rentalId===rental.id);
+    if(property&&!aduTaxActivityStarted(plan,property,year))return;
     required(rental.activeParticipation, rental.id, 'activeParticipation');
     if (rental.convertedFromPersonalUse) required(rental.conversionBuildingFmv, rental.id, 'conversionBuildingFmv');
     Object.entries(rental.qualifications).forEach(([field, answer]: [string, History<boolean>]) => {

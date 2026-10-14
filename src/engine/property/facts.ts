@@ -1,4 +1,9 @@
 import type { CashYear } from '../cash/income';
+import {prepareAduTaxYear} from './adu-tax';
+import type {AduRiskMovements,PreparedAduTaxYear} from './adu-tax';
+import {resolveAduYear} from './adu-lifecycle';
+import type {AduYear} from './adu-lifecycle';
+import {allocateAduSharedExpense} from './adu-allocation';
 import { Decimal, settleCents } from '../money';
 import type { Cents, Expense, History, Property, PropertyLoan, RentalBookState, RentalUnit, TaxBook, ValidatedPlan } from '../model/plan';
 import type { HouseholdTaxState } from '../model/tax-state';
@@ -11,6 +16,8 @@ import { calculateDepreciation } from './depreciation';
 import type { LoanSchedule, MortgageQualificationEvidence } from './loans';
 
 export interface ExpenseAllocationRecord extends ExpenseAllocation {
+  /** Project rows expose unavailable splits separately from their known paid cash. */
+  readonly allocation?:Available<ExpenseAllocation>;
   readonly expenseId: string;
   readonly propertyId: string;
   readonly taxCategory: Expense['taxCategory'];
@@ -29,6 +36,7 @@ export interface RentalTaxBookFacts {
   readonly closingState: RentalBookState;
 }
 export interface RentalYearFacts {
+  readonly aduRiskMovements?:Readonly<Record<TaxBook,Available<AduRiskMovements>>>;
   readonly rentalId: string;
   readonly propertyId: string;
   readonly unit: RentalUnit;
@@ -59,6 +67,7 @@ export interface PersonalDeductionFacts {
   readonly loans: readonly PersonalLoanFacts[];
 }
 export interface PropertyYearFacts {
+  readonly adu?:PreparedAduTaxYear;
   readonly year: number;
   readonly expenses: readonly ExpenseAllocationRecord[];
   readonly rentals: readonly RentalYearFacts[];
@@ -111,9 +120,11 @@ function unavailableIssue<T>(status: 'needs-data' | 'unsupported-case', issue: I
 
 export function buildPropertyFacts(
   plan: ValidatedPlan, cash: CashYear, loans: readonly LoanSchedule[],
-  opening: HouseholdTaxState, rules: YearRules,
+  opening: HouseholdTaxState, rules: YearRules, adu?:AduYear,
 ): PropertyYearFacts {
   const year = cash.year;
+  const aduContext=adu??(plan.properties.some(p=>p.aduProject)?resolveAduYear(plan,year):undefined);
+  const prepared=aduContext?.projects.length?prepareAduTaxYear(plan,aduContext,opening,rules):undefined;
   const properties = new Map(plan.properties.map(property => [property.id, property]));
   const units = [...plan.rentals].sort((a, b) => a.id.localeCompare(b.id));
   const unitsById = new Map(units.map(unit => [unit.id, unit]));
@@ -125,9 +136,12 @@ export function buildPropertyFacts(
     const property = properties.get(propertyId);
     if (!property) continue; // Validated plans cannot have dangling references.
     const paidCents = streamById.get(expense.id)?.annualCents ?? 0;
-    const allocation = allocateExpense(expense, property, units, paidCents);
+    const projectUnit=property.aduProject?unitsById.get(property.aduProject.rentalId):undefined;
+    const monthly=projectUnit?allocateAduSharedExpense(expense,property,projectUnit,streamById.get(expense.id)?.months??Array(12).fill(0),year):undefined;
+    const resolved:Available<ExpenseAllocation>|undefined=monthly?monthly.status==='available'?available({personalCents:sum(monthly.value.map(m=>m.personalCents)),rentalCentsByUnit:{[projectUnit!.id]:sum(monthly.value.map(m=>m.rentalCentsByUnit[projectUnit!.id]??0))}}):monthly:undefined;
+    const allocation=resolved?resolved.status==='available'?resolved.value:{personalCents:0,rentalCentsByUnit:{[projectUnit!.id]:0}}:allocateExpense(expense,property,units,paidCents);
     expenses.push({ expenseId: expense.id, propertyId, taxCategory: expense.taxCategory,
-      paidCents, ...allocation, ...(expense.mortgageInsuranceQualification?{mortgageInsuranceQualification:expense.mortgageInsuranceQualification}:{}) });
+      paidCents, ...allocation, ...(resolved?{allocation:resolved}:{}), ...(expense.mortgageInsuranceQualification?{mortgageInsuranceQualification:expense.mortgageInsuranceQualification}:{}) });
   }
   const personalExpenses = expenses.filter(expense => properties.get(expense.propertyId)?.role !== 'rental');
   const personalCategory = (category: Expense['taxCategory']): Cents => sum(personalExpenses
@@ -183,6 +197,7 @@ export function buildPropertyFacts(
   const closingRentalState: Record<string, Readonly<Record<TaxBook, Available<RentalBookState>>>> = {};
   const issues: Issue[] = [];
   for (const unit of units) {
+    if(plan.properties.find(p=>p.id===unit.propertyId)?.aduProject?.rentalId===unit.id)continue;
     const allocations = expenses.filter(expense => (expense.rentalCentsByUnit[unit.id] ?? 0) !== 0);
     const operatingExpenseCents = sum(allocations.filter(expense => expense.taxCategory !== 'capital'
       && expense.taxCategory !== 'personal').map(expense => expense.rentalCentsByUnit[unit.id]!));
@@ -241,8 +256,13 @@ export function buildPropertyFacts(
       eligibleInterestCents, depreciation: depreciation as Record<TaxBook, Available<DepreciationYear>>,
       books: rentalBooks as Record<TaxBook, Available<RentalTaxBookFacts>> });
   }
+  if(prepared){
+    rentals.push(...prepared.rentalFacts);rentals.sort((a,b)=>a.rentalId.localeCompare(b.rentalId));
+    for(const rental of prepared.rentalFacts)closingRentalState[rental.rentalId]=Object.fromEntries(books.map(book=>{const d=rental.depreciation[book];return [book,d.status==='available'?available(d.value.closing):d];})) as Record<TaxBook,Available<RentalBookState>>;
+    issues.push(...prepared.issues);
+  }
   const uniqueIssues = [...new Map(issues.map(issue => [JSON.stringify(issue), issue])).values()];
-  return { year, expenses, rentals,
+  return { year, expenses, rentals, ...(prepared?{adu:prepared}:{}),
     personal: { propertyTaxPaidCents: personalCategory('property-tax'),
       homeownersInsuranceCents: personalCategory('homeowners-insurance'),
       mortgageInsuranceCents: personalCategory('mortgage-insurance'),
@@ -250,6 +270,6 @@ export function buildPropertyFacts(
     cash: { rentCents: sum(rentals.map(rental => rental.rentCents)),
       operatingExpenseCents: sum(expenses.filter(expense => expense.taxCategory !== 'capital').map(expense => expense.paidCents)),
       capitalExpenseCents: sum(expenses.filter(expense => expense.taxCategory === 'capital').map(expense => expense.paidCents)),
-      debtPaymentCents: sum(totalDebtPayments), interestCents: sum(totalInterest), principalPaidCents: sum(totalPrincipal) },
+      debtPaymentCents: sum([...totalDebtPayments,...(prepared?.rentalFacts.map(r=>r.debtPaymentCents)??[])]), interestCents: sum([...totalInterest,...(prepared?.rentalFacts.map(r=>r.cashInterestCents)??[])]), principalPaidCents: sum([...totalPrincipal,...(prepared?.rentalFacts.map(r=>r.principalPaidCents)??[])]) },
     closingRentalState, issues: uniqueIssues };
 }

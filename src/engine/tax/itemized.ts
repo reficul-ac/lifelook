@@ -46,7 +46,8 @@ export function buildItemizedCandidate(facts:ItemizedFacts,property:PropertyYear
     return {status:missing.some(v=>v.status==='unsupported-case')?'unsupported-case':'needs-data',issues:missing.flatMap(v=>v.issues)};
   }
   const personal=property.personal;
-  const caMissing=unavailable<ItemizedDetail>([mortgages.california,facts.federalAgiCents]);
+  const allocationInputs=(categories:readonly string[]):readonly Available<unknown>[]=>property.expenses.filter(e=>categories.includes(e.taxCategory)).flatMap(e=>e.allocation?[e.allocation]:[]);
+  const caMissing=unavailable<ItemizedDetail>([mortgages.california,facts.federalAgiCents,...allocationInputs(['property-tax'])]);
   let california:Available<ItemizedDetail>;
   if(caMissing)california=caMissing;
   else {
@@ -66,7 +67,7 @@ export function buildItemizedCandidate(facts:ItemizedFacts,property:PropertyYear
     const provenance=mergeRuleProvenance(rules,[ruleProvenance,mortgage.provenance]);
     california={status:'available',value:{jurisdiction:'california',originalCents:original,allowedCents:allowed,disallowedCents:settleCents(new Decimal(original).minus(allowed)),mortgageInterestCents:mortgage.allowedInterestCents,mortgageInsuranceCents:0,saltCents:personal.propertyTaxPaidCents,propertyTaxPaidCents:personal.propertyTaxPaidCents,niitDeductionCents:{status:'available',value:0},amtAllowedCents:mortgage.allowedInterestCents,provenance,reasons}};
   }
-  const fedMissing=unavailable<ItemizedDetail>([mortgages.federal,facts.federalAgiCents,facts.saltMagiCents,statePaid]);
+  const fedMissing=unavailable<ItemizedDetail>([mortgages.federal,facts.federalAgiCents,facts.saltMagiCents,statePaid,...allocationInputs(['property-tax','mortgage-insurance'])]);
   let federal:Available<ItemizedDetail>;
   if(fedMissing)federal=fedMissing;
   else {

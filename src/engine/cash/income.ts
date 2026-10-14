@@ -77,36 +77,45 @@ function earnedSalary(salary: Salary, year: number): { months: readonly Cents[];
   return {months:settleSeries(unrounded),periods};
 }
 
-export function resolveCashYear(plan: ValidatedPlan, year: number): CashYear {
+export interface CashSelection {readonly streamIds?:ReadonlySet<string>}
+export function resolveCashYear(plan: ValidatedPlan, year: number, selection?:CashSelection): CashYear {
+  const include=(id:string):boolean=>!selection?.streamIds||selection.streamIds.has(id);
   const streams: CashStream[]=[], salaryPeriods: SalaryPeriod[]=[];
   for(const s of [...plan.salaries].sort((a,b)=>a.id.localeCompare(b.id))) {
+    if(!include(s.id))continue;
     const result=earnedSalary(s,year); salaryPeriods.push(...result.periods);
     streams.push({id:s.id,kind:'salary',months:result.months,annualCents:sum(result.months),classification:'wage',ownerId:s.ownerId,employerId:s.employerId,niitTreatment:'excluded'});
   }
   for(const o of [...plan.otherIncome].sort((a,b)=>a.id.localeCompare(b.id))) {
+    if(!include(o.id))continue;
     const months=recurringAmounts(o,year);
     streams.push({id:o.id,kind:'other-income',months,annualCents:sum(months),classification:o.classification,...(o.niitTreatment?{niitTreatment:o.niitTreatment}:{}),...(o.ownerId?{ownerId:o.ownerId}:{}),...(o.employerId?{employerId:o.employerId}:{})});
   }
   for(const e of [...plan.expenses].sort((a,b)=>a.id.localeCompare(b.id))) {
+    if(!include(e.id))continue;
     const months=expenseAmounts(e,year);
     streams.push({id:e.id,kind:'expense',months,annualCents:sum(months),...(e.propertyId?{propertyId:e.propertyId}:{})});
   }
   for(const child of [...(plan.children??[])].sort((a,b)=>a.id.localeCompare(b.id))) {
+    if(!include(child.id))continue;
     const months=childExpenseAmounts(child,year);
     streams.push({id:child.id,kind:'expense',months,annualCents:sum(months)});
   }
   for(const property of plan.properties) {
     const project=property.aduProject;if(!project)continue;
     for(const cost of project.costs) {
+      if(!include(cost.id))continue;
       const months=Array.from({length:12},(_,index)=>cost.paymentDate.slice(0,7)===`${year}-${String(index+1).padStart(2,'0')}`?cost.amountCents:0);
       streams.push({id:cost.id,kind:'expense',months,annualCents:sum(months),propertyId:property.id,aduProjectId:project.id});
     }
     for(const row of project.propertyTax.paymentYears.filter(row=>row.year===year))for(const payment of row.payments) {
+      if(!include(payment.id))continue;
       const months=Array.from({length:12},(_,index)=>payment.month===`${year}-${String(index+1).padStart(2,'0')}`?payment.amountCents:0);
       streams.push({id:payment.id,kind:'expense',months,annualCents:sum(months),propertyId:property.id,aduProjectId:project.id});
     }
   }
   for(const r of [...plan.rentals].sort((a,b)=>a.id.localeCompare(b.id))) {
+    if(!include(r.id))continue;
     const startYear=Number(r.rentStartDate.slice(0,4));
     const amount=new Decimal(r.monthlyRentCents).mul(new Decimal(1).plus(new Decimal(r.rentGrowthBps).div(10000)).pow(Math.max(0,year-startYear)));
     const collected=r.vacancyBps===undefined?amount:amount.times(new Decimal(10000).minus(r.vacancyBps).div(10000));

@@ -1,0 +1,19 @@
+import type {AduBuildComparison} from '../../engine';
+import type {IssueViewContext} from '../issue-presentation';
+import {appendAmount,appendCoverage,appendProvenance,element,moneyEntry,renderIssues} from './issues';
+export function renderAduComparison(root:HTMLElement,comparison:AduBuildComparison,context:IssueViewContext,year:number):void {
+ const section=element('section');section.className='adu-comparison-report';section.append(element('h3',`ADU build versus no build · ${year}`));
+ const row=comparison.years.find(y=>y.year===year);if(!row){section.append(element('p','This year is outside the calculated comparison.'));root.append(section);return;}
+ const policy=context.readState().savedPlan.cashFlowAllocation;
+ section.append(element('p','Changes compare the applied build with an independently calculated household forecast that removes this project. Other projects and the original home remain.'));
+ const amounts=element('dl');for(const [field,label] of [['constructionCostCents','Construction cash change'],['financingProceedsCents','Dedicated loan receipts change'],['rentCents','Collected rent change'],['expensesCents','Household expense change'],['debtPaymentCents','Debt payment change'],['cashFlowBeforeInvestmentsCents','Household cash flow change before investments'],['totalTaxCents',policy?'Household tax change with your allocation policy':'Household tax change'],['investmentContributionsCents','Investment contribution change'],['reserveCents','December household reserve change'],['propertyEquityCents','December property equity change'],['netWorthCents','December household net worth change']] as const)moneyEntry(amounts,label,row[field],context,`adu-comparison-${field}`);
+ section.append(amounts);
+ const returns=element('dl');moneyEntry(returns,'Owner cash committed through completion',comparison.ownerCommitmentCents,context,'adu-owner-commitment');moneyEntry(returns,'Build household funding need',comparison.buildFundingNeedCents,context,'adu-build-funding-need');moneyEntry(returns,'No-build household funding need',comparison.noBuildFundingNeedCents,context,'adu-no-build-funding-need');
+ returns.append(element('dt','Cash-on-cash return'));const ratio=element('dd');ratio.dataset.testid='adu-cash-on-cash';if(row.cashOnCash)appendAmount(ratio,row.cashOnCash,context,{label:'Cash-on-cash return',period:{year}},'ratio');returns.append(ratio);section.append(returns);
+ if(row.partialReturnYear)section.append(element('p','Partial operating year · return is not annualized.'));
+ const payback=element('p');payback.dataset.testid='adu-payback';if(comparison.payback.status==='available'){const p=comparison.payback.value;payback.textContent=p.kind==='reached'?`Owner cash payback reached: ${p.month}`:p.kind==='not-reached'?'Not reached within forecast':'No positive owner capital to recover';}else appendAmount(payback,comparison.payback,context,{label:'Owner cash payback'});section.append(payback);
+ section.append(element('small','Cash commitment includes precompletion interest, principal, property-tax payments and modeled household tax changes once. Recovery starts after completion and excludes loan receipts and unrealized equity. Annual income-tax cash timing is a planning reserve allocation.'));
+ section.append(element('p',policy?'Taxes and returns include the response of your saved allocation policy; contribution changes are shown alongside tax changes.':'Returns include the whole household tax difference between the two forecasts.'));
+ section.append(element('small','Funding needs are peak total household cash gaps in each forecast; preexisting gaps are included.'));
+ appendCoverage(section,comparison.build.coverage);appendCoverage(section,comparison.noBuild.coverage);appendProvenance(section,comparison.provenance);const issues=element('div');renderIssues(issues,comparison.issues,context,'Comparison issues');section.append(issues);root.append(section);
+}

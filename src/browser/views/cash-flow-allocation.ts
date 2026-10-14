@@ -72,7 +72,7 @@ export function renderAllocationPie(root:HTMLElement,report:Available<CashFlowAl
     root.append(element('p','Allocation funding is unavailable.'));
     appendAmount(root,report,viewContext,{label:'Cash flow allocation'});return;
   }
-  const value=report.value;root.append(element('p',`Original cash flow · ${value.year}: ${formatCents(value.originalCashFlowCents)}`));
+  const value=report.value;root.append(element('p',`${value.aduBudget?'Cash available from income for investment allocation':'Original cash flow'} · ${value.year}: ${formatCents(value.originalCashFlowCents)}`));if(value.aduBudget)root.append(element('p',`Before-investment household cash flow: ${formatCents(value.aduBudget.reportedCashFlowCents)}; financed construction paid: ${formatCents(value.aduBudget.financedConstructionCents)}.`),element('small','The allocation pool adds back financed construction paid. Loan receipts and future-stage earmarks do not fund investment deposits.'));
   if(value.status==='funding-conflict')root.append(element('p','Funding conflict: existing deposits exceed the allocation budget.'));
   else if(value.status==='no-surplus'||value.originalCashFlowCents<=0)root.append(element('p','No positive allocation budget.'));
   else {

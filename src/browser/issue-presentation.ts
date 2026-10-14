@@ -1,3 +1,4 @@
+import {findAduOwner,getAduProjects} from '../engine/property/adu-ownership';
 import type {EditorViewSession} from './scenario-session';
 import type {AllocationDestination,Issue,PlanDocument} from '../engine';
 import type {DisclosureController} from './disclosures';
@@ -40,6 +41,25 @@ export function findRecordPath(value:unknown,id:string,path=''):string|undefined
   if('id' in value&&value.id===id)return path;
   for(const [key,child] of Object.entries(value)){const found=findRecordPath(child,id,path?`${path}.${key}`:key);if(found!==undefined)return found;}return undefined;
 }
+function propertyIssueField(raw:unknown,id:string,field:string):string|undefined {
+ const prefix=findRecordPath(raw,id);if(prefix===undefined)return undefined;
+ if(/^(property|rentals|expenses)\./.test(field))return field;
+ if(!prefix.startsWith('property.aduProject'))return field?`${prefix}.${field}`:prefix;
+ let relative=field.replace(/^aduProject\./,'');
+ const project=valueAtProject(raw);
+ const visit=(value:unknown):void=>{if(!value||typeof value!=='object')return;
+  if('id' in value&&typeof value.id==='string'){
+   const path=findRecordPath(raw,value.id)!.replace(/^property\.aduProject\./,''),collection=path.slice(0,path.lastIndexOf('.'));
+   for(const head of [`${collection}.${value.id}`,`propertyTax.${value.id}`])if(relative===head||relative.startsWith(`${head}.`))relative=path+relative.slice(head.length);
+  }Object.values(value).forEach(visit);
+ };visit(project);
+ const projectPrefix='property.aduProject';
+ if(prefix===projectPrefix)return relative?`${projectPrefix}.${relative}`:prefix;
+ const ownPath=prefix.slice(projectPrefix.length+1),ownCollection=ownPath.slice(0,ownPath.lastIndexOf('.'));
+ for(const head of [ownPath,`${ownCollection}.${id}`,`propertyTax.${id}`])if(relative===head||relative.startsWith(`${head}.`))return `${projectPrefix}.${relative}`;
+ return relative&&prefix.endsWith(`.${relative}`)?prefix:relative?`${prefix}.${relative}`:prefix;
+}
+function valueAtProject(raw:unknown):unknown{return (raw as {property?:{aduProject?:unknown}})?.property?.aduProject;}
 export function getRecordLabel(plan:PlanDocument,id:string):string{
   if(id===plan.id||id==='household')return 'Household';
   const policy=plan.cashFlowAllocation;
@@ -49,6 +69,7 @@ export function getRecordLabel(plan:PlanDocument,id:string):string{
     if(source)return `${source===policy.overflow?'Excess allocation':'Allocation'} · ${source.destination.kind==='cash'?'Cash / savings':getRecordLabel(plan,source.destination.accountId)}`;
   }
   for(const record of [...plan.household.filers,...plan.salaries,...plan.otherIncome,...plan.expenses,...plan.children??[],...plan.debts,...plan.accounts,...plan.properties,...plan.properties.flatMap(p=>p.loans)])if(record.id===id)return record.name;
+  for(const {project} of getAduProjects(plan)){if(project.id===id)return project.name;for(const row of [...project.costs,...(project.financing?[project.financing]:[])])if(row.id===id)return row.name;}
   for(const account of plan.accounts)for(const grant of account.rsu?.grants??[])if(grant.id===id)return grant.name;
   const rental=plan.rentals.find(r=>r.id===id);
   if(rental){const property=plan.properties.find(p=>p.id===rental.propertyId);return `${property?.role==='primary-with-adu'?'ADU':'Rental'} ${plan.rentals.filter(r=>r.propertyId===rental.propertyId).findIndex(r=>r.id===id)+1} — ${property?.name??'Property'}`;}
@@ -118,8 +139,10 @@ export function resolveIssueTargets(issue:Issue,state:IssueViewState,sourcePlan:
     const prefix=findRecordPath(raw,id);
     if(prefix?.startsWith('rsu.grants.'))return [target('Investments',accountId,field===prefix||field.startsWith(`${prefix}.`)?field:field?`${prefix}.${field}`:prefix)];
   }
-  const property=plan.properties.find(p=>p.id===id||p.loans.some(l=>l.id===id)||plan.rentals.some(r=>r.id===id&&r.propertyId===p.id));
-  if(property){const raw=Object.hasOwn(state.drafts,property.id)?state.drafts[property.id]!.value:{property,rentals:plan.rentals.filter(r=>r.propertyId===property.id),expenses:plan.expenses.filter(e=>e.propertyId===property.id)};const prefix=findRecordPath(raw,id);return [target('Properties',property.id,field.startsWith('property.')||field.startsWith('rentals.')?field:prefix===undefined?undefined:field?`${prefix}.${field}`:prefix)];}
+  const aduOwner=findAduOwner(plan,id);
+  const draftOwner=Object.values(state.drafts).find(d=>d.section==='properties'&&findRecordPath(d.value,id)!==undefined)?.recordId;
+  const property=plan.properties.find(p=>p.id===aduOwner?.propertyId||p.id===draftOwner||p.id===id||p.loans.some(l=>l.id===id)||plan.rentals.some(r=>r.id===id&&r.propertyId===p.id));
+  if(property){const raw=Object.hasOwn(state.drafts,property.id)?state.drafts[property.id]!.value:{property,rentals:plan.rentals.filter(r=>r.propertyId===property.id),expenses:plan.expenses.filter(e=>e.propertyId===property.id)};return [target('Properties',property.id,propertyIssueField(raw,id,field))];}
   const sections=[['salaries','Income'],['otherIncome','Income'],['expenses','Expenses and debts'],['children','Expenses and debts'],['debts','Expenses and debts'],['accounts','Investments'],['contributions','Investments']] as const;
   for(const [key,section] of sections)if((plan[key]??[]).some(r=>r.id===id)||Object.hasOwn(state.drafts,id)&&state.drafts[id]!.section===key)return [target(section,id,field)];
   return [];

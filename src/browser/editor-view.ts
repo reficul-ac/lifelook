@@ -1,3 +1,5 @@
+import {createAduComparisonScheduler} from './adu-comparison';
+import {renderAduComparison} from './views/adu-comparison';
 import type {ScenarioEditorSession} from './scenario-session';
 import type {ScenarioManager} from './scenario-manager';
 import type {InputSection} from './issue-presentation';
@@ -31,12 +33,23 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   const allocationHost=element('div'),investmentRecords=element('div');investments.container.append(allocationHost,investmentRecords);
   const allocationEditor=mountInvestmentAllocation(allocationHost,controller,context,{view:session.view,ownership:{owner:{scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration},isCurrent:()=>isCurrent()}});
   const heading=element('h2');heading.dataset.forecastName='';heading.textContent=`Forecast · ${manager.getState().document.scenarios.find(s=>s.id===session.scenarioId)!.name}`;
-  const projectionRoot=element('div');report.append(heading,projectionRoot);
+  const projectionRoot=element('div'),comparisonRoot=element('div');report.append(heading,projectionRoot,comparisonRoot);
+  let comparisonYear=session.view.selections.forecastYear,schedulerSelection=session.view.selectedAduProjectId;
+  const paintComparison=()=>{if(!isCurrent())return;context.disclosures.closeWithin(comparisonRoot,false);comparisonRoot.replaceChildren();const projects=controller.getState().savedPlan.properties.filter(p=>p.aduProject);if(!projects.length)return;
+    const label=element('label','ADU project comparison'),select=element('select');select.setAttribute('aria-label','ADU project comparison');const empty=element('option','Select a project');empty.value='';select.append(empty);for(const property of projects){const option=element('option',`${property.name} · ${property.aduProject!.name}`);option.value=property.aduProject!.id;select.append(option);}select.value=session.view.selectedAduProjectId??'';label.append(select);comparisonRoot.append(label);
+    select.addEventListener('change',()=>{if(!isCurrent())return;if(select.value)session.view.selectedAduProjectId=select.value;else delete session.view.selectedAduProjectId;schedulerSelection=select.value||undefined;aduScheduler.select(schedulerSelection);});
+    const state=session.view.aduComparison;if(state.status==='calculated'&&state.comparison)renderAduComparison(comparisonRoot,state.comparison,context,session.view.selections.forecastYear);else if(state.status==='pending')comparisonRoot.append(element('p','Calculating applied ADU comparison…'));else if(state.status==='failed'){const issues=element('div');renderIssues(issues,state.issues,context,'ADU comparison unavailable');comparisonRoot.append(issues,button('Request comparison again',()=>{if(isCurrent())aduScheduler.request();}));}
+    comparisonYear=session.view.selections.forecastYear;
+  };
+  const aduScheduler=createAduComparisonScheduler(controller,state=>{if(!isCurrent())return;session.view.aduComparison=state;paintComparison();},{owner:{workspaceGeneration:target.workspaceGeneration,scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration},isCurrent:()=>isCurrent()});
+  const selectedYearChanged=()=>{if(comparisonYear!==session.view.selections.forecastYear)paintComparison();};
+  for(const event of ['change','keydown','pointermove'])report.addEventListener(event,selectedYearChanged);
+
   let savedIdentity:PlanDocument|undefined,draftKeys='';
   const render=(operation?:WorkspaceOperation)=>{if(!isCurrent())return;
     const state=controller.getState(),newKeys=Object.values(state.drafts).filter(d=>d.section!=='household'&&!((state.savedPlan[d.section]??[]) as readonly {id:string}[]).some(r=>r.id===d.recordId)).map(d=>d.recordId).sort().join('|'),changed=savedIdentity!==state.savedPlan;
     if(operation)root.dispatchEvent(new CustomEvent('editor-operation',{bubbles:true,detail:operation}));
-    if(changed)renderProjection(projectionRoot,state.projection,context,session.view);
+    if(changed){renderProjection(projectionRoot,state.projection,context,session.view);if(schedulerSelection!==session.view.selectedAduProjectId){schedulerSelection=session.view.selectedAduProjectId;aduScheduler.select(schedulerSelection);}paintComparison();}
     const active=document.activeElement instanceof HTMLInputElement||document.activeElement instanceof HTMLSelectElement?document.activeElement:undefined;const activeRecord=active?.closest<HTMLElement>('[data-record-id]')?.dataset.recordId,activeField=active?.dataset.field;const selection=active instanceof HTMLInputElement&&active.type==='text'?[active.selectionStart,active.selectionEnd] as const:undefined;
     if(changed||draftKeys!==newKeys){for(const {container,renderer} of containers){const recordRoot=container===investments.container?investmentRecords:container;disclosures.closeWithin(recordRoot,false);renderer(recordRoot,controller,context);}}
     syncFormFeedback(editor,controller,context);
@@ -48,7 +61,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
     if(activeField&&activeRecord&&!active?.isConnected){const form=[...editor.querySelectorAll<HTMLElement>('[data-record-id]')].find(node=>node.dataset.recordId===activeRecord);const replacement=[...form?.querySelectorAll<HTMLInputElement|HTMLSelectElement>('[data-field]')??[]].find(node=>node.dataset.field===activeField);replacement?.focus();if(selection&&replacement instanceof HTMLInputElement&&replacement.type==='text')replacement.setSelectionRange(selection[0],selection[1]);}
     savedIdentity=state.savedPlan;draftKeys=newKeys;
   };
-  const unsubscribe=controller.subscribe(render);render();return {dispose(){if(disposed)return;disposed=true;
+  const unsubscribe=controller.subscribe(render);render();aduScheduler.select(session.view.selectedAduProjectId);return {dispose(){if(disposed)return;disposed=true;
     for(const node of root.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]'))session.view.propertyDisclosures.set(node.dataset.propertyDisclosure!,node.open);
-    unsubscribe();allocationEditor.dispose();disclosures.dispose();}};
+    unsubscribe();aduScheduler.dispose();allocationEditor.dispose();disclosures.dispose();}};
 }

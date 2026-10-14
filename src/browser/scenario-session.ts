@@ -1,3 +1,4 @@
+import type {AduComparisonViewState} from './adu-comparison';
 import type {Issue,PlanDocument,ProjectionResult} from '../engine';
 import type {InputSection} from './issue-presentation';
 import type {ProjectionSummaryRow} from './projection-summary';
@@ -5,13 +6,15 @@ import type {WorkspaceController,WorkspaceState} from './state';
 export type ForecastPlotSeriesKey=Exclude<keyof ProjectionSummaryRow,'year'>;
 export interface ScenarioViewSelections {inputSection:InputSection;forecastYear:number;allocationYear:number;hiddenPlotSeries:Set<ForecastPlotSeriesKey>}
 export interface AllocationPreviewSession {lastValid?:{plan:PlanDocument;projection:ProjectionResult};status:'pending'|'valid'|'invalid'|'failed'|'inactive';issues:readonly Issue[];entryIdSequence:number}
-export interface EditorViewSession {selections:ScenarioViewSelections;allocationPreview:AllocationPreviewSession;taskIssues:Map<string,readonly Issue[]>;removeIssues:Map<string,readonly Issue[]>;propertyDisclosures:Map<string,boolean>}
+export interface EditorViewSession {selectedAduProjectId?:string;aduComparison:AduComparisonViewState;selections:ScenarioViewSelections;allocationPreview:AllocationPreviewSession;taskIssues:Map<string,readonly Issue[]>;removeIssues:Map<string,readonly Issue[]>;propertyDisclosures:Map<string,boolean>}
 export interface ScenarioEditorSession {scenarioId:string;generation:number;controller:WorkspaceController;view:EditorViewSession}
 export interface PreviewOwner {scenarioId:string;sessionGeneration:number;activationGeneration:number}
 export function createEditorViewSession(plan:PlanDocument,selections?:ScenarioViewSelections):EditorViewSession {
-  const view:EditorViewSession={selections:selections?{...selections,hiddenPlotSeries:new Set(selections.hiddenPlotSeries)}:{inputSection:'Household',forecastYear:plan.startYear,allocationYear:plan.startYear,hiddenPlotSeries:new Set()},allocationPreview:{status:'inactive',issues:[],entryIdSequence:0},taskIssues:new Map(),removeIssues:new Map(),propertyDisclosures:new Map()};normalizeViewYears(view,plan);return view;
+  const selected=plan.properties.find(p=>p.aduProject)?.aduProject?.id;
+  const view:EditorViewSession={...(selected?{selectedAduProjectId:selected}:{}),aduComparison:{status:'inactive',issues:[]},selections:selections?{...selections,hiddenPlotSeries:new Set(selections.hiddenPlotSeries)}:{inputSection:'Household',forecastYear:plan.startYear,allocationYear:plan.startYear,hiddenPlotSeries:new Set()},allocationPreview:{status:'inactive',issues:[],entryIdSequence:0},taskIssues:new Map(),removeIssues:new Map(),propertyDisclosures:new Map()};normalizeViewYears(view,plan);return view;
 }
 export function normalizeViewYears(view:EditorViewSession,plan:PlanDocument):void {
+  if(view.selectedAduProjectId&&!plan.properties.some(p=>p.aduProject?.id===view.selectedAduProjectId)){delete view.selectedAduProjectId;view.aduComparison={status:'inactive',issues:[]};}
   for(const key of ['forecastYear','allocationYear'] as const){const year=view.selections[key];if(!Number.isInteger(year)||year<plan.startYear||year>=plan.startYear+plan.horizonYears)view.selections[key]=plan.startYear;}
 }
 
@@ -32,6 +35,7 @@ export function retainEditorView(controller:WorkspaceController,view:EditorViewS
       if(operation.result.accepted){view.taskIssues.delete(operation.recordId);view.removeIssues.delete(operation.recordId);}
       else (operation.kind==='save'?view.taskIssues:view.removeIssues).set(operation.recordId,operation.result.issues);
     }
+    if(state.savedPlan!==previous.savedPlan){view.aduComparison={status:'inactive',issues:[]};if(!previous.savedPlan.properties.some(p=>p.aduProject)){const first=state.savedPlan.properties.find(p=>p.aduProject)?.aduProject?.id;if(first)view.selectedAduProjectId=first;}}
     if(state.savedPlan!==previous.savedPlan||state.allocationDraft!==previous.allocationDraft){
       if(!state.allocationDraft)appliedPreview(state);
       else {view.allocationPreview.status='pending';view.allocationPreview.issues=[];}

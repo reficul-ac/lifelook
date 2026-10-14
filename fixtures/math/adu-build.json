@@ -1,0 +1,81 @@
+{
+  "cases": [
+    {
+      "taxYear": 2027,
+      "sources": [
+        "Independent arithmetic worksheet; ADU approved specification 2026-10-13"
+      ],
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "adu-construction.1"
+      ],
+      "id": "area-rate-value",
+      "input": {
+        "area": 800,
+        "rateCents": 27500,
+        "openingValueCents": 100000000,
+        "primaryArea": 1800,
+        "kind": "valuation"
+      },
+      "worksheetSteps": [
+        "800 square feet \u00d7 27500 cents = 22000000 cents.",
+        "100000000 / 1800 = 55555.555\u2026 cents; round once to 55556."
+      ],
+      "expected": {
+        "valueAddedCents": 22000000,
+        "referencePerSquareFootCents": 55556
+      }
+    },
+    {
+      "taxYear": 2027,
+      "sources": [
+        "Independent arithmetic worksheet; ADU approved specification 2026-10-13"
+      ],
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "adu-construction.1"
+      ],
+      "id": "explicit-rounded-reference",
+      "input": {
+        "area": 800,
+        "rateCents": 27778,
+        "openingValueCents": 50000000,
+        "primaryArea": 1800,
+        "kind": "valuation"
+      },
+      "worksheetSteps": [
+        "50000000 cents / 1800 = 27777.777\u2026; explicit copied input 27778 cents.",
+        "800 \u00d7 27778 = 22222400 cents."
+      ],
+      "expected": {
+        "valueAddedCents": 22222400,
+        "referencePerSquareFootCents": 27778
+      }
+    },
+    {
+      "taxYear": 2027,
+      "sources": [
+        "Independent arithmetic worksheet; ADU approved specification 2026-10-13"
+      ],
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "adu-construction.1"
+      ],
+      "id": "fractional-area-settles-once",
+      "input": {
+        "area": 800.125,
+        "rateCents": 27500,
+        "openingValueCents": 100000000,
+        "primaryArea": 1800,
+        "kind": "valuation"
+      },
+      "worksheetSteps": [
+        "800.125 \u00d7 27500 = 22003437.5 cents; half up 22003438."
+      ],
+      "expected": {
+        "valueAddedCents": 22003438,
+        "referencePerSquareFootCents": 55556
+      }
+    }
+  ]
+}

@@ -561,6 +561,106 @@
       "retrievedOn": "2026-10-13",
       "sha256": "f75196570eef35092d75a95bbdc85712fe0223515a798c1e934d7ac8e5cb7b57",
       "bytes": 287122
+    },
+    {
+      "id": "boe-new-construction",
+      "url": "https://www.boe.ca.gov/proptaxes/newconstructionproperty.htm",
+      "snapshot": "2026/boe-new-construction.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-13",
+      "sha256": "35fd9aa9a87ea2d17032ee6c23c58172f8bf3e4f82d1c50da51fbb060d64dc2e",
+      "bytes": 67964
+    },
+    {
+      "id": "boe-supplemental-assessment",
+      "url": "https://www.boe.ca.gov/proptaxes/supplemental-assessment/",
+      "snapshot": "2026/boe-supplemental-assessment.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-13",
+      "sha256": "8b5d85363e740ea058afcba78eb696b6d7e42206903af75f4c9d5a235588e2e6",
+      "bytes": 66946
+    },
+    {
+      "id": "boe-pub29",
+      "url": "https://www.boe.ca.gov/proptaxes/pdf/pub29.pdf",
+      "snapshot": "2026/boe-pub29.pdf",
+      "publicationYear": 2025,
+      "publicationDate": "2025-03",
+      "retrievedOn": "2026-10-13",
+      "sha256": "90d44309d9951d0a21140d84a8a0d862508c2e6e4d3824055e0fe72581a9d713",
+      "bytes": 446593
+    },
+    {
+      "id": "fannie-adu-appraisal",
+      "url": "https://guide-selling.fanniemae.com/sel/b4-1.3-05/improvements-section-appraisal-report",
+      "snapshot": "2026/fannie-adu-appraisal.html",
+      "publicationYear": 2025,
+      "publicationDate": "2025-06-04",
+      "retrievedOn": "2026-10-13",
+      "sha256": "d13cfd44b93c30ac060e2a2f76112399a846988cbba09a2161ed8ba30b83e095",
+      "bytes": 264747
+    },
+    {
+      "id": "fannie-comparable-adjustments",
+      "url": "https://guide-selling.fanniemae.com/sel/b4-1.3-09/adjustments-comparable-sales",
+      "snapshot": "2026/fannie-comparable-adjustments.html",
+      "publicationYear": 2025,
+      "publicationDate": "2025-06-04",
+      "retrievedOn": "2026-10-13",
+      "sha256": "02a12b70ce9a26c160e353ac4f402f375c03a944c426eecb5cc8ded830715dcf",
+      "bytes": 250857
+    },
+    {
+      "id": "usc-168-current",
+      "url": "https://uscode.house.gov/us/usc/119-118/t26/s168/",
+      "snapshot": "2026/usc-168-current.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-13",
+      "sha256": "841e6e83c03326109f9177284d4d1c9d6f5436859110d3bba8bef60b28512cab",
+      "bytes": 510621
+    },
+    {
+      "id": "cfr-263a-1",
+      "url": "https://www.govinfo.gov/content/pkg/CFR-2025-title26-vol4/xml/CFR-2025-title26-vol4-sec1-263A-1.xml",
+      "snapshot": "2026/cfr-263a-1.xml",
+      "publicationYear": 2025,
+      "publicationDate": "2025-04-01",
+      "retrievedOn": "2026-10-13",
+      "sha256": "2c671ed352e47520454f393f22c992e6a4342a3230c1b4cd47562359501ca26e",
+      "bytes": 147352
+    },
+    {
+      "id": "cfr-263a-8",
+      "url": "https://www.govinfo.gov/content/pkg/CFR-2025-title26-vol4/xml/CFR-2025-title26-vol4-sec1-263A-8.xml",
+      "snapshot": "2026/cfr-263a-8.xml",
+      "publicationYear": 2025,
+      "publicationDate": "2025-04-01",
+      "retrievedOn": "2026-10-13",
+      "sha256": "dc9200992332536bb109ac7ea8b00453441fc0e9f6c0717530af3fbef959e087",
+      "bytes": 19160
+    },
+    {
+      "id": "cfr-263a-12",
+      "url": "https://www.govinfo.gov/content/pkg/CFR-2025-title26-vol4/xml/CFR-2025-title26-vol4-sec1-263A-12.xml",
+      "snapshot": "2026/cfr-263a-12.xml",
+      "publicationYear": 2025,
+      "publicationDate": "2025-04-01",
+      "retrievedOn": "2026-10-13",
+      "sha256": "f2acab3174a4efe5e76de22f00734c3f5b1337395f171e3d6d42529f1d0cb83c",
+      "bytes": 15909
+    },
+    {
+      "id": "fr-td10034",
+      "url": "https://www.govinfo.gov/content/pkg/FR-2025-10-02/html/2025-19279.htm",
+      "snapshot": "2026/fr-td10034.html",
+      "publicationYear": 2025,
+      "publicationDate": "2025-10-02",
+      "retrievedOn": "2026-10-13",
+      "sha256": "182896d9f218d395c71f215c3f4e09b12173560d5a89e8fc717cd51a3e415680",
+      "bytes": 14073
     }
   ]
 }

@@ -15,7 +15,7 @@ export interface CashStream {
   readonly months: readonly Cents[]; readonly annualCents: Cents;
   readonly classification?: 'wage' | 'ordinary-taxable' | 'non-taxable';
   readonly niitTreatment?: 'included' | 'excluded' | 'unknown';
-  readonly ownerId?: string; readonly employerId?: string; readonly propertyId?: string;
+  readonly ownerId?: string; readonly employerId?: string; readonly propertyId?: string; readonly aduProjectId?: string;
 }
 export interface WageFacts {
   readonly ownerId: string; readonly employerId: string; readonly monthlyCents: readonly Cents[];
@@ -95,13 +95,25 @@ export function resolveCashYear(plan: ValidatedPlan, year: number): CashYear {
     const months=childExpenseAmounts(child,year);
     streams.push({id:child.id,kind:'expense',months,annualCents:sum(months)});
   }
+  for(const property of plan.properties) {
+    const project=property.aduProject;if(!project)continue;
+    for(const cost of project.costs) {
+      const months=Array.from({length:12},(_,index)=>cost.paymentDate.slice(0,7)===`${year}-${String(index+1).padStart(2,'0')}`?cost.amountCents:0);
+      streams.push({id:cost.id,kind:'expense',months,annualCents:sum(months),propertyId:property.id,aduProjectId:project.id});
+    }
+    for(const row of project.propertyTax.paymentYears.filter(row=>row.year===year))for(const payment of row.payments) {
+      const months=Array.from({length:12},(_,index)=>payment.month===`${year}-${String(index+1).padStart(2,'0')}`?payment.amountCents:0);
+      streams.push({id:payment.id,kind:'expense',months,annualCents:sum(months),propertyId:property.id,aduProjectId:project.id});
+    }
+  }
   for(const r of [...plan.rentals].sort((a,b)=>a.id.localeCompare(b.id))) {
     const startYear=Number(r.rentStartDate.slice(0,4));
     const amount=new Decimal(r.monthlyRentCents).mul(new Decimal(1).plus(new Decimal(r.rentGrowthBps).div(10000)).pow(Math.max(0,year-startYear)));
+    const collected=r.vacancyBps===undefined?amount:amount.times(new Decimal(10000).minus(r.vacancyBps).div(10000));
     const exact=Array.from({length:12},(_,i)=>{
       const from=maxDate(r.rentStartDate,calendarDate(year,i+1,1));
       const to=minDate(r.rentEndDate??calendarDate(year,12,31),calendarDate(year,i+1,daysInMonth(year,i+1)));
-      return from>to?new Decimal(0):amount.mul(day(to)-day(from)+1).div(daysInMonth(year,i+1));
+      return from>to?new Decimal(0):collected.mul(day(to)-day(from)+1).div(daysInMonth(year,i+1));
     });
     const months=settleSeries(exact);
     streams.push({id:r.id,kind:'rent',months,annualCents:sum(months),propertyId:r.propertyId});

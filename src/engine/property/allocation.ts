@@ -41,7 +41,7 @@ export function sharedRentalShares(
 /** Effective loan shares honor explicit unit overrides, then traced proceeds. */
 export function loanRentalShares(loan: PropertyLoan | undefined, property: Property,
   units: readonly RentalUnit[]): Readonly<Record<string, Decimal>> {
-  const defaults = sharedRentalShares(property, units);
+  let defaults: Readonly<Record<string, Decimal>> | undefined;
   return Object.fromEntries([...units].filter(unit => unit.propertyId === property.id)
     .sort((a, b) => a.id.localeCompare(b.id)).map(unit => {
       const explicit = loan && unit.loanAllocations.find(allocation => allocation.loanId === loan.id);
@@ -51,6 +51,8 @@ export function loanRentalShares(loan: PropertyLoan | undefined, property: Prope
       if (proceeds.length) return [unit.id, proceeds.reduce((total, allocation) => total.plus(
         fraction(allocation.share.numerator, allocation.share.denominator)), new Decimal(0))];
       if (loan?.proceedsAllocations.length) return [unit.id, new Decimal(0)];
+      if(property.aduProject?.rentalId===unit.id)return [unit.id,new Decimal(0)];
+      defaults ??= sharedRentalShares(property, units);
       return [unit.id, defaults[unit.id] ?? new Decimal(0)];
     }));
 }

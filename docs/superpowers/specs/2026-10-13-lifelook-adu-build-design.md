@@ -2,7 +2,7 @@
 
 Date: 2026-10-13
 
-Status: Scope approved; written specification awaiting review.
+Status: Approved for implementation planning.
 
 ## Intent and approved scope
 
@@ -81,7 +81,7 @@ Show the planned total, cumulative paid cost, future commitments, and constructi
 
 Loan proceeds increase cash and debt equally. They do not enter gross income, tax-reserve income weights, rental revenue, income ratios, or the percentage cash-flow-allocation denominator as income. Loan repayments debit cash once; principal reduces debt and is not an income-tax deduction. Show cash spending, financing receipts, interest, principal repayments, and the residual owner cash needed separately.
 
-After-tax cash flow before investments includes construction outflows and debt payments but excludes borrowing receipts. Cash reserve reconciliation separately includes financing inflows and investment transfers. Report peak additional funding need using the minimum modeled cash reserve; preserve existing funding-gap and conditional-result behavior. The monthly forecast does not prove intramonth liquidity or imply a cash shortfall has been externally funded.
+After-tax cash flow before investments includes construction outflows and debt payments but excludes borrowing receipts. Cash reserve reconciliation separately includes financing inflows and investment transfers. Report peak additional funding need using minimum unrestricted cash, excluding proceeds earmarked for future project payments; positive total cash must not conceal an owner funding gap. Preserve existing funding-gap and conditional-result behavior. The monthly forecast does not prove intramonth liquidity or imply a cash shortfall has been externally funded.
 
 For investment allocation, subtract only the owner-funded part of staged construction costs from income available for investing. Add back the traced loan-funded portion of that month's paid construction costs to the reported cash-flow budget, without adding unused draws or presenting proceeds as income. Expose this bridge as **Cash available from income for investment allocation**; it equals reported after-tax cash flow before investments plus traced financed construction spending. Interest and repayments still reduce that budget. Monthly funding ceilings use unrestricted household cash, excluding unspent project-earmarked proceeds. Thus a wage-funded contribution need not be deferred by a simultaneous fully financed construction payment, but idle borrowed money cannot fund investment targets. With no project, the existing allocation denominator and funding ceilings are unchanged.
 
@@ -231,4 +231,4 @@ Expected values must be transcribed from independent arithmetic/source worksheet
 
 ## Review and handoff
 
-This specification records the approved feature scope and the additional math contracts requested by the user. Product implementation has not begun. Review this written specification before invoking the writing-plans skill; the implementation plan then defines tasks, exact interfaces, independent fixtures, and execution method. Local commits are permitted. Before any `git push`, obtain explicit user confirmation for the exact repository, remote, and branch.
+This specification records the approved feature scope and the additional math contracts requested by the user. Product implementation has not begun. The [implementation plan](../plans/2026-10-13-lifelook-adu-build.md) defines tasks, exact interfaces, independent fixtures, and the execution handoff. Implementation follows plan review and execution-method selection. Local commits are permitted. Before any `git push`, obtain explicit user confirmation for the exact repository, remote, and branch.

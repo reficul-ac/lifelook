@@ -76,6 +76,32 @@
         "valueAddedCents": 22003438,
         "referencePerSquareFootCents": 55556
       }
+    },
+    {
+      "id": "loan-120000-zero-apr",
+      "taxYear": 2027,
+      "sources": [
+        "Independent arithmetic ADU loan worksheet, approved specification 2026-10-13"
+      ],
+      "input": {
+        "kind": "loan"
+      },
+      "worksheetSteps": [
+        "12000000 cents drawn July2027; no principal paid until January2028.",
+        "12000000 / 120 = 100000 cents monthly principal.",
+        "December2028:12000000 \u2212 12 \u00d7 100000 = 10800000.",
+        "120 payments January2028 through December2037; final balance zero."
+      ],
+      "expected": {
+        "closing2027Cents": 12000000,
+        "closing2028Cents": 10800000,
+        "finalPaymentMonth": "2037-12",
+        "monthlyPaymentCents": 100000
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "adu-construction.1"
+      ]
     }
   ]
 }

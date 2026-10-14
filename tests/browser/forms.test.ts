@@ -1,3 +1,5 @@
+import {makeScenarioWorkspace} from '../helpers/scenarios';
+import {exportWorkspace,WORKSPACE_STORAGE_KEY} from '../../src/browser/workspace-storage';
 import {loadReferences} from '../helpers/references';
 import type {PlanDocument,ProjectionResult} from '../../src/engine';
 import { describe,expect,it,vi } from 'vitest';
@@ -21,9 +23,9 @@ describe('native workspace drafts and explicit record saves',()=>{
     vi.stubGlobal('URL',{createObjectURL:(blob:Blob)=>{captured=blob;return 'blob:backup';},revokeObjectURL:()=>{}});
     const click=vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(()=>{});
     try{
-      const root=document.createElement('main');document.body.replaceChildren(root);const controller=startBrowserApp(root,{getItem:()=>raw,setItem:(_key,value)=>{writes.push(value);}});
+      const root=document.createElement('main');document.body.replaceChildren(root);const manager=startBrowserApp(root,{getItem:key=>key===WORKSPACE_STORAGE_KEY?raw:null,setItem:(_key,value)=>{writes.push(value);}}),controller=manager.getActiveSession().controller;
       expect(controller.getState().persisted).toBe(false);expect(writes).toEqual([]);
-      fireEvent.click(within(root).getByRole('button',{name:'Download unreadable saved backup'}));
+      fireEvent.click(within(within(root).getByTestId('persistence-warning')).getByRole('button',{name:'Download unreadable saved backup'}));
       expect(captured).toBeDefined();
       const bytes=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.addEventListener('load',()=>resolve(String(reader.result)));reader.addEventListener('error',()=>reject(reader.error));reader.readAsText(captured!);});
       expect(bytes).toBe(raw);expect(writes).toEqual([]);
@@ -40,7 +42,7 @@ describe('native workspace drafts and explicit record saves',()=>{
     const state=controller.getState();
     expect(state.drafts.household?.value.openingCashCents).toBe('1.234');
     expect(state.savedPlan.revision).toBe(0);expect(state.projection.inputRevision).toBe(0);
-    expect(root).toHaveTextContent('Saved · Inputs v0');fireEvent.click(within(root.querySelector('[data-form-feedback]')!).getByRole('button',{name:/Details: Opening cash reserve/}));expect(document.querySelector('[data-disclosure-panel]')).toHaveTextContent('openingCashCents');
+    expect(root).toHaveTextContent('Saved locally · Inputs v0');fireEvent.click(within(root.querySelector('[data-form-feedback]')!).getByRole('button',{name:/Details: Opening cash reserve/}));expect(document.querySelector('[data-disclosure-panel]')).toHaveTextContent('openingCashCents');
     expect(within(root).getByLabelText('Opening cash reserve ($)')).toHaveValue('1.234');
   });
   it('saves household factual and tax-policy inputs together in one revision',()=>{
@@ -113,28 +115,28 @@ describe('recovery shell and meaningful announcements',()=>{
   it('announces operations without announcing keystrokes and keeps recovery export outside closed backups',async()=>{
     const {root,controller}=mountWorkspace(makePlan(),storage(true)),announcement=within(root).getByTestId('save-announcement');const mutations:MutationRecord[]=[];const observer=new MutationObserver(records=>mutations.push(...records));observer.observe(announcement,{childList:true,subtree:true,characterData:true});
     setField(root,'Opening cash reserve ($)','10.00');await Promise.resolve();expect(mutations).toEqual([]);fireEvent.click(within(root).getByRole('button',{name:'Save household'}));await Promise.resolve();expect(mutations.length).toBeGreaterThan(0);expect(announcement).toHaveTextContent('Inputs applied in memory');
-    setField(root,'Opening cash reserve ($)','123.45');expect(within(root).getByTestId('persistence-warning')).toBeVisible();expect(within(root).getByRole('button',{name:'Export recovery backup'})).toBeVisible();expect(JSON.parse(controller.exportBackup()).openingCashCents).toBe(1000);
-    expect(within(root).getByTestId('save-status')).toHaveTextContent('Unsaved · Inputs v1');expect(within(root).getByTestId('draft-status')).toHaveTextContent('Draft edits not applied');observer.disconnect();
+    setField(root,'Opening cash reserve ($)','123.45');expect(within(root).getByTestId('persistence-warning')).toBeVisible();expect(within(within(root).getByTestId('persistence-warning')).getByRole('button',{name:'Export workspace backup'})).toBeVisible();expect(JSON.parse(controller.exportBackup()).openingCashCents).toBe(1000);
+    expect(within(root).getByTestId('save-status')).toHaveTextContent('Unsaved locally · Inputs v1');expect(within(root).getByTestId('draft-status')).toHaveTextContent('Draft edits not applied');observer.disconnect();
   });
   it.each(['{',JSON.stringify({...makePlan(),schemaVersion:2})])('retains startup recovery for rejected documents through editing: %s',raw=>{
-    const root=document.createElement('main');document.body.replaceChildren(root);const controller=startBrowserApp(root,{getItem:()=>raw,setItem:()=>{}});expect(within(root).getByTestId('persistence-warning')).toBeVisible();expect(controller.getState().persistenceIssues.length).toBeGreaterThan(0);
-    setField(root,'Opening cash reserve ($)','1.234');fireEvent.click(within(root).getByRole('button',{name:'Save household'}));expect(within(root).getByTestId('persistence-warning')).toBeVisible();expect(within(root).getByRole('button',{name:'Download unreadable saved backup'})).toBeVisible();
+    const root=document.createElement('main');document.body.replaceChildren(root);const manager=startBrowserApp(root,{getItem:key=>key===WORKSPACE_STORAGE_KEY?raw:null,setItem:()=>{}}),controller=manager.getActiveSession().controller;expect(within(root).getByTestId('persistence-warning')).toBeVisible();expect(controller.getState().persistenceIssues.length).toBeGreaterThan(0);
+    setField(root,'Opening cash reserve ($)','1.234');fireEvent.click(within(root).getByRole('button',{name:'Save household'}));expect(within(root).getByTestId('persistence-warning')).toBeVisible();expect(within(within(root).getByTestId('persistence-warning')).getByRole('button',{name:'Download unreadable saved backup'})).toBeVisible();
   });
   it('distinguishes first use, valid incomplete loaded inputs and failed reads',()=>{
-    for(const [getItem,want]of [[()=>null,false],[()=>JSON.stringify({...makePlan(),household:{...makePlan().household,coverageAnswers:{...makePlan().household.coverageAnswers,additionalIncome:{known:false}}}}),false],[()=>{throw new Error('blocked');},true]] as const){
-      const root=document.createElement('main');document.body.replaceChildren(root);const controller=startBrowserApp(root,{getItem,setItem:()=>{}});expect(controller.getState().persistenceIssues.length>0).toBe(want);expect(within(root).getByTestId('persistence-warning').hidden).toBe(!want);
+    for(const [getItem,want]of [[()=>null,false],[()=>exportWorkspace(makeScenarioWorkspace({...makePlan(),household:{...makePlan().household,coverageAnswers:{...makePlan().household.coverageAnswers,additionalIncome:{known:false}}}})),false],[()=>{throw new Error('blocked');},true]] as const){
+      const root=document.createElement('main');document.body.replaceChildren(root);const manager=startBrowserApp(root,{getItem,setItem:()=>{}}),controller=manager.getActiveSession().controller;expect(controller.getState().persistenceIssues.length>0).toBe(want);expect(within(root).getByTestId('persistence-warning').hidden).toBe(!want);
     }
   });
   it('associates backup replacement and draft exclusion consequences before selection',()=>{
     const {root}=mountWorkspace(makePlan());fireEvent.click(within(root).getByText('Backups and recovery',{selector:'summary'}));
-    expect(within(root).getByLabelText('Import JSON backup')).toHaveAccessibleDescription('Replaces all inputs and discards record drafts.');expect(root).toHaveTextContent('Exports applied inputs. Record drafts are excluded.');
+    expect(within(root).getByLabelText('Replace this scenario from JSON')).toHaveAccessibleDescription("Replaces Master's applied inputs and unfinished edits after confirmation.");expect(root).toHaveTextContent('Exports applied inputs. Record and allocation drafts are excluded.');
   });
   it('keeps drafts on malformed import and initializes durable failures for an accepted memory-only restore',async()=>{
-    const {root,controller}=mountWorkspace(makePlan(),storage(true));setField(root,'Opening cash reserve ($)','77.77');const before=controller.getState();
-    fireEvent.click(within(root).getByText('Backups and recovery',{selector:'summary'}));const input=within(root).getByLabelText('Import JSON backup');
+    const {root,controller,manager}=mountWorkspace(makePlan(),storage(true));setField(root,'Opening cash reserve ($)','77.77');const before=controller.getState();
+    fireEvent.click(within(root).getByText('Backups and recovery',{selector:'summary'}));const input=within(root).getByLabelText('Replace this scenario from JSON');
     fireEvent.change(input,{target:{files:[new File(['{'],'bad.json',{type:'application/json'})]}});await waitFor(()=>expect(root).toHaveTextContent('Backup not restored.'));
     expect(controller.getState().savedPlan).toBe(before.savedPlan);expect(controller.getState().drafts).toEqual(before.drafts);expect(controller.getState().persistenceIssues).toEqual(before.persistenceIssues);
-    const replacement=makePlan({revision:8,openingCashCents:8800});fireEvent.change(input,{target:{files:[new File([JSON.stringify(replacement)],'valid.json',{type:'application/json'})]}});await waitFor(()=>expect(controller.getState().savedPlan.revision).toBe(8));
-    expect(controller.getState().drafts).toEqual({});expect(controller.getState().persistenceIssues).toContainEqual(expect.objectContaining({code:'storage-write-failed'}));setField(root,'Opening cash reserve ($)','99.99');expect(within(root).getByRole('button',{name:'Export recovery backup'})).toBeVisible();expect(JSON.parse(controller.exportBackup()).openingCashCents).toBe(8800);
+    const replacement=makePlan({revision:8,openingCashCents:8800});fireEvent.change(input,{target:{files:[new File([JSON.stringify(replacement)],'valid.json',{type:'application/json'})]}});await waitFor(()=>expect(within(root).getByRole('dialog',{name:'Replace Master'})).toBeVisible());fireEvent.click(within(within(root).getByRole('dialog')).getByRole('button',{name:'Replace scenario'}));const replacementController=manager.getActiveSession().controller;expect(replacementController.getState().savedPlan.revision).toBe(8);
+    expect(replacementController.getState().drafts).toEqual({});expect(replacementController.getState().persistenceIssues).toContainEqual(expect.objectContaining({code:'storage-write-failed'}));setField(root,'Opening cash reserve ($)','99.99');expect(within(within(root).getByTestId('persistence-warning')).getByRole('button',{name:'Export workspace backup'})).toBeVisible();expect(JSON.parse(replacementController.exportBackup()).openingCashCents).toBe(8800);
   });
 });

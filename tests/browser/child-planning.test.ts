@@ -1,9 +1,10 @@
+import {loadWorkspace} from '../../src/browser/workspace-storage';
 import { describe, expect, it } from 'vitest';
 import { fireEvent, within } from '@testing-library/dom';
 import { getRecordLabel, resolveIssueTargets } from '../../src/browser/issue-presentation';
-import { loadPlan, restorePlan, type StoragePort } from '../../src/browser/storage';
+import {type StoragePort} from '../../src/browser/storage';
 import { mountWorkspace, setField } from '../helpers/dom';
-import { makePlan } from '../helpers/plans';
+import { makePlan,mustValidate } from '../helpers/plans';
 
 function expenses(plan = makePlan(), storage?: StoragePort) {
   const mounted = mountWorkspace(plan, storage);
@@ -52,16 +53,16 @@ describe('child planning records', () => {
     expect(state.projection.years[0]?.expensesCents).toEqual({ status: 'available', value: 900000 });
     const backup = mounted.controller.exportBackup();
     expect(JSON.parse(backup).children).toEqual(state.savedPlan.children);
-    const loaded = loadPlan(storage);
+    const loaded = loadWorkspace(storage,()=> 'master');
     expect(loaded.status).toBe('loaded');
     if (loaded.status !== 'loaded') throw new Error('Saved child inputs did not reload');
-    mounted = expenses(loaded.plan, storage);
+    mounted = expenses(loaded.document.scenarios.find(s=>s.id===loaded.document.activeScenarioId)!.plan, storage);
     expect(childForms(mounted.root).map(child => within(child).getByLabelText('Child birth month'))).toEqual([
       expect.objectContaining({ value: '2026-05' }), expect.objectContaining({ value: '2026-09' }),
     ]);
-    const restored = restorePlan(backup, makePlan(), storage);
+    const restored = mounted.manager.replaceScenario(mounted.manager.captureTarget(mounted.manager.getState().document.activeScenarioId)!,mustValidate(JSON.parse(backup)));
     expect(restored.accepted).toBe(true);
-    expect(restored.plan.children).toEqual(state.savedPlan.children);
+    expect(mounted.manager.getActiveSession().controller.getState().savedPlan.children).toEqual(state.savedPlan.children);
   });
 
   // A checkbox wired only to presentation or a calendar-year cutoff would lose

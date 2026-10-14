@@ -1,3 +1,4 @@
+import {preloadWorkspace,readActivePlan,replaceScenarioFromJson} from './helpers/workspace';
 import { expect, test } from '@playwright/test';
 import { makePlan } from '../helpers/plans';
 
@@ -14,8 +15,7 @@ test('reloads annual expenses as monthly budgets and posts annual IRA funding at
       destination: { kind: 'account', accountId: 'roth' }, amount: { kind: 'max-annual' } }],
       overflow: { id: 'remaining-cash', destination: { kind: 'cash' } } },
   });
-  await page.addInitScript(saved => localStorage.setItem('lifelook.foundation.plan.v1', JSON.stringify(saved)), plan);
-  await page.goto('/');
+  await preloadWorkspace(page,plan);
   await page.getByRole('button', { name: 'Show months for 2026', exact: true }).click();
   for (let month = 1; month <= 12; month++) {
     const date = `2026-${String(month).padStart(2, '0')}`;
@@ -26,7 +26,7 @@ test('reloads annual expenses as monthly budgets and posts annual IRA funding at
   await expect(page.getByTestId('monthly-2026-01-account-roth-closing')).toHaveText('$625.00');
   await expect(page.getByTestId('monthly-2026-02-account-roth-closing')).toHaveText('$1,253.88');
   await expect(page.getByTestId('annual-2026-account-roth-closing')).toHaveText('$7,761.14');
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('lifelook.foundation.plan.v1')!));
+  const saved = await readActivePlan(page);
   expect(saved.expenses[0]).toMatchObject({ amountCents: 120000, frequency: 'annual' });
   await page.reload();
   await page.getByRole('button', { name: 'Show months for 2026', exact: true }).click();

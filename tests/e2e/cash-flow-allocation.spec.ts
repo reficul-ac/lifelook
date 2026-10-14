@@ -1,9 +1,9 @@
+import {preloadWorkspace,readActivePlan,replaceScenarioFromJson} from './helpers/workspace';
 import { readFile, mkdir } from 'node:fs/promises';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { calculateProjection, loadRuleSet, type Account, type Available, type CashFlowAllocationYear, type PlanDocument } from '../../src/engine';
 import { makePlan, mustValidate } from '../helpers/plans';
 
-const storageKey = 'lifelook.foundation.plan.v1';
 const screenshots = '/tmp/lifelook-allocation-acceptance';
 const money = (cents: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 
@@ -99,8 +99,7 @@ function baseOracles(plan = allocationPlan(), shared = false, existingStocks = 0
 }
 async function preload(page: Page, plan: PlanDocument) {
   mustValidate(plan);
-  await page.addInitScript(({ key, doc }) => { if (localStorage.getItem(key) === null) localStorage.setItem(key, JSON.stringify(doc)); }, { key: storageKey, doc: plan });
-  await page.goto('/');
+  await preloadWorkspace(page,plan);
   await page.getByRole('button', { name: 'Investments', exact: true }).click();
   await expect(editor(page).locator('[data-allocation-status]')).toHaveText('Applied allocation');
 }
@@ -117,7 +116,7 @@ async function selectYear(page: Page, year: number) {
   await expect(preview(page)).toContainText(`Original cash flow · ${year}:`);
 }
 async function savedPlan(page: Page): Promise<PlanDocument> {
-  return page.evaluate(key => JSON.parse(localStorage.getItem(key)!), storageKey);
+  return readActivePlan(page);
 }
 async function expectBaseUI(page: Page, plan = allocationPlan(), shared = false, existingStocks = 0) {
   for (const want of baseOracles(plan, shared, existingStocks)) {
@@ -142,7 +141,7 @@ async function backup(page: Page) {
   const details = page.locator('header details').filter({ has: page.getByText('Backups and recovery', { exact: true }) });
   if (!await details.evaluate(node => (node as HTMLDetailsElement).open)) await details.locator('summary').click();
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export JSON backup', exact: true }).click();
+  await page.getByRole('button', { name: 'Export scenario JSON', exact: true }).click();
   const path = await (await download).path();
   expect(path).not.toBeNull();
   return readFile(path!, 'utf8');
@@ -184,7 +183,7 @@ test('selects the cash account in native controls and restores reversed same-ID 
   await expect(page.getByTestId('annual-2026-account-cash-closing')).toHaveText('$143,868.00');
   const exported = JSON.parse(await backup(page)) as PlanDocument;
   const restored = { ...exported, cashFlowAllocation: { ...exported.cashFlowAllocation!, entries: [...exported.cashFlowAllocation!.entries].reverse() } };
-  await page.getByLabel('Import JSON backup', { exact: true }).setInputFiles({ name: 'reordered-allocation.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(restored)) });
+  await replaceScenarioFromJson(page,JSON.stringify(restored));
   await expect(editor(page).locator('[data-allocation-status]')).toHaveText('Applied allocation');
   await expect(entry(page, 0).locator('legend')).toHaveText('Allocation 1');
   await expect(entry(page, 0).getByLabel('Allocation destination', { exact: true }).locator('option:checked')).toHaveText('Roth IRA');
@@ -334,7 +333,7 @@ test('keeps native edits stable and exports/restores only the applied maximum po
   await expect(percent).toHaveValue('93.00');
   await percent.fill('50.00'); await apply(page);
   await percent.fill('40.00');
-  await page.getByLabel('Import JSON backup', { exact: true }).setInputFiles({ name: 'synthetic-allocation.json', mimeType: 'application/json', buffer: Buffer.from(exported) });
+  await replaceScenarioFromJson(page,exported);
   await expect(editor(page).locator('[data-allocation-status]')).toHaveText('Applied allocation');
   await expect(percent).toHaveValue('93.00');
   expect(await savedPlan(page)).toEqual(plan);

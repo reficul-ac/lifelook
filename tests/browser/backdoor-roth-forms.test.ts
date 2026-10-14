@@ -1,3 +1,4 @@
+import {mustValidate} from '../helpers/plans';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {fireEvent,within} from '@testing-library/dom';
 import {mountWorkspace,setField} from '../helpers/dom';
@@ -65,18 +66,18 @@ describe('backdoor Roth allocation controls',()=>{
     expect(within(editor).queryByLabelText('Use backdoor Roth')).toBeNull();
   });
   it('keeps backdoor edits on their stable entry after a reordered restore',()=>{
-    const {controller,editor,row}=setup();
+    const {controller,editor,row,manager,root}=setup();
     fireEvent.click(within(row).getByLabelText('Use backdoor Roth'));
     fireEvent.click(within(row).getByLabelText('Confirm clean IRA history'));
     fireEvent.click(within(editor).getByRole('button',{name:'Add allocation'}));
     fireEvent.click(within(editor).getByRole('button',{name:'Apply allocation'}));
     const saved=controller.getState().savedPlan;
     expect(saved.cashFlowAllocation).toBeDefined();
-    controller.resetPlan({...saved,cashFlowAllocation:{...saved.cashFlowAllocation!,entries:[...saved.cashFlowAllocation!.entries].reverse()}});
-    const moved=within(editor).getByRole('group',{name:'Allocation 2'});
+    expect(manager.replaceScenario(manager.captureTarget(manager.getState().document.activeScenarioId)!,mustValidate({...saved,cashFlowAllocation:{...saved.cashFlowAllocation!,entries:[...saved.cashFlowAllocation!.entries].reverse()}})).accepted).toBe(true);const fresh=manager.getActiveSession().controller;
+    const moved=within(root).getByRole('group',{name:'Allocation 2'});
     fireEvent.click(within(moved).getByLabelText('Confirm clean IRA history'));
-    expect(controller.getAllocationDraft().value.entries).toMatchObject([{destination:{kind:'cash'}},{destination:{accountId:'roth',backdoorRoth:{cleanIraHistory:{known:true,value:false}}}}]);
-    expect((controller.getAllocationDraft().value.entries as any[])[0].destination.backdoorRoth).toBeUndefined();
+    expect(fresh.getAllocationDraft().value.entries).toMatchObject([{destination:{kind:'cash'}},{destination:{accountId:'roth',backdoorRoth:{cleanIraHistory:{known:true,value:false}}}}]);
+    expect((fresh.getAllocationDraft().value.entries as any[])[0].destination.backdoorRoth).toBeUndefined();
   });
   it('shows the cash deposit and Roth conversion as separate account movements',()=>{
     const {controller,root,editor,row}=setup();

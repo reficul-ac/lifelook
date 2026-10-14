@@ -20,7 +20,11 @@ npm run preview
 
 Open the production preview at `http://127.0.0.1:4174`. The repository contains this browser application and its independent TypeScript calculation engine. The former desktop application has been removed from the current tree; its code remains in Git history. No server account, cloud connection or desktop packaging is required.
 
-## Enter, save and recover a plan
+## Scenarios, editing and recovery
+
+The **Scenario** selector starts with an editable **Master** baseline. **Fork scenario** creates a named, independent copy of the active scenario's applied inputs, including its financial record IDs and input revision. Later changes stay in the scenario where you Save them. **Manage scenarios** renames scenarios and deletes experiments; the baseline can be renamed and edited but cannot be deleted. Names accept 1–80 Unicode code points and must be unique without regard to capitalization.
+
+Switch freely without a Save/Discard prompt. Each scenario retains invalid text, unsaved records, allocation drafts and their last valid preview, validation feedback, input section, forecast year and plot choices while the tab stays open. A fork starts clean and inherits the source's view selections. The forecast heading names the active scenario. **Draft edits not applied** describes unfinished inputs; **Unsaved locally** means applied changes have not reached storage. Unapplied edits stay here while this tab is open. Save to keep them after reload.
 
 Household, Income, Expenses and Debts, Investments, and Properties contain labeled native controls. Each record has its own Save action; dated raises, appreciation overrides and related tax history are saved together. Boolean histories use **Unknown / Yes / No**. Other histories retain an explicit Unknown choice; required numeric blanks are errors. Confirmed zero and unknown remain distinct. Advanced property and rental histories start closed with status summaries; failed saves reveal the affected field. Mortgage opening balances can use a labeled schedule estimate or an entered known value.
 
@@ -43,11 +47,27 @@ In **Expenses and debts**, open **Child planning** and choose **Add child**. Ent
 | 15 | $12,500 |
 | 16–18 | $16,000 |
 
-This user-supplied modeled Oceanside budget stays fixed in today's dollars without inflation. **It excludes housing, medical costs, education (including college), and day care**, as well as lost income. Each annual amount is divided by twelve, with cumulative cent rounding preserving each full age-year total. The complete ages 0–17 schedule totals $194,000 per child; including age 18 totals $210,000. Child records do not establish tax-dependent status or model child tax credits. Saved plans and JSON backups retain the optional `children` records with `id`, `name`, `birthMonth` (`YYYY-MM`) and `includeAge18`; older backups without children remain compatible with schema version 1 and the existing storage key.
+This user-supplied modeled Oceanside budget stays fixed in today's dollars without inflation. **It excludes housing, medical costs, education (including college), and day care**, as well as lost income. Each annual amount is divided by twelve, with cumulative cent rounding preserving each full age-year total. The complete ages 0–17 schedule totals $194,000 per child; including age 18 totals $210,000. Child records do not establish tax-dependent status or model child tax credits. Saved plans and JSON backups retain the optional `children` records with `id`, `name`, `birthMonth` (`YYYY-MM`) and `includeAge18`; older plain-plan backups without children remain compatible with plan schema version 1.
 
 Save validates effective shared and loan allocations and calculates the candidate projection before replacing saved state. A property draft includes its linked rental and expense records. If another Save changes one of those records, the older draft is retained and its Save is rejected. Use the record's **Discard edits** action, then reapply changes to the newer saved inputs. Unrelated drafts and saves remain independent.
 
-Plans retain JSON schema version 1 and browser storage key `lifelook.foundation.plan.v1`. Browser storage belongs to the current origin: development on port 1421 and preview on port 4174 have separate saved plans. Use export and restore to move a plan between origins. Download a backup to retain the current in-memory inputs and revision. Backups contain applied inputs and exclude record drafts and calculated results; results are recalculated with this package's rule version. An accepted restore replaces all inputs and discards record drafts. Restore validates the entire document before replacement. Malformed JSON, unsupported schema versions and invalid references leave the current plan intact. Corrupt stored documents remain recoverable instead of being silently overwritten.
+Embedded plans retain JSON schema version 1. The browser stores the complete scenario envelope under `lifelook.foundation.workspace.v1`, including names, the baseline role and active selection. On first load, an existing `lifelook.foundation.plan.v1` plan becomes Master without changing its inputs or revision; its original legacy bytes remain intact. A valid workspace takes precedence over that legacy key. Missing data creates an unsaved Master in memory; unreadable or unsupported data stays protected for recovery.
+
+**Backups and recovery** offers separate scopes:
+
+| Action | Contents or effect |
+| --- | --- |
+| Export scenario JSON | The active scenario's applied plain plan; compatible with existing plan backups. |
+| Export workspace backup | Every scenario's applied inputs, names, identities, baseline role and selection. |
+| Import scenario JSON | A validated plain plan becomes a new named experiment; existing drafts stay intact. |
+| Replace this scenario from JSON | After confirmation, replace only the named scenario's inputs and drafts. |
+| Restore workspace backup | After confirmation, replace the entire collection and clear every scenario session. |
+
+All exports exclude unfinished record/allocation drafts, view state, previews and calculated results. Reload and restore recalculate applied inputs using this package's rule set. Invalid JSON, unsupported versions, duplicate scenario metadata and invalid financial links leave existing inputs and drafts intact. Restored financial revisions remain unchanged; the workspace revision advances independently.
+
+Storage belongs to the current origin: development on port 1421 and preview on port 4174 have separate workspaces. Use a workspace backup to move the whole collection between origins, or a scenario JSON to move one plan. A failed write retains accepted changes in memory and keeps a global warning visible across switches. **Export workspace backup** works without storage access; **Retry local save** writes the complete current collection without changing revisions. For protected unreadable data, download its original bytes and use **Replace unreadable saved data** with a validated workspace or plain-plan backup. A plain-plan recovery creates Master only. Failed recovery keeps the accepted workspace in memory and offers a separate replacement retry while preserving the original bytes.
+
+An external workspace change detected through a storage event or pre-write check suspends writes. Export local changes as needed, then reload before further restores or writes. Concurrent multi-tab merging and race-free synchronization are outside this version; there is no automatic merge. Drafts survive switching only during this tab's lifetime and are never recovered from backups.
 
 The former desktop application's SQLite profiles and `.lifelook` backups are not imported by this JSON format. Removing its source code does not delete existing device data or backups. Keep those files separately; enter a new plan or restore a compatible browser JSON backup.
 

@@ -1,3 +1,4 @@
+import {preloadWorkspace,readActivePlan,replaceScenarioFromJson} from './helpers/workspace';
 import {createPlan} from '../../src/engine';
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -138,7 +139,7 @@ async function enterAcceptancePlan(page: Page, plan: PlanDocument): Promise<void
 async function openDetails(scope:Locator,title:string):Promise<Locator>{const summary=scope.locator('summary').filter({hasText:new RegExp('^'+title.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))}).first();if(!await summary.evaluate(node=>(node.parentElement as HTMLDetailsElement).open))await summary.click();return summary.locator('..');}
 async function openBackups(page: Page) {await openDetails(page.locator('header'),'Backups and recovery');}
 async function importDocument(page: Page, document: string) {
-  await page.getByLabel('Import JSON backup', { exact: true }).setInputFiles({ name: 'plan.json', mimeType: 'application/json', buffer: Buffer.from(document) });
+  await replaceScenarioFromJson(page,document);
 }
 
 test('saves two salaries, accounts and an ADU; reloads and restores', async ({ page }) => {
@@ -154,7 +155,7 @@ test('saves two salaries, accounts and an ADU; reloads and restores', async ({ p
   await openDetails(page.getByRole('region',{name:'Saved projection'}),'How calculated');
   await expect(page.getByText(/Annual income tax is reserved across months in proportion to positive gross cash income/).first()).toBeVisible();
   await page.reload(); await expect(page.getByTestId('annual-2026-net-worth')).toHaveText(formatExpectedCents(annual.value));
-  await openBackups(page); const downloadPromise = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export JSON backup', exact: true }).click();
+  await openBackups(page); const downloadPromise = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export scenario JSON', exact: true }).click();
   const download = await downloadPromise, path = await download.path(); if (!path) throw new Error('Missing backup');
   const backup = await readFile(path, 'utf8'), document = JSON.parse(backup) as PlanDocument;
   expect(document.salaries).toHaveLength(2); expect(document.accounts).toHaveLength(5); expect(document.properties).toHaveLength(1); expect(document.rentals).toHaveLength(1);
@@ -182,9 +183,9 @@ test('keeps a quota-failed restored revision Unsaved and downloadable', async ({
   await page.goto('/'); await openBackups(page); await importDocument(page, JSON.stringify(fixture.input));
   await expect(page.getByTestId('save-status')).toContainText('Unsaved'); await expect(page.getByTestId('save-status')).toContainText('Inputs v0');
   await page.getByText('Backups and recovery',{exact:true}).click();await fill(recordForm(page,'Save household'),'Opening cash reserve ($)','999.99');await expect(page.getByTestId('persistence-warning')).toBeVisible();
-  const downloadPromise = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export recovery backup', exact: true }).click();
+  const downloadPromise = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export workspace backup', exact: true }).click();
   const downloaded = await downloadPromise, path = await downloaded.path(); if (!path) throw new Error('Missing unsaved backup');
-  expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(fixture.input);
+  const recovered=JSON.parse(await readFile(path,'utf8'));expect(recovered.scenarios.find((s:{id:string})=>s.id===recovered.activeScenarioId).plan).toEqual(fixture.input);
 });
 
 test('renders imported HTML-like names as literal text', async ({ page }) => {
@@ -196,7 +197,7 @@ test('renders imported HTML-like names as literal text', async ({ page }) => {
 });
 
 const defaultPlan=()=>createPlan('2026-10-12','warning-audit');
-async function preload(page:Page,plan:PlanDocument=defaultPlan()){await page.addInitScript(doc=>localStorage.setItem('lifelook.foundation.plan.v1',JSON.stringify(doc)),plan);await page.goto('/');}
+async function preload(page:Page,plan:PlanDocument=defaultPlan()){await preloadWorkspace(page,plan);}
 async function insideViewport(panel:Locator,page:Page){const rect=await panel.boundingBox(),size=page.viewportSize()!;expect(rect).not.toBeNull();expect(rect!.x).toBeGreaterThanOrEqual(11);expect(rect!.y).toBeGreaterThanOrEqual(11);expect(rect!.x+rect!.width).toBeLessThanOrEqual(size.width-11);expect(rect!.y+rect!.height).toBeLessThanOrEqual(size.height-11);}
 test('keeps all default annual rows compact and exposes carried causes',async({page})=>{
   await preload(page);await page.setViewportSize({width:1440,height:1000});const rows=page.locator('.projection-table-wrap tbody tr');await expect(rows).toHaveCount(30);await expect(page.locator('.projection-table-wrap td p')).toHaveCount(0);

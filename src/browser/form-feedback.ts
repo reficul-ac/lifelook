@@ -1,3 +1,4 @@
+import type {EditorViewSession} from './scenario-session';
 import {MAX_CENTS} from '../engine/money';
 import {formatCents} from './views/issues';
 import type {Issue} from '../engine';
@@ -55,14 +56,15 @@ export function formatFieldIssue(issue:Issue,draft:RecordDraft):string{
 const summaries=new WeakMap<HTMLDetailsElement,()=>string>();
 export function registerFormSummary(node:HTMLDetailsElement,read:()=>string):void {summaries.set(node,read);}
 const taskIssues=new WeakMap<HTMLElement,readonly Issue[]>();
-export function setFormTaskIssues(form:HTMLElement,issues:readonly Issue[]):void {taskIssues.set(form,issues);}
+export function setFormTaskIssues(form:HTMLElement,issues:readonly Issue[],view?:EditorViewSession):void {if(view&&form.dataset.recordId){if(issues.length)view.taskIssues.set(form.dataset.recordId,issues);else view.taskIssues.delete(form.dataset.recordId);}else taskIssues.set(form,issues);}
 const lastIssues=new WeakMap<HTMLElement,readonly Issue[]>();
 let groupErrorSequence=0;
 export function syncFormFeedback(root:HTMLElement,controller:WorkspaceController,context:IssueViewContext):void{
   const state=controller.getState();
   for(const form of root.querySelectorAll<HTMLElement>('form[data-record-id][data-editable-section]')){
     const id=form.dataset.recordId!,draft=controller.getDraft(form.dataset.editableSection as EditableSection,id);
-    const resolved=resolveFormIssues(draft,state.savedPlan.id,[...state.issues,...taskIssues.get(form)??[]]),fresh=lastIssues.get(form)!==state.issues;
+    const combined=[...state.issues,...(context.editorView?context.editorView.taskIssues.get(id):taskIssues.get(form))??[]];
+    const resolved=resolveFormIssues(draft,state.savedPlan.id,[...new Map(combined.map(issue=>[JSON.stringify(issue),issue])).values()]),fresh=lastIssues.get(form)!==state.issues;
     for(const disclosure of form.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]')){const read=summaries.get(disclosure);if(read)disclosure.dataset.disclosureStatus=read();const heading=disclosure.querySelector('summary');if(heading)heading.textContent=disclosure.dataset.disclosureName+(disclosure.dataset.disclosureStatus?' · '+disclosure.dataset.disclosureStatus:'');}
     const previous=lastIssues.get(form);lastIssues.set(form,state.issues);
     if(!resolved.length&&!previous?.length&&!form.querySelector('[data-form-feedback]'))continue;

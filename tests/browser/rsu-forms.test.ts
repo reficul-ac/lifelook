@@ -1,9 +1,10 @@
+import {loadWorkspace} from '../../src/browser/workspace-storage';
 import {describe,expect,it} from 'vitest';
 import {fireEvent,within} from '@testing-library/dom';
 import {calculateProjection,loadRuleSet,type Account,type Issue,type PlanDocument} from '../../src/engine';
 import {resolveIssueTargets} from '../../src/browser/issue-presentation';
 import {renderProjection} from '../../src/browser/views/projection';
-import {loadPlan,restorePlan,type StoragePort} from '../../src/browser/storage';
+import {type StoragePort} from '../../src/browser/storage';
 import {mountWorkspace,setField} from '../helpers/dom';
 import {mountPresentation} from '../helpers/presentation';
 import {makePlan,mustValidate} from '../helpers/plans';
@@ -23,14 +24,14 @@ const initialFields={'Grant name':'Initial award','Grant value ($)':'48000.00','
 
 describe('RSU account entry and review',()=>{
   it('initializes RSU fields and hides generic opening balance on account type change',()=>{
-    const {root,controller}=investments();setField(accountForm(root),'Account type','rsu');
+    const {root,controller,manager}=investments();setField(accountForm(root),'Account type','rsu');
     const form=accountForm(root);expect(within(form).getByLabelText('Current share price ($)')).toHaveValue('0.00');
     expect(within(form).queryByLabelText('Account opening balance ($)')).toBeNull();
     expect(controller.getState().drafts.equity?.value).toMatchObject({type:'rsu',openingBalanceCents:'0.00',openingIraBasis:{known:false},rsu:{grants:[expect.objectContaining({vestingMonths:'48',vestingFrequency:'monthly',openingBasis:{known:true,value:'0.00'}})]}});
     expect(form).toHaveTextContent('Jan 1, 2026');expect(form).toHaveTextContent('withholding assumption, not a tax rate');
   });
   it('saves independently configured grants together and preserves computed awarded units in a backup',()=>{
-    const {root,controller}=investments();setField(accountForm(root),'Account type','rsu');
+    const {root,controller,manager}=investments();setField(accountForm(root),'Account type','rsu');
     let form=accountForm(root);setField(form,'RSU employer ID','employer-equity');setField(form,'Current share price ($)','120.00');
     enterGrant(form,1,initialFields);fireEvent.click(within(form).getByRole('button',{name:'Add RSU grant'}));
     form=accountForm(root);enterGrant(form,2,{'Grant name':'Refresher','Grant value ($)':'24000.00','Grant share price ($)':'120.00','Actual awarded shares (optional)':'199.123456','Vesting start date':'2027-06-30','Vesting term (months)':'24','Vesting frequency':'quarterly','Cliff (months)':'6','Shares sold for withholding (%)':'35.00'});
@@ -42,10 +43,10 @@ describe('RSU account entry and review',()=>{
     const saved=controller.getState().savedPlan;expect(saved.revision).toBe(1);expect(saved.accounts[0]?.rsu?.grants).toEqual([
       expect.objectContaining({...grant,id:expect.any(String),openingBasis:{known:true,value:0}}),expect.objectContaining({name:'Refresher',grantValueCents:2400000,grantSharePriceCents:12000,awardedShares:199.123456,vestingMonths:24,vestingFrequency:'quarterly',cliffMonths:6,withholdingBps:3500}),
     ]);
-    const restored=JSON.parse(controller.exportBackup()) as PlanDocument;controller.resetPlan(restored);expect(controller.getState().savedPlan.accounts).toEqual(saved.accounts);
+    const restored=JSON.parse(controller.exportBackup()) as PlanDocument;expect(manager.replaceScenario(manager.captureTarget(manager.getState().document.activeScenarioId)!,mustValidate(restored)).accepted).toBe(true);expect(manager.getActiveSession().controller.getState().savedPlan.accounts).toEqual(saved.accounts);
   });
   it('identifies a malformed grant price without applying the account draft',()=>{
-    const {root,controller}=investments(makePlan({accounts:[rsuAccount]}));const form=accountForm(root);
+    const {root,controller,manager}=investments(makePlan({accounts:[rsuAccount]}));const form=accountForm(root);
     const input=within(form).getByLabelText('Grant share price ($)');fireEvent.input(input,{target:{value:'1.234'}});fireEvent.click(within(form).getByRole('button',{name:'Save account'}));
     expect(input).toHaveValue('1.234');expect(input).toHaveAttribute('aria-invalid','true');expect(controller.getState().savedPlan.revision).toBe(0);
     expect(controller.getState().issues).toContainEqual(expect.objectContaining({recordId:'equity',field:'rsu.grants.0.grantSharePriceCents'}));
@@ -65,15 +66,15 @@ describe('RSU account entry and review',()=>{
     setField(second,'Target date','2032-07-01');setField(second,'Target share price ($)','195.25');
     fireEvent.click(within(form).getByRole('button',{name:'Save account'}));
     expect(mounted.controller.getState().savedPlan.accounts[0]).toMatchObject({annualGrowthBps:770,rsu:{currentSharePriceCents:9500,priceTargets:[{date:'2030-01-01',sharePriceCents:17000},{date:'2032-07-01',sharePriceCents:19525}]}});
-    const backup=mounted.controller.exportBackup(),loaded=loadPlan(storage);expect(loaded.status).toBe('loaded');
+    const backup=mounted.controller.exportBackup(),loaded=loadWorkspace(storage,()=> 'master');expect(loaded.status).toBe('loaded');
     if(loaded.status!=='loaded')throw new Error(JSON.stringify(loaded));
-    mounted=investments(loaded.plan,storage);form=accountForm(mounted.root);
+    mounted=investments(loaded.document.scenarios.find(s=>s.id===loaded.document.activeScenarioId)!.plan,storage);form=accountForm(mounted.root);
     expect(within(within(form).getByRole('group',{name:'Share price target 1'})).getByLabelText('Target share price ($)')).toHaveValue('170.00');
     fireEvent.click(within(form).getByRole('button',{name:'Remove Share price target 1'}));
     fireEvent.click(within(accountForm(mounted.root)).getByRole('button',{name:'Save account'}));
     expect(mounted.controller.getState().savedPlan.accounts[0]?.rsu?.priceTargets).toEqual([{date:'2032-07-01',sharePriceCents:19525}]);
-    const restored=restorePlan(backup,mounted.controller.getState().savedPlan,storage);expect(restored.accepted).toBe(true);
-    mounted.controller.resetPlan(restored.plan);form=accountForm(mounted.root);
+    const restored=mounted.manager.replaceScenario(mounted.manager.captureTarget(mounted.manager.getState().document.activeScenarioId)!,mustValidate(JSON.parse(backup)));expect(restored.accepted).toBe(true);
+    mounted.controller=mounted.manager.getActiveSession().controller;form=accountForm(mounted.root);
     expect(within(within(form).getByRole('group',{name:'Share price target 2'})).getByLabelText('Target date')).toHaveValue('2032-07-01');
     fireEvent.click(within(form).getByRole('button',{name:'Remove Share price target 2'}));
     fireEvent.click(within(accountForm(mounted.root)).getByRole('button',{name:'Remove Share price target 1'}));
@@ -81,7 +82,7 @@ describe('RSU account entry and review',()=>{
     expect(mounted.controller.getState().savedPlan.accounts[0]?.rsu?.priceTargets).toEqual([]);
   });
   it('keeps an incomplete target draft and focuses its nested malformed price',()=>{
-    const {root,controller}=investments(makePlan({accounts:[rsuAccount]}));
+    const {root,controller,manager}=investments(makePlan({accounts:[rsuAccount]}));
     fireEvent.click(within(accountForm(root)).getByRole('button',{name:'Add Share price target'}));
     let form=accountForm(root);fireEvent.click(within(form).getByRole('button',{name:'Save account'}));
     expect(controller.getState().savedPlan.revision).toBe(0);
@@ -95,7 +96,7 @@ describe('RSU account entry and review',()=>{
   });
   it('focuses a target date that is not later than the previous target',()=>{
     const account:Account={...rsuAccount,rsu:{...rsuAccount.rsu!,priceTargets:[{date:'2030-01-01',sharePriceCents:17000}]}};
-    const {root,controller}=investments(makePlan({accounts:[account]}));
+    const {root,controller,manager}=investments(makePlan({accounts:[account]}));
     fireEvent.click(within(accountForm(root)).getByRole('button',{name:'Add Share price target'}));
     const form=accountForm(root),row=within(form).getByRole('group',{name:'Share price target 2'}),input=within(row).getByLabelText('Target date');
     setField(row,'Target date','2030-01-01');setField(row,'Target share price ($)','180.00');
@@ -113,7 +114,7 @@ describe('RSU account entry and review',()=>{
     expect(within(mounted.root).getByLabelText('Contribution account')).toHaveValue('cash-account');expect(within(mounted.root).queryByRole('option',{name:'Employer equity'})).toBeNull();
   });
   it('allocates grant IDs across saved records and all unsaved drafts',()=>{
-    const plan=makePlan({accounts:[broker,{...broker,id:'equity-grant-1',name:'Collision'}]});const {root,controller}=investments(plan);
+    const plan=makePlan({accounts:[broker,{...broker,id:'equity-grant-1',name:'Collision'}]});const {root,controller,manager}=investments(plan);
     controller.beginAdd('accounts',{...broker,id:'draft-collision',rsu:{grants:[{...grant,id:'equity-grant-2'}]}});
     setField(accountForm(root),'Account type','rsu');fireEvent.click(within(accountForm(root)).getByRole('button',{name:'Add RSU grant'}));
     const grants=(controller.getState().drafts.equity?.value.rsu as {grants:{id:string}[]}).grants;

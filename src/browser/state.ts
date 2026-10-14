@@ -28,6 +28,11 @@ export interface WorkspaceController {
   exportBackup():string;
   resetPlan(plan:PlanDocument,initial?:WorkspaceInitialization):void;
 }
+export interface EditorPublicationPort {
+  readPersistence():WorkspaceInitialization;
+  publish(plan:ValidatedPlan,projection:ProjectionResult,commitSession:()=>void):{accepted:true}|{accepted:false;issues:readonly Issue[]};
+  retry():{accepted:true}|{accepted:false;issues:readonly Issue[]};
+}
 export interface WorkspaceInitialization {readonly persisted:boolean;readonly persistenceIssues:readonly Issue[]}
 export type WorkspaceOperation=Readonly<{kind:'save'|'remove';recordId:string;result:SaveRecordResult}>|Readonly<{kind:'restore';persisted:boolean}>;
 const moneyHistories=new Set(['openingIraBasis','openingBalance','openingPayment','openingBasis','conversionBuildingFmv','priorYearWagesCents','qualifiedPrincipalCents','wagesCents','ubiaCents']);
@@ -76,26 +81,32 @@ export function allocationCalculationFailure(inputRevision:number):CashFlowAlloc
   return {status:'failed',inputRevision,issues:[{code:'calculation-failed',field:'cashFlowAllocation',severity:'error',explanation:'These allocation inputs could not be calculated. The saved plan and projection have been retained.',resolution:'Correct the draft inputs and request a new preview or Apply again.'}]};
 }
 
-export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:RuleSet=loadRuleSet()):WorkspaceController {
+export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:RuleSet=loadRuleSet()):WorkspaceController {return createController(plan,ruleSet,storage);}
+export function createEditorSession(plan:PlanDocument,port:EditorPublicationPort,ruleSet:RuleSet):WorkspaceController {return createController(plan,ruleSet,undefined,port);}
+function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort,port?:EditorPublicationPort):WorkspaceController {
   let savedPlan:PlanDocument=requiredPlan(plan),projection=calculateProjection(requiredPlan(plan),ruleSet),persisted=true,issues:readonly Issue[]=[],persistenceIssues:readonly Issue[]=[];
   let drafts:Record<string,RecordDraft>={};const bases=new Map<string,string>();const listeners=new Set<(operation?:WorkspaceOperation)=>void>();let sequence=0;
   let allocationDraft:CashFlowAllocationDraft|undefined,allocationDefault:CashFlowAllocationDraft|undefined,allocationBase:string|undefined,allocationEpoch=0;
   let operationDepth=0;
   const notify=(operation?:WorkspaceOperation)=>{if(operationDepth===0||operation)listeners.forEach(listener=>listener(operation));};
   const operate=(kind:'save'|'remove',recordId:string,action:()=>SaveRecordResult):SaveRecordResult=>{operationDepth++;let outcome:SaveRecordResult;try{outcome=action();}finally{operationDepth--;}if(operationDepth===0)notify({kind,recordId,result:outcome});return outcome;};
-  const result=(accepted:boolean):SaveRecordResult=>({accepted,persisted,issues,persistenceIssues});
+  const persistence=():WorkspaceInitialization=>port?.readPersistence()??{persisted,persistenceIssues};
+  const result=(accepted:boolean):SaveRecordResult=>({accepted,...persistence(),issues});
   const persistApplied=():SaveRecordResult=>{
-    const saved=savePlan(storage,savedPlan);persisted=saved.persisted;persistenceIssues=saved.issues.filter(issue=>issue.code==='storage-write-failed');issues=[];notify();return result(true);
+    if(port){const outcome=port.retry();issues=outcome.accepted?[]:outcome.issues;notify();return result(outcome.accepted);}
+    const saved=savePlan(storage!,savedPlan);persisted=saved.persisted;persistenceIssues=saved.issues.filter(issue=>issue.code==='storage-write-failed');issues=[];notify();return result(true);
   };
   const publish=(candidate:PlanDocument,clear:readonly string[],clearAllocation=false):SaveRecordResult=>{
     const validation=validatePlan(candidate);if(!validation.ok){issues=validation.issues;notify();return result(false);}
     let candidateProjection:ProjectionResult;
     try { candidateProjection=calculateProjection(validation.plan,ruleSet); }
     catch { issues=[{code:'calculation-failed',field:'plan',severity:'error',explanation:'These inputs could not be calculated. The saved plan and projection have been retained.',resolution:'Correct the draft inputs before saving again.'}];notify();return result(false); }
-    savedPlan=validation.plan;projection=candidateProjection;
-    const saved=savePlan(storage,savedPlan);persisted=saved.persisted;persistenceIssues=saved.issues.filter(issue=>issue.code==='storage-write-failed');issues=[];
-    drafts=Object.fromEntries(Object.entries(drafts).filter(([id])=>!clear.includes(id)));clear.forEach(id=>bases.delete(id));
-    if(clearAllocation){allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;}
+    const commit=()=>{savedPlan=validation.plan;projection=candidateProjection;issues=[];
+      drafts=Object.fromEntries(Object.entries(drafts).filter(([id])=>!clear.includes(id)));clear.forEach(id=>bases.delete(id));
+      if(clearAllocation){allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;}
+    };
+    if(port){const outcome=port.publish(validation.plan,candidateProjection,commit);if(!outcome.accepted){issues=outcome.issues;notify();return result(false);}}
+    else{commit();const saved=savePlan(storage!,savedPlan);persisted=saved.persisted;persistenceIssues=saved.issues.filter(issue=>issue.code==='storage-write-failed');}
     notify();return result(true);
   };
   const householdValue=()=>({household:savedPlan.household,taxPolicy:savedPlan.taxPolicy,startYear:savedPlan.startYear,horizonYears:savedPlan.horizonYears,openingCashCents:savedPlan.openingCashCents});
@@ -131,7 +142,7 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
   const rejectIdentity=(id:string,field:string):SaveRecordResult=>{issues=[{code:'invalid-input',recordId:id,field,severity:'error',explanation:'The original record ID must remain unchanged.',resolution:'Keep this record ID so its linked records continue to refer to the same record.'}];notify();return result(false);};
   const getDraft=(section:EditableSection,id:string):RecordDraft=>draftFor(id)??{recordId:id,section,baseSnapshot:snapshot(section,id),value:toDraftValue(section==='household'?householdValue():section==='properties'?propertyValue(id):(savedPlan[section]??[]).find(row=>row.id===id)??{})};
   const controller:WorkspaceController={
-    getState:()=>({savedPlan,drafts,projection,persisted,issues,persistenceIssues,...(allocationDraft?{allocationDraft}:{})}),getDraft,getAllocationDraft,
+    getState:()=>({savedPlan,drafts,projection,...persistence(),issues,...(allocationDraft?{allocationDraft}:{})}),getDraft,getAllocationDraft,
     editAllocationDraft(draft){if(allocationDraft&&allocationDraft.recordId!==draft.recordId)throw new Error('Allocation draft identity must remain stable.');if(allocationBase===undefined)allocationBase=draft.baseSnapshot;allocationDraft={...structuredClone(draft),baseSnapshot:allocationBase};issues=[];notify();},
     discardAllocationDraft(){allocationEpoch++;allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;issues=[];notify();},
     previewAllocation(){const prepared=prepareAllocation();if(prepared.status!=='ready')return prepared;try{return {status:'calculated',projection:calculateProjection(prepared.plan,prepared.ruleSet),inputRevision:prepared.inputRevision};}catch{return allocationCalculationFailure(prepared.inputRevision);}},
@@ -139,7 +150,7 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
     editDraft(id,draft){if(id!==draft.recordId)throw new Error('Draft record identity must remain stable.');if(!bases.has(id))bases.set(id,draft.baseSnapshot??snapshot(draft.section,id));drafts={...drafts,[id]:structuredClone(draft)};issues=[];notify();},
     discardDraft(id){drafts=Object.fromEntries(Object.entries(drafts).filter(([key])=>key!==id));bases.delete(id);issues=[];notify();},
     saveRecord(id){return operate('save',id,()=>{
-      const edited=draftFor(id),retry=persistenceIssues.some(issue=>issue.code==='storage-write-failed');
+      const edited=draftFor(id),retry=persistence().persistenceIssues.some(issue=>issue.code==='storage-write-failed');
       if(!edited&&id==='household'&&retry)return persistApplied();
       const draft=edited??(id==='household'?getDraft('household',id):undefined);
       if(!draft){const sections=['salaries','otherIncome','expenses','children','debts','accounts','contributions','properties','rentals'] as const;return sections.some(section=>(savedPlan[section]??[]).some(record=>record.id===id))?persistApplied():result(false);}
@@ -150,7 +161,7 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
       const candidate:PlanDocument=draft.section==='household'?{...savedPlan,...decoded.value,revision:savedPlan.revision+1}:{...savedPlan,[draft.section]:[...(savedPlan[draft.section]??[]).filter(row=>row.id!==id),decoded.value],revision:savedPlan.revision+1};
       return publish(candidate,[id]);
     });},
-    saveProperty(id){return operate('save',id,()=>{if(!draftFor(id)&&savedPlan.properties.some(property=>property.id===id)&&persistenceIssues.some(issue=>issue.code==='storage-write-failed'))return persistApplied();const draft=draftFor(id)??getDraft('properties',id);if(stale('properties',id))return result(false);const decoded=fromDraftValue(draft.value,id);if(decoded.issues.length){issues=decoded.issues;notify();return result(false);}
+    saveProperty(id){return operate('save',id,()=>{if(!draftFor(id)&&savedPlan.properties.some(property=>property.id===id)&&persistence().persistenceIssues.some(issue=>issue.code==='storage-write-failed'))return persistApplied();const draft=draftFor(id)??getDraft('properties',id);if(stale('properties',id))return result(false);const decoded=fromDraftValue(draft.value,id);if(decoded.issues.length){issues=decoded.issues;notify();return result(false);}
       if((decoded.value.property as RawObject|undefined)?.id!==id)return rejectIdentity(id,'property.id');
       const existingRentalIds=new Set(savedPlan.rentals.filter(r=>r.propertyId===id).map(r=>r.id));
       return publish({...savedPlan,revision:savedPlan.revision+1,properties:[...savedPlan.properties.filter(p=>p.id!==id),decoded.value.property as PlanDocument['properties'][number]],rentals:[...savedPlan.rentals.filter(r=>r.propertyId!==id),...decoded.value.rentals as PlanDocument['rentals']],expenses:[...savedPlan.expenses.filter(e=>e.propertyId!==id&&(!e.rentalId||!existingRentalIds.has(e.rentalId))),...decoded.value.expenses as PlanDocument['expenses']]},[id]);
@@ -161,6 +172,6 @@ export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:Ru
       bases.set(id,snapshot(section,id));drafts={...drafts,[id]:{recordId:id,section,value:toDraftValue(value??(section==='household'?householdValue():defaults[section]))}};issues=[];notify();return id;
     },
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},exportBackup:()=>exportPlan(savedPlan),
-    resetPlan(next,initial={persisted:true,persistenceIssues:[]}){const validated=requiredPlan(next),calculated=calculateProjection(validated,ruleSet);allocationEpoch++;savedPlan=validated;projection=calculated;drafts={};bases.clear();allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;persisted=initial.persisted;persistenceIssues=initial.persistenceIssues;issues=[];notify({kind:'restore',persisted});},
+    resetPlan(next,initial={persisted:true,persistenceIssues:[]}){if(port)throw new Error('Managed editors require a scenario replacement.');const validated=requiredPlan(next),calculated=calculateProjection(validated,ruleSet);allocationEpoch++;savedPlan=validated;projection=calculated;drafts={};bases.clear();allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;persisted=initial.persisted;persistenceIssues=initial.persistenceIssues;issues=[];notify({kind:'restore',persisted});},
   };allocationBridges.set(controller,{prepare:prepareAllocation,epoch:()=>allocationEpoch});return controller;
 }

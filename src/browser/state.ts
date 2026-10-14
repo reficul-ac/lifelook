@@ -35,11 +35,12 @@ export interface EditorPublicationPort {
 }
 export interface WorkspaceInitialization {readonly persisted:boolean;readonly persistenceIssues:readonly Issue[]}
 export type WorkspaceOperation=Readonly<{kind:'save'|'remove';recordId:string;result:SaveRecordResult}>|Readonly<{kind:'restore';persisted:boolean}>;
-const moneyHistories=new Set(['openingIraBasis','openingBalance','openingPayment','openingBasis','conversionBuildingFmv','priorYearWagesCents','qualifiedPrincipalCents','wagesCents','ubiaCents']);
+const moneyHistories=new Set(['openingIraBasis','openingBalance','openingPayment','openingBasis','conversionBuildingFmv','priorYearWagesCents','qualifiedPrincipalCents','wagesCents','ubiaCents','addedAssessedValueCents','valueCents']);
+const rateHistories=new Set(['marginalRateBps']);
 const decimalUnits=(value:number)=>{const sign=value<0?'-':'';const digits=String(Math.abs(value));return `${sign}${digits.length<3?'0':digits.slice(0,-2)}.${digits.slice(-2).padStart(2,'0')}`;};
 /** Stored integers become entered dollars/percentages; histories retain explicit unknowns. */
 export function toDraftValue(value:unknown,key='',historyKey=''):any {
-  if(typeof value==='number')return key.endsWith('Cents')||key.endsWith('Bps')||key==='value'&&moneyHistories.has(historyKey)?decimalUnits(value):String(value);
+  if(typeof value==='number')return key.endsWith('Cents')||key.endsWith('Bps')||key==='value'&&(moneyHistories.has(historyKey)||rateHistories.has(historyKey))?decimalUnits(value):String(value);
   if(Array.isArray(value))return value.map(row=>toDraftValue(row,key,historyKey));
   if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([field,entry])=>[field,toDraftValue(entry,field,key)]));
   return value;
@@ -48,8 +49,8 @@ function decode(value:unknown,issues:Issue[],recordId:string,path:string,key='',
   if(Array.isArray(value))return value.map((row,i)=>decode(row,issues,recordId,`${path}.${i}`,key,historyKey));
   if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([field])=>field!=='__draft').map(([field,entry])=>[field,decode(entry,issues,recordId,path?`${path}.${field}`:field,field,key)]));
   if(typeof value!=='string')return value;
-  const isMoney=key.endsWith('Cents')||key==='value'&&moneyHistories.has(historyKey),isRate=key.endsWith('Bps');
-  const integers=new Set(['year','startYear','horizonYears','raiseMonth','raiseDay','priority','termMonths','vestingMonths','cliffMonths','numerator','denominator','baselineYear']);
+  const isMoney=key.endsWith('Cents')||key==='value'&&moneyHistories.has(historyKey),isRate=key.endsWith('Bps')||key==='value'&&rateHistories.has(historyKey);
+  const integers=new Set(['year','startYear','horizonYears','raiseMonth','raiseDay','priority','termMonths','vestingMonths','cliffMonths','numerator','denominator','baselineYear','completedValueEnrollmentYear']);
   const parser=isMoney?parseMoneyInput:isRate?parseRateInput:undefined;
   if(parser){const result=parser(value);if(result.status==='available')return result.value;issues.push(...result.issues.map(issue=>({...issue,recordId,field:path})));return value;}
   if(key==='awardedShares'||key==='openingHeldShares'){
@@ -72,7 +73,9 @@ function requiredPlan(plan:PlanDocument){const validation=validatePlan(plan);if(
 
 /** Browser-only bridge: the worker receives the exact rules captured by its workspace. */
 export type PreparedAllocationPreview=Readonly<{status:'ready';plan:ValidatedPlan;ruleSet:RuleSet;inputRevision:number}>|Extract<CashFlowAllocationPreview,{status:'invalid'|'failed'}>;
-const allocationBridges=new WeakMap<WorkspaceController,{prepare():PreparedAllocationPreview;epoch():number}>();
+export type PreparedAduComparison=Readonly<{status:'ready';plan:ValidatedPlan;ruleSet:RuleSet;projection:ProjectionResult;inputRevision:number}>|Readonly<{status:'invalid'|'failed';issues:readonly Issue[]}>;
+const allocationBridges=new WeakMap<WorkspaceController,{prepare():PreparedAllocationPreview;epoch():number;adu(projectId:string):PreparedAduComparison}>();
+export function prepareAduComparison(controller:WorkspaceController,projectId:string):PreparedAduComparison{const bridge=allocationBridges.get(controller);if(!bridge)throw new Error('Unknown ADU workspace.');return bridge.adu(projectId);}
 export function prepareAllocationPreview(controller:WorkspaceController):PreparedAllocationPreview {
   const bridge=allocationBridges.get(controller);if(!bridge)throw new Error('Unknown allocation workspace.');return bridge.prepare();
 }
@@ -84,7 +87,7 @@ export function allocationCalculationFailure(inputRevision:number):CashFlowAlloc
 export function createWorkspace(plan:PlanDocument,storage:StoragePort,ruleSet:RuleSet=loadRuleSet()):WorkspaceController {return createController(plan,ruleSet,storage);}
 export function createEditorSession(plan:PlanDocument,port:EditorPublicationPort,ruleSet:RuleSet):WorkspaceController {return createController(plan,ruleSet,undefined,port);}
 function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort,port?:EditorPublicationPort):WorkspaceController {
-  let savedPlan:PlanDocument=requiredPlan(plan),projection=calculateProjection(requiredPlan(plan),ruleSet),persisted=true,issues:readonly Issue[]=[],persistenceIssues:readonly Issue[]=[];
+  let savedPlan:ValidatedPlan=requiredPlan(plan),projection=calculateProjection(requiredPlan(plan),ruleSet),persisted=true,issues:readonly Issue[]=[],persistenceIssues:readonly Issue[]=[];
   let drafts:Record<string,RecordDraft>={};const bases=new Map<string,string>();const listeners=new Set<(operation?:WorkspaceOperation)=>void>();let sequence=0;
   let allocationDraft:CashFlowAllocationDraft|undefined,allocationDefault:CashFlowAllocationDraft|undefined,allocationBase:string|undefined,allocationEpoch=0;
   let operationDepth=0;
@@ -173,5 +176,5 @@ function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort
     },
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},exportBackup:()=>exportPlan(savedPlan),
     resetPlan(next,initial={persisted:true,persistenceIssues:[]}){if(port)throw new Error('Managed editors require a scenario replacement.');const validated=requiredPlan(next),calculated=calculateProjection(validated,ruleSet);allocationEpoch++;savedPlan=validated;projection=calculated;drafts={};bases.clear();allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;persisted=initial.persisted;persistenceIssues=initial.persistenceIssues;issues=[];notify({kind:'restore',persisted});},
-  };allocationBridges.set(controller,{prepare:prepareAllocation,epoch:()=>allocationEpoch});return controller;
+  };allocationBridges.set(controller,{prepare:prepareAllocation,epoch:()=>allocationEpoch,adu(projectId){if(!savedPlan.properties.some(p=>p.aduProject?.id===projectId))return{status:'invalid',issues:[{code:'required-adu-project',recordId:projectId,field:'aduComparison',severity:'warning',explanation:'This project is absent from the applied scenario.',resolution:'Select an applied ADU project.'}]};return{status:'ready',plan:savedPlan,ruleSet,projection,inputRevision:savedPlan.revision};}});return controller;
 }

@@ -208,6 +208,122 @@ function records(v: Validator, raw: Obj, key: string, name = true): readonly Obj
 }
 const recordId = (o: Obj): string => typeof o.id === 'string' ? o.id : '';
 
+/** Register all nested IDs before checking cross-project references. */
+function validateAduProjects(v:Validator, properties:readonly Obj[], rentals:readonly Obj[], expenses:readonly Obj[], forecastStart:string):Map<string,Obj> {
+  const projectsByRental=new Map<string,Obj>();
+  const identities=(rows:unknown,field:string,id:string,name=false):Obj[]=>v.array(rows,field,id).flatMap(value=>{const row=v.record(value,field,name);return row?[row]:[];});
+  const month=(value:unknown,field:string,id:string):value is string=>{
+    if(!isValidYearMonth(value)){v.issue(field,id,'Use a valid calendar month (YYYY-MM).');return false;}return true;
+  };
+  const treatments=(value:unknown,field:string,id:string,amount?:unknown):void=>{
+    const rows=v.object(value,field,id);if(!rows)return;
+    for(const book of books)v.history(rows[book],`${field}.${book}`,id,(value,path)=>{
+      const split=v.object(value,path,id);if(!split)return;
+      const keys=['buildingBasisCents','currentDeductionCents','nondepreciableBasisCents','nondeductibleExpenseCents'];
+      for(const key of keys)v.cents(split[key],`${path}.${key}`,id);
+      if(Object.keys(split).some(key=>!keys.includes(key)))v.issue(path,id,'Treatment splits permit only the four declared categories.');
+      if(typeof amount==='number' && keys.every(key=>Number.isSafeInteger(split[key]) && Number(split[key])>=0)){
+        const total=keys.reduce((sum,key)=>sum.plus(Number(split[key])),new Decimal(0));
+        if(!total.eq(amount))v.issue(path,id,'Tax treatment must reconcile exactly to the associated cash payment.');
+      }
+    });
+  };
+  const registered: {property:Obj;project:Obj;costs:Obj[];overrides:Obj[];draws:Obj[];financing?:Obj}[]=[];
+  for(const property of properties){
+    if(property.aduProject===undefined)continue;
+    const project=v.record(property.aduProject,'aduProject');if(!project)continue;
+    const id=recordId(project);
+    const costs=identities(project.costs,'aduProject.costs',id,true);
+    const overrides=identities(project.sharedExpenseOverrides,'aduProject.sharedExpenseOverrides',id);
+    const financing=project.financing===undefined?undefined:v.record(project.financing,'aduProject.financing');
+    const draws=financing?identities(financing.draws,'aduProject.financing.draws',recordId(financing)):[];
+    if(financing)for(const row of identities(financing.interestTaxRows,'aduProject.financing.interestTaxRows',recordId(financing))){
+      month(row.month,'month',recordId(row));treatments(row.treatments,'treatments',recordId(row));
+    }
+    if(financing)v.uniqueRows(v.array(financing.interestTaxRows,'interestTaxRows',recordId(financing)),row=>row.month,'interestTaxRows',recordId(financing));
+    const tax=v.object(project.propertyTax,'aduProject.propertyTax',id);
+    if(tax){
+      v.moneyHistory(tax.addedAssessedValueCents,'propertyTax.addedAssessedValueCents',id);
+      v.history(tax.marginalRateBps,'propertyTax.marginalRateBps',id,(value,path)=>{v.integer(value,path,id,0,100000);});
+      v.integer(tax.annualAssessmentGrowthBps,'propertyTax.annualAssessmentGrowthBps',id,0,200);
+      v.integer(tax.completedValueEnrollmentYear,'propertyTax.completedValueEnrollmentYear',id,2026,9999);
+      v.cents(tax.additionalAnnualChargesCents,'propertyTax.additionalAnnualChargesCents',id);
+      v.booleanHistory(tax.originalExpenseExcludesAdu,'propertyTax.originalExpenseExcludesAdu',id);
+      const assessments=v.array(tax.constructionAssessments,'propertyTax.constructionAssessments',id);
+      v.uniqueRows(assessments,row=>row.year,'propertyTax.constructionAssessments',id);
+      assessments.forEach((value,index)=>{const row=v.object(value,`propertyTax.constructionAssessments[${index}]`,id);if(!row)return;v.integer(row.year,`propertyTax.constructionAssessments[${index}].year`,id,2026,9999);v.moneyHistory(row.valueCents,`propertyTax.constructionAssessments[${index}].valueCents`,id);});
+      const years=v.array(tax.paymentYears,'propertyTax.paymentYears',id);v.uniqueRows(years,row=>row.year,'propertyTax.paymentYears',id);
+      const paymentMonths:Obj[]=[];
+      years.forEach((value,index)=>{
+        const path=`propertyTax.paymentYears[${index}]`;const year=v.object(value,path,id);if(!year)return;
+        v.integer(year.year,`${path}.year`,id,2026,9999);v.booleanHistory(year.complete,`${path}.complete`,id);
+        for(const payment of identities(year.payments,`${path}.payments`,id)){
+          const pid=recordId(payment);paymentMonths.push(payment);v.cents(payment.amountCents,'amountCents',pid);v.enum(payment.kind,['regular','supplemental','construction-in-progress'],'kind',pid);
+          if(month(payment.month,'month',pid) && payment.month.slice(0,4)!==String(year.year))v.issue('month',pid,'Payment month must belong to its declared payment year.');
+          if(typeof payment.month==='string' && forecastStart && payment.month<forecastStart.slice(0,7))v.issue('month',pid,'Project tax payments cannot precede the forecast.');
+          treatments(payment.treatments,'treatments',pid,payment.amountCents);
+        }
+      });
+      // Different bill kinds may legitimately be paid in the same month.
+    }
+    registered.push({property,project,costs,overrides,draws,...(financing?{financing}: {})});
+    if(v.text(project.rentalId,'rentalId',id)){
+      if(projectsByRental.has(project.rentalId))v.issue('rentalId',id,'A rental cannot belong to multiple ADU projects.');
+      projectsByRental.set(project.rentalId,project);
+    }
+  }
+  for(const {property,project,costs,overrides,draws,financing} of registered){
+    const id=recordId(project), propertyId=recordId(property);
+    if(property.role!=='primary-with-adu')v.issue('role',propertyId,'A planned project belongs to an existing primary home with an ADU.');
+    const unit=rentals.find(unit=>unit.id===project.rentalId);
+    if(!unit || unit.propertyId!==property.id)v.issue('rentalId',id,'The project must own a rental on its own property.','dangling-reference');
+    if(rentals.filter(unit=>unit.propertyId===property.id).length!==1)v.issue('rentalId',id,'A project property must have exactly its one new ADU rental.');
+    v.range(project,'constructionStartDate','completionDate',id);
+    if(isValidISODate(project.constructionStartDate) && forecastStart && project.constructionStartDate<forecastStart)v.issue('constructionStartDate',id,'Construction cannot begin before forecast start.');
+    if(unit){
+      if(isValidISODate(unit.availableDate) && isValidISODate(project.completionDate) && unit.availableDate<project.completionDate)v.issue('availableDate',recordId(unit),'Rental readiness cannot precede completion.');
+      if(unit.convertedFromPersonalUse!==false)v.issue('convertedFromPersonalUse',recordId(unit),'This project supports a genuinely new ADU, not personal-use conversion.');
+      if(unit.sharedAllocation!==undefined)v.issue('sharedAllocation',recordId(unit),'Prospective shared allocations belong to project expense overrides.');
+      if(Array.isArray(unit.loanAllocations) && unit.loanAllocations.length)v.issue('loanAllocations',recordId(unit),'Historical mortgages cannot be attributed to the future ADU.');
+      const qualifications=isObject(unit.qualifications)?unit.qualifications:undefined;
+      if(isObject(qualifications?.noPersonalUse) && qualifications.noPersonalUse.known===true && qualifications.noPersonalUse.value===false)v.issue('qualifications.noPersonalUse',recordId(unit),'Personal use of a new project ADU is outside this contract.');
+      const history=isObject(unit.taxHistory)?unit.taxHistory:undefined;
+      for(const book of books){
+        const h=history?.[book];if(!isObject(h)||h.known!==true||!isObject(h.value))continue;
+        const state=h.value;
+        if(['recoveryBasisCents','adjustedBuildingBasisCents','cumulativeDepreciationCents','atRiskCents','atRiskSuspendedCents','passiveSuspendedCents'].some(key=>state[key]!==0)||!Array.isArray(state.lossVintages)||state.lossVintages.length)v.issue(`taxHistory.${book}`,recordId(unit),'A genuinely new project rental cannot have preforecast basis, capital, depreciation or losses.');
+      }
+      const qbi=isObject(unit.qbi)?unit.qbi:undefined;const vintages=qbi?.openingLossVintages;
+      if(isObject(vintages)&&vintages.known===true&&(!Array.isArray(vintages.value)||vintages.value.length))v.issue('qbi.openingLossVintages',recordId(unit),'A new ADU cannot have preforecast rental QBI loss vintages.');
+    }
+    const valuation=v.object(project.valuation,'valuation',id);
+    if(valuation){v.enum(valuation.kind,['adu-value-per-square-foot','value-added'],'valuation.kind',id);if(valuation.kind==='adu-value-per-square-foot')v.cents(valuation.valuePerSquareFootCents,'valuation.valuePerSquareFootCents',id);if(valuation.kind==='value-added')v.cents(valuation.valueAddedCents,'valuation.valueAddedCents',id);}
+    const qualification=v.object(project.taxQualifications,'taxQualifications',id);if(qualification)for(const book of books)v.booleanHistory(qualification[book],`taxQualifications.${book}`,id);
+    v.booleanHistory(project.supportOperatingDeficits,'supportOperatingDeficits',id);
+    v.history(project.productionPeriod,'productionPeriod',id,(value,path)=>{const period=v.object(value,path,id);if(!period)return;v.range(period,'startDate','endDate',id);if(period.endDate===undefined)v.issue(`${path}.endDate`,id,'An explicit production end date is required.');v.bool(period.uninterrupted,`${path}.uninterrupted`,id);if(isValidISODate(period.startDate)&&isValidISODate(project.constructionStartDate)&&period.startDate<project.constructionStartDate)v.issue(`${path}.startDate`,id,'Physical production cannot precede construction start.');});
+    const costById=new Map(costs.map(row=>[recordId(row),row]));
+    for(const cost of costs){const cid=recordId(cost);v.cents(cost.amountCents,'amountCents',cid);v.enum(cost.category,['building','land','financing-fee','other'],'category',cid);if(v.date(cost.paymentDate,'paymentDate',cid)){if(forecastStart&&cost.paymentDate<forecastStart)v.issue('paymentDate',cid,'Planning payments cannot precede forecast start.');if(isValidISODate(project.completionDate)&&cost.paymentDate>project.completionDate)v.issue('paymentDate',cid,'Construction payments cannot follow completion.');}treatments(cost.treatments,'treatments',cid,cost.amountCents);}
+    const selectedExpenses=new Set<unknown>();
+    for(const override of overrides){const oid=recordId(override);v.text(override.expenseId,'expenseId',oid);const expense=expenses.find(row=>row.id===override.expenseId);if(!expense||expense.propertyId!==property.id||expense.rentalId!==undefined||expense.use==='rental')v.issue('expenseId',oid,'A prospective override must reference an original expense of this property.','dangling-reference');if(selectedExpenses.has(override.expenseId))v.issue('expenseId',oid,'Only one prospective override is permitted per expense.');selectedExpenses.add(override.expenseId);if(override.share!==undefined)v.allocation(override.share,'share',oid);}
+    for(const expense of expenses)if(expense.rentalId===project.rentalId && expense.use!=='rental')v.issue('use',recordId(expense),'Future ADU expenses must be directly assigned; shared overrides belong in the project.');
+    if(financing){
+      const fid=recordId(financing);v.rate(financing.aprBps,'aprBps',fid,false);v.integer(financing.termMonths,'termMonths',fid,1,1200);month(financing.firstAmortizingPaymentMonth,'firstAmortizingPaymentMonth',fid);
+      if(financing.collateralPropertyId!==property.id)v.issue('collateralPropertyId',fid,'Dedicated financing must use its own project property.');
+      for(const key of ['proceedsHistoryComplete','rentalInterestQualified','financingAtRiskQualification'])v.booleanHistory(financing[key],key,fid);
+      const totals=new Map<string,InstanceType<typeof Decimal>>();
+      for(const draw of draws){
+        const did=recordId(draw);v.cents(draw.amountCents,'amountCents',did);
+        if(month(draw.month,'month',did)){if(forecastStart&&draw.month<forecastStart.slice(0,7))v.issue('month',did,'Draws cannot precede forecast start.');if(isValidISODate(project.completionDate)&&draw.month>project.completionDate.slice(0,7))v.issue('month',did,'Draws cannot follow completion.');if(isValidYearMonth(financing.firstAmortizingPaymentMonth)&&draw.month>=financing.firstAmortizingPaymentMonth)v.issue('month',did,'All draws must precede amortization.');}
+        let total=new Decimal(0);const allocations=v.array(draw.costAllocations,'costAllocations',did);v.uniqueRows(allocations,row=>row.costId,'costAllocations',did);
+        allocations.forEach((value,index)=>{const path=`costAllocations[${index}]`;const row=v.object(value,path,did);if(!row)return;v.text(row.costId,`${path}.costId`,did);const cost=typeof row.costId==='string'?costById.get(row.costId):undefined;if(!cost)v.issue(`${path}.costId`,did,'Draws must be attributed to costs owned by this project.','dangling-reference');if(v.cents(row.amountCents,`${path}.amountCents`,did)){total=total.plus(row.amountCents as number);if(typeof row.costId==='string')totals.set(row.costId,(totals.get(row.costId)??new Decimal(0)).plus(row.amountCents as number));}if(cost&&isValidYearMonth(draw.month)&&isValidISODate(cost.paymentDate)&&draw.month>cost.paymentDate.slice(0,7))v.issue('month',did,'Draws cannot reimburse an earlier paid cost.');});
+        if(typeof draw.amountCents==='number'&&!total.eq(draw.amountCents))v.issue('costAllocations',did,'Allocated draw cents must equal the full draw.');
+      }
+      for(const [costId,total] of totals){const cost=costById.get(costId);if(cost&&typeof cost.amountCents==='number'&&total.gt(cost.amountCents))v.issue('costAllocations',fid,'A cost cent cannot be financed twice or exceed its staged amount.');}
+    }
+  }
+  return projectsByRental;
+}
+
 export function validatePlan(raw: unknown): ValidationResult {
   const v = new Validator(isObject(raw) && typeof raw.id === 'string' ? raw.id : undefined);
   const root = v.object(raw, 'document', v.planId);
@@ -291,6 +407,7 @@ export function validatePlan(raw: unknown): ValidationResult {
   const rentalById = new Map(rentals.map(o => [recordId(o), o]));
   const accountById = new Map(accounts.map(o => [recordId(o), o]));
   const salaryById = new Map(salaries.map(o => [recordId(o), o]));
+  const projectsByRental=validateAduProjects(v,properties,rentals,expenses,forecastStart);
   children.forEach(child => {
     const id = recordId(child);
     if (!isValidYearMonth(child.birthMonth)) v.issue('birthMonth', id, 'Use a valid birth month (YYYY-MM).');
@@ -439,7 +556,7 @@ export function validatePlan(raw: unknown): ValidationResult {
     v.cents(o.purchasePriceCents, 'purchasePriceCents', id); v.cents(o.downPaymentCents, 'downPaymentCents', id); v.cents(o.openingValueCents, 'openingValueCents', id);
     if (typeof o.downPaymentCents === 'number' && typeof o.purchasePriceCents === 'number' && o.downPaymentCents > o.purchasePriceCents) v.issue('downPaymentCents', id, 'Down payment cannot exceed purchase price.');
     v.rate(o.appreciationBps, 'appreciationBps', id);
-    for (const area of ['primaryArea', 'aduArea']) if (o[area] !== undefined || o.role === 'primary-with-adu') {
+    for (const area of ['primaryArea', 'aduArea']) if (o[area] !== undefined || o.role === 'primary-with-adu' && (o.aduProject === undefined || area === 'aduArea')) {
       if (typeof o[area] !== 'number' || !Number.isFinite(o[area]) || (o[area] as number) <= 0 || (o[area] as number) > Number.MAX_SAFE_INTEGER) v.issue(area, id, 'A finite positive living area is required.');
     }
     const overrides = v.array(o.appreciationOverrides, 'appreciationOverrides', id); v.uniqueRows(overrides, row => row.year, 'appreciationOverrides', id);
@@ -464,6 +581,7 @@ export function validatePlan(raw: unknown): ValidationResult {
         const row = v.object(value, `proceedsAllocations[${index}]`, loanId); if (!row) return sum;
         const field = `proceedsAllocations[${index}]`; reference(row.propertyId, propertyById, `${field}.propertyId`, loanId); v.enum(row.use, ['personal', 'rental'], `${field}.use`, loanId); v.allocation(row.share, `${field}.share`, loanId);
         if (row.use === 'rental') reference(row.rentalId, rentalById, `${field}.rentalId`, loanId);
+        if(typeof row.rentalId==='string' && projectsByRental.has(row.rentalId))v.issue(`${field}.rentalId`,loanId,'Existing mortgage proceeds cannot reference a future ADU.');
         const linked = typeof row.rentalId === 'string' ? rentalById.get(row.rentalId) : undefined;
         if (linked && linked.propertyId !== row.propertyId) v.issue(`${field}.rentalId`, loanId, 'The loan allocation rental must belong to its declared property.');
         const share = row.share;
@@ -479,9 +597,9 @@ export function validatePlan(raw: unknown): ValidationResult {
     if (o.propertyId !== undefined) reference(o.propertyId, propertyById, 'propertyId', id);
   });
   rentals.forEach(o => {
-    const id = recordId(o); reference(o.propertyId, propertyById, 'propertyId', id); v.cents(o.monthlyRentCents, 'monthlyRentCents', id); v.rate(o.rentGrowthBps, 'rentGrowthBps', id); v.range(o, 'rentStartDate', 'rentEndDate', id);
+    const id = recordId(o); if(o.vacancyBps!==undefined)v.integer(o.vacancyBps,'vacancyBps',id,0,10000); reference(o.propertyId, propertyById, 'propertyId', id); v.cents(o.monthlyRentCents, 'monthlyRentCents', id); v.rate(o.rentGrowthBps, 'rentGrowthBps', id); v.range(o, 'rentStartDate', 'rentEndDate', id);
     if (v.date(o.availableDate, 'availableDate', id)) {
-      if (forecastStart && o.availableDate > forecastStart) v.issue('availableDate', id, 'Included rental units must already be available at the forecast start.');
+      if (!projectsByRental.has(id) && forecastStart && o.availableDate > forecastStart) v.issue('availableDate', id, 'Included rental units must already be available at the forecast start.');
       if (isValidISODate(o.rentStartDate) && o.rentStartDate < o.availableDate) v.issue('rentStartDate', id, 'Rent cannot begin before the rental unit is available.');
     }
     const property = typeof o.propertyId === 'string' ? propertyById.get(o.propertyId) : undefined;
@@ -535,6 +653,7 @@ export function validatePlan(raw: unknown): ValidationResult {
   if (v.issues.length === 0) {
     const document = raw as PlanDocument;
     for (const property of document.properties) {
+      if(property.aduProject)continue;
       const units = document.rentals.filter(unit => unit.propertyId === property.id);
       try { sharedRentalShares(property, units); }
       catch (error) { if (!(error instanceof RangeError)) throw error; v.issue('rentals.sharedAllocation', property.id, error.message); }
@@ -546,7 +665,7 @@ export function validatePlan(raw: unknown): ValidationResult {
     for (const expense of document.expenses) {
       const rental = document.rentals.find(unit => unit.id === expense.rentalId);
       const property = document.properties.find(row => row.id === (expense.propertyId ?? rental?.propertyId));
-      if (!property) continue;
+      if (!property || property.aduProject) continue;
       try { allocateExpense(expense, property, document.rentals, 100); }
       catch (error) { if (!(error instanceof RangeError)) throw error; v.issue(expense.allocationOverride ? 'allocationOverride' : 'use', expense.id, error.message); }
     }

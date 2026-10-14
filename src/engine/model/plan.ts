@@ -1,3 +1,5 @@
+import type { AduProject } from './adu-project';
+export type * from './adu-project';
 /** Stored values are plain JSON; all monetary amounts are validated integer USD cents. */
 export type Cents = number;
 export type BasisPoints = number;
@@ -201,6 +203,7 @@ export interface PropertyLoan {
 }
 export interface AppreciationOverride { readonly year: number; readonly rateBps: BasisPoints }
 export interface Property {
+  readonly aduProject?: AduProject;
   readonly id: string;
   readonly name: string;
   readonly role: 'primary' | 'rental' | 'primary-with-adu';
@@ -251,6 +254,7 @@ export interface RentalLoanAllocation {
   readonly qualification: History<boolean>;
 }
 export interface RentalUnit {
+  readonly vacancyBps?: BasisPoints;
   readonly id: string;
   readonly propertyId: string;
   readonly monthlyRentCents: Cents;

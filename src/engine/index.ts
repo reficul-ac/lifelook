@@ -25,3 +25,5 @@ export type * from './tax/federal';
 export type * from './tax/california';
 export type * from './tax/comparison';
 export type * from './cash/allocation-types';
+
+export { getAduProjects, findAduOwner } from './property/adu-ownership';

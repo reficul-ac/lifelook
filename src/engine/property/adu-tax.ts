@@ -77,7 +77,14 @@ function prepareBook(plan:ValidatedPlan,project:AduProject,unit:RentalUnit,conte
   };
   for(const cost of project.costs.filter(c=>c.paymentDate.startsWith(`${year}-`))){
     let split=validateSplit(cost.treatments[book],cost.amountCents,`costs.${cost.id}.treatments.${book}`);
-    if(split.status==='available'&&cost.category==='land'&&split.value.buildingBasisCents>0)split=failure(project,year,`costs.${cost.id}.treatments.${book}`,'unsupported-adu-land-recovery','Land cannot enter building recovery.','unsupported-case');
+    if(split.status==='available'&&cost.category==='land'&&
+      (split.value.buildingBasisCents>0||split.value.currentDeductionCents>0))
+      split=failure(project,year,`costs.${cost.id}.treatments.${book}`,'unsupported-adu-land-recovery','Land acquisition costs are nondepreciable and cannot enter building recovery or a current deduction.','unsupported-case');
+    // Other components have no separate classification or recovery method in
+    // this contract. A confirmed split cannot establish that missing method.
+    if(split.status==='available'&&cost.category==='other'&&
+      (split.value.buildingBasisCents>0||split.value.nondepreciableBasisCents>0||split.value.currentDeductionCents>0))
+      split=failure(project,year,`costs.${cost.id}.treatments.${book}`,'unsupported-adu-component-recovery','Other components require a separately supported classification and recovery schedule.','unsupported-case');
     // Borrowing fees/points need their own loan-term recovery and, where eligible,
     // period-accrued construction-interest treatment. This ledger cannot recover an
     // entire upfront fee as building cost or infer an immediate deduction (Pub 551/527).

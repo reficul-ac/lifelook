@@ -279,6 +279,7 @@ function validateAduProjects(v:Validator, properties:readonly Obj[], rentals:rea
     if(!unit || unit.propertyId!==property.id)v.issue('rentalId',id,'The project must own a rental on its own property.','dangling-reference');
     if(rentals.filter(unit=>unit.propertyId===property.id).length!==1)v.issue('rentalId',id,'A project property must have exactly its one new ADU rental.');
     v.range(project,'constructionStartDate','completionDate',id);
+    if(project.completionDate===undefined)v.issue('completionDate',id,'An explicit completion date is required.');
     if(isValidISODate(project.constructionStartDate) && forecastStart && project.constructionStartDate<forecastStart)v.issue('constructionStartDate',id,'Construction cannot begin before forecast start.');
     if(unit){
       if(isValidISODate(unit.availableDate) && isValidISODate(project.completionDate) && unit.availableDate<project.completionDate)v.issue('availableDate',recordId(unit),'Rental readiness cannot precede completion.');

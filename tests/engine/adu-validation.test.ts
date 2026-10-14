@@ -28,6 +28,12 @@ describe('owned new ADU contracts', () => {
   });
   it('keeps record IDs scoped to each scenario document',()=>{ expect(validatePlan(makeAduPlan()).ok).toBe(true); expect(validatePlan({...makeAduPlan(),id:'fork'}).ok).toBe(true); });
   it('accepts dates beyond the forecast and unknown future treatment',()=>{ const p=edited(p=>{p.properties[0].aduProject.completionDate='2032-07-31'; p.rentals[0].availableDate='2032-08-01';p.rentals[0].rentStartDate='2032-09-01';p.properties[0].aduProject.taxQualifications.federal={known:false};});expect(validatePlan(p).ok).toBe(true); });
+  it('rejects an imported project with its required completion date omitted',()=>{
+    const imported=JSON.parse(JSON.stringify(makeAduPlan()));delete imported.properties[0].aduProject.completionDate;
+    const result=validatePlan(imported);
+    expect(result.ok).toBe(false);
+    expect(result.issues).toEqual(expect.arrayContaining([expect.objectContaining({recordId:'adu-project',field:'completionDate',severity:'error'})]));
+  });
   const cases: readonly [string,(p:Raw)=>void][] = [
     ['completion before start',p=>p.properties[0].aduProject.completionDate='2026-12-31'],
     ['start before forecast',p=>p.properties[0].aduProject.constructionStartDate='2025-12-31'],

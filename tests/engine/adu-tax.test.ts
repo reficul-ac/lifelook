@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest';
-import type {AduFinancing,AduProject,PlanDocument,TaxBook} from '../../src/engine/model/plan';
+import type {AduFinancing,AduProject,AduTaxSplit,PlanDocument,TaxBook} from '../../src/engine/model/plan';
 import type {HouseholdTaxState} from '../../src/engine/model/tax-state';
 import {initialTaxState} from '../../src/engine/model/tax-state';
 import {resolveCashYear} from '../../src/engine/cash/income';
@@ -53,6 +53,38 @@ describe('pending ADU capital and independent four-book loss carry',()=>{
   });
   it('reduces risk for confirmed nondeductible spending',()=>{
     const y=run(makeAduPlan({}, {costs:[{id:'building-stage',name:'Nondeductible cost',paymentDate:'2027-07-01',amountCents:10000,category:'other',treatments:makeAduTreatments(10000,'nondeductibleExpenseCents')}]}),2027);expect(aduValue(y.property.rentals[0]!.aduRiskMovements!.federal).nondeductibleExpenseCents).toBe(10000);expect(aduValue(y.result.closingTaxState.rentals['new-adu']!.federal).atRiskCents).toBe(0);
+  });
+  const unsupportedCategories:readonly ["land"|"other",keyof AduTaxSplit,string][]=[
+    ['land','buildingBasisCents','unsupported-adu-land-recovery'],
+    ['land','currentDeductionCents','unsupported-adu-land-recovery'],
+    ['other','buildingBasisCents','unsupported-adu-component-recovery'],
+    ['other','currentDeductionCents','unsupported-adu-component-recovery'],
+    ['other','nondepreciableBasisCents','unsupported-adu-component-recovery'],
+  ];
+  it.each(unsupportedCategories)('keeps a confirmed %s %s split unsupported without obscuring paid construction', (category,kind,code)=>{
+    const y=run(makeAduPlan({}, {costs:[{id:'building-stage',name:'Separate cost',paymentDate:'2027-07-01',amountCents:30_000_000,category,treatments:makeAduTreatments(30_000_000,kind)}]}),2027);
+    for(const book of aduBooks){
+      expect(y.property.rentals[0]!.books[book]).toMatchObject({status:'unsupported-case',issues:expect.arrayContaining([expect.objectContaining({code})])});
+      expect(y.result.closingTaxState.aduProjects!['adu-project']![book].status).toBe('unsupported-case');
+    }
+    expect(y.result.rental.federal.status).toBe('unsupported-case');
+    expect(y.result.rental.california.status).toBe('unsupported-case');
+    expect(y.context.cashComplete).toEqual({status:'available',value:true});
+    expect(resolveCashYear(y.plan,2027).annual.expensesCents).toBe(30_000_000);
+    expect(aduValue(y.property.rentals[0]!.aduCash!.capitalExpenseCents)).toBe(30_000_000);
+  });
+  it('keeps supported nondepreciable land basis separate from building recovery',()=>{
+    const y=run(makeAduPlan({}, {costs:[{id:'building-stage',name:'Land acquisition',paymentDate:'2027-07-01',amountCents:30_000_000,category:'land',treatments:makeAduTreatments(30_000_000,'nondepreciableBasisCents')}]}),2027);
+    for(const book of aduBooks){
+      expect(aduValue(y.result.closingTaxState.aduProjects!['adu-project']![book])).toMatchObject({capitalizedBuildingCents:0,nondepreciableBasisCents:30_000_000});
+      expect(aduValue(y.property.rentals[0]!.books[book])).toMatchObject({operatingExpenseCents:0,depreciationCents:0,taxableProfitCents:0});
+    }
+  });
+  it('localizes a contradictory land deduction to its tax book',()=>{
+    const treatments=makeAduTreatments(30_000_000,'nondepreciableBasisCents'),contradictory=makeAduTreatments(30_000_000,'currentDeductionCents');
+    const y=run(makeAduPlan({}, {costs:[{id:'building-stage',name:'Land acquisition',paymentDate:'2027-07-01',amountCents:30_000_000,category:'land',treatments:{...treatments,federal:contradictory.federal}}]}),2027);
+    expect(y.result.rental.federal.status).toBe('unsupported-case');
+    for(const book of aduBooks.filter(book=>book!=='federal'))expect(y.property.rentals[0]!.books[book].status).toBe('available');
   });
   it('retains the negative-risk recapture boundary when principal lacks owner support',()=>{
     const p=makeAduPlan({}, {supportOperatingDeficits:{known:true,value:false},costs:[{id:'building-stage',name:'Building',paymentDate:'2027-07-01',amountCents:10000,category:'building',treatments:makeAduTreatments(10000)}],financing:loan({draws:[{id:'draw',month:'2027-07',amountCents:10000,costAllocations:[{costId:'building-stage',amountCents:10000}]}],firstAmortizingPaymentMonth:'2028-01',termMonths:1})});const first=run(p,2027),next=run(p,2028,first.result.closingTaxState);expect(next.result.rental.federal).toMatchObject({status:'unsupported-case',issues:expect.arrayContaining([expect.objectContaining({code:'unsupported-at-risk-recapture'})])});

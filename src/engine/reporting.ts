@@ -1,3 +1,4 @@
+import {summarizeAduPeriods} from './property/adu-projection';
 import type { Cents } from './model/plan';
 import type { Available,Issue } from './model/results';
 import type { HouseholdYear } from './tax/comparison';
@@ -57,13 +58,14 @@ function summarize(months:readonly MonthlyProjection[],override?:Omit<Projection
   const properties:PropertyProjection[]=propertyIds.map(propertyId=>{
     const series=ordered.map(month=>month.properties.find(property=>property.propertyId===propertyId));
     const value=(index:number,key:Exclude<keyof PropertyProjection,'propertyId'>)=>track(series[index]?.[key]??absentRecord(`properties.${propertyId}.${key}`));
-    return {propertyId,openingValueCents:value(0,'openingValueCents'),growthCents:sum(series.map((_,i)=>value(i,'growthCents')),`properties.${propertyId}.growthCents`),closingValueCents:value(series.length-1,'closingValueCents'),loanBalanceCents:value(series.length-1,'loanBalanceCents'),equityCents:value(series.length-1,'equityCents')};
+    const additions=series.some(r=>r?.completionValueAddedCents)?{completionValueAddedCents:sum(series.map(r=>r?.completionValueAddedCents??absentRecord('completionValueAddedCents')),'completionValueAddedCents'),knownExistingHomeValueCents:value(series.length-1,'knownExistingHomeValueCents'),combinedLivingAreaSqFt:value(series.length-1,'combinedLivingAreaSqFt')}:{};
+    return {...additions,propertyId,openingValueCents:value(0,'openingValueCents'),growthCents:sum(series.map((_,i)=>value(i,'growthCents')),`properties.${propertyId}.growthCents`),closingValueCents:value(series.length-1,'closingValueCents'),loanBalanceCents:value(series.length-1,'loanBalanceCents'),equityCents:value(series.length-1,'equityCents')};
   });
   const loanIds=[...new Set(ordered.flatMap(month=>month.loans.map(loan=>loan.loanId)))].sort();
   const loans:LoanProjection[]=loanIds.map(loanId=>{
     const series=ordered.map(month=>month.loans.find(loan=>loan.loanId===loanId));
     const value=(index:number,key:Exclude<keyof LoanProjection,'loanId'>)=>track(series[index]?.[key]??absentRecord(`loans.${loanId}.${key}`));
-    return {loanId,openingPrincipalCents:value(0,'openingPrincipalCents'),interestCents:sum(series.map((_,i)=>value(i,'interestCents')),`loans.${loanId}.interestCents`),paymentCents:sum(series.map((_,i)=>value(i,'paymentCents')),`loans.${loanId}.paymentCents`),principalPaidCents:sum(series.map((_,i)=>value(i,'principalPaidCents')),`loans.${loanId}.principalPaidCents`),closingPrincipalCents:value(series.length-1,'closingPrincipalCents')};
+    return {...(series.some(r=>r?.drawCents)?{drawCents:sum(series.map(r=>r?.drawCents??absentRecord('drawCents')),'drawCents')}:{}),loanId,openingPrincipalCents:value(0,'openingPrincipalCents'),interestCents:sum(series.map((_,i)=>value(i,'interestCents')),`loans.${loanId}.interestCents`),paymentCents:sum(series.map((_,i)=>value(i,'paymentCents')),`loans.${loanId}.paymentCents`),principalPaidCents:sum(series.map((_,i)=>value(i,'principalPaidCents')),`loans.${loanId}.principalPaidCents`),closingPrincipalCents:value(series.length-1,'closingPrincipalCents')};
   });
   const rsuInputs=ordered.flatMap(month=>month.rsu?[month.rsu]:[]);
   let rsu:Available<RsuPeriod>|undefined;
@@ -104,5 +106,5 @@ function summarize(months:readonly MonthlyProjection[],override?:Omit<Projection
   const coverage=affected?{...metadata.coverage,completeForModeledScope:false,completeHouseholdLiability:false,issues:deduplicate([...metadata.coverage.issues,...generated.filter(issue=>issue.severity!=='info')])}:metadata.coverage;
   const conditionalOnGap=ordered.some(month=>month.conditionalOnGap);
   const fundingStatus=last.fundingStatus==='funded'&&conditionalOnGap?'conditional-on-gap':last.fundingStatus;
-  return {...amounts,year,fundingStatus,conditionalOnGap,accounts,properties,loans,...(rsu?{rsu}:{}),ratios,tax:metadata.tax,household:metadata.household,candidates:metadata.candidates,coverage,provenance:first.provenance,issues:deduplicate(issues)};
+  return {...amounts,...(last.adu?{adu:summarizeAduPeriods(ordered.map(m=>m.adu!),year)}:{}),year,fundingStatus,conditionalOnGap,accounts,properties,loans,...(rsu?{rsu}:{}),ratios,tax:metadata.tax,household:metadata.household,candidates:metadata.candidates,coverage,provenance:first.provenance,issues:deduplicate(issues)};
 }

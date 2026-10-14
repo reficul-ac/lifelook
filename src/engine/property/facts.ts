@@ -35,7 +35,10 @@ export interface RentalTaxBookFacts {
   readonly openingState: RentalBookState;
   readonly closingState: RentalBookState;
 }
+export type RentalCashField='rentCents'|'operatingExpenseCents'|'capitalExpenseCents'|'debtPaymentCents'|'cashInterestCents'|'principalPaidCents'|'cashFlowCents';
 export interface RentalYearFacts {
+  /** Project annual cash availability; numeric compatibility fields must not replace it. */
+  readonly aduCash?:Readonly<Record<RentalCashField,Available<Cents>>>;
   readonly aduRiskMovements?:Readonly<Record<TaxBook,Available<AduRiskMovements>>>;
   readonly rentalId: string;
   readonly propertyId: string;

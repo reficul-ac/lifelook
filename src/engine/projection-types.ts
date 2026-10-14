@@ -1,3 +1,4 @@
+import type { AduPeriodProjection } from './property/adu-projection';
 import type { CashFlowAllocationYear } from './cash/allocation-types';
 import type { Cents } from './model/plan';
 import type { Available, Coverage, Issue, RuleProvenance } from './model/results';
@@ -32,6 +33,9 @@ export interface RsuPeriod {
   readonly grants:readonly RsuGrantMonth[];
 }
 export interface PropertyProjection {
+  readonly completionValueAddedCents?:Available<Cents>;
+  readonly knownExistingHomeValueCents?:Available<Cents>;
+  readonly combinedLivingAreaSqFt?:Available<number>;
   readonly propertyId:string;
   readonly openingValueCents:Available<Cents>;
   readonly growthCents:Available<Cents>;
@@ -40,6 +44,7 @@ export interface PropertyProjection {
   readonly equityCents:Available<Cents>;
 }
 export interface LoanProjection {
+  readonly drawCents?:Available<Cents>;
   readonly loanId:string;
   readonly openingPrincipalCents:Available<Cents>;
   readonly interestCents:Available<Cents>;
@@ -56,6 +61,7 @@ export interface ProjectionMetadata {
   readonly issues:readonly Issue[];
 }
 export interface MonthlyProjection extends ProjectionAmounts,ProjectionMetadata {
+  readonly adu?:AduPeriodProjection;
   readonly year:number;
   readonly month:number;
   readonly date:string;
@@ -67,6 +73,7 @@ export interface MonthlyProjection extends ProjectionAmounts,ProjectionMetadata 
   readonly rsu?:Available<RsuPeriod>;
 }
 export interface AnnualProjection extends ProjectionAmounts,ProjectionMetadata {
+  readonly adu?:AduPeriodProjection;
   readonly cashFlowAllocation?:Available<CashFlowAllocationYear>;
   readonly year:number;
   readonly fundingStatus:FundingStatus;

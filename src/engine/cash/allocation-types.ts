@@ -15,6 +15,7 @@ export interface AccountAllocationFunding {
   readonly reasons: readonly Issue[];
 }
 export interface CashFlowAllocationYear {
+  readonly aduBudget?:Readonly<{reportedCashFlowCents:Cents;financedConstructionCents:Cents;allocationCashFlowCents:Cents}>;
   readonly year: number;
   readonly status: 'funded' | 'no-surplus' | 'funding-conflict';
   readonly originalCashFlowCents: Cents;

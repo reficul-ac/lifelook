@@ -10,6 +10,7 @@ export interface AduLoanMonth extends LoanMonth {
   readonly openingEarmarkedCents:Cents;readonly closingEarmarkedCents:Cents;
 }
 export interface AduLoanSchedule extends LoanSchedule {
+  readonly kind:'adu-project';
   readonly projectId:string;readonly propertyId:string;readonly rentalId:string;
   readonly months:readonly AduLoanMonth[];
 }
@@ -109,6 +110,6 @@ export function calculateAduLoanSchedule(property:Property,startYear:number,hori
       balance=settleCents(new Decimal(balance).minus(principalPaidCents));
       months.push({loanId:loan.id,date:calendarDate(year,month,31),openingPrincipalCents,interestCents,paymentCents,principalPaidCents,closingPrincipalCents:balance,openingProvenance:'known',issues:[],drawCents,financedCostPaidCents,openingEarmarkedCents,closingEarmarkedCents:earmarked});
     }
-    return {status:'available',value:{loanId:loan.id,projectId:project.id,propertyId:property.id,rentalId:project.rentalId,startYear,horizonYears,months,openingProvenance:'known',paymentProvenance:'known',averageBalanceEvidence:[],issues:[]}};
+    return {status:'available',value:{loanId:loan.id,kind:'adu-project',projectId:project.id,propertyId:property.id,rentalId:project.rentalId,startYear,horizonYears,months,openingProvenance:'known',paymentProvenance:'known',averageBalanceEvidence:[],issues:[]}};
   }catch(error){return reportError(property,error,startYear);}
 }

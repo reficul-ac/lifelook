@@ -32,3 +32,6 @@ export { calculateAduValueAdded, aduAreaRatios } from './property/adu-valuation'
 export { calculateAduDepreciation } from './property/adu-depreciation';
 export type { AduDepreciationYear } from './property/adu-depreciation';
 export { ADU_PLANNING_MODEL_VERSION, maxAssessmentGrowthBps, aduPlanningProvenance } from './rules/adu-planning-v1';
+
+export {cashFlowBeforeInvestments,calculateFundingNeed} from './property/adu-projection';
+export type {AduPeriodProjection,AduProjectPeriodProjection} from './property/adu-projection';

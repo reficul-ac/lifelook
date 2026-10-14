@@ -10,7 +10,7 @@ import {aduPlanningProvenance} from '../rules/adu-planning-v1';
 import {allocateAduSharedExpense} from './adu-allocation';
 import {calculateAduDepreciation} from './adu-depreciation';
 import type {DepreciationYear} from './depreciation';
-import type {RentalTaxBookFacts,RentalYearFacts} from './facts';
+import type {RentalCashField,RentalTaxBookFacts,RentalYearFacts} from './facts';
 import type {AduProjectYear,AduYear} from './adu-lifecycle';
 import {getAduProjects} from './adu-ownership';
 export type {AduCapitalBookState} from '../model/tax-state';
@@ -168,13 +168,30 @@ export function prepareAduTaxYear(plan:ValidatedPlan,context:AduYear,opening:Hou
     capitalClosing[project.id]=Object.fromEntries(books.map(book=>[book,resolved[book].capital])) as Record<TaxBook,Available<AduCapitalBookState>>;
     rentals[unit.id]=Object.fromEntries(books.map(book=>[book,resolved[book].opening])) as Record<TaxBook,Available<RentalBookState>>;
     const loan=projectContext.loan,loanMonths=loan?.status==='available'?loan.value.months.filter(m=>m.date.startsWith(`${rules.year}-`)):[];
-    const cashInterestCents=sum(loanMonths.map(m=>m.interestCents)),principalPaidCents=sum(loanMonths.map(m=>m.principalPaidCents)),debtPaymentCents=sum(loanMonths.map(m=>m.paymentCents));
-    const normal=operating.status==='available'?operating.value:undefined,rentCents=sum(normal?.rent??[]),operatingExpenseCents=sum(normal?.deductible??[]),capitalExpenseCents=sum(projectContext.months.map(m=>m.constructionCostCents));
-    rentalFacts.push({rentalId:unit.id,propertyId:property.id,unit,financingAtRiskQualification:project.financing?.financingAtRiskQualification??{known:true,value:true},rentCents,operatingExpenseCents,capitalExpenseCents,debtPaymentCents,cashInterestCents,principalPaidCents,cashFlowCents:sum([rentCents,-sum(normal?.paid??[]),-sum(projectContext.months.map(m=>m.projectTaxPaidCents)),-capitalExpenseCents,-debtPaymentCents]),eligibleInterestCents:resolved.federal.eligibleInterest,
+    const cashAmount=(field:RentalCashField,calculate:()=>Cents,operands:readonly Available<unknown>[]=[]):Available<Cents>=>{
+      try{return combine(operands,calculate);}catch(error){if(!(error instanceof CalculationRangeError))throw error;return failure(project,rules.year,field,'monetary-overflow',error.message,'unsupported-case');}
+    };
+    const lifeAmount=(field:'constructionCostCents'|'projectTaxPaidCents'):Available<Cents>=>{
+      const issues=projectContext.months.flatMap(m=>m.cashComplete.status==='available'?[]:m.cashComplete.issues.filter(i=>i.field===field));
+      return cashAmount(field==='constructionCostCents'?'capitalExpenseCents':'cashFlowCents',()=>sum(projectContext.months.map(m=>m[field])),issues.length?[{status:'unsupported-case',issues}]:[]);
+    };
+    const loanGate=loan&&loan.status!=='available'&&projectContext.months.some(m=>m.financingProceedsCents>0||m.cashComplete.status!=='available'&&m.cashComplete.issues.some(i=>i.field==='aduProject.financing'))?[loan]:[];
+    const normal=operating.status==='available'?operating.value:undefined;
+    const rent=cashAmount('rentCents',()=>sum(normal?.rent??[]),[operating]);
+    const expense=cashAmount('operatingExpenseCents',()=>sum(normal?.deductible??[]),[operating]);
+    const capital=lifeAmount('constructionCostCents'),tax=lifeAmount('projectTaxPaidCents');
+    const interest=cashAmount('cashInterestCents',()=>sum(loanMonths.map(m=>m.interestCents)),loanGate);
+    const principal=cashAmount('principalPaidCents',()=>sum(loanMonths.map(m=>m.principalPaidCents)),loanGate);
+    const debt=cashAmount('debtPaymentCents',()=>sum(loanMonths.map(m=>m.paymentCents)),loanGate);
+    const value=(v:Available<Cents>):Cents=>v.status==='available'?v.value:0;
+    const flow=cashAmount('cashFlowCents',()=>sum([value(rent),-sum(normal?.paid??[]),-value(tax),-value(capital),-value(debt)]),[operating,rent,tax,capital,debt,...projectContext.months.map(m=>m.cashComplete)]);
+    const aduCash={rentCents:rent,operatingExpenseCents:expense,capitalExpenseCents:capital,debtPaymentCents:debt,cashInterestCents:interest,principalPaidCents:principal,cashFlowCents:flow};
+    rentalFacts.push({rentalId:unit.id,propertyId:property.id,unit,financingAtRiskQualification:project.financing?.financingAtRiskQualification??{known:true,value:true},aduCash,rentCents:value(rent),operatingExpenseCents:value(expense),capitalExpenseCents:value(capital),debtPaymentCents:value(debt),cashInterestCents:value(interest),principalPaidCents:value(principal),cashFlowCents:value(flow),eligibleInterestCents:resolved.federal.eligibleInterest,
       depreciation:Object.fromEntries(books.map(book=>[book,resolved[book].depreciation])) as Record<TaxBook,Available<DepreciationYear>>,
       books:Object.fromEntries(books.map(book=>[book,resolved[book].facts])) as Record<TaxBook,Available<RentalTaxBookFacts>>,
       aduRiskMovements:Object.fromEntries(books.map(book=>[book,resolved[book].risk])) as Record<TaxBook,Available<AduRiskMovements>>,
     });
+    for(const amount of Object.values(aduCash))if(amount.status!=='available')issues.push(...amount.issues);
     for(const book of books)for(const value of [resolved[book].capital,resolved[book].facts,resolved[book].risk])if(value.status!=='available')issues.push(...value.issues);
   }
   return {opening:{...opening,rentals},capitalClosing,rentalFacts,issues:[...new Map(issues.map(i=>[JSON.stringify(i),i])).values()],provenance:context.projects.length?aduPlanningProvenance(rules.year):[]};

@@ -1,12 +1,9 @@
+import {preloadWorkspace,readActivePlan,replaceScenarioFromJson} from './helpers/workspace';
 import { test, expect } from '@playwright/test';
 import { makeEstimatedMortgagePlan } from '../helpers/estimated-mortgage';
 
 test('a qualified estimated mortgage keeps forecast taxes, ratios and funding available after Save and reload', async ({ page }) => {
-  await page.addInitScript(plan => {
-    const key = 'lifelook.foundation.plan.v1';
-    if (localStorage.getItem(key) === null) localStorage.setItem(key, JSON.stringify(plan));
-  }, makeEstimatedMortgagePlan());
-  await page.goto('/');
+  await preloadWorkspace(page,makeEstimatedMortgagePlan());
   const money = /^\$[\d,]+\.\d{2}$/;
   for (const year of [2026, 2027, 2028]) {
     const federal = page.getByTestId(`annual-${year}-federal-income-tax`);

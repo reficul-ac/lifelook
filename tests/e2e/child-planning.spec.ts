@@ -1,11 +1,9 @@
+import {preloadWorkspace,readActivePlan,replaceScenarioFromJson} from './helpers/workspace';
 import { expect, test } from '@playwright/test';
 import { makePlan } from '../helpers/plans';
 
 test('saves independently dated children, reloads budgets, and restores a child backup', async ({ page }) => {
-  await page.addInitScript(saved => {
-    if (!localStorage.getItem('lifelook.foundation.plan.v1')) localStorage.setItem('lifelook.foundation.plan.v1', JSON.stringify(saved));
-  }, makePlan());
-  await page.goto('/');
+  await preloadWorkspace(page,makePlan());
   await page.getByRole('button', { name: 'Expenses and debts', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Child planning', exact: true })).toBeVisible();
   const forms = page.locator('form[data-editable-section="children"]');
@@ -22,7 +20,7 @@ test('saves independently dated children, reloads budgets, and restores a child 
   await expect(page.getByTestId('monthly-2026-04-expenses')).toHaveText('$0.00');
   await expect(page.getByTestId('monthly-2026-05-expenses')).toHaveText('$750.00');
   await expect(page.getByTestId('monthly-2026-09-expenses')).toHaveText('$1,500.00');
-  const backup = await page.evaluate(() => localStorage.getItem('lifelook.foundation.plan.v1')!);
+  const backup = JSON.stringify(await readActivePlan(page));
   expect(JSON.parse(backup).children).toEqual([
     expect.objectContaining({ name: 'First child', birthMonth: '2026-05', includeAge18: false }),
     expect.objectContaining({ name: 'Second child', birthMonth: '2026-09', includeAge18: false }),
@@ -34,15 +32,14 @@ test('saves independently dated children, reloads budgets, and restores a child 
   await forms.nth(0).getByRole('button', { name: 'Remove First child', exact: true }).click();
   await expect(page.getByTestId('summary-2026-expenses')).toHaveText('$3,000.00');
   await page.getByText('Backups and recovery', { exact: true }).click();
-  await page.getByLabel('Import JSON backup', { exact: true }).setInputFiles({ name: 'children.json', mimeType: 'application/json', buffer: Buffer.from(backup) });
+  await replaceScenarioFromJson(page,backup);
   await expect(forms).toHaveCount(2);
   await expect(page.getByTestId('summary-2026-expenses')).toHaveText('$9,000.00');
 });
 
 test('includes the complete age-18 year only when selected and stops at age 19', async ({ page }) => {
   const plan = makePlan({ horizonYears: 2, children: [{ id: 'child', name: 'Older child', birthMonth: '2008-06', includeAge18: false }] });
-  await page.addInitScript(saved => localStorage.setItem('lifelook.foundation.plan.v1', JSON.stringify(saved)), plan);
-  await page.goto('/');
+  await preloadWorkspace(page,plan);
   await page.getByRole('button', { name: 'Show months for 2026', exact: true }).click();
   await expect(page.getByTestId('monthly-2026-06-expenses')).toHaveText('$0.00');
   await page.getByRole('button', { name: 'Expenses and debts', exact: true }).click();

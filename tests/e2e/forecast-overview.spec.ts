@@ -1,3 +1,4 @@
+import {preloadWorkspace,readActivePlan,replaceScenarioFromJson} from './helpers/workspace';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { calculateProjection, loadRuleSet, type AnnualProjection, type Available, type PlanDocument } from '../../src/engine';
 import { makeEstimatedMortgagePlan } from '../helpers/estimated-mortgage';
@@ -33,8 +34,7 @@ function expectedYear(year: number): AnnualProjection {
   return row;
 }
 async function preload(page: Page): Promise<void> {
-  await page.addInitScript(plan => localStorage.setItem('lifelook.foundation.plan.v1', JSON.stringify(plan)), overviewPlan());
-  await page.goto('/');
+  await preloadWorkspace(page,overviewPlan());
 }
 async function expectPlotYear(page: Page, year: number, cashMetric: 'cash-flow' | 'cash-income' = 'cash-flow'): Promise<void> {
   await expect(page.getByRole('combobox', { name: 'Plot year', exact: true })).toHaveValue(String(year));

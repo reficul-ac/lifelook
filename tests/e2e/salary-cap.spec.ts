@@ -1,3 +1,4 @@
+import {preloadWorkspace,readActivePlan,replaceScenarioFromJson} from './helpers/workspace';
 import { expect, test } from '@playwright/test';
 import { makePlan } from '../helpers/plans';
 
@@ -10,12 +11,7 @@ test('caps automatic salary growth, preserves a dated override and reloads optio
       annualGrossCents: 12000000, startDate: '2026-01-01', annualRaiseBps: 1000,
       raiseMonth: 1, raiseDay: 1, changes: [] }],
   });
-  await page.addInitScript(initial => {
-    if (localStorage.getItem('lifelook.foundation.plan.v1') === null) {
-      localStorage.setItem('lifelook.foundation.plan.v1', JSON.stringify(initial));
-    }
-  }, plan);
-  await page.goto('/');
+  await preloadWorkspace(page,plan);
   await page.getByRole('button', { name: 'Income', exact: true }).click();
   const form = page.locator('form[data-record-id="salary"]');
   const cap = form.getByLabel('Automatic salary raise cap ($)', { exact: true });
@@ -55,7 +51,7 @@ test('caps automatic salary growth, preserves a dated override and reloads optio
   await expect(page.getByTestId('save-status')).toContainText('Inputs v3');
   await expect(page.getByTestId('annual-2028-gross-income')).toHaveText('$145,200.00');
   await expect(page.getByTestId('annual-2030-gross-income')).toHaveText('$176,000.00');
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('lifelook.foundation.plan.v1')!));
+  const saved = await readActivePlan(page);
   expect(saved.salaries[0]).not.toHaveProperty('annualRaiseCapCents');
   await page.reload();
   await page.getByRole('button', { name: 'Income', exact: true }).click();

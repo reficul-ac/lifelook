@@ -1,13 +1,13 @@
 import {validatePlan,type RuleSet,type ValidatedPlan} from '../engine';
 import type {BackupPayload} from './workspace-backups';
 import {createEditorSession,type EditorPublicationPort} from './state';
-import {createEditorViewSession,normalizeViewYears,type ScenarioEditorSession,type ScenarioViewSelections} from './scenario-session';
+import {createEditorViewSession,normalizeViewYears,retainEditorView,type ScenarioEditorSession,type ScenarioViewSelections} from './scenario-session';
 import {createScenarioWorkspace,validateScenarioName,validateScenarioWorkspace,workspaceIssue,type ScenarioDocument,type ScenarioWorkspaceDocument,type WorkspaceIssue} from './scenario-workspace';
 import {saveWorkspace,exportWorkspace as serializeWorkspace,WORKSPACE_STORAGE_KEY,type WorkspacePersistence} from './workspace-storage';
 import {exportPlan,type StoragePort} from './storage';
 export interface ScenarioTarget {scenarioId:string;generation:number;workspaceGeneration:number}
 export interface ScenarioOperationResult {accepted:boolean;persisted:boolean;issues:readonly WorkspaceIssue[];scenarioId?:string}
-export interface ScenarioManagerState {document:ScenarioWorkspaceDocument;persistence:WorkspacePersistence;workspaceGeneration:number;activeSession:ScenarioEditorSession}
+export interface ScenarioManagerState {document:ScenarioWorkspaceDocument;persistence:WorkspacePersistence;workspaceGeneration:number;activeSession:ScenarioEditorSession;recoveryReplacementPending:boolean}
 export interface ScenarioManager {
  getState():ScenarioManagerState;getSession(id:string):ScenarioEditorSession|undefined;getActiveSession():ScenarioEditorSession;
  captureTarget(id:string):ScenarioTarget|undefined;isCurrentTarget(target:ScenarioTarget):boolean;
@@ -45,7 +45,7 @@ export function createScenarioManager(input:ScenarioWorkspaceDocument,storage:St
    },retry(){if(!current(target))return {accepted:false,issues:[workspaceIssue('obsolete-scenario','workspace','This editor is obsolete.')]};const result=retry(false);return result.accepted?{accepted:true}:{accepted:false,issues:result.issues};}};
   const controller=createEditorSession(scenario.plan,port,rules),session:ScenarioEditorSession={scenarioId:scenario.id,generation,controller,view:createEditorViewSession(scenario.plan,selections)};return session;
  };
- const retain=(session:ScenarioEditorSession)=>{subscriptions.get(session.scenarioId)?.();sessions.set(session.scenarioId,session);subscriptions.set(session.scenarioId,session.controller.subscribe(()=>{normalizeViewYears(session.view,session.controller.getState().savedPlan);notify();}));};
+ const retain=(session:ScenarioEditorSession)=>{if(sessions.get(session.scenarioId)===session)return;subscriptions.get(session.scenarioId)?.();sessions.set(session.scenarioId,session);subscriptions.set(session.scenarioId,retainEditorView(session.controller,session.view,notify));};
  const prepare=(id:string):ScenarioEditorSession=>{const existing=sessions.get(id);if(existing)return existing;const scenario=row(id);if(!scenario)throw Error('Scenario missing');return build(scenario,generations.get(id)!);};
  const retry=(announce=true)=>{if(disposed||persistence.suspension!=='none'||persistence.observedRaw===undefined)return reject('persistence-suspended','Saving is suspended. Export the workspace and reload or replace unreadable saved data.');persist();if(announce)notify();return outcome(true,persistence.persistenceIssues);};
 
@@ -74,7 +74,7 @@ export function createScenarioManager(input:ScenarioWorkspaceDocument,storage:St
  };
  retain(prepare(document.activeScenarioId));
  const manager:ScenarioManager={
-  getState:()=>({document,persistence,workspaceGeneration,activeSession:sessions.get(document.activeScenarioId)!}),getSession:id=>sessions.get(id),getActiveSession:()=>sessions.get(document.activeScenarioId)!,captureTarget:capture,isCurrentTarget:current,
+  getState:()=>({document,persistence,workspaceGeneration,recoveryReplacementPending,activeSession:sessions.get(document.activeScenarioId)!}),getSession:id=>sessions.get(id),getActiveSession:()=>sessions.get(document.activeScenarioId)!,captureTarget:capture,isCurrentTarget:current,
   switchScenario(id){if(disposed||!row(id))return reject('missing-scenario','This scenario is no longer available.');if(id===document.activeScenarioId)return outcome(true);if(!canIncrement())return reject('revision-overflow','Workspace revision cannot be incremented.');let prepared:ScenarioEditorSession;try{prepared=prepare(id);}catch{return reject('calculation-failed','The selected scenario could not be calculated. The current scenario remains active.');}retain(prepared);return commit({...document,workspaceRevision:document.workspaceRevision+1,activeScenarioId:id});},
   forkScenario(source,name){if(!current(source))return reject('obsolete-scenario','The source scenario changed. Reopen the fork dialog.');const named=validateScenarioName(name,document.scenarios);if(!named.ok)return outcome(false,named.issues);if(!canIncrement())return reject('revision-overflow','Workspace revision cannot be incremented.');let id:string;try{id=allocateId();}catch{return reject('invalid-scenario-id','A new scenario ID could not be created.');}if(!id.trim()||row(id))return reject('duplicate-scenario-id','The new scenario ID must be unique.');
    const original=row(source.scenarioId)!,scenario:ScenarioDocument={id,name:named.name,plan:structuredClone(original.plan),forkedFrom:{scenarioId:original.id,scenarioName:original.name,planRevision:original.plan.revision}},generation=++sequence;

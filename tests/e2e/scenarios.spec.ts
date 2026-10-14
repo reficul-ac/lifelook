@@ -48,3 +48,28 @@ test('keeps the draft lifetime hint readable against the global header',async({p
   const luminance=(color:string)=>{const channels=color.match(/\d+(?:\.\d+)?/g)!.slice(0,3).map(value=>{const channel=Number(value)/255;return channel<=0.04045?channel/12.92:((channel+0.055)/1.055)**2.4;});return channels[0]!*0.2126+channels[1]!*0.7152+channels[2]!*0.0722;};const foreground=luminance(getComputedStyle(node).color),background=luminance(getComputedStyle(node.closest('header')!).backgroundColor);return (Math.max(foreground,background)+0.05)/(Math.min(foreground,background)+0.05);
  });expect(contrast).toBeGreaterThanOrEqual(4.5);
 });
+
+for(const operation of ['fork','delete'] as const)test(`Escape cancels queued ${operation} without changing applied inputs or drafts`,async({page})=>{
+ await preloadWorkspace(page,makePlan());
+ if(operation==='delete')await fork(page,'Experiment');
+ await page.getByLabel('Opening cash reserve ($)',{exact:true}).fill('1.234');
+ const before=await readWorkspace(page);
+ if(operation==='fork')await page.getByRole('button',{name:'Fork scenario',exact:true}).click();
+ else{await page.getByText('Manage scenarios',{exact:true}).click();await page.getByRole('button',{name:'Delete Experiment',exact:true}).click();}
+ await page.evaluate(()=>{
+  const original=requestAnimationFrame,callbacks:FrameRequestCallback[]=[];
+  window.requestAnimationFrame=callback=>{callbacks.push(callback);return 100000+callbacks.length;};
+  (window as any).resumeScenarioFrame=()=>{window.requestAnimationFrame=original;callbacks.forEach(callback=>original(callback));};
+ });
+ const dialog=page.getByRole('dialog');
+ await dialog.getByRole('button',{name:operation==='fork'?'Create scenario':'Delete scenario',exact:true}).click();
+ await expect(page.locator('.workspace')).toHaveAttribute('aria-busy','true');
+ await dialog.press('Escape');await expect(dialog).not.toBeVisible();
+ await page.evaluate(()=>(window as any).resumeScenarioFrame());await page.waitForTimeout(100);
+ expect(await readWorkspace(page)).toEqual(before);
+ await expect(page.getByLabel('Scenario',{exact:true})).toHaveValue(before.activeScenarioId);
+ await expect(page.getByLabel('Opening cash reserve ($)',{exact:true})).toHaveValue('1.234');
+ await expect(page.locator('.workspace')).not.toHaveAttribute('aria-busy','true');
+ await expect(page.getByRole('button',{name:'Fork scenario',exact:true})).toBeEnabled();
+ await expect(page.getByRole('button',{name:operation==='fork'?'Fork scenario':'Delete Experiment',exact:true})).toBeFocused();
+});

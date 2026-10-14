@@ -32,14 +32,9 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   const allocationEditor=mountInvestmentAllocation(allocationHost,controller,context,{view:session.view,ownership:{owner:{scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration},isCurrent:()=>isCurrent()}});
   const heading=element('h2');heading.dataset.forecastName='';heading.textContent=`Forecast · ${manager.getState().document.scenarios.find(s=>s.id===session.scenarioId)!.name}`;
   const projectionRoot=element('div');report.append(heading,projectionRoot);
-  let savedIdentity:PlanDocument|undefined,draftKeys='',previousDrafts=controller.getState().drafts;
+  let savedIdentity:PlanDocument|undefined,draftKeys='';
   const render=(operation?:WorkspaceOperation)=>{if(!isCurrent())return;
     const state=controller.getState(),newKeys=Object.values(state.drafts).filter(d=>d.section!=='household'&&!((state.savedPlan[d.section]??[]) as readonly {id:string}[]).some(r=>r.id===d.recordId)).map(d=>d.recordId).sort().join('|'),changed=savedIdentity!==state.savedPlan;
-    for(const map of [session.view.taskIssues,session.view.removeIssues])for(const id of map.keys())if(state.drafts[id]!==previousDrafts[id])map.delete(id);
-    if(operation&&operation.kind!=='restore'&&operation.result.accepted){session.view.taskIssues.delete(operation.recordId);session.view.removeIssues.delete(operation.recordId);}
-    if(operation?.kind==='save'&&!operation.result.accepted)session.view.taskIssues.set(operation.recordId,operation.result.issues);
-    if(operation?.kind==='remove'&&!operation.result.accepted)session.view.removeIssues.set(operation.recordId,operation.result.issues);
-    previousDrafts=state.drafts;
     if(operation)root.dispatchEvent(new CustomEvent('editor-operation',{bubbles:true,detail:operation}));
     if(changed)renderProjection(projectionRoot,state.projection,context,session.view);
     const active=document.activeElement instanceof HTMLInputElement||document.activeElement instanceof HTMLSelectElement?document.activeElement:undefined;const activeRecord=active?.closest<HTMLElement>('[data-record-id]')?.dataset.recordId,activeField=active?.dataset.field;const selection=active instanceof HTMLInputElement&&active.type==='text'?[active.selectionStart,active.selectionEnd] as const:undefined;

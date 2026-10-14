@@ -35,3 +35,6 @@ export { ADU_PLANNING_MODEL_VERSION, maxAssessmentGrowthBps, aduPlanningProvenan
 
 export {cashFlowBeforeInvestments,calculateFundingNeed} from './property/adu-projection';
 export type {AduPeriodProjection,AduProjectPeriodProjection} from './property/adu-projection';
+
+export {createAduNoBuildPlan,calculateAduBuildComparison,calculateAduCashReturns} from './property/adu-comparison';
+export type {AduBuildComparison,AduComparisonPeriod} from './property/adu-comparison';

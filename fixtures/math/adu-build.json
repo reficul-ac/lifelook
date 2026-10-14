@@ -102,6 +102,30 @@
       "ruleVersions": [
         "adu-construction.1"
       ]
+    },
+    {
+      "id": "owner-cash-return",
+      "taxYear": 2026,
+      "input": {
+        "kind": "return"
+      },
+      "expected": {
+        "ownerCommitmentCents": 10190000,
+        "paybackMonth": "2034-12",
+        "fullYearCashCents": 1200000
+      },
+      "sources": [
+        "Independent arithmetic worksheet; ADU approved specification 2026-10-13"
+      ],
+      "ruleVersions": [
+        "adu-construction.1"
+      ],
+      "toleranceCents": 0,
+      "worksheetSteps": [
+        "C=30000000-20000000+100000+60000+50000-20000=10190000 cents.",
+        "ceil(10190000/100000)=102 postcompletion months; July 2026 is month 1 and December 2034 is month 102.",
+        "12 times 100000 cents = 1200000 cents; receipts and unrealized value are excluded."
+      ]
     }
   ]
 }

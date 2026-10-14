@@ -1,3 +1,5 @@
+import {registerAppCleanup,unmountApp} from './app-lifecycle';
+export {unmountApp} from './app-lifecycle';
 import {syncFormFeedback} from './form-feedback';
 import {createDisclosureController} from './disclosures';
 import {reviewTarget} from './navigation';
@@ -19,8 +21,6 @@ function downloadText(text:string,name:string):void {
   const url=URL.createObjectURL(new Blob([text],{type:'application/json'})),link=element('a');link.href=url;link.download=name;link.click();URL.revokeObjectURL(url);
 }
 
-const cleanups=new WeakMap<HTMLElement,()=>void>();
-export function unmountApp(root:HTMLElement):void {cleanups.get(root)?.();cleanups.delete(root);}
 
 export function mountApp(root:HTMLElement,plan:PlanDocument,storage:StoragePort,rules:RuleSet,initial?:WorkspaceInitialization):WorkspaceController {
   unmountApp(root);
@@ -70,7 +70,7 @@ export function mountApp(root:HTMLElement,plan:PlanDocument,storage:StoragePort,
     if(activeField&&activeRecord&&!active?.isConnected){const form=[...editor.querySelectorAll<HTMLElement>('[data-record-id]')].find(node=>node.dataset.recordId===activeRecord);const replacement=[...form?.querySelectorAll<HTMLInputElement|HTMLSelectElement>('[data-field]')??[]].find(node=>node.dataset.field===activeField);replacement?.focus();if(selection&&replacement instanceof HTMLInputElement&&replacement.type==='text')replacement.setSelectionRange(selection[0],selection[1]);}
     savedIdentity=state.savedPlan;draftKeys=newKeys;
   };
-  const unsubscribe=controller.subscribe(render);cleanups.set(root,()=>{unsubscribe();allocationEditor.dispose();disclosures.dispose();});render();return controller;
+  const unsubscribe=controller.subscribe(render);registerAppCleanup(root,()=>{unsubscribe();allocationEditor.dispose();disclosures.dispose();});render();return controller;
 }
 
 /** Browser alone reads today's local calendar and storage. The engine receives explicit inputs. */

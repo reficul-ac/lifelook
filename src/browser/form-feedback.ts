@@ -63,7 +63,8 @@ export function syncFormFeedback(root:HTMLElement,controller:WorkspaceController
   const state=controller.getState();
   for(const form of root.querySelectorAll<HTMLElement>('form[data-record-id][data-editable-section]')){
     const id=form.dataset.recordId!,draft=controller.getDraft(form.dataset.editableSection as EditableSection,id);
-    const resolved=resolveFormIssues(draft,state.savedPlan.id,[...state.issues,...(context.editorView?context.editorView.taskIssues.get(id):taskIssues.get(form))??[]]),fresh=lastIssues.get(form)!==state.issues;
+    const combined=[...state.issues,...(context.editorView?context.editorView.taskIssues.get(id):taskIssues.get(form))??[]];
+    const resolved=resolveFormIssues(draft,state.savedPlan.id,[...new Map(combined.map(issue=>[JSON.stringify(issue),issue])).values()]),fresh=lastIssues.get(form)!==state.issues;
     for(const disclosure of form.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]')){const read=summaries.get(disclosure);if(read)disclosure.dataset.disclosureStatus=read();const heading=disclosure.querySelector('summary');if(heading)heading.textContent=disclosure.dataset.disclosureName+(disclosure.dataset.disclosureStatus?' · '+disclosure.dataset.disclosureStatus:'');}
     const previous=lastIssues.get(form);lastIssues.set(form,state.issues);
     if(!resolved.length&&!previous?.length&&!form.querySelector('[data-form-feedback]'))continue;

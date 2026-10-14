@@ -136,3 +136,15 @@ describe('editor worker lifecycle',()=>{
   EditorWorker.instances=[];vi.stubGlobal('Worker',EditorWorker);const {root,editor}=setup();click(editor,'Add allocation');setField(row(editor),'Allocation percentage (%)','20.00');flush();const old=EditorWorker.instances[0]!;setField(row(editor),'Allocation percentage (%)','30.00');expect(old.terminated).toBe(true);flush();const current=EditorWorker.instances[1]!;old.reply();expect(row(editor)).not.toHaveTextContent('Requested: 20.00%');current.reply();expect(row(editor)).toHaveTextContent('Requested: 30.00%');setField(row(editor),'Allocation percentage (%)','40.00');flush();const pending=EditorWorker.instances[2]!;unmountApp(root);expect(pending.terminated).toBe(true);pending.reply();expect(row(editor)).toHaveTextContent('Requested: 30.00%');
  });
 });
+
+import {createEditorViewSession} from '../../src/browser/scenario-session';
+import {createWorkspace as createRetainedController} from '../../src/browser/state';
+it('retains the exact valid unapplied preview, invalid raw draft, year and row sequence across remount',()=>{
+ const plan=makeAllocationPlan({horizonYears:2}),controller=createRetainedController(plan,{getItem:()=>null,setItem(){} }),view=createEditorViewSession(plan),root=document.createElement('div');document.body.append(root);
+ const disclosures=createDisclosureController(root),context={disclosures,readState:controller.getState,review(){} };
+ let mounted=mountCashFlowAllocationEditor(root,controller,context,{view});click(root,'Add allocation');setField(row(root),'Allocation percentage (%)','20.00');setField(root,'Allocation year','2027');flush();const earlier=view.allocationPreview.lastValid;
+ expect(earlier?.plan.cashFlowAllocation?.entries[0]!.amount).toEqual({kind:'percent',percentBps:2000});
+ setField(row(root),'Allocation percentage (%)','1.234');flush();expect(view.allocationPreview.status).toBe('invalid');mounted.dispose();
+ mounted=mountCashFlowAllocationEditor(root,controller,context,{view});flush();expect(view.allocationPreview.lastValid).toBe(earlier);expect(root).toHaveTextContent('Invalid allocation edits · Stale preview');expect(row(root)).toHaveTextContent('Requested: 20.00%');expect(within(row(root)).getByLabelText('Allocation percentage (%)')).toHaveValue('1.234');expect(within(root).getByLabelText('Allocation year')).toHaveValue('2027');
+ click(root,'Remove allocation');click(root,'Add allocation');expect((controller.getAllocationDraft().value.entries as any[])[0].id).toBe('allocation-entry-2');expect(createEditorViewSession(plan,view.selections).allocationPreview.lastValid).toBeUndefined();mounted.dispose();disclosures.dispose();
+});

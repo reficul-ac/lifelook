@@ -1,3 +1,4 @@
+import type {EditorViewSession} from './scenario-session';
 import type {AllocationDestination,Issue,PlanDocument} from '../engine';
 import type {DisclosureController} from './disclosures';
 import type {WorkspaceState} from './state';
@@ -7,7 +8,7 @@ export type IssueGroup=Readonly<{key:string;issues:readonly Issue[];periods:read
 export type InputSection='Household'|'Income'|'Expenses and debts'|'Investments'|'Properties';
 export type ReviewTarget=Readonly<{section:InputSection;recordId:string;field?:string;label:string}>;
 export type IssueViewState=Pick<WorkspaceState,'savedPlan'|'drafts'|'allocationDraft'>;
-export interface IssueViewContext {readonly disclosures:DisclosureController;readonly readState:()=>IssueViewState;readonly review:(target:ReviewTarget)=>void;/** Plan that produced a report, including a retained valid preview. */readonly allocationPlan?:PlanDocument}
+export interface IssueViewContext {readonly editorView?:EditorViewSession;readonly disclosures:DisclosureController;readonly readState:()=>IssueViewState;readonly review:(target:ReviewTarget)=>void;/** Plan that produced a report, including a retained valid preview. */readonly allocationPlan?:PlanDocument}
 export type AmountScope=Readonly<{label:string;period?:ReportPeriod}>;
 export function groupIssueOccurrences(items:readonly IssueOccurrence[]):readonly IssueGroup[]{
   const groups=new Map<string,{key:string;issues:Issue[];periods:ReportPeriod[]}>();

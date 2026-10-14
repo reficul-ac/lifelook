@@ -1,5 +1,6 @@
 import type {Issue,PlanDocument,ProjectionResult} from '../../engine';
-import {createAllocationPreviewScheduler} from '../allocation-preview';
+import {createEditorViewSession,normalizeViewYears,type EditorViewSession} from '../scenario-session';
+import {createAllocationPreviewScheduler,type AllocationPreviewOwnership} from '../allocation-preview';
 import {button,element,parseRateInput,setAt,type FieldPath} from '../fields';
 import {revealField} from '../form-feedback';
 import {normalizeFieldPath,type IssueViewContext} from '../issue-presentation';
@@ -16,16 +17,17 @@ interface Control {node:HTMLInputElement|HTMLSelectElement;error:HTMLElement;pat
 interface BackdoorControls {toggle:Control;details:HTMLElement;source?:Control|undefined;history?:Control|undefined;sourceTools?:HTMLElement|undefined}
 interface Row {root:HTMLElement;legend:HTMLElement;destination:Control;priority:Control;sponsorHost:HTMLElement;sponsor?:Control|undefined;backdoorHost:HTMLElement;backdoor?:BackdoorControls|undefined;amountHost:HTMLElement;mode:string;maximum?:Control|undefined;percent?:Control|undefined;slider?:Control|undefined;readout:HTMLElement}
 
+export interface AllocationEditorOptions {view:EditorViewSession;ownership?:AllocationPreviewOwnership}
+
 /** A separate policy transaction. Controls survive preview and unrelated record updates. */
-export function mountCashFlowAllocationEditor(root:HTMLElement,controller:WorkspaceController,context:IssueViewContext):{dispose():void}{
+export function mountCashFlowAllocationEditor(root:HTMLElement,controller:WorkspaceController,context:IssueViewContext,editorOptions?:AllocationEditorOptions):{dispose():void}{
   root.replaceChildren();root.classList.add('allocation-editor');
   const form=element('form');form.setAttribute('aria-label','Cash flow allocation');form.append(element('h2','Cash flow allocation'));
   const intro=element('p','Allocate the same annual cash flow after taxes and expenses. Existing deposits count toward each total account target.');form.append(intro);
   form.append(element('p','Annual account targets are divided into monthly installments, with cent rounding. A $7,500 annual IRA target contributes $625 at each month end and grows from the next month. Excess funding adapts to available monthly cash while preserving feasible target installments. Cash availability, payroll timing and contribution limits can change the monthly schedule. Traditional 401(k) funding reduces modeled income tax; the allocation budget includes that tax saving.'));
   const yearHost=element('div'),rowHost=element('div'),overflowHost=element('div'),feedback=element('div'),status=element('p'),remaining=element('p'),chart=element('div');status.setAttribute('role','status');status.dataset.allocationStatus='';feedback.dataset.allocationFeedback='';remaining.dataset.allocationRemaining='';chart.dataset.allocationPreview='';
   form.append(yearHost,rowHost,button('Add allocation',add),overflowHost,button('Apply allocation',()=>controller.applyAllocation()),button('Discard allocation edits',()=>controller.discardAllocationDraft()),feedback,status,remaining,chart);root.append(form);form.addEventListener('submit',event=>{event.preventDefault();controller.applyAllocation();});
-  let disposed=false,selectedYear=controller.getState().savedPlan.startYear,sequence=0;
-  let lastValid:{plan:PlanDocument;projection:ProjectionResult}|undefined,previewStatus:'pending'|'valid'|'invalid'|'failed'|'inactive'='inactive',previewIssues:readonly Issue[]=[];
+  let disposed=false;const view=editorOptions?.view??createEditorViewSession(controller.getState().savedPlan),preview=view.allocationPreview;
   let savedIdentity=controller.getState().savedPlan,draftIdentity=controller.getState().allocationDraft;
   const rows=new Map<string,Row>();let initialized=false;
   const draft=()=>controller.getAllocationDraft();
@@ -38,7 +40,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
     const control:Control={node,error,path,setPath(next){this.path=next;node.dataset.field=next;node.name=next;}};control.setPath(path);
     node.addEventListener(kind==='select'||kind==='checkbox'?'change':'input',()=>write(node instanceof HTMLInputElement&&node.type==='checkbox'?node.checked:node.value));return control;
   }
-  const year=field(yearHost,'Allocation year','','select',value=>{selectedYear=Number(value);renderPreview();});delete year.node.dataset.field;
+  const year=field(yearHost,'Allocation year','','select',value=>{view.selections.allocationYear=Number(value);renderPreview();});delete year.node.dataset.field;
   const overflow=field(overflowHost,'Excess allocation account','overflow.destination.accountId','select',value=>edit(['overflow','destination'],destination(String(value))));
   overflow.node.parentElement!.dataset.fieldGroup='overflow.destination';overflow.node.parentElement!.dataset.groupLabel='Excess allocation account';
   const overflowSponsorHost=element('div'),overflowBackdoorHost=element('div');overflowHost.append(overflowSponsorHost,overflowBackdoorHost);let overflowSponsor:Control|undefined,overflowBackdoor:BackdoorControls|undefined;
@@ -49,7 +51,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
   function destination(value:string):RawObject{return value==='cash:'?{kind:'cash'}:{kind:'account',accountId:value.startsWith('account:')?value.slice('account:'.length):''};}
   const destinationValue=(dest:RawObject)=>dest.kind==='cash'?'cash:':`account:${String(dest.accountId??'')}`;
   function add(){
-    const used=new Set<string>();const scan=(value:unknown)=>{if(!value||typeof value!=='object')return;const raw=object(value);if(typeof raw.id==='string')used.add(raw.id);Object.values(raw).forEach(scan);};scan(controller.getState());scan(draft().value);let id:string;do{id=`allocation-entry-${++sequence}`;}while(used.has(id));
+    const used=new Set<string>();const scan=(value:unknown)=>{if(!value||typeof value!=='object')return;const raw=object(value);if(typeof raw.id==='string')used.add(raw.id);Object.values(raw).forEach(scan);};scan(controller.getState());scan(draft().value);let id:string;do{id=`allocation-entry-${++preview.entryIdSequence}`;}while(used.has(id));
     edit(['entries'],[...entries(draft().value),{id,priority:String(entries(draft().value).length+1),destination:{kind:'cash'},amount:{kind:'percent',percentBps:'0.00'}}]);
   }
   function createRow(id:string):Row{
@@ -105,7 +107,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
   }
   function syncControls(){
     const state=controller.getState(),current=draft(),plan=state.savedPlan;form.dataset.recordId=current.recordId;
-    selectedYear=Math.max(plan.startYear,Math.min(plan.startYear+plan.horizonYears-1,selectedYear));options(year,Array.from({length:plan.horizonYears},(_,i)=>({value:String(plan.startYear+i),label:String(plan.startYear+i)})),String(selectedYear));
+    normalizeViewYears(view,plan);options(year,Array.from({length:plan.horizonYears},(_,i)=>({value:String(plan.startYear+i),label:String(plan.startYear+i)})),String(view.selections.allocationYear));
     const choices=[{value:'cash:',label:'Cash / savings'},...plan.accounts.filter(a=>a.type!=='rsu').map(a=>({value:`account:${a.id}`,label:a.name}))],active=new Set<string>();
     entries(current.value).forEach((entry,i)=>{
       const id=String(entry.id);active.add(id);let row=rows.get(id);if(!row){row=createRow(id);rows.set(id,row);}
@@ -150,36 +152,36 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
     }
   }
   function renderPreview(){
-    status.textContent=previewStatus==='inactive'?'No allocation policy applied.':previewStatus==='valid'?(controller.getState().allocationDraft?'Allocation preview · edits not applied':'Applied allocation'):previewStatus==='pending'?(lastValid?'Stale preview · updating allocation preview.':'Updating allocation preview.'):previewStatus==='invalid'?(lastValid?'Invalid allocation edits · Stale preview shows the last valid allocation.':'Invalid allocation edits · no valid preview available.'):(lastValid?'Allocation preview failed · Stale preview shows the last valid allocation.':'Allocation preview failed · no valid preview available.');
-    const report=lastValid?.projection.years.find(year=>year.year===selectedYear)?.cashFlowAllocation;
-    if(report&&lastValid)renderAllocationPie(chart,report,lastValid.plan,context);else{context.disclosures.closeWithin(chart,false);chart.replaceChildren();}
+    status.textContent=preview.status==='inactive'?'No allocation policy applied.':preview.status==='valid'?(controller.getState().allocationDraft?'Allocation preview · edits not applied':'Applied allocation'):preview.status==='pending'?(preview.lastValid?'Stale preview · updating allocation preview.':'Updating allocation preview.'):preview.status==='invalid'?(preview.lastValid?'Invalid allocation edits · Stale preview shows the last valid allocation.':'Invalid allocation edits · no valid preview available.'):(preview.lastValid?'Allocation preview failed · Stale preview shows the last valid allocation.':'Allocation preview failed · no valid preview available.');
+    const report=preview.lastValid?.projection.years.find(year=>year.year===view.selections.allocationYear)?.cashFlowAllocation;
+    if(report&&preview.lastValid)renderAllocationPie(chart,report,preview.lastValid.plan,context);else{context.disclosures.closeWithin(chart,false);chart.replaceChildren();}
     remaining.textContent='';
     if(report?.status==='available'){
       const value=report.value,percent=(cents:number)=>value.originalCashFlowCents>0?`${(cents/value.originalCashFlowCents*100).toFixed(2)}%`:'N/A · no positive budget';
       remaining.textContent=`Remaining before excess: ${formatCents(value.excessOfferedCents)} · ${percent(value.excessOfferedCents)} of original cash flow.`;
-      for(const [id,row] of rows){const source=lastValid?.plan.cashFlowAllocation?.entries.find(entry=>entry.id===id);if(!source){row.readout.textContent='Preview pending for this allocation.';continue;}
+      for(const [id,row] of rows){const source=preview.lastValid?.plan.cashFlowAllocation?.entries.find(entry=>entry.id===id);if(!source){row.readout.textContent='Preview pending for this allocation.';continue;}
         const request=(source.destination.kind==='account'&&source.destination.backdoorRoth?'Backdoor Roth · nondeductible IRA funding converted immediately. ':'')+(source.amount.kind==='percent'?`Requested: ${(source.amount.percentBps/100).toFixed(2)}%. `:'Automatic annual maximum. ');
         if(source.destination.kind==='cash')row.readout.textContent=`${request}Saving target: ${formatCents(value.explicitCashTargetCents)} · Actual earmark: ${formatCents(value.explicitCashCents)} · Actual share: ${percent(value.explicitCashCents)} · Shortfall: ${formatCents(value.explicitCashShortfallCents)}.`;
         else{const accountId=source.destination.accountId,account=value.accounts.find(account=>account.accountId===accountId);row.readout.textContent=account?`${request}Total target: ${formatCents(account.targetCents)} · ${percent(account.targetCents)}. Actual funded: ${formatCents(account.actualCents)} · Actual share: ${percent(account.actualCents)}. Existing deposits included: ${formatCents(account.existingCents)}. Annual maximum top up: ${formatCents(account.maximumCents)}. Shortfall: ${formatCents(account.shortfallCents)}.`:'Funding is unavailable for this destination.';}
       }
     }else for(const row of rows.values())row.readout.textContent=report?'Funding is unavailable for the selected year.':'No valid funding preview for the selected year.';
   }
-  const scheduler=createAllocationPreviewScheduler(controller,preview=>{
+  const scheduler=createAllocationPreviewScheduler(controller,result=>{
     if(disposed)return;
-    if(preview.status==='calculated'){const prepared=prepareAllocationPreview(controller);if(prepared.status!=='ready')return;lastValid={plan:prepared.plan,projection:preview.projection};previewStatus='valid';previewIssues=[];}else{previewStatus=preview.status;previewIssues=preview.issues;}
-    syncFeedback([...previewIssues,...controller.getState().issues]);renderPreview();
-  });
+    if(result.status==='calculated'){const prepared=prepareAllocationPreview(controller);if(prepared.status!=='ready')return;preview.lastValid={plan:prepared.plan,projection:result.projection};preview.status='valid';preview.issues=[];}else{preview.status=result.status;preview.issues=result.issues;}
+    syncFeedback([...preview.issues,...controller.getState().issues]);renderPreview();
+  },editorOptions?.ownership);
   function update(operation?:WorkspaceOperation){
     if(disposed)return;const state=controller.getState(),changed=state.savedPlan!==savedIdentity||state.allocationDraft!==draftIdentity;
     if(initialized&&!changed&&!operation)return;initialized=true;
     const cleared=draftIdentity!==undefined&&state.allocationDraft===undefined;savedIdentity=state.savedPlan;draftIdentity=state.allocationDraft;syncControls();
-    if(cleared||changed&&!state.allocationDraft){lastValid=state.savedPlan.cashFlowAllocation?{plan:state.savedPlan,projection:state.projection}:undefined;previewStatus=lastValid?'valid':'inactive';previewIssues=[];}
-    else if(changed&&state.allocationDraft){previewStatus='pending';previewIssues=[];scheduler.request();}
-    if(operation?.kind==='save'&&operation.recordId===draft().recordId&&!operation.result.accepted){previewIssues=operation.result.issues;previewStatus=previewIssues.some(issue=>issue.code==='calculation-failed')?'failed':'invalid';}
-    syncFeedback([...previewIssues,...state.issues]);renderPreview();
+    if(cleared||changed&&!state.allocationDraft){if(state.savedPlan.cashFlowAllocation)preview.lastValid={plan:state.savedPlan,projection:state.projection};else delete preview.lastValid;preview.status=preview.lastValid?'valid':'inactive';preview.issues=[];}
+    else if(changed&&state.allocationDraft){preview.status='pending';preview.issues=[];scheduler.request();}
+    if(operation?.kind==='save'&&operation.recordId===draft().recordId&&!operation.result.accepted){preview.issues=operation.result.issues;preview.status=preview.issues.some(issue=>issue.code==='calculation-failed')?'failed':'invalid';}
+    syncFeedback([...preview.issues,...state.issues]);renderPreview();
   }
   const unsubscribe=controller.subscribe(update);
-  if(savedIdentity.cashFlowAllocation){lastValid={plan:savedIdentity,projection:controller.getState().projection};previewStatus='valid';}
-  update();if(draftIdentity){previewStatus='pending';scheduler.request();renderPreview();}
+  if(!draftIdentity&&!preview.lastValid&&savedIdentity.cashFlowAllocation){preview.lastValid={plan:savedIdentity,projection:controller.getState().projection};preview.status='valid';}
+  update();if(draftIdentity){const prepared=prepareAllocationPreview(controller);if(prepared.status==='ready'){preview.status='pending';scheduler.request();}else{preview.status=prepared.status;preview.issues=prepared.issues;syncFeedback(preview.issues);}renderPreview();}
   return {dispose(){if(disposed)return;disposed=true;unsubscribe();scheduler.dispose();context.disclosures.closeWithin(root,false);}};
 }

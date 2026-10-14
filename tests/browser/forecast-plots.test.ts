@@ -66,3 +66,12 @@ describe('interactive annual forecast plots',()=>{
     expect(within(root).queryByRole('img')).toBeNull();
   });
 });
+
+import {createEditorViewSession} from '../../src/browser/scenario-session';
+import {makePlan} from '../helpers/plans';
+it('retains actual plot years and hidden series independently across rendering',()=>{
+ const {root,context}=mountPresentation(),view=createEditorViewSession(makePlan({horizonYears:2}));renderForecastPlots(root,[row(2026,10000),row(2027,20000)],context,view.selections);
+ fireEvent.change(within(root).getByLabelText('Plot year'),{target:{value:'2027'}});fireEvent.click(within(root).getByRole('button',{name:'Cash Flow'}));expect(view.selections.forecastYear).toBe(2027);expect(view.selections.hiddenPlotSeries.has('cashFlowCents')).toBe(true);
+ root.replaceChildren();renderForecastPlots(root,[row(2026,10000),row(2027,20000)],context,view.selections);expect(within(root).getByLabelText('Plot year')).toHaveValue('2027');expect(within(root).getByRole('button',{name:'Cash Flow'})).toHaveAttribute('aria-pressed','false');
+ const other=createEditorViewSession(makePlan());expect(other.selections.forecastYear).toBe(2026);expect(other.selections.hiddenPlotSeries.size).toBe(0);
+});

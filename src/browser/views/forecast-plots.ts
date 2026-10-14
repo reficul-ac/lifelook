@@ -1,3 +1,4 @@
+import type {ScenarioViewSelections} from '../scenario-session';
 import type { ProjectionSummaryRow } from '../projection-summary';
 import type { IssueViewContext } from '../issue-presentation';
 import { appendAmount, element, formatCents } from './issues';
@@ -21,7 +22,7 @@ function svgElement<K extends keyof SVGElementTagNameMap>(tag:K,attributes:Recor
   return node;
 }
 
-export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSummaryRow[],context:IssueViewContext):void {
+export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSummaryRow[],context:IssueViewContext,selections?:ScenarioViewSelections):void {
   const section=element('section');section.className='forecast-plots';
   if(!rows.length){section.append(element('p','No forecast years to plot.'));root.append(section);return;}
   const controls=element('div');controls.className='forecast-plot-controls';
@@ -29,8 +30,8 @@ export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSum
   for(const row of rows){const option=element('option',String(row.year));option.value=String(row.year);select.append(option);}
   label.append(select);controls.append(label);
   const help=element('small','Hover over a year, select it above, or focus a plot and use the arrow keys.');help.id='forecast-plot-help';controls.append(help);section.append(controls);
-  let selected=0;
-  const hiddenSeries=new Set<SeriesKey>();
+  let selected=Math.max(0,rows.findIndex(row=>row.year===selections?.forecastYear));select.value=String(rows[selected]!.year);
+  const hiddenSeries=selections?.hiddenPlotSeries??new Set<SeriesKey>();
   const charts:{svg:SVGSVGElement;readout:HTMLElement;series:readonly Series[];title:string}[]=[];
   for(const [title,series,id] of [
     ['Net worth over time',[netWorth],'net-worth'],
@@ -41,7 +42,7 @@ export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSum
     if(id==='cash-flow'){
       const legend=element('div');legend.className='forecast-plot-legend';legend.setAttribute('aria-label','Plot series');
       for(const line of series){
-        const button=element('button');button.type='button';button.setAttribute('aria-pressed','true');button.style.setProperty('--series-color',line.color);
+        const button=element('button');button.type='button';button.setAttribute('aria-pressed',String(!hiddenSeries.has(line.key)));button.style.setProperty('--series-color',line.color);
         const swatch=element('span');swatch.className='forecast-plot-swatch';swatch.setAttribute('aria-hidden','true');button.append(swatch,document.createTextNode(line.label));
         button.addEventListener('click',()=>{if(hiddenSeries.has(line.key))hiddenSeries.delete(line.key);else hiddenSeries.add(line.key);button.setAttribute('aria-pressed',String(!hiddenSeries.has(line.key)));paint();});
         legend.append(button);
@@ -64,7 +65,7 @@ export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSum
     charts.push({svg,readout,series,title});section.append(figure);
   }
   select.addEventListener('change',()=>choose(rows.findIndex(row=>String(row.year)===select.value)));
-  function choose(index:number):void {const next=Math.max(0,Math.min(rows.length-1,index));if(next===selected)return;selected=next;select.value=String(rows[selected]!.year);paint();}
+  function choose(index:number):void {const next=Math.max(0,Math.min(rows.length-1,index));if(next===selected)return;selected=next;if(selections)selections.forecastYear=rows[selected]!.year;select.value=String(rows[selected]!.year);paint();}
   function paint():void {
     for(const chart of charts){
       const lines=chart.series.filter(series=>!hiddenSeries.has(series.key));

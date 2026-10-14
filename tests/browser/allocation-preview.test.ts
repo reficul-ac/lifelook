@@ -80,3 +80,10 @@ describe('module worker preview transport',()=>{
   if(prepared.status!=='ready')throw Error('Expected valid candidate');expect(controller.previewAllocation()).toEqual({status:'calculated',projection:calculateProjection(prepared.plan,prepared.ruleSet),inputRevision:0});scheduler.dispose();
  });
 });
+
+it('echoes worker ownership and rejects old session or activation replies even with matching financial identities',()=>{
+ ControlledWorker.instances=[];vi.stubGlobal('Worker',ControlledWorker);const {controller}=setup();const owner={scenarioId:'master',sessionGeneration:4,activationGeneration:9};let active=true;const published:CashFlowAllocationPreview[]=[];
+ const scheduler=createScheduler(controller,p=>published.push(p),{owner,isCurrent:()=>active});edit(controller,'20.00');scheduler.request();flush();const worker=ControlledWorker.instances[0]!;expect(worker.request.owner).toEqual(owner);
+ const reply=calculateAllocationPreview(worker.request);expect(reply.owner).toEqual(owner);active=false;worker.onmessage?.({data:reply} as MessageEvent);expect(published).toEqual([]);scheduler.dispose();expect(worker.terminated).toBe(true);
+});
+import {calculateAllocationPreview} from '../../src/browser/allocation-preview-worker';

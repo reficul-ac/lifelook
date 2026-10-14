@@ -77,3 +77,12 @@ describe('feedback in entered units',()=>{
     expect(formatFieldIssue({...problem('debt','other'),explanation:'Custom correction 38'},draft)).toBe('Custom correction 38');
   });
 });
+
+import {createEditorViewSession} from '../../src/browser/scenario-session';
+import {setFormTaskIssues,syncFormFeedback} from '../../src/browser/form-feedback';
+import {renderHouseholdForm} from '../../src/browser/forms/household';
+it('rebuilds task feedback for the same record from its owning session',()=>{
+ const {root,context}=mountPresentation(),plan=makePlan(),view=createEditorViewSession(plan),controller=createWorkspace(plan,{getItem:()=>null,setItem(){}}),ui={...context,editorView:view,readState:controller.getState};
+ renderHouseholdForm(root,controller,ui);setFormTaskIssues(root.querySelector('form')!,[problem('household','openingCashCents')],view);renderHouseholdForm(root,controller,ui);syncFormFeedback(root,controller,ui);expect(within(root).getByLabelText('Opening cash reserve ($)')).toHaveAttribute('aria-invalid','true');
+ renderHouseholdForm(root,controller,{...ui,editorView:createEditorViewSession(plan)});syncFormFeedback(root,controller,{...ui,editorView:createEditorViewSession(plan)});expect(within(root).getByLabelText('Opening cash reserve ($)')).not.toHaveAttribute('aria-invalid');
+});

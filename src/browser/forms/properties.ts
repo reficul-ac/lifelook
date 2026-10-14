@@ -105,8 +105,8 @@ function renderLoan(root:HTMLElement,controller:WorkspaceController,context:Fiel
   field(node,context,[...path,'proceedsQualification','kind'],'Proceeds type',{kind:'select',options:[{value:'acquisition',label:'Purchase/acquisition'},{value:'refinance',label:'Refinance'},{value:'cash-out',label:'Cash-out'},{value:'mixed',label:'Mixed proceeds'},{value:'grandfathered',label:'Grandfathered debt'},{value:'unknown',label:'Unknown'}],refresh:true});
   if(at(context,[...path,'proceedsQualification','kind'])==='acquisition')node.append(button('Calculate purchase loan',()=>{
     const current=at(context,path) as RawObject,result=purchaseTerms(context,current);
-    if(result.status!=='available'){const form=node.closest<HTMLElement>('form')!;setFormTaskIssues(form,result.issues.map(issue=>({...issue,recordId:String(current.id),...(issue.field==='purchasePriceCents'||issue.field==='downPaymentCents'?{recordId:context.draft.recordId,field:'property.'+issue.field}:{})})));if(context.ui)syncFormFeedback(ownerFor(root),controller,context.ui);return;}
-    setFormTaskIssues(node.closest<HTMLElement>('form')!,[]);
+    if(result.status!=='available'){const form=node.closest<HTMLElement>('form')!;setFormTaskIssues(form,result.issues.map(issue=>({...issue,recordId:String(current.id),...(issue.field==='purchasePriceCents'||issue.field==='downPaymentCents'?{recordId:context.draft.recordId,field:'property.'+issue.field}:{})})),context.ui?.editorView);if(context.ui)syncFormFeedback(ownerFor(root),controller,context.ui);return;}
+    setFormTaskIssues(node.closest<HTMLElement>('form')!,[],context.ui?.editorView);
     context.onChange(path,loanWithTerms(current,result.value));context.refresh();
   }));
   const estimate=at(context,[...path,'__draft','paymentEstimate']);if(estimate!==undefined)node.append(element('p',`Estimated monthly principal & interest: $${String(estimate)} per month.`));
@@ -181,13 +181,14 @@ function propertyFields(root:HTMLElement,controller:WorkspaceController,context:
 }
 /** Related property, loan, rental and expense rows remain one revisioned draft. */
 export function renderPropertiesForm(root:HTMLElement,controller:WorkspaceController,ui?:IssueViewContext):void {
+  if(ui?.editorView)disclosureStates.set(root,ui.editorView.propertyDisclosures);
   captureDisclosures(root);disclosureRoots.set(root,root);ui?.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2','Properties'),element('p','Only existing properties and rentals are supported. Future purchases, rental conversions, refinance, construction and sales are unsupported.'));
   const state=controller.getState(),ids=[...new Set([...state.savedPlan.properties.map(p=>p.id),...Object.values(state.drafts).filter(d=>d.section==='properties').map(d=>d.recordId)])];
   for(const id of ids){
     const card=element('form');card.dataset.recordId=id;card.dataset.editableSection='properties';const body=element('div');disclosureRoots.set(body,root);card.append(element('h3',String(controller.getDraft('properties',id).value.property&& (controller.getDraft('properties',id).value.property as RawObject).name||'Property')),body);
-    const context:FieldContext={...(ui?{ui}:{}),get draft(){return controller.getDraft('properties',id);},get issues(){return controller.getState().issues;},onChange(path,value){setFormTaskIssues(card,[]);const draft=controller.getDraft('properties',id);controller.editDraft(id,{...draft,value:setAt(draft.value,path,value)});},refresh(){captureDisclosures(body);ui?.disclosures.closeWithin(body,false);refreshFields(body,()=>propertyFields(body,controller,context));if(ui)syncFormFeedback(root,controller,ui);}};
+    const context:FieldContext={...(ui?{ui}:{}),get draft(){return controller.getDraft('properties',id);},get issues(){return controller.getState().issues;},onChange(path,value){setFormTaskIssues(card,[],ui?.editorView);const draft=controller.getDraft('properties',id);controller.editDraft(id,{...draft,value:setAt(draft.value,path,value)});},refresh(){captureDisclosures(body);ui?.disclosures.closeWithin(body,false);refreshFields(body,()=>propertyFields(body,controller,context));if(ui)syncFormFeedback(root,controller,ui);}};
     context.refresh();const save=element('button','Save property');save.type='submit';card.append(save,button('Remove property',()=>controller.removeRecord('properties',id)));card.addEventListener('submit',event=>{event.preventDefault();controller.saveProperty(id);});
-    card.append(element('small','Discards this draft and reloads applied inputs.'),button('Discard edits',()=>{controller.discardDraft(id);renderPropertiesForm(root,controller,ui);}));
+    card.append(element('small','Discards this draft and reloads applied inputs.'),button('Discard edits',()=>{setFormTaskIssues(card,[],ui?.editorView);controller.discardDraft(id);renderPropertiesForm(root,controller,ui);}));
     root.append(card);
   }
   if(ui)syncFormFeedback(root,controller,ui);

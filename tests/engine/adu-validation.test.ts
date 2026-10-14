@@ -72,4 +72,9 @@ describe('owned new ADU contracts', () => {
     const expense=structuredClone(p);expense.expenses.push({id:'other-original',name:'Other cost',propertyId:'second-home',amountCents:100,frequency:'monthly',startDate:'2026-01-01',annualGrowthBps:0,use:'personal',taxCategory:'operating'});expense.properties[0].aduProject.sharedExpenseOverrides=[{id:'override',expenseId:'other-original'}];expect(validatePlan(expense).ok).toBe(false);
   });
 
+  it('rejects prospective original-expense shares stored outside the owned project',()=>{
+    const p=edited(p=>p.expenses=[{id:'home-cost',name:'Original home cost',propertyId:'home',amountCents:100,frequency:'monthly',startDate:'2026-01-01',annualGrowthBps:0,use:'shared',taxCategory:'operating',allocationOverride:{numerator:1,denominator:3}}]);
+    expect(validatePlan(p).ok).toBe(false);
+  });
+
 });

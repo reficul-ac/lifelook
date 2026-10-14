@@ -642,6 +642,8 @@ export function validatePlan(raw: unknown): ValidationResult {
     if (o.propertyId !== undefined || o.use === 'shared') reference(o.propertyId, propertyById, 'propertyId', id);
     if (o.rentalId !== undefined || o.use === 'rental') reference(o.rentalId, rentalById, 'rentalId', id);
     if (o.allocationOverride !== undefined) v.allocation(o.allocationOverride, 'allocationOverride', id);
+    const originalProperty=typeof o.propertyId==='string'?propertyById.get(o.propertyId):undefined;
+    if(originalProperty?.aduProject!==undefined && o.rentalId===undefined && isObject(o.allocationOverride) && Number(o.allocationOverride.numerator)>0)v.issue('allocationOverride',id,'Prospective ADU expense shares must be stored in the owned project, preserving the original expense.');
     if (o.mortgageInsuranceQualification !== undefined) v.booleanHistory(o.mortgageInsuranceQualification, 'mortgageInsuranceQualification', id);
     const linked = typeof o.rentalId === 'string' ? rentalById.get(o.rentalId) : undefined;
     if (linked && o.propertyId !== undefined && linked.propertyId !== o.propertyId) v.issue('rentalId', id, 'The expense rental must belong to the referenced property.');

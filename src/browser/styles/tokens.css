@@ -1,0 +1,91 @@
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-page: #111315;
+  --surface-panel: #191c20;
+  --surface-raised: #22262b;
+  --surface-subtle: #202429;
+  --surface-hover: #2a3037;
+  --text-primary: #f3f5f7;
+  --text-muted: #afb8c3;
+  --border: #414a55;
+  --border-strong: #6b7684;
+  --accent: #80b7ff;
+  --accent-hover: #a9ceff;
+  --accent-on: #08192e;
+  --focus: #b9d6ff;
+  --success: #86d8b0;
+  --success-surface: #183529;
+  --warning: #ffdb8c;
+  --warning-surface: #342b18;
+  --warning-border: #b49145;
+  --danger: #ffaaa3;
+  --danger-surface: #3a2223;
+  --info: #a9ceff;
+  --shadow: 0 8px 32px #0006;
+  --backdrop: #0009;
+  --chart-1: #80b7ff;
+  --chart-2: #e8bd70;
+  --chart-3: #ac9dff;
+  --chart-4: #85d3c8;
+  --chart-5: #efa4ce;
+  --chart-6: #f3a38a;
+  --space-1: .25rem;
+  --space-2: .5rem;
+  --space-3: .75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --radius-control: .3rem;
+  --radius-panel: .5rem;
+  --font-body: Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-small: .85rem;
+  --motion-duration: 200ms;
+  --motion-easing: cubic-bezier(.2, .8, .2, 1);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --surface-page: #f2f4f7;
+  --surface-panel: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-subtle: #eaf0f6;
+  --surface-hover: #e0e9f3;
+  --text-primary: #17212e;
+  --text-muted: #526171;
+  --border: #b1bdca;
+  --border-strong: #788797;
+  --accent: #175fbb;
+  --accent-hover: #0c4999;
+  --accent-on: #ffffff;
+  --focus: #185eae;
+  --success: #14623f;
+  --success-surface: #e3f3e9;
+  --warning: #714b05;
+  --warning-surface: #fff3d3;
+  --warning-border: #99711c;
+  --danger: #a42a26;
+  --danger-surface: #ffebe8;
+  --info: #175fbb;
+  --shadow: 0 8px 32px #17212e26;
+  --backdrop: #17212e80;
+  --chart-1: #175fbb;
+  --chart-2: #8b5a09;
+  --chart-3: #7044b2;
+  --chart-4: #006d68;
+  --chart-5: #a53177;
+  --chart-6: #b84125;
+}
+
+:root,
+[data-theme] {
+  color: var(--text-primary);
+  background: var(--surface-page);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  [data-theme] {
+    --motion-duration: 0ms;
+  }
+}

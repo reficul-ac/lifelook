@@ -30,6 +30,8 @@ export interface CashYear {
   readonly year: number; readonly months: readonly CashMonth[]; readonly annual: CashTotals;
   readonly streams: readonly CashStream[]; readonly wages: readonly WageFacts[];
   readonly salaryPeriods: readonly SalaryPeriod[]; readonly positiveGrossCashByMonth: readonly Cents[];
+  /** Generated investment-sale gain is a tax fact, separate from cash income and sale proceeds. */
+  readonly longTermCapitalGainCents?: Cents;
 }
 
 const sum = (values: readonly Cents[]): Cents => settleCents(values.reduce((s,v) => s.plus(v), new Decimal(0)));
@@ -108,7 +110,9 @@ export function resolveCashYear(plan: ValidatedPlan, year: number, selection?:Ca
       const months=Array.from({length:12},(_,index)=>cost.paymentDate.slice(0,7)===`${year}-${String(index+1).padStart(2,'0')}`?cost.amountCents:0);
       streams.push({id:cost.id,kind:'expense',months,annualCents:sum(months),propertyId:property.id,aduProjectId:project.id});
     }
-    for(const row of project.propertyTax.paymentYears.filter(row=>row.year===year))for(const payment of row.payments) {
+    // Keep every declared payment stream in every year, with zero cash outside
+    // its payment month, so projection can resolve records across the horizon.
+    for(const row of project.propertyTax.paymentYears)for(const payment of row.payments) {
       if(!include(payment.id))continue;
       const months=Array.from({length:12},(_,index)=>payment.month===`${year}-${String(index+1).padStart(2,'0')}`?payment.amountCents:0);
       streams.push({id:payment.id,kind:'expense',months,annualCents:sum(months),propertyId:property.id,aduProjectId:project.id});

@@ -3,9 +3,10 @@ import {fireEvent,within} from '@testing-library/dom';
 import type {PlanDocument,ProjectionResult} from '../../src/engine';
 import {resolveIssueTargets} from '../../src/browser/issue-presentation';
 import {reviewTarget} from '../../src/browser/navigation';
-import {setAt} from '../../src/browser/fields';
+import {setAt,valueAt} from '../../src/browser/fields';
 import {mountWorkspace,setField} from '../helpers/dom';
 import {makePlan} from '../helpers/plans';
+import {makeAduPlan} from '../helpers/adu';
 import {loadReferences} from '../helpers/references';
 
 const fixture=()=>loadReferences<PlanDocument,ProjectionResult>('projection').find(c=>c.id==='two-salaries-home-adu')!.input;
@@ -13,6 +14,27 @@ const formFor=(root:HTMLElement,id:string)=>[...root.querySelectorAll<HTMLFormEl
 const fieldFor=(form:HTMLElement,path:string)=>[...form.querySelectorAll<HTMLElement>('[data-field]')].find(control=>control.dataset.field===path)!;
 
 describe('actionable review and recovery paths',()=>{
+  it('reviews an unconfirmed ADU paid-tax year at its current draft row',()=>{
+    const source=makeAduPlan().properties[0]!.aduProject!;
+    const plan=makeAduPlan({},{propertyTax:{...source.propertyTax,paymentYears:source.propertyTax.paymentYears.map(row=>row.year===2027?{...row,complete:{known:false}}:row)}});
+    const {root,controller}=mountWorkspace(plan),issue=controller.getState().projection.issues.find(issue=>issue.code==='required-adu-tax-payments'&&issue.year===2027)!;
+    const draft=controller.getDraft('properties','home'),path=['property','aduProject','propertyTax','paymentYears'],years=valueAt(draft.value,path) as readonly unknown[];
+    controller.editDraft('home',{...draft,value:setAt(draft.value,path,[years[1],years[2],years[0]])});controller.beginAdd('salaries');
+    const target=resolveIssueTargets(issue,controller.getState())[0]!;reviewTarget(root,target);
+    const control=fieldFor(formFor(root,'home'),'property.aduProject.propertyTax.paymentYears.0.complete');
+    expect(control).toHaveFocus();expect(control).toBeVisible();expect(control).toHaveValue('unknown');expect(fieldFor(formFor(root,'home'),'property.aduProject.propertyTax.paymentYears.0.year')).toHaveValue('2027');expect(root.querySelector('[data-section="Properties"]')).toBeVisible();
+  });
+
+  it('opens the paid-tax controls when the required ADU year is absent from the draft',()=>{
+    const source=makeAduPlan().properties[0]!.aduProject!;
+    const plan=makeAduPlan({},{propertyTax:{...source.propertyTax,paymentYears:source.propertyTax.paymentYears.filter(row=>row.year!==2027)}});
+    const {root,controller}=mountWorkspace(plan),issue=controller.getState().projection.issues.find(issue=>issue.code==='required-adu-tax-payments'&&issue.year===2027)!;
+    const target=resolveIssueTargets(issue,controller.getState())[0]!;reviewTarget(root,target);
+    const add=within(formFor(root,'home')).getByRole('button',{name:'Add paid-tax year'});
+    expect(add).toBeVisible();expect(document.activeElement?.contains(add)||document.activeElement===add).toBe(true);
+    fireEvent.click(add);expect(within(formFor(root,'home')).getAllByLabelText('Paid-tax calendar year')).toHaveLength(3);
+  });
+
   it('shows a rejected salary removal beside its action and opens the dependent contribution',()=>{
     const plan=fixture(),{root,controller}=mountWorkspace(plan),salary=plan.salaries[0]!;
     fireEvent.click(within(root.querySelector('nav')!).getByRole('button',{name:'Income'}));

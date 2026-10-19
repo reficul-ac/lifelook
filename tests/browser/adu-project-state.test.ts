@@ -4,12 +4,54 @@ import {createWorkspace,prepareAduComparison,fromDraftValue,toDraftValue} from '
 import {setAt,valueAt} from '../../src/browser/fields';
 import {loadRuleSet} from '../../src/engine';
 import {aduBooks,makeAduPlan,zeroAduBook} from '../helpers/adu';
+import {makeAllocationPolicy} from '../helpers/allocations';
+import {setAduCompletionDate} from '../../src/browser/adu-project-setup';
+import {calculateFundingNeed} from '../../src/engine';
 const storage={getItem:()=>null,setItem:()=>{}};
 const bundle=(controller:ReturnType<typeof createWorkspace>)=>controller.getDraft('properties','home').value as unknown as PropertyDraftBundle;
 describe('atomic ADU property drafts and applied comparison preparation',()=>{
+ it('keeps a future simple ADU numeric throughout a twenty-year household forecast',()=>{
+  const p=makeAduPlan({startYear:2027,horizonYears:20,cashFlowAllocation:makeAllocationPolicy(),salaries:[{id:'salary',name:'Synthetic salary',ownerId:'owner-a',employerId:'employer',annualGrossCents:20_000_000,startDate:'2027-01-01',annualRaiseBps:0,raiseMonth:1,raiseDay:1,changes:[]}]}),{aduProject,...home}=p.properties[0]!;
+  const c=createWorkspace({...p,properties:[{...home,role:'primary'}],rentals:[]},storage),draft=c.getDraft('properties','home'),before=c.getState().projection;let n=0;
+  const added=setAduCompletionDate(addAduProjectDraft(draft.value as unknown as PropertyDraftBundle,p.startYear,kind=>`${kind}-${++n}`),'2028-06-01');
+  let value=added as unknown as Record<string,unknown>;
+  for(const [path,entered] of [
+   [['property','aduArea'],'400'],[['property','aduProject','valuation','valueAddedCents'],'212000.00'],
+   [['property','aduProject','costs',0,'amountCents'],'100000.00'],[['rentals',0,'monthlyRentCents'],'2000.00'],
+  ] as const)value=setAt(value,path,entered);
+  c.editDraft('home',{...draft,value});expect(c.saveProperty('home')).toMatchObject({accepted:true,issues:[]});
+  const state=c.getState();
+  for(const year of state.projection.years)for(const field of ['totalTaxCents','expensesCents','cashFlowCents','reserveCents','netWorthCents'] as const)expect(year[field].status,`${year.year} ${field}`).toBe('available');
+  expect(calculateFundingNeed(state.projection.months).status).toBe('available');
+  expect(state.projection.years[0]!.totalTaxCents).toEqual(before.years[0]!.totalTaxCents);
+  expect(state.projection.years[0]!.propertyValueCents).toEqual({status:'available',value:100_000_000});
+  expect(state.projection.years[1]!.propertyValueCents).toEqual({status:'available',value:121_200_000});
+  expect(state.projection.years[1]!.adu!.projectTaxPaidCents).toEqual({status:'available',value:60_000});
+  expect(state.projection.coverage.completeHouseholdLiability).toBe(false);
+  expect(state.projection.provenance.some(p=>p.ruleVersion==='adu-simple-estimate.1'&&p.status==='provisional')).toBe(true);
+  expect(state.savedPlan.properties[0]!.aduProject!.taxQualifications.federal).toEqual({known:false});
+  expect(state.savedPlan.properties[0]!.aduProject!.propertyTax.paymentYears[0]!.payments).toEqual([]);
+ });
+ it('saves a newly added ADU with unanswered tax details across a 20-year allocation forecast',()=>{
+  const p=makeAduPlan({horizonYears:20,cashFlowAllocation:makeAllocationPolicy()}),{aduProject,...home}=p.properties[0]!;
+  const c=createWorkspace({...p,properties:[{...home,role:'primary'}],rentals:[]},storage),draft=c.getDraft('properties','home');let n=0;
+  const added=addAduProjectDraft(draft.value as unknown as PropertyDraftBundle,p.startYear,kind=>`${kind}-${++n}`);
+  let value=added as unknown as Record<string,unknown>;
+  for(const [path,entered] of [
+   [['property','aduProject','valuation','valueAddedCents'],'220000.00'],
+   [['property','aduProject','costs',0,'amountCents'],'300000.00'],
+   [['rentals',0,'monthlyRentCents'],'3000.00'],
+  ] as const)value=setAt(value,path,entered);
+  c.editDraft('home',{...draft,value});
+  expect(c.saveProperty('home')).toMatchObject({accepted:true,issues:[]});
+  const state=c.getState();expect(state.savedPlan.revision).toBe(1);expect(state.drafts.home).toBeUndefined();expect(state.projection.years).toHaveLength(20);
+  expect(state.savedPlan.properties[0]!.aduProject!.taxQualifications.federal).toEqual({known:false});
+  expect(state.projection.years.at(-1)!.totalTaxCents.status).toBe('available');
+  expect(JSON.parse(c.exportBackup()).properties[0].aduProject).toBeDefined();
+ });
  it('creates new zero histories and unknown qualifications without copying another rental',()=>{
   const p=makeAduPlan(),{aduProject,...home}=p.properties[0]!,original={property:toDraftValue({...home,role:'primary'}),rentals:[],expenses:[]},before=structuredClone(original);let n=0;const draft=addAduProjectDraft(original,2026,kind=>`${kind}-${++n}`),unit=draft.rentals[0]!;
-  expect(draft.property.role).toBe('primary-with-adu');expect(draft.property.aduProject).toMatchObject({valuation:{kind:'adu-value-per-square-foot',valuePerSquareFootCents:''}});for(const book of aduBooks)expect((unit.taxHistory as any)[book]).toEqual({known:true,value:toDraftValue(zeroAduBook)});expect(unit.qualifications).toMatchObject({ordinaryResidential:{known:false}});expect(original).toEqual(before);expect(removeAduProjectDraft(draft)).toEqual(original);
+  expect(draft.property.role).toBe('primary-with-adu');expect(draft.property.aduProject).toMatchObject({valuation:{kind:'value-added',valueAddedCents:''}});for(const book of aduBooks)expect((unit.taxHistory as any)[book]).toEqual({known:true,value:toDraftValue(zeroAduBook)});expect(unit.qualifications).toMatchObject({ordinaryResidential:{known:false}});expect(original).toEqual(before);expect(removeAduProjectDraft(draft)).toEqual(original);
  });
  it('removes a newly added blank area when reverting an unsaved project',()=>{let n=0;const original={property:{id:'home',role:'primary'},rentals:[],expenses:[]};expect(removeAduProjectDraft(addAduProjectDraft(original,2026,kind=>`${kind}-${++n}`))).toEqual(original);});
  it('publishes all linked edits once and retains rejected text',()=>{

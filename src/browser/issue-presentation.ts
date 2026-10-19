@@ -142,7 +142,17 @@ export function resolveIssueTargets(issue:Issue,state:IssueViewState,sourcePlan:
   const aduOwner=findAduOwner(plan,id);
   const draftOwner=Object.values(state.drafts).find(d=>d.section==='properties'&&findRecordPath(d.value,id)!==undefined)?.recordId;
   const property=plan.properties.find(p=>p.id===aduOwner?.propertyId||p.id===draftOwner||p.id===id||p.loans.some(l=>l.id===id)||plan.rentals.some(r=>r.id===id&&r.propertyId===p.id));
-  if(property){const raw=Object.hasOwn(state.drafts,property.id)?state.drafts[property.id]!.value:{property,rentals:plan.rentals.filter(r=>r.propertyId===property.id),expenses:plan.expenses.filter(e=>e.propertyId===property.id)};return [target('Properties',property.id,propertyIssueField(raw,id,field))];}
+  if(property){
+    const raw=Object.hasOwn(state.drafts,property.id)?state.drafts[property.id]!.value:{property,rentals:plan.rentals.filter(r=>r.propertyId===property.id),expenses:plan.expenses.filter(e=>e.propertyId===property.id)};
+    const propertyField=field.replace(/^(aduProject\.)?ownerFunding\.(?:kind|accountId)$/,'$1ownerFunding');
+    let path=propertyIssueField(raw,id,propertyField);
+    if(issue.code==='required-adu-tax-payments'&&issue.year!==undefined&&path==='property.aduProject.propertyTax.paymentYears'){
+      const years=(valueAtProject(raw) as {propertyTax?:{paymentYears?:readonly {year?:unknown}[]}}|undefined)?.propertyTax?.paymentYears;
+      const index=Array.isArray(years)?years.findIndex(row=>row&&String(row.year)===String(issue.year)):-1;
+      if(index>=0)path+=`.${index}.complete`;
+    }
+    return [target('Properties',property.id,path)];
+  }
   const sections=[['salaries','Income'],['otherIncome','Income'],['expenses','Expenses and debts'],['children','Expenses and debts'],['debts','Expenses and debts'],['accounts','Investments'],['contributions','Investments']] as const;
   for(const [key,section] of sections)if((plan[key]??[]).some(r=>r.id===id)||Object.hasOwn(state.drafts,id)&&state.drafts[id]!.section===key)return [target(section,id,field)];
   return [];

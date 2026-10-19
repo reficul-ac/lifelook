@@ -38,12 +38,17 @@ export interface AduPropertyTax {
   readonly paymentYears:readonly Readonly<{year:number;complete:History<boolean>;payments:readonly AduTaxPayment[]}>[];
   readonly originalExpenseExcludesAdu:History<boolean>;
 }
+/** Optional planning assumptions; legacy unanswered basic projects may also use estimates. */
+export type AduTaxEstimation = Readonly<{mode:'simple';propertyTaxRateBps:BasisPoints}> | Readonly<{mode:'detailed'}>;
 export interface AduProject {
   readonly id:string; readonly name:string; readonly rentalId:string;
   readonly constructionStartDate:ISODate; readonly completionDate:ISODate;
   readonly costs:readonly AduCostStage[]; readonly valuation:AduCompletionValuation;
   readonly financing?:AduFinancing; readonly sharedExpenseOverrides:readonly AduSharedExpenseOverride[];
+  /** Funds construction costs remaining after attributed financing; omission uses household cash. */
+  readonly ownerFunding?:Readonly<{kind:'household-cash'}>|Readonly<{kind:'taxable-brokerage';accountId:string}>;
   readonly propertyTax:AduPropertyTax; readonly taxQualifications:Readonly<Record<TaxBook,History<boolean>>>;
   readonly productionPeriod:History<Readonly<{startDate:ISODate;endDate:ISODate;uninterrupted:boolean}>>;
   readonly supportOperatingDeficits:History<boolean>;
+  readonly taxEstimation?:AduTaxEstimation;
 }

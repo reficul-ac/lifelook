@@ -40,7 +40,10 @@ export function moneyEntry(root:HTMLElement,label:string,value:Available<number>
   appendAmount(cell,typeof value==='number'?{status:'available',value}:value,context,{label});root.append(cell);
 }
 export function appendCoverage(root:HTMLElement,coverage:Coverage):void {
-  const statuses=element('div');statuses.className='report-statuses';statuses.append(element('span',coverage.completeForModeledScope?'Modeled calculations complete':'Modeled calculations incomplete'),element('span',coverage.completeHouseholdLiability?'Household tax complete':'Household tax incomplete'));root.append(statuses);
+  const estimateCodes=new Set(['adu-planning-estimate','brokerage-funding-estimate','brokerage-funding-deposit-timing']);
+  const estimated=coverage.issues.some(issue=>estimateCodes.has(issue.code));
+  const estimateOnly=estimated&&coverage.completeForModeledScope&&!coverage.issues.some(issue=>!estimateCodes.has(issue.code)&&issue.severity!=='info');
+  const statuses=element('div');statuses.className='report-statuses';statuses.append(element('span',coverage.completeForModeledScope?'Modeled calculations complete':'Modeled calculations incomplete'),element('span',coverage.completeHouseholdLiability?'Household tax complete':estimateOnly?'Household tax estimate':'Household tax incomplete'));if(estimated&&!estimateOnly)statuses.append(element('span','ADU planning estimates'));root.append(statuses);
 }
 function sourceTitle(url:string):string {const known:Record<string,string>={'rp-25-32.pdf':'IRS federal tax brackets and deductions','n-25-67.pdf':'IRS retirement contribution limits','p936':'IRS mortgage interest','p527':'IRS residential rental property','i6251':'IRS alternative minimum tax'};try{const parsed=new URL(url);return known[parsed.pathname.split('/').pop()??'']??`${parsed.hostname}${parsed.pathname}`;}catch{return url;}}
 export function appendProvenance(root:HTMLElement,provenance:readonly RuleProvenance[]):void {

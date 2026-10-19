@@ -83,6 +83,15 @@ export function checkCoverage(plan: ValidatedPlan, year: number): Coverage {
       required(rental.qbi.ubiaCents, rental.id, 'qbi.ubiaCents');
     }
   });
+  for(const property of plan.properties){
+    if(property.aduProject?.ownerFunding?.kind==='taxable-brokerage'){
+      completeHouseholdLiability=false;
+      issues.push({code:'brokerage-funding-estimate',recordId:property.aduProject.id,year,field:'ownerFunding',severity:'info',explanation:'ADU funding assumes proportional sales of long-term brokerage holdings. Unknown account basis is estimated as zero, and realized losses receive no tax deduction, offset or carryforward benefit.',resolution:'Review the selected account and its investment cost basis before relying on the planning estimate.'});
+    }
+    const project=property.aduProject;if(project?.taxEstimation?.mode!=='simple')continue;
+    completeHouseholdLiability=false;
+    issues.push({code:'adu-planning-estimate',recordId:project.id,year,field:'taxEstimation',severity:'info',explanation:'ADU taxes use planning assumptions for unanswered rental, building-cost, financing and property-tax details. The known home value is retained until completion; no additional unfinished-construction market value is assumed.',resolution:'Review the editable assumptions in Advanced ADU details or choose detailed tax inputs.'});
+  }
   const rsuIssues=rsuDeferredTaxIssues(plan,year);
   if(rsuIssues.length){issues.push(...rsuIssues);completeForModeledScope=false;completeHouseholdLiability=false;}
   return { completeForModeledScope, completeHouseholdLiability, issues };

@@ -2,7 +2,7 @@ import type {EditorViewSession} from './scenario-session';
 import {MAX_CENTS} from '../engine/money';
 import {formatCents} from './views/issues';
 import type {Issue} from '../engine';
-import {findRecordPath,normalizeFieldPath,type IssueViewContext} from './issue-presentation';
+import {findRecordPath,normalizeFieldPath,resolveIssueTargets,type IssueViewContext} from './issue-presentation';
 import {element,valueAt,type FieldPath} from './fields';
 import type {RecordDraft,WorkspaceController,EditableSection} from './state';
 export interface ResolvedFormIssue {readonly issue:Issue;readonly path?:FieldPath;readonly scope:'field'|'group'|'record'}
@@ -36,7 +36,7 @@ export function revealField(form:HTMLElement,path:FieldPath,focus=true):boolean{
 export function formatFieldIssue(issue:Issue,draft:RecordDraft):string{
   const field=normalizeFieldPath(issue.field??''),leaf=field.split('.').pop()??'';
   const resolved=resolveFormIssues(draft,'',[issue])[0],raw=valueAt(draft.value,resolved?.path??pathOf(field));
-  const money=leaf.endsWith('Cents')||/openingIraBasis|openingBalance\.value|openingPayment\.value|conversionBuildingFmv|qualifiedPrincipalCents|priorYearWagesCents|wagesCents|ubiaCents/.test(field);
+  const money=leaf.endsWith('Cents')||/openingIraBasis|openingTaxableBasis|openingBalance\.value|openingPayment\.value|conversionBuildingFmv|qualifiedPrincipalCents|priorYearWagesCents|wagesCents|ubiaCents/.test(field);
   if(issue.code==='invalid-input'&&issue.explanation.includes('ordinary decimal')){
     if(typeof raw==='string'&&raw.trim()==='')return money?'Enter an amount; use 0 only if confirmed.':'Enter a percentage.';
     return 'Use up to 2 decimal places, without commas.';
@@ -63,8 +63,10 @@ export function syncFormFeedback(root:HTMLElement,controller:WorkspaceController
   const state=controller.getState();
   for(const form of root.querySelectorAll<HTMLElement>('form[data-record-id][data-editable-section]')){
     const id=form.dataset.recordId!,draft=controller.getDraft(form.dataset.editableSection as EditableSection,id);
-    const combined=[...state.issues,...(context.editorView?context.editorView.taskIssues.get(id):taskIssues.get(form))??[]];
-    const resolved=resolveFormIssues(draft,state.savedPlan.id,[...new Map(combined.map(issue=>[JSON.stringify(issue),issue])).values()]),fresh=lastIssues.get(form)!==state.issues;
+    const ownedIssues=(context.editorView?context.editorView.taskIssues.get(id):taskIssues.get(form))??[];
+    const combined=[...state.issues,...ownedIssues];
+    const resolved=[...resolveFormIssues(draft,state.savedPlan.id,[...new Map(combined.map(issue=>[JSON.stringify(issue),issue])).values()])],fresh=lastIssues.get(form)!==state.issues;
+    for(const issue of ownedIssues)if(!resolved.some(item=>JSON.stringify(item.issue)===JSON.stringify(issue)))resolved.push({issue,scope:'record'});
     for(const disclosure of form.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]')){const read=summaries.get(disclosure);if(read)disclosure.dataset.disclosureStatus=read();const heading=disclosure.querySelector('summary');if(heading)heading.textContent=disclosure.dataset.disclosureName+(disclosure.dataset.disclosureStatus?' · '+disclosure.dataset.disclosureStatus:'');}
     const previous=lastIssues.get(form);lastIssues.set(form,state.issues);
     if(!resolved.length&&!previous?.length&&!form.querySelector('[data-form-feedback]'))continue;
@@ -88,6 +90,9 @@ export function syncFormFeedback(root:HTMLElement,controller:WorkspaceController
         }
         if(error){error.append(element('span',message));if(issue.severity==='error'){const invalid=control??target;invalid.setAttribute('aria-invalid','true');invalid.setAttribute('aria-describedby',[invalid.dataset.hintIds,error.id].filter(Boolean).join(' '));}}
         if(fresh&&issue.severity==='error')revealField(form,path,false);
+      }
+      else for(const linked of resolveIssueTargets(issue,context.readState())){
+        const review=element('button',linked.label);review.type='button';review.addEventListener('click',()=>{context.disclosures.closeWithin(root,false);context.review(linked);});row.append(review);
       }
       row.append(context.disclosures.createTrigger({label:'Details',accessibleLabel:`Details: ${label} input`,title:`${label} · input error`,preview:message,renderDetails:node=>{node.append(element('p',issue.explanation),element('p',issue.resolution),element('code',[issue.code,issue.recordId,issue.field].filter(Boolean).join(' · ')));}}));list.append(row);
     }

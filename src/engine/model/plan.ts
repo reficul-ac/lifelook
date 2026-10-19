@@ -135,6 +135,8 @@ export interface Account {
   readonly openingBalanceCents: Cents;
   readonly annualGrowthBps: BasisPoints;
   readonly openingIraBasis: History<Cents>;
+  /** Aggregate investment basis on January 1; omitted or unknown means unanswered. Taxable brokerage only. */
+  readonly openingTaxableBasis?: History<Cents>;
   readonly rsu?: RsuAccountDetails;
 }
 export type ContributionAmount = Readonly<{ kind: 'fixed'; monthlyCents: Cents }> | Readonly<{ kind: 'salary-percent'; salaryId: string; percentBps: BasisPoints }>;

@@ -63,6 +63,7 @@ export interface PassiveRules {
 }
 export interface FederalRules {
   readonly brackets: readonly TaxBracket[];
+  readonly capitalGains: { readonly method: string; readonly zeroRateMaximumCents: number; readonly fifteenRateMaximumCents: number; readonly middleRateBps: number; readonly upperRateBps: number };
   readonly standardDeductionCents: number;
   readonly taxTable: { readonly method: string; readonly maximumExclusiveCents: number; readonly narrowBinsThroughCents: number; readonly narrowBinWidthCents: number; readonly wideBinWidthCents: number; readonly initialUpperCents: readonly number[] };
   readonly additionalStandardDeductionPerFilerCents: number;

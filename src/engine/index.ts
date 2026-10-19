@@ -29,6 +29,7 @@ export type * from './cash/allocation-types';
 export { getAduProjects, findAduOwner } from './property/adu-ownership';
 
 export { calculateAduValueAdded, aduAreaRatios } from './property/adu-valuation';
+export {usesAduPlanningEstimates,resolveAduPlanningEstimates,aduEstimateProvenance} from './property/adu-planning-estimates';
 export { calculateAduDepreciation } from './property/adu-depreciation';
 export type { AduDepreciationYear } from './property/adu-depreciation';
 export { ADU_PLANNING_MODEL_VERSION, maxAssessmentGrowthBps, aduPlanningProvenance } from './rules/adu-planning-v1';

@@ -17,7 +17,7 @@ export interface AduPeriodProjection {
 }
 export const aduAvailable=<T>(value:T):Available<T>=>({status:'available',value});
 export function aduSum(values:readonly Available<Cents>[],field:string,year?:number):Available<Cents>{
- const absent=values.filter(v=>v.status!=='available');if(absent.length)return{status:absent.some(v=>v.status==='unsupported-case')?'unsupported-case':'needs-data',issues:absent.flatMap(v=>v.issues)};
+ const absent=values.filter(v=>v.status!=='available');if(absent.length)return{status:absent.some(v=>v.status==='unsupported-case')?'unsupported-case':'needs-data',issues:[...new Map(absent.flatMap(v=>v.issues).map(issue=>[JSON.stringify(issue),issue])).values()]};
  try{return aduAvailable(settleCents(values.reduce((s,v)=>s.plus(v.status==='available'?v.value:0),new Decimal(0))));}
  catch(error){if(!(error instanceof CalculationRangeError))throw error;return{status:'unsupported-case',issues:[{code:'monetary-overflow',field,...(year?{year}:{}),severity:'error',explanation:'The affected ADU total exceeds the supported monetary range.',resolution:'Reduce the relevant amounts or horizon.'}]};}
 }

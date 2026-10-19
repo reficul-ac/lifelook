@@ -16,6 +16,7 @@ export function renderInvestmentsForm(root: HTMLElement, controller: WorkspaceCo
       renderField(body, ctx, ['openingBalanceCents'], 'Account opening balance ($)', { kind: 'money' });
       renderField(body, ctx, ['annualGrowthBps'], 'Effective annual account return (%)', { kind: 'rate', hint: 'Deposits grow from the following month.',help:'An effective annual return becomes monthly compounded growth. Taxable account value growth is assumed unrealized and excludes separately entered cash dividends or interest.' });
     }
+    if (ctx.draft.value.type === 'taxable-brokerage') renderHistory(body, ctx, ['openingTaxableBasis'], 'Investment cost basis at forecast start ($)', { kind: 'money', hint: `The amount paid for investments still held on January 1, ${plan.startYear}, rather than their market value. Unknown basis uses a labeled zero-basis planning assumption for ADU construction funding; enter 0 only if confirmed.` });
     if (ctx.draft.value.type === 'traditional-ira') renderHistory(body, ctx, ['openingIraBasis'], 'After-tax IRA basis at forecast start ($)', { kind: 'money', hint: 'Different from account balance; enter 0 only if confirmed.' });
   },undefined,ui);
   renderRecordSection(contributions, controller, 'contributions', 'Contribution', (body, ctx) => {

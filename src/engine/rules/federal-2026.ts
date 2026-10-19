@@ -10,6 +10,11 @@ thresholds.forEach((upper, i) => {
 });
 const saltGrowth = { kind: 'statutory-growth', growthBps: 100, incrementCents: 1, rounding: 'nearest' } as const;
 Object.assign(values, {
+  'capitalGains.method': rule('ordinary-long-term-gain-worksheet', [s.capitalGains, s.amtMethod]),
+  'capitalGains.zeroRateMaximumCents': rule(9890000, [s.federal, s.federalIndex], indexed(5000)),
+  'capitalGains.fifteenRateMaximumCents': rule(61370000, [s.federal, s.federalIndex], indexed(5000)),
+  'capitalGains.middleRateBps': rule(1500, [s.federalIndex, s.capitalGains]),
+  'capitalGains.upperRateBps': rule(2000, [s.federalIndex, s.capitalGains]),
   standardDeductionCents: rule(3220000, [s.federal, s.standardIndex, s.law], indexed(10000)),
   'taxTable.method': rule('federal-variable-dollar-midpoint', s.federalTaxTable, fixed, ['Explicit provisional 2026 tax-table assumption: preserve complete official 2025 bin and rounding methods while applying the published 2026 marginal rates until the 2026 annual table is published.'], 'provisional'),
   'taxTable.maximumExclusiveCents': rule(10000000, s.federalTaxTable, fixed, ['Explicit provisional 2025 tax-table/schedule boundary for 2026.'], 'provisional'),

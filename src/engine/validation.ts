@@ -209,7 +209,7 @@ function records(v: Validator, raw: Obj, key: string, name = true): readonly Obj
 const recordId = (o: Obj): string => typeof o.id === 'string' ? o.id : '';
 
 /** Register all nested IDs before checking cross-project references. */
-function validateAduProjects(v:Validator, properties:readonly Obj[], rentals:readonly Obj[], expenses:readonly Obj[], forecastStart:string):Map<string,Obj> {
+function validateAduProjects(v:Validator, properties:readonly Obj[], rentals:readonly Obj[], expenses:readonly Obj[], forecastStart:string,accounts:ReadonlyMap<string,Obj>):Map<string,Obj> {
   const projectsByRental=new Map<string,Obj>();
   const identities=(rows:unknown,field:string,id:string,name=false):Obj[]=>v.array(rows,field,id).flatMap(value=>{const row=v.record(value,field,name);return row?[row]:[];});
   const month=(value:unknown,field:string,id:string):value is string=>{
@@ -233,6 +233,28 @@ function validateAduProjects(v:Validator, properties:readonly Obj[], rentals:rea
     if(property.aduProject===undefined)continue;
     const project=v.record(property.aduProject,'aduProject');if(!project)continue;
     const id=recordId(project);
+    if(project.ownerFunding!==undefined){
+      const funding=v.object(project.ownerFunding,'ownerFunding',id);
+      if(funding){
+        v.enum(funding.kind,['household-cash','taxable-brokerage'],'ownerFunding.kind',id);
+        if(funding.kind==='taxable-brokerage'&&v.text(funding.accountId,'ownerFunding.accountId',id)){
+          const account=accounts.get(funding.accountId);
+          if(!account)v.issue('ownerFunding.accountId',id,'The selected construction funding account no longer exists. Choose a saved taxable brokerage account or household cash.','dangling-reference');
+          else if(account.type!=='taxable-brokerage')v.issue('ownerFunding.accountId',id,'Construction investment funding requires a taxable brokerage account. Review the selected account or choose another funding source.');
+        }
+        const allowed=funding.kind==='taxable-brokerage'?['kind','accountId']:['kind'];
+        if(Object.keys(funding).some(key=>!allowed.includes(key)))v.issue('ownerFunding',id,'Use only the settings supported by the selected construction funding source.');
+      }
+    }
+    if(project.taxEstimation!==undefined){
+      const estimation=v.object(project.taxEstimation,'taxEstimation',id);
+      if(estimation){
+        v.enum(estimation.mode,['simple','detailed'],'taxEstimation.mode',id);
+        if(estimation.mode==='simple')v.integer(estimation.propertyTaxRateBps,'taxEstimation.propertyTaxRateBps',id,0,100000);
+        const allowed=estimation.mode==='simple'?['mode','propertyTaxRateBps']:['mode'];
+        if(Object.keys(estimation).some(key=>!allowed.includes(key)))v.issue('taxEstimation',id,'Use only the settings supported by the selected tax-estimation mode.');
+      }
+    }
     const costs=identities(project.costs,'aduProject.costs',id,true);
     const overrides=identities(project.sharedExpenseOverrides,'aduProject.sharedExpenseOverrides',id);
     const financing=project.financing===undefined?undefined:v.record(project.financing,'aduProject.financing');
@@ -408,7 +430,7 @@ export function validatePlan(raw: unknown): ValidationResult {
   const rentalById = new Map(rentals.map(o => [recordId(o), o]));
   const accountById = new Map(accounts.map(o => [recordId(o), o]));
   const salaryById = new Map(salaries.map(o => [recordId(o), o]));
-  const projectsByRental=validateAduProjects(v,properties,rentals,expenses,forecastStart);
+  const projectsByRental=validateAduProjects(v,properties,rentals,expenses,forecastStart,accountById);
   children.forEach(child => {
     const id = recordId(child);
     if (!isValidYearMonth(child.birthMonth)) v.issue('birthMonth', id, 'Use a valid birth month (YYYY-MM).');
@@ -459,6 +481,10 @@ export function validatePlan(raw: unknown): ValidationResult {
     const id = recordId(o); reference(o.ownerId, owners, 'ownerId', id);
     v.enum(o.type, ['taxable-brokerage', 'traditional-401k', 'roth-401k', 'traditional-ira', 'roth-ira', 'rsu'], 'type', id);
     v.cents(o.openingBalanceCents, 'openingBalanceCents', id); v.rate(o.annualGrowthBps, 'annualGrowthBps', id); v.moneyHistory(o.openingIraBasis, 'openingIraBasis', id);
+    if(o.openingTaxableBasis!==undefined){
+      v.moneyHistory(o.openingTaxableBasis,'openingTaxableBasis',id);
+      if(o.type!=='taxable-brokerage')v.issue('openingTaxableBasis',id,'Investment cost basis belongs only to taxable brokerage accounts.');
+    }
     if (o.type !== 'rsu') {
       if (o.rsu !== undefined) v.issue('rsu', id, 'RSU grant details belong only to RSU accounts.');
       return;

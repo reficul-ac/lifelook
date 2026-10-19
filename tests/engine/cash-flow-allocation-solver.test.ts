@@ -27,6 +27,27 @@ function resolved(input:AllocationYearInput,evaluate=resolveHouseholdYear) {
 const sum=(values:readonly number[])=>values.reduce((a,b)=>a+b,0);
 // Students in these fictional cases cannot claim Saver's Credit. Independent arithmetic: tax-fixture-worksheet.md.
 describe('annual allocation and coupled taxes',()=>{
+ it('reports brokerage-funded construction without requiring a financing schedule',()=>{
+  const input=fixture([]);
+  const r=resolved({...syntheticCash(input,1_200_000),expensesByMonth:Array(12).fill(10_000),brokerageFundingByMonth:()=>Array(12).fill(10_000)},zeroTaxes);
+  expect(r.report.aduBudget).toEqual({reportedCashFlowCents:1_080_000,financedConstructionCents:0,allocationCashFlowCents:1_200_000});
+  expect(r.report.retainedCashCents).toBe(1_200_000);
+ });
+ it.each([
+  {kind:'percentage',entry:percent('brokerage',5000),savedAccount:'brokerage',automaticCents:590_000,overflowCents:600_000},
+  {kind:'maximum',entry:maximum('ira'),savedAccount:'ira',automaticCents:740_000,overflowCents:450_000},
+ ])('defers automatic $kind targets and overflow while preserving a saved January deposit',({entry,savedAccount,automaticCents,overflowCents})=>{
+  const input=fixture([entry],'brokerage',{contributions:[{id:'saved-january',accountId:savedAccount,priority:1,startDate:'2026-01-01',endDate:'2026-01-31',amount:{kind:'fixed',monthlyCents:10_000}}]});
+  const r=resolved({...syntheticCash(input,1_200_000),automaticDepositStartMonthsByAccount:new Map([['brokerage',6],['ira',6]])},zeroTaxes);
+  expect(r.requests.filter(request=>request.ruleId==='saved-january')).toEqual(input.legacyRequests);
+  expect(r.requests.filter(request=>request.ruleId==='saved-january'&&request.requestedCents>0)).toEqual([expect.objectContaining({month:1,requestedCents:10_000})]);
+  for(const [ruleId,expectedCents] of [[entry.id,automaticCents],['overflow',overflowCents]] as const){
+   const requests=r.requests.filter(request=>request.ruleId===ruleId);
+   expect(sum(requests.map(request=>request.requestedCents))).toBe(expectedCents);
+   expect(requests.every(request=>request.month>=6)).toBe(true);
+  }
+  expect(r.report.retainedCashCents).toBe(0);
+ });
  it('recomputes the common denominator after maximum traditional deferrals and aggregates brokerage excess',()=>{
   const input=fixture([percent('brokerage',2000),percent('cash',2000),maximum('workplace')],'brokerage');
   const opening=structuredClone(input.opening),r=resolved(input);

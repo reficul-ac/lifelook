@@ -35,7 +35,7 @@ export interface EditorPublicationPort {
 }
 export interface WorkspaceInitialization {readonly persisted:boolean;readonly persistenceIssues:readonly Issue[]}
 export type WorkspaceOperation=Readonly<{kind:'save'|'remove';recordId:string;result:SaveRecordResult}>|Readonly<{kind:'restore';persisted:boolean}>;
-const moneyHistories=new Set(['openingIraBasis','openingBalance','openingPayment','openingBasis','conversionBuildingFmv','priorYearWagesCents','qualifiedPrincipalCents','wagesCents','ubiaCents','addedAssessedValueCents','valueCents']);
+const moneyHistories=new Set(['openingIraBasis','openingTaxableBasis','openingBalance','openingPayment','openingBasis','conversionBuildingFmv','priorYearWagesCents','qualifiedPrincipalCents','wagesCents','ubiaCents','addedAssessedValueCents','valueCents']);
 const rateHistories=new Set(['marginalRateBps']);
 const decimalUnits=(value:number)=>{const sign=value<0?'-':'';const digits=String(Math.abs(value));return `${sign}${digits.length<3?'0':digits.slice(0,-2)}.${digits.slice(-2).padStart(2,'0')}`;};
 /** Stored integers become entered dollars/percentages; histories retain explicit unknowns. */

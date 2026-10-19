@@ -7,6 +7,7 @@ import type { Available, Coverage, Issue, RuleProvenance } from '../model/result
 import type { HouseholdTaxState } from '../model/tax-state';
 import type { PropertyYearFacts } from '../property/facts';
 import {finishAduTaxYear} from '../property/adu-tax';
+import {aduEstimateProvenance} from '../property/adu-planning-estimates';
 import type { LoanSchedule } from '../property/loans';
 import type { YearRules } from '../rules/types';
 import { calculateCaliforniaTax, type CaliforniaTaxResult } from './california';
@@ -122,7 +123,7 @@ export function resolveHouseholdYear(plan:ValidatedPlan,cash:CashYear,requests:r
   let tax:Available<HouseholdTaxResult>;
   if(blocked)tax=blocked;
   else if(selected?.federal.status==='available'&&selected.california.status==='available'&&selected.statePaid.status==='available'&&selected.combinedIncomeTaxCents.status==='available'&&selected.deductions.federal.status==='available'&&selected.deductions.california.status==='available') {
-    tax=available({year:cash.year,federal:selected.federal.value,california:selected.california.value,combinedIncomeTaxCents:selected.combinedIncomeTaxCents.value,selectedMethods:{federal:selected.federalMethod,california:selected.californiaMethod},statePaid:selected.statePaid.value,deductions:{federal:selected.deductions.federal.value,california:selected.deductions.california.value},provenance:combineProvenance(rules,[selected.federal.value.provenance,selected.california.value.provenance])});
+    tax=available({year:cash.year,federal:selected.federal.value,california:selected.california.value,combinedIncomeTaxCents:selected.combinedIncomeTaxCents.value,selectedMethods:{federal:selected.federalMethod,california:selected.californiaMethod},statePaid:selected.statePaid.value,deductions:{federal:selected.deductions.federal.value,california:selected.deductions.california.value},provenance:combineProvenance(rules,[selected.federal.value.provenance,selected.california.value.provenance,...(plan.properties.some(p=>p.aduProject?.taxEstimation?.mode==='simple')?[aduEstimateProvenance(cash.year)]:[])])});
   } else tax={status:'needs-data',issues:[{code:'unavailable-tax-choice',year:cash.year,severity:'warning',explanation:'No complete legal tax candidate is available.',resolution:'Resolve the located tax and deduction inputs.'}]};
   const priorities=new Map(plan.contributions.map(r=>[r.id,r.priority]));
   const contributions=[...workplace.records,...ira.records].sort((a,b)=>a.month-b.month||(priorities.get(a.ruleId)??0)-(priorities.get(b.ruleId)??0)||(a.ruleId<b.ruleId?-1:a.ruleId>b.ruleId?1:0));

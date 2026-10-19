@@ -19,6 +19,9 @@ header details{background:#f7faf6;color:#183229;padding:.75rem 1rem}header detai
 
 .adu-project, .adu-comparison-report { border-left: 3px solid #205e44; padding: 1rem; margin-block: 1rem; }
 .adu-project details { margin-block: .6rem; }
+.adu-setup-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 .75rem}
+.adu-setup-fields>p,.adu-setup-fields>small,.adu-setup-fields>button{grid-column:1/-1}
+@media(max-width:600px){.adu-setup-fields{grid-template-columns:1fr}}
 .adu-comparison-report dl { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: .4rem 1rem; }
 .adu-comparison-report dd { margin: 0; text-align: right; }
 @media (max-width: 600px) { .adu-comparison-report dl { grid-template-columns: minmax(0, 1fr); } .adu-comparison-report dd { text-align: left; margin-bottom: .5rem; } }

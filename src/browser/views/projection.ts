@@ -1,4 +1,4 @@
-import {calculateFundingNeed} from '../../engine/property/adu-projection';
+import {calculateFundingNeed,aduSum} from '../../engine/property/adu-projection';
 import {moneyEntry} from './issues';
 import {normalizeViewYears,type EditorViewSession} from '../scenario-session';
 import {getRecordLabel,type IssueViewContext} from '../issue-presentation';
@@ -19,6 +19,17 @@ const columns:readonly {key:MonetaryField;label:string}[]=[
 ];
 const slug=(key:string)=>key.replace(/Cents$/,'').replace(/[A-Z]/g,c=>`-${c.toLowerCase()}`);
 const available=(value:number)=>({status:'available' as const,value});
+type FundingSales=NonNullable<MonthlyProjection['brokerageFunding']>['sales'];
+function fundingSummary(root:HTMLElement,sales:FundingSales,context:IssueViewContext,prefix:string):void {
+  const list=element('dl');
+  const amount=(field:'grossSaleCents'|'realizedGainCents'|'constructionFundedCents'|'shortfallCents')=>aduSum(sales.map(s=>available(s[field])),field);
+  moneyEntry(list,'Investments sold for ADU construction',amount('grossSaleCents'),context,`${prefix}-brokerage-gross-sales`);
+  moneyEntry(list,'Estimated realized investment gain or loss',amount('realizedGainCents'),context,`${prefix}-brokerage-gain`);
+  moneyEntry(list,'Estimated additional income tax from sales',aduSum(sales.flatMap(s=>[available(s.federalTaxCents),available(s.californiaTaxCents)]),'saleTaxCents'),context,`${prefix}-brokerage-sale-tax`);
+  moneyEntry(list,'Construction covered by investments',amount('constructionFundedCents'),context,`${prefix}-brokerage-construction-funded`);
+  moneyEntry(list,'Uncovered construction funding',amount('shortfallCents'),context,`${prefix}-brokerage-shortfall`);
+  root.append(list);
+}
 function assetTable(root:HTMLElement,caption:string,headers:readonly string[]):HTMLTableSectionElement {
   const scroll=element('div');scroll.className='projection-table-wrap';const table=element('table');table.append(element('caption',caption));const head=element('thead'),line=element('tr');for(const label of headers){const cell=element('th',label);cell.scope='col';line.append(cell);}head.append(line);table.append(head);const body=element('tbody');table.append(body);scroll.append(table);root.append(scroll);return body;
 }
@@ -55,8 +66,9 @@ function records(root:HTMLElement,row:AnnualProjection|MonthlyProjection,prefix:
   const plan=context.readState().savedPlan,ordinary=row.accounts.filter(account=>plan.accounts.find(a=>a.id===account.accountId)?.type!=='rsu'),rsuAccounts=row.accounts.filter(account=>plan.accounts.find(a=>a.id===account.accountId)?.type==='rsu');
   if(ordinary.length){
     const conversions=ordinary.some(account=>account.conversionInCents!==undefined||account.conversionOutCents!==undefined);
-    const {body}=table('Account balances and flows',['Account','Opening balance','Eligible deposit','Growth',...(conversions?['Roth conversion in','Roth conversion out']:[]),'Closing balance']);
-    for(const account of ordinary){const line=element('tr');line.append(element('th',getRecordLabel(plan,account.accountId)));cell(line,account.openingCents);cell(line,account.contributionCents);cell(line,account.growthCents);if(conversions){cell(line,account.conversionInCents??available(0));cell(line,account.conversionOutCents??available(0));}cell(line,account.closingCents,`${prefix}-account-${account.accountId}-closing`);body.append(line);}
+    const sales=ordinary.some(account=>account.withdrawalCents!==undefined);
+    const {body}=table('Account balances and flows',['Account','Opening balance','Eligible deposit','Growth',...(conversions?['Roth conversion in','Roth conversion out']:[]),...(sales?['Investments sold','Realized gain or loss','Remaining brokerage cost basis']:[]),'Closing balance']);
+    for(const account of ordinary){const line=element('tr');line.append(element('th',getRecordLabel(plan,account.accountId)));cell(line,account.openingCents);cell(line,account.contributionCents);cell(line,account.growthCents);if(conversions){cell(line,account.conversionInCents??available(0));cell(line,account.conversionOutCents??available(0));}if(sales){cell(line,account.withdrawalCents??available(0),`${prefix}-account-${account.accountId}-sold`);cell(line,account.realizedGainCents??available(0));if(account.closingTaxableBasisCents)cell(line,account.closingTaxableBasisCents,`${prefix}-account-${account.accountId}-basis`);else line.append(element('td','—'));}cell(line,account.closingCents,`${prefix}-account-${account.accountId}-closing`);body.append(line);}
   }
   if(rsuAccounts.length){const {body}=table('RSU held balances and vesting',['Account','Opening held value','Vested value','Withholding funding','Unrealized growth','Closing held value']);for(const account of rsuAccounts){const line=element('tr');line.append(element('th',getRecordLabel(plan,account.accountId)));cell(line,account.openingCents);cell(line,account.vestedCents??(row.rsu?.status==='available'?available(row.rsu.value.grants.filter(grant=>grant.accountId===account.accountId).reduce((sum,grant)=>sum+grant.vestedValueCents,0)):row.rsu??{status:'needs-data',issues:[]}));cell(line,account.withholdingCents??(row.rsu?.status==='available'?available(row.rsu.value.grants.filter(grant=>grant.accountId===account.accountId).reduce((sum,grant)=>sum+grant.withholdingCents,0)):row.rsu??{status:'needs-data',issues:[]}));cell(line,account.growthCents);cell(line,account.closingCents,`${prefix}-account-${account.accountId}-closing`);body.append(line);}}
   if(row.rsu){
@@ -67,6 +79,10 @@ function records(root:HTMLElement,row:AnnualProjection|MonthlyProjection,prefix:
   if(row.properties.length){const projectValues=row.properties.some(p=>p.completionValueAddedCents);const {body}=table('Property values and equity',['Property','Opening value','Growth',...(projectValues?['Completion value added','Known original-home value','Combined living area (sq ft)']:[]),'Closing value','Closing loans','Equity']);for(const property of row.properties){const line=element('tr');line.append(element('th',getRecordLabel(context.readState().savedPlan,property.propertyId)));cell(line,property.openingValueCents);cell(line,property.growthCents);if(projectValues){cell(line,property.completionValueAddedCents??available(0),`${prefix}-property-${property.propertyId}-completion-value`);cell(line,property.knownExistingHomeValueCents??property.closingValueCents);const area=element('td');if(property.combinedLivingAreaSqFt?.status==='available')area.textContent=String(property.combinedLivingAreaSqFt.value);else if(property.combinedLivingAreaSqFt)appendAmount(area,property.combinedLivingAreaSqFt,context,{label:'Combined living area'},'ratio');line.append(area);}cell(line,property.closingValueCents);cell(line,property.loanBalanceCents);cell(line,property.equityCents,`${prefix}-property-${property.propertyId}-equity`);body.append(line);}}
   if(row.loans.length){const draws=row.loans.some(l=>l.drawCents);const {body}=table('Loan balances and payments',['Loan','Opening principal',...(draws?['Draw receipts']:[]),'Interest','Full payment','Principal paid','Closing principal']);for(const loan of row.loans){const line=element('tr');line.append(element('th',getRecordLabel(context.readState().savedPlan,loan.loanId)));cell(line,loan.openingPrincipalCents);if(draws)cell(line,loan.drawCents??available(0));cell(line,loan.interestCents);cell(line,loan.paymentCents);cell(line,loan.principalPaidCents);cell(line,loan.closingPrincipalCents,`${prefix}-loan-${loan.loanId}-closing`);body.append(line);}}
   if(row.adu){const list=element('dl');for(const [field,label,slug] of [['constructionCostCents','Staged construction cash','construction-cost'],['financingProceedsCents','Dedicated financing receipts','financing-proceeds'],['financedCostPaidCents','Financed construction paid','financed-cost'],['projectTaxPaidCents','Incremental property tax paid','tax-paid'],['completionValueAddedCents','Completion value added','completion-value'],['earmarkedCashCents','Restricted construction cash','restricted-cash'],['unrestrictedCashCents','Unrestricted cash','unrestricted-cash'],['allocationCashFlowCents','Cash available from income for investment allocation','allocation-cash']] as const)moneyEntry(list,label,row.adu[field],context,`${prefix}-adu-${slug}`);details.append(list,element('small','Loan receipts are not income. Restricted proceeds fund only attributed construction costs. The income allocation budget adds back financed construction paid; interest and principal remain cash costs. Construction in progress has no modeled market value; known original-home value remains visible.'));
+  }
+  if(row.brokerageFunding?.sales.length){fundingSummary(details,row.brokerageFunding.sales,context,prefix);details.append(element('small','Brokerage sale proceeds are an asset-to-cash transfer. Only the gain enters taxes; the additional sale tax is reserved in the sale month. Remaining investments continue growing from their reduced balance.'));
+    const body=assetTable(details,'Brokerage construction sales',['Payment date','Funding account','Investments sold','Basis consumed','Gain or loss','Additional federal tax','Additional California tax','Construction covered','Shortfall']);
+    for(const sale of row.brokerageFunding.sales){const line=element('tr');line.append(element('th',sale.date),element('td',getRecordLabel(plan,sale.accountId)));for(const field of ['grossSaleCents','basisConsumedCents','realizedGainCents','federalTaxCents','californiaTaxCents','constructionFundedCents','shortfallCents'] as const)cell(line,available(sale[field]));body.append(line);}
   }
   if(!row.accounts.length&&!row.properties.length&&!row.loans.length&&!row.rsu)details.append(element('p','No asset or loan records in this period.'));
   root.append(details);
@@ -80,6 +96,14 @@ export function renderProjection(root:HTMLElement,result:ProjectionResult,contex
   if(view)normalizeViewYears(view,context.readState().savedPlan);
   context.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2','Projection'),element('p',`Inputs v${result.inputRevision}`));
   appendCoverage(root,result.coverage);if(result.months.some(m=>m.adu)){const need=element('dl');moneyEntry(need,'Peak household funding need',calculateFundingNeed(result.months),context,'adu-forecast-funding-need');root.append(need);}
+  const fundingSales=result.months.flatMap(m=>m.brokerageFunding?.sales??[]),fundingIncomplete=result.months.some(m=>m.brokerageFunding?.issues?.length);
+  if(fundingSales.length||fundingIncomplete){
+    const funding=element('section');funding.append(element('h3',`ADU investment funding · ${fundingIncomplete?'available periods only':'forecast total'}`));
+    if(fundingSales.length)fundingSummary(funding,fundingSales,context,'forecast');
+    for(const issue of result.issues.filter(issue=>issue.code==='brokerage-funding-deposit-timing'))funding.append(element('p',issue.explanation));
+    if(fundingIncomplete)funding.append(element('p','Brokerage funding could not be estimated for every construction period. These amounts cover available periods only; review the funding issues below.'));
+    root.append(funding);
+  }
   if(result.years.some(year=>year.conditionalOnGap)){const notice=element('p','Some balances depend on covering a modeled cash gap.');notice.setAttribute('role','status');notice.className='forecast-conditional';root.append(notice);}
   const overview=result.years.map(projectionSummary);renderForecastSummary(root,overview,context);renderForecastPlots(root,overview,context,view?.selections);
   if(result.years.some(year=>year.cashFlowAllocation!==undefined)){const allocation=element('div');renderAllocationYears(allocation,result.years,context);root.append(allocation);}

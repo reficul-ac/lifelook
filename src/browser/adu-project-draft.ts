@@ -12,9 +12,9 @@ export function addAduProjectDraft(bundle:PropertyDraftBundle,startYear:number,n
   qualifications:Object.fromEntries(['longTermFairMarketLease','noPersonalUse','noSubstantialTenantServices','ordinaryResidential','advancedBasisAdjustments','californiaSmallBusinessQualification'].map(key=>[key,unknown()])),
   taxHistory:Object.fromEntries(books.map(book=>[book,{known:true,value:zeroBook()}])),qbi:{qualification:unknown(),wagesCents:unknown(),ubiaCents:unknown(),openingLossVintages:{known:true,value:[]}},
  });
- const project={id:projectId,name:'ADU build',rentalId,constructionStartDate:start,completionDate:completion,
+ const project={id:projectId,name:'ADU build',rentalId,constructionStartDate:start,completionDate:completion,taxEstimation:{mode:'simple',propertyTaxRateBps:'1.20'},
   costs:[{id:stageId,name:'Construction',paymentDate:completion,amountCents:'',category:'building',treatments:Object.fromEntries(books.map(book=>[book,unknown()]))}],
-  valuation:{kind:'adu-value-per-square-foot',valuePerSquareFootCents:''},sharedExpenseOverrides:[],
+  valuation:{kind:'value-added',valueAddedCents:''},sharedExpenseOverrides:[],
   propertyTax:{addedAssessedValueCents:unknown(),marginalRateBps:unknown(),annualAssessmentGrowthBps:'2.00',completedValueEnrollmentYear:String(startYear+1),additionalAnnualChargesCents:'0.00',constructionAssessments:[],paymentYears:[{year:String(startYear),complete:unknown(),payments:[]}],originalExpenseExcludesAdu:unknown()},
   taxQualifications:Object.fromEntries(books.map(book=>[book,unknown()])),productionPeriod:unknown(),supportOperatingDeficits:unknown(),
  };

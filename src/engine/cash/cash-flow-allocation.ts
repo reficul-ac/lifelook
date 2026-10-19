@@ -22,6 +22,11 @@ export interface AllocationYearInput {
  readonly cashIncomeByMonth: readonly Cents[]; readonly expensesByMonth: readonly Cents[]; readonly debtPaymentsByMonth: readonly Cents[];
  readonly rsuWithholdingByMonth: readonly Cents[]; readonly taxWeightsByMonth: readonly Cents[];
  readonly financedConstructionByMonth?:readonly Cents[];
+ /** Dedicated asset transfers offset only construction and sale tax actually funded. */
+ readonly brokerageFundingByMonth?:(household:HouseholdYear,incomeTaxByMonth:readonly Cents[])=>readonly Cents[];
+ readonly incomeTaxByMonth?:(household:HouseholdYear)=>readonly Cents[];
+ /** Internal timing fallback for automatic targets; saved requests keep their dates. */
+ readonly automaticDepositStartMonthsByAccount?:ReadonlyMap<string,number>;
  readonly openingUnrestrictedCashCents?:Available<Cents>;
  readonly openingAccountBalances?: ReadonlyMap<string, Available<Cents>>;
 }
@@ -47,9 +52,10 @@ function cashTiming(input: AllocationYearInput, household: HouseholdYear) {
   if (household.tax.status !== 'available') throw new Error('Tax timing requires resolved tax.');
   const federal = allocateAnnualTax(household.tax.value.federal.totalCents, input.taxWeightsByMonth);
   const california = allocateAnnualTax(household.tax.value.california.totalCents, input.taxWeightsByMonth);
-  const incomeTaxByMonth = federal.map((value, month) => sum([value, california[month]!]));
+  const incomeTaxByMonth = input.incomeTaxByMonth?.(household)??federal.map((value, month) => sum([value, california[month]!]));
+  const brokerage=input.brokerageFundingByMonth?.(household,incomeTaxByMonth);
   const preTransferCashByMonth = input.cashIncomeByMonth.map((value, month) => sum([value, -input.expensesByMonth[month]!, -input.debtPaymentsByMonth[month]!, -household.payroll.months[month]!.totalCents, -incomeTaxByMonth[month]!, input.rsuWithholdingByMonth[month]!]));
-  return { incomeTaxByMonth, preTransferCashByMonth,...(input.financedConstructionByMonth?{allocationBudgetByMonth:preTransferCashByMonth.map((a,i)=>sum([a,input.financedConstructionByMonth![i]!]))}:{}) };
+  return { incomeTaxByMonth, preTransferCashByMonth,...(input.financedConstructionByMonth||brokerage?{allocationBudgetByMonth:preTransferCashByMonth.map((a,i)=>sum([a,input.financedConstructionByMonth?.[i]??0,brokerage?.[i]??0]))}:{}) };
 }
 function requestsFor(adapter: AllocationAdapter, year: number, targets: readonly FundingTarget[], ceilings: readonly Cents[], employers: readonly EmployerFundingBudget[], routeReadiness: ReadonlyMap<string, Available<true>>): readonly ContributionRequest[] {
   const schedule = scheduleAllocationFunding(targets, ceilings, employers);
@@ -67,6 +73,9 @@ function requestsFor(adapter: AllocationAdapter, year: number, targets: readonly
 
 /** Every trial starts from the caller's opening state; only the verified fixed point escapes. */
 export function resolveAllocationYear(input: AllocationYearInput, resolveHousehold = resolveHouseholdYear): Available<ResolvedAllocationYear> {
+  for (const month of input.automaticDepositStartMonthsByAccount?.values() ?? []) {
+    if (!Number.isInteger(month) || month < 1 || month > 12) throw new RangeError('Automatic deposits require a start month from 1 through 12.');
+  }
   for (const months of [input.cashIncomeByMonth, input.expensesByMonth, input.debtPaymentsByMonth, input.rsuWithholdingByMonth, input.taxWeightsByMonth,...(input.financedConstructionByMonth?[input.financedConstructionByMonth]:[])]) {
     if (months.length !== 12) throw new RangeError('Allocation requires twelve monthly amounts.');
     months.forEach(value => { if (!Number.isSafeInteger(value)) throw new RangeError('Allocation requires integer cents.'); assertMonetaryRange(new Decimal(value)); });
@@ -137,7 +146,8 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
       if (source.destination.kind !== 'account') return available(0);
       const salaryId = source.destination.sponsoringSalaryId;
       const sponsor = adapter.plan.salaries.find(salary => salary.id === salaryId);
-      const target: FundingTarget = { ruleId, stage, priority, requestedCents: desired, allowedMonths: Array.from({ length: 12 }, (_, i) => i + 1), ...(sponsor ? { employerKey: JSON.stringify([sponsor.ownerId, sponsor.employerId]) } : {}) };
+      const firstDepositMonth = input.automaticDepositStartMonthsByAccount?.get(source.destination.accountId) ?? 1;
+      const target: FundingTarget = { ruleId, stage, priority, requestedCents: desired, allowedMonths: Array.from({ length: 12 }, (_, i) => i + 1).filter(month => month >= firstDepositMonth), ...(sponsor ? { employerKey: JSON.stringify([sponsor.ownerId, sponsor.employerId]) } : {}) };
       const protectedTotals = protectedAmounts(protectedHousehold);
       for (const [id, floor] of protectionFloors) protectedTotals.set(id, floor);
       const destinationAccount = adapter.plan.accounts.find(account => source.destination.kind === 'account' && account.id === source.destination.accountId)!;
@@ -306,7 +316,7 @@ export function resolveAllocationYear(input: AllocationYearInput, resolveHouseho
     // Known target shortfalls still reconcile to the annual pool; only saved
     // deposits exceeding that pool constitute an allocation funding conflict.
     const conflict = sum(afterExisting) < 0;
-    return available({ requests: acceptedRequests, report: { year: input.cash.year, status: original <= 0 ? 'no-surplus' : conflict ? 'funding-conflict' : 'funded', originalCashFlowCents: original,...(timing.allocationBudgetByMonth?{aduBudget:{reportedCashFlowCents:sum(timing.preTransferCashByMonth),financedConstructionCents:sum(input.financedConstructionByMonth!),allocationCashFlowCents:original}}:{}), accounts, explicitCashTargetCents: explicitCashTarget, explicitCashCents: explicitCash, explicitCashShortfallCents: Math.max(0, explicitCashTarget - explicitCash), excessOfferedCents: excessOffered, excessAcceptedCents: excessAccepted, excessRetainedCents: excessOffered - excessAccepted, retainedCashCents: sum([original, -sum(accounts.map(account => account.actualCents))]), reasons: uniqueReasons } });
+    return available({ requests: acceptedRequests, report: { year: input.cash.year, status: original <= 0 ? 'no-surplus' : conflict ? 'funding-conflict' : 'funded', originalCashFlowCents: original,...(timing.allocationBudgetByMonth?{aduBudget:{reportedCashFlowCents:sum(timing.preTransferCashByMonth),financedConstructionCents:sum(input.financedConstructionByMonth??[]),allocationCashFlowCents:original}}:{}), accounts, explicitCashTargetCents: explicitCashTarget, explicitCashCents: explicitCash, explicitCashShortfallCents: Math.max(0, explicitCashTarget - explicitCash), excessOfferedCents: excessOffered, excessAcceptedCents: excessAccepted, excessRetainedCents: excessOffered - excessAccepted, retainedCashCents: sum([original, -sum(accounts.map(account => account.actualCents))]), reasons: uniqueReasons } });
   }
   let household = evaluate(input.legacyRequests, resolveHousehold);
   let lastSignature: string | undefined;

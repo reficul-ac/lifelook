@@ -106,6 +106,26 @@ function ordinaryTax(taxable:Cents,rules:YearRules):{taxCents:Cents;usedTable:bo
   return {taxCents:taxRound(tax),usedTable};
 }
 
+/** Ordinary long-term gains use the remaining 0%/15% bands above regular ordinary income. */
+function capitalGainTax(gain:Decimal,ordinaryIncome:Decimal,rules:YearRules):Decimal{
+  const r=rules.federal.capitalGains;
+  const zero=Decimal.min(gain,Decimal.max(0,new Decimal(r.zeroRateMaximumCents).minus(ordinaryIncome)));
+  const middle=Decimal.min(gain.minus(zero),Decimal.max(0,new Decimal(r.fifteenRateMaximumCents).minus(Decimal.max(ordinaryIncome,r.zeroRateMaximumCents))));
+  return middle.mul(r.middleRateBps).plus(gain.minus(zero).minus(middle).mul(r.upperRateBps)).div(10000);
+}
+
+function regularTax(taxable:Cents,gain:Cents,rules:YearRules):{taxCents:Cents;usedTable:boolean}{
+  const allOrdinary=ordinaryTax(taxable,rules);
+  if(gain===0)return allOrdinary;
+  const income=new Decimal(taxRound(taxable));
+  const taxableGain=Decimal.min(income,taxRound(gain));
+  const ordinaryIncome=income.minus(taxableGain);
+  const ordinary=ordinaryTax(settleCents(ordinaryIncome),rules);
+  const preferential=taxRound(new Decimal(ordinary.taxCents).plus(capitalGainTax(taxableGain,ordinaryIncome,rules)));
+  // The capital-gain worksheet may never exceed tax on all income at ordinary rates.
+  return {taxCents:Math.min(allOrdinary.taxCents,preferential),usedTable:ordinary.usedTable||allOrdinary.usedTable};
+}
+
 export function calculateFederalTax(facts:ResolvedTaxFacts,deductions:DeductionChoice,opening:HouseholdTaxState,rules:YearRules):Available<FederalTaxResult>{
   const mtc=opening.minimumTaxCreditCoverage.federal;
   if(!mtc.known)return {status:'needs-data',issues:[issue(facts.year,'required-minimum-tax-credit-history','minimumTaxCreditCoverage.federal','Federal prior minimum-tax-credit coverage is unknown.')]};
@@ -148,11 +168,12 @@ export function calculateFederalTax(facts:ResolvedTaxFacts,deductions:DeductionC
     businessDeduction=businessDeduction.plus(potential.minus(reduction));
   }
   if(qbiIssues.length)return {status:'needs-data',issues:qbiIssues};
-  const qbiDeduction=settleCents(Decimal.min(businessDeduction,beforeQbi.mul(qr.deductionBps).div(10000)));
+  const longTermCapitalGain=Math.max(0,facts.longTermCapitalGainCents??0);
+  const qbiDeduction=settleCents(Decimal.min(businessDeduction,Decimal.max(0,beforeQbi.minus(longTermCapitalGain)).mul(qr.deductionBps).div(10000)));
   const preSection68=settleCents(Decimal.max(0,beforeQbi.minus(qbiDeduction)));
   const allowedItemized=deductions.method==='itemized'?limitFederalItemized(rawItemized,preSection68,rules):0;
   const taxable=settleCents(new Decimal(preSection68).plus(rawItemized-allowedItemized));
-  const ordinary=ordinaryTax(taxable,rules);
+  const ordinary=regularTax(taxable,longTermCapitalGain,rules);
   const ar=rules.federal.amt;
   const amtRawDeduction=deductions.method==='itemized'?deductions.detail!.amtAllowedCents:0;
   const amtSenior=ar.seniorDeductionAllowed?senior:0;
@@ -161,7 +182,15 @@ export function calculateFederalTax(facts:ResolvedTaxFacts,deductions:DeductionC
   const amtIncome=settleCents(Decimal.max(0,new Decimal(facts.federalAmtIncomeCents.value).minus(amtSenior).minus(qbiDeduction).minus(amtAllowedDeduction)));
   const exemption=settleCents(Decimal.max(0,new Decimal(ar.exemptionCents).minus(Decimal.max(0,new Decimal(amtIncome).minus(ar.phaseoutStartCents)).mul(ar.phaseoutBps).div(10000))));
   const amtBase=Decimal.max(0,new Decimal(amtIncome).minus(exemption));
-  const tentative=taxRound(Decimal.min(amtBase,ar.rateSplitCents).mul(ar.lowerRateBps).plus(Decimal.max(0,amtBase.minus(ar.rateSplitCents)).mul(ar.upperRateBps)).div(10000));
+  const amtRateTax=(amount:Decimal):Decimal=>Decimal.min(amount,ar.rateSplitCents).mul(ar.lowerRateBps).plus(Decimal.max(0,amount.minus(ar.rateSplitCents)).mul(ar.upperRateBps)).div(10000);
+  let tentative=taxRound(amtRateTax(amtBase));
+  if(longTermCapitalGain>0){
+    const amtForTax=new Decimal(taxRound(settleCents(amtBase)));
+    const amtGain=Decimal.min(amtForTax,taxRound(longTermCapitalGain));
+    const regularOrdinary=Decimal.max(0,new Decimal(taxRound(taxable)).minus(taxRound(longTermCapitalGain)));
+    // Form6251 PartIII: exemption limits taxable AMT gain; REGULAR ordinary income sets gain-band capacity.
+    tentative=taxRound(Decimal.min(amtRateTax(amtForTax),amtRateTax(amtForTax.minus(amtGain)).plus(capitalGainTax(amtGain,regularOrdinary,rules))));
+  }
   const amt=Math.max(0,tentative-ordinary.taxCents);
   const niiBefore=Decimal.max(0,new Decimal(facts.niitOtherIncomeCents.value).plus(facts.rental.federal.value.allowedRentalCents));
   let niitDeduction=0;
@@ -178,7 +207,8 @@ export function calculateFederalTax(facts:ResolvedTaxFacts,deductions:DeductionC
   if(deductions.method==='standard')paths.push('federal.standardDeductionCents','federal.additionalStandardDeductionPerFilerCents','federal.ageDeductionMinimumAge');
   else paths.push('federal.itemized.restrictionNumerator','federal.itemized.restrictionDenominator','federal.itemized.thresholdCents',...Object.keys(rules.provenance).filter(p=>p.startsWith('federal.salt.')||p.startsWith('federal.mortgage.')));
   if(ordinary.usedTable)paths.push(...Object.keys(rules.provenance).filter(p=>p.startsWith('federal.taxTable.')));
+  if(longTermCapitalGain>0)paths.push(...Object.keys(rules.provenance).filter(p=>p.startsWith('federal.capitalGains.')));
   if(qbi.value.units.some(u=>u.qualifiedIncomeCents!==0))paths.push('federal.qbi.deductionBps','federal.qbi.phaseoutStartCents','federal.qbi.phaseoutEndCents','federal.qbi.wageOnlyLimitBps','federal.qbi.wageMixedLimitBps','federal.qbi.ubiaLimitBps');
   const provenance=mergeRuleProvenance(rules,[aggregateRuleProvenance(rules,paths),qbi.value.provenance,...(deductions.method==='itemized'&&deductions.detail?[deductions.detail.provenance]:[])]);
-  return {status:'available',value:{year:facts.year,agiCents:facts.federalAgiCents.value,taxableIncomeCents:taxable,taxableIncomeForTaxCents:taxRound(taxable),deductionMethod:deductions.method,standardDeductionCents:standard,originalItemizedCents:deductions.detail?.originalCents??rawItemized,allowedItemizedCents:allowedItemized,disallowedItemizedCents:deductions.method==='itemized'?moneySum([deductions.detail?.disallowedCents??0,rawItemized-allowedItemized]):0,seniorDeductionCents:senior,qbiDeductionCents:qbiDeduction,preSection68TaxableCents:preSection68,ordinaryTaxCents:ordinary.taxCents,amtIncomeCents:amtIncome,amtExemptionCents:exemption,tentativeMinimumTaxCents:tentative,amtCents:amt,niitIncomeCents:nii,niitDeductionCents:niitDeduction,niitMagiCents:facts.niitMagiCents.value,niitCents:niit,totalCents:moneySum([ordinary.taxCents,amt,niit]),qbi:qbi.value,closingState,provenance,explanations:[`Selected ${deductions.method} deduction ${selected} cents before section68; senior deduction ${senior} cents.`,`QBI taxable income before QBI and section68 ${settleCents(beforeQbi)} cents; QBI deduction ${qbiDeduction} cents.`,`Section68 taxable income before restriction ${preSection68} cents; allowed itemized ${allowedItemized} cents.`,`Ordinary liability uses ${ordinary.usedTable?'provisional official-table bin method':'published marginal rate schedule'} with separate whole-dollar tax rounding.`,`AMT uses its independent income/book, adds back the senior deduction, and disapplies section68; increment ${amt} cents.`,`NIIT excludes wages and QBI deductions; allowed investment tax allocation ${niitDeduction} cents.`,...(deferral?['Deferral AMT creates a future minimum-tax-credit coverage boundary; later total liability requires that separate credit model.']:[])],issues:[]}};
+  return {status:'available',value:{year:facts.year,agiCents:facts.federalAgiCents.value,taxableIncomeCents:taxable,taxableIncomeForTaxCents:taxRound(taxable),deductionMethod:deductions.method,standardDeductionCents:standard,originalItemizedCents:deductions.detail?.originalCents??rawItemized,allowedItemizedCents:allowedItemized,disallowedItemizedCents:deductions.method==='itemized'?moneySum([deductions.detail?.disallowedCents??0,rawItemized-allowedItemized]):0,seniorDeductionCents:senior,qbiDeductionCents:qbiDeduction,preSection68TaxableCents:preSection68,ordinaryTaxCents:ordinary.taxCents,amtIncomeCents:amtIncome,amtExemptionCents:exemption,tentativeMinimumTaxCents:tentative,amtCents:amt,niitIncomeCents:nii,niitDeductionCents:niitDeduction,niitMagiCents:facts.niitMagiCents.value,niitCents:niit,totalCents:moneySum([ordinary.taxCents,amt,niit]),qbi:qbi.value,closingState,provenance,explanations:[`Selected ${deductions.method} deduction ${selected} cents before section68; senior deduction ${senior} cents.`,`QBI taxable income before QBI and section68 ${settleCents(beforeQbi)} cents; QBI deduction ${qbiDeduction} cents.`,`Section68 taxable income before restriction ${preSection68} cents; allowed itemized ${allowedItemized} cents.`,`Ordinary liability uses ${ordinary.usedTable?'provisional official-table bin method':'published marginal rate schedule'} with separate whole-dollar tax rounding.`,`AMT uses its independent income/book, adds back the senior deduction, and disapplies section68; increment ${amt} cents.`,`NIIT excludes wages and QBI deductions; allowed investment tax allocation ${niitDeduction} cents.`,...(longTermCapitalGain>0?[`Regular tax includes ${longTermCapitalGain} cents of ordinary long-term gains stacked above ordinary taxable income at 0%, 15% and 20%; AMT applies the separate Form6251 capital-gain worksheet.`,`QBI taxable-income cap excludes net capital gain. Generated-sale losses receive no deduction, gain offset or carryforward benefit.`]:[]),...(deferral?['Deferral AMT creates a future minimum-tax-credit coverage boundary; later total liability requires that separate credit model.']:[])],issues:[]}};
 }

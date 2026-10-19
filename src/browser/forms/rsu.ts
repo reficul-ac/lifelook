@@ -15,6 +15,7 @@ export function newRsuGrant(controller:WorkspaceController,context:FieldContext)
 }
 export function changeAccountType(controller:WorkspaceController,context:FieldContext,type:unknown):void {
   const value:RawObject={...context.draft.value,type};
+  if(type!=='taxable-brokerage')delete value.openingTaxableBasis;
   if(type==='rsu'){
     value.openingBalanceCents='0.00';value.openingIraBasis={known:false};
     value.rsu??={employerId:'',currentSharePriceCents:'0.00',grants:[newRsuGrant(controller,context)]};

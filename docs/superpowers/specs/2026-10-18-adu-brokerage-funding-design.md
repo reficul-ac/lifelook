@@ -1,6 +1,6 @@
 # ADU construction funded from a brokerage account
 
-Status: draft for review. Product implementation has not started.
+Status: implemented locally following the user's instruction to proceed directly without an implementation plan. Verification is recorded in the development session.
 
 ## Intended outcome
 

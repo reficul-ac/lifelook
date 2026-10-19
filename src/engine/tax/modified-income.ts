@@ -16,12 +16,15 @@ export function combineAvailableCents(values: readonly Available<Cents>[], trans
 }
 export function buildPreIraFacts(cash: CashYear, workplace: WorkplaceYear, property: PropertyYearFacts): PreIraFacts {
   const issues: Issue[] = [...workplace.issues, ...property.issues];
+  // This first sale model gives no loss deduction, offset or carryforward benefit.
+  const longTermCapitalGainCents = Math.max(0, cash.longTermCapitalGainCents ?? 0);
   const uncharacterized = cash.streams.filter(stream => stream.classification === 'ordinary-taxable' && (!stream.niitTreatment || stream.niitTreatment === 'unknown'));
   const niitIssues: Issue[] = uncharacterized.map(stream => ({ code: 'required-niit-characterization', recordId: stream.id, year: cash.year, field: 'niitTreatment', severity: 'warning', explanation: 'This ordinary taxable income has unresolved net-investment-income treatment.', resolution: 'Confirm whether this income is included in or excluded from NIIT.' }));
-  const niitOtherIncomeCents: Available<Cents> = niitIssues.length ? { status: 'needs-data', issues: niitIssues } : { status: 'available', value: sumCents(cash.streams.filter(stream => stream.classification === 'ordinary-taxable' && stream.niitTreatment === 'included').map(stream => stream.annualCents)) };
-  const gross = sumCents([cash.annual.wageCents, cash.annual.ordinaryTaxableCents]);
+  const niitOtherIncomeCents: Available<Cents> = niitIssues.length ? { status: 'needs-data', issues: niitIssues } : { status: 'available', value: sumCents([longTermCapitalGainCents, ...cash.streams.filter(stream => stream.classification === 'ordinary-taxable' && stream.niitTreatment === 'included').map(stream => stream.annualCents)]) };
+  const gross = sumCents([cash.annual.wageCents, cash.annual.ordinaryTaxableCents, longTermCapitalGainCents]);
   return {
     year: cash.year, filers: workplace.filers, grossWagesCents: cash.annual.wageCents, ordinaryTaxableCents: cash.annual.ordinaryTaxableCents, nonTaxableCashCents: cash.annual.nonTaxableCents,
+    ...(longTermCapitalGainCents ? { longTermCapitalGainCents } : {}),
     niitOtherIncomeCents, federalIncomeTaxWageReductionCents: workplace.federalIncomeTaxWageReductionCents, californiaIncomeTaxWageReductionCents: workplace.californiaIncomeTaxWageReductionCents,
     nonRentalFederalAgiCents: mapAvailableCents(workplace.federalIncomeTaxWageReductionCents, reduction => sumCents([gross, -reduction])),
     nonRentalCaliforniaAgiCents: mapAvailableCents(workplace.californiaIncomeTaxWageReductionCents, reduction => sumCents([gross, -reduction])),

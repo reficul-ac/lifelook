@@ -9,18 +9,28 @@ import type { HouseholdTaxResult, HouseholdYear, TaxCandidate } from './tax/comp
 import type { ContributionRecord } from './tax/facts';
 import type { ContributionRequest } from './cash/contribution-requests';
 import type { RsuGrantMonth } from './equity/rsu';
+import type { BrokerageSale } from './cash/brokerage-funding';
 
 export const flowFields = ['grossIncomeCents','salaryCents','otherIncomeCents','rentCents','ordinaryExpensesCents','propertyExpensesCents','expensesCents','debtPaymentCents','interestCents','principalPaidCents','federalIncomeTaxCents','californiaIncomeTaxCents','socialSecurityCents','medicareCents','additionalMedicareCents','sdiCents','totalTaxCents','requestedContributionCents','eligibleContributionCents','preventedContributionCents','accountGrowthCents','propertyGrowthCents','cashFlowCents'] as const;
 export const balanceFields = ['accountBalanceCents','propertyValueCents','loanBalanceCents','equityCents','reserveCents','netWorthCents'] as const;
 export type MonetaryField = typeof flowFields[number] | typeof balanceFields[number];
 export type ProjectionAmounts = Readonly<Record<MonetaryField,Available<Cents>>>;
 export type FundingStatus = 'funded' | 'conditional-on-gap' | 'unavailable';
+export interface BrokerageFundingPeriod {
+  readonly sales:readonly BrokerageSale[];
+  readonly issues?:readonly Issue[];
+}
 export interface AccountProjection {
   readonly accountId:string;
   readonly openingCents:Available<Cents>;
   readonly contributionCents:Available<Cents>;
   readonly growthCents:Available<Cents>;
   readonly closingCents:Available<Cents>;
+  readonly withdrawalCents?:Available<Cents>;
+  readonly realizedGainCents?:Available<Cents>;
+  readonly basisConsumedCents?:Available<Cents>;
+  readonly openingTaxableBasisCents?:Available<Cents>;
+  readonly closingTaxableBasisCents?:Available<Cents>;
   readonly vestedCents?:Available<Cents>;
   readonly withholdingCents?:Available<Cents>;
   readonly conversionInCents?:Available<Cents>;
@@ -61,6 +71,7 @@ export interface ProjectionMetadata {
   readonly issues:readonly Issue[];
 }
 export interface MonthlyProjection extends ProjectionAmounts,ProjectionMetadata {
+  readonly brokerageFunding?:BrokerageFundingPeriod;
   readonly adu?:AduPeriodProjection;
   readonly year:number;
   readonly month:number;
@@ -73,6 +84,7 @@ export interface MonthlyProjection extends ProjectionAmounts,ProjectionMetadata 
   readonly rsu?:Available<RsuPeriod>;
 }
 export interface AnnualProjection extends ProjectionAmounts,ProjectionMetadata {
+  readonly brokerageFunding?:BrokerageFundingPeriod;
   readonly adu?:AduPeriodProjection;
   readonly cashFlowAllocation?:Available<CashFlowAllocationYear>;
   readonly year:number;

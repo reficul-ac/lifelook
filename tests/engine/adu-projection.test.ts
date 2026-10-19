@@ -10,6 +10,17 @@ export const aduLoan=(overrides:Partial<AduFinancing>={}):AduFinancing=>({id:'ad
 const run=(p:PlanDocument)=>calculateProjection(mustValidate(p),loadRuleSet());
 function baseline(p:PlanDocument):PlanDocument {const {aduProject,...home}=p.properties[0]!;return{...p,properties:[{...home,role:'primary'}],rentals:[]};}
 describe('ADU projection accounting and availability',()=>{
+ it.each([2026,2027,2028,2029])('posts a planned ADU tax payment only in its payment year, %s',year=>{
+  const p=makeAduPlan(),project=p.properties[0]!.aduProject!;
+  const payment={id:'planned-tax',month:`${year}-12`,kind:'regular' as const,amountCents:264_000,treatments:makeAduTreatments(264_000,'currentDeductionCents')};
+  const paymentYears=[2026,2027,2028,2029].map(y=>({year:y,complete:{known:true as const,value:true},payments:y===year?[payment]:[]}));
+  const result=run({...p,properties:[{...p.properties[0]!,aduProject:{...project,propertyTax:{...project.propertyTax,paymentYears}}}]});
+  for(const row of result.years){
+   expect(aduValue(row.adu!.projectTaxPaidCents)).toBe(row.year===year?264_000:0);
+   expect(aduValue(row.propertyExpensesCents)).toBe((row.year===2027?30_000_000:0)+(row.year===year?264_000:0));
+  }
+  expect(result.months.filter(m=>aduValue(m.adu!.projectTaxPaidCents)>0).map(m=>m.date)).toEqual(year===2029?[]:[`${year}-12`]);
+ });
  it.each([false,true])('separates equity from net-worth gain, financed=%s',financed=>{
   const p=makeAduPlan({},financed?{financing:aduLoan()}:{}),build=run(p),noBuild=run(baseline(p)),row=build.months.find(m=>m.date==='2027-07')!,base=noBuild.months.find(m=>m.date===row.date)!;
   expect(aduValue(row.equityCents)-aduValue(base.equityCents)).toBe(financed?2_000_000:22_000_000);expect(aduValue(row.netWorthCents)-aduValue(base.netWorthCents)).toBe(-8_000_000);
@@ -21,6 +32,20 @@ describe('ADU projection accounting and availability',()=>{
   const p=makeAduPlan({}, {completionDate:'2027-06-30',productionPeriod:{known:true,value:{startDate:'2027-01-01',endDate:'2027-06-30',uninterrupted:true}},costs:[{id:'building-stage',name:'Building',paymentDate:'2027-06-01',amountCents:30_000_000,category:'building',treatments:makeAduTreatments(30_000_000)}]});const result=run({...p,properties:[{...p.properties[0]!,appreciationBps:1200}]}),june=result.months.find(m=>m.date==='2027-06')!,july=result.months.find(m=>m.date==='2027-07')!;
   // Independently evaluated Decimal worksheet: q=1.12^(1/12), V=100m*q^18+22m.
   expect(aduValue(june.propertyValueCents)).toBe(140_529_659);expect(aduValue(june.propertyGrowthCents)).toBe(1_114_132);expect(aduValue(july.propertyValueCents)).toBe(141_863_116);expect(aduValue(july.propertyGrowthCents)).toBe(1_333_457);
+ });
+ it('appreciates the completed ADU with the home through a yearly override and return to the default rate',()=>{
+  const p=makeAduPlan({horizonYears:4});
+  const result=run({...p,properties:[{...p.properties[0]!,appreciationBps:500,appreciationOverrides:[{year:2028,rateBps:1000}]}]});
+  const completionPostings=result.months.filter(m=>aduValue(m.adu!.completionValueAddedCents)!==0);
+  expect(completionPostings.map(m=>({date:m.date,value:aduValue(m.adu!.completionValueAddedCents)}))).toEqual([{date:'2027-07',value:22_000_000}]);
+  // Independent worksheet: Dec 2027 = $1m * 1.05^2 + $220k * 1.05^(5/12).
+  // Both components then grow 10% in 2028 and return to 5% in 2029.
+  const expectedValues:[string,number][]=[['2027-07',130_031_330],['2027-12',132_701_820],['2028-12',145_972_002],['2029-12',153_270_602]];
+  for(const [date,expected] of expectedValues){
+   const row=result.months.find(m=>m.date===date)!;
+   expect(aduValue(row.properties[0]!.closingValueCents),date).toBe(expected);
+   expect(aduValue(row.propertyValueCents),date).toBe(expected);
+  }
  });
  it('marks WIP value incomplete but retains original-home growth and recovers at completion',()=>{
   const p=makeAduPlan(),result=run({...p,properties:[{...p.properties[0]!,appreciationBps:1200}]});const june=result.months.find(m=>m.date==='2027-06')!,july=result.months.find(m=>m.date==='2027-07')!,august=result.months.find(m=>m.date==='2027-08')!;

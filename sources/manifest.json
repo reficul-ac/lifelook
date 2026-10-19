@@ -661,6 +661,26 @@
       "retrievedOn": "2026-10-13",
       "sha256": "182896d9f218d395c71f215c3f4e09b12173560d5a89e8fc717cd51a3e415680",
       "bytes": 14073
+    },
+    {
+      "id": "irs-p550-2025",
+      "url": "https://www.irs.gov/publications/p550",
+      "snapshot": "2025-reference/irs-p550.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-18",
+      "sha256": "0272fcdef3e9cfc2f985b88fe60aa956df21d4adbbce214bb4c9580470b115bc",
+      "bytes": 1324357
+    },
+    {
+      "id": "ftb-capital-gains",
+      "url": "https://www.ftb.ca.gov/file/personal/income-types/capital-gains-and-losses.html",
+      "snapshot": "2026/ftb-capital-gains.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-10-18",
+      "sha256": "2697ef00c34f0b3f6c2bea1c111d589d9f3317a5bd49433dabbcb639c835360e",
+      "bytes": 28072
     }
   ]
 }

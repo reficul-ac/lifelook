@@ -8,6 +8,7 @@ export const SOURCES = {
   law: source('pl-119-21', 'https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf', '2026/pl-119-21.pdf', 2025, '2025-07-04'),
   planning: source('irs-p505-2026', 'https://www.irs.gov/publications/p505', '2026/irs-p505.html', 2026),
   federalIndex: source('usc-1-2024', 'https://www.govinfo.gov/content/pkg/USCODE-2024-title26/html/USCODE-2024-title26-subtitleA-chap1-subchapA-partI-sec1.htm', '2026/usc-1-2024.html', 2024),
+  capitalGains: source('irs-p550-2025', 'https://www.irs.gov/publications/p550', '2025-reference/irs-p550.html', 2025),
   standardIndex: source('usc-63-2024', 'https://www.govinfo.gov/content/pkg/USCODE-2024-title26/html/USCODE-2024-title26-subtitleA-chap1-subchapB-partI-sec63.htm', '2026/usc-63-2024.html', 2024),
   amtIndex: source('usc-55-2024', 'https://www.govinfo.gov/content/pkg/USCODE-2024-title26/html/USCODE-2024-title26-subtitleA-chap1-subchapA-partVI-sec55.htm', '2026/usc-55-2024.html', 2024),
   california: source('ftb-tax-news-2026-10', 'https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/', '2026/ftb-tax-news.html', 2026, '2026-10'),

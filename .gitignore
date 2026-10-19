@@ -8,6 +8,7 @@ coverage/
 *.tsbuildinfo
 test-results/
 playwright-report/
+.superpowers/
 *.lifelook
 
 # Local financial profiles and exported backups.

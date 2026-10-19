@@ -34,7 +34,7 @@ function expectedYear(year: number): AnnualProjection {
   return row;
 }
 async function preload(page: Page): Promise<void> {
-  await preloadWorkspace(page,overviewPlan());
+  await preloadWorkspace(page,overviewPlan());await page.getByLabel('Table view',{exact:true}).selectOption('financial-overview');await page.getByText('Forecast charts',{exact:true}).click();
 }
 async function expectPlotYear(page: Page, year: number, cashMetric: 'cash-flow' | 'cash-income' = 'cash-flow'): Promise<void> {
   await expect(page.getByRole('combobox', { name: 'Plot year', exact: true })).toHaveValue(String(year));

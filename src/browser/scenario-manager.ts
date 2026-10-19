@@ -1,3 +1,4 @@
+import type {GrowthChartViewState} from './growth-chart-model';
 import {validatePlan,type RuleSet,type ValidatedPlan} from '../engine';
 import type {BackupPayload} from './workspace-backups';
 import {createEditorSession,type EditorPublicationPort} from './state';
@@ -33,7 +34,7 @@ export function createScenarioManager(input:ScenarioWorkspaceDocument,storage:St
   persistence={...persistence,persisted:result.status==='saved',persistenceIssues:result.issues,observedRaw:result.observedRaw,suspension:result.status==='external-change'?'external-change':result.status==='read-failed'?'unreadable':'none'};
  };
  const commit=(candidate:ScenarioWorkspaceDocument)=>{const checked=validateScenarioWorkspace(candidate);if(!checked.ok)return outcome(false,checked.issues);document=checked.document;persist();notify();return outcome(true,[],document.activeScenarioId);};
- const build=(scenario:ScenarioDocument,generation:number,selections?:ScenarioViewSelections,ownerWorkspaceGeneration=workspaceGeneration):ScenarioEditorSession=>{
+ const build=(scenario:ScenarioDocument,generation:number,selections?:ScenarioViewSelections,ownerWorkspaceGeneration=workspaceGeneration,growthChart?:GrowthChartViewState):ScenarioEditorSession=>{
   const target:ScenarioTarget={scenarioId:scenario.id,generation,workspaceGeneration:ownerWorkspaceGeneration};
   const port:EditorPublicationPort={readPersistence:()=>persistence,
    publish(plan,_projection,commitSession){
@@ -43,7 +44,7 @@ export function createScenarioManager(input:ScenarioWorkspaceDocument,storage:St
     if(!checked.ok)return {accepted:false,issues:checked.issues};
     document=checked.document;commitSession();normalizeViewYears(session.view,plan);persist();return {accepted:true};
    },retry(){if(!current(target))return {accepted:false,issues:[workspaceIssue('obsolete-scenario','workspace','This editor is obsolete.')]};const result=retry(false);return result.accepted?{accepted:true}:{accepted:false,issues:result.issues};}};
-  const controller=createEditorSession(scenario.plan,port,rules),session:ScenarioEditorSession={scenarioId:scenario.id,generation,controller,view:createEditorViewSession(scenario.plan,selections)};return session;
+  const controller=createEditorSession(scenario.plan,port,rules),session:ScenarioEditorSession={scenarioId:scenario.id,generation,controller,view:createEditorViewSession(scenario.plan,selections,growthChart)};return session;
  };
  const retain=(session:ScenarioEditorSession)=>{if(sessions.get(session.scenarioId)===session)return;subscriptions.get(session.scenarioId)?.();sessions.set(session.scenarioId,session);subscriptions.set(session.scenarioId,retainEditorView(session.controller,session.view,notify));};
  const prepare=(id:string):ScenarioEditorSession=>{const existing=sessions.get(id);if(existing)return existing;const scenario=row(id);if(!scenario)throw Error('Scenario missing');return build(scenario,generations.get(id)!);};
@@ -78,7 +79,7 @@ export function createScenarioManager(input:ScenarioWorkspaceDocument,storage:St
   switchScenario(id){if(disposed||!row(id))return reject('missing-scenario','This scenario is no longer available.');if(id===document.activeScenarioId)return outcome(true);if(!canIncrement())return reject('revision-overflow','Workspace revision cannot be incremented.');let prepared:ScenarioEditorSession;try{prepared=prepare(id);}catch{return reject('calculation-failed','The selected scenario could not be calculated. The current scenario remains active.');}retain(prepared);return commit({...document,workspaceRevision:document.workspaceRevision+1,activeScenarioId:id});},
   forkScenario(source,name){if(!current(source))return reject('obsolete-scenario','The source scenario changed. Reopen the fork dialog.');const named=validateScenarioName(name,document.scenarios);if(!named.ok)return outcome(false,named.issues);if(!canIncrement())return reject('revision-overflow','Workspace revision cannot be incremented.');let id:string;try{id=allocateId();}catch{return reject('invalid-scenario-id','A new scenario ID could not be created.');}if(!id.trim()||row(id))return reject('duplicate-scenario-id','The new scenario ID must be unique.');
    const original=row(source.scenarioId)!,scenario:ScenarioDocument={id,name:named.name,plan:structuredClone(original.plan),forkedFrom:{scenarioId:original.id,scenarioName:original.name,planRevision:original.plan.revision}},generation=++sequence;
-   let session:ScenarioEditorSession;try{session=build(scenario,generation,sessions.get(source.scenarioId)?.view.selections);}catch{return reject('calculation-failed','The fork could not be calculated. Source inputs and drafts are retained.');}
+   let session:ScenarioEditorSession;try{session=build(scenario,generation,sessions.get(source.scenarioId)?.view.selections,workspaceGeneration,sessions.get(source.scenarioId)?.view.growthChart);}catch{return reject('calculation-failed','The fork could not be calculated. Source inputs and drafts are retained.');}
    const checked=validateScenarioWorkspace({...document,workspaceRevision:document.workspaceRevision+1,activeScenarioId:id,scenarios:[...document.scenarios,scenario]});if(!checked.ok)return outcome(false,checked.issues);generations.set(id,generation);retain(session);return commit(checked.document);
   },
   renameScenario(id,name){const scenario=row(id);if(!scenario||disposed)return reject('missing-scenario','Scenario no longer available.');const named=validateScenarioName(name,document.scenarios,id);if(!named.ok)return outcome(false,named.issues);if(named.name===scenario.name)return outcome(true);if(!canIncrement())return reject('revision-overflow','Workspace revision cannot be incremented.');return commit({...document,workspaceRevision:document.workspaceRevision+1,scenarios:document.scenarios.map(s=>s.id===id?{...s,name:named.name}:s)});},

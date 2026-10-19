@@ -14,6 +14,12 @@ function snapshot(document:PlanDocument,base?:PlanDocument):ReportSnapshot{retur
 const cleanups:(()=>void)[]=[];afterEach(()=>{cleanups.splice(0).forEach(dispose=>dispose());document.body.replaceChildren();});
 
 describe('mounted producing-plan overview',()=>{
+ it('makes detached selected-year total actions inert after the producing report changes',()=>{
+  const base=makePlan(),unknown=makePlan({household:{...base.household,coverageAnswers:{...base.household.coverageAnswers,additionalIncome:{known:false}}}}),{root,context,reviews}=mountPresentation(unknown),binding=mountOverview(root,snapshot(unknown),context,createEditorViewSession(unknown));cleanups.push(binding.dispose,()=>context.disclosures.dispose());
+  fireEvent.click(root.querySelector('.overview-totals [data-metric="netWorthCents"] button')!);
+  const panel=within(document.body).getByRole('region',{name:'Net worth · 2026'}),oldReview=within(panel).getByRole('button',{name:'Review Household'});
+  binding.update(snapshot({...base,revision:1},unknown));fireEvent.click(oldReview);expect(reviews).toEqual([]);
+ });
  it.each(['Show months for 2026','Tax explanation for 2026'])('retains keyboard focus on %s through a completed preview',label=>{
   const applied=plan(),{root,context}=mountPresentation(applied),view=createEditorViewSession(applied),binding=mountOverview(root,snapshot(applied),context,view);cleanups.push(binding.dispose,()=>context.disclosures.dispose());
   fireEvent.click(within(root).getByText('Forecast details',{selector:'summary'}));const control=within(root).getByRole('button',{name:label});control.focus();
@@ -27,13 +33,13 @@ describe('mounted producing-plan overview',()=>{
   control().focus();const candidate={...plan('Updated candidate'),revision:1,accounts:applied.accounts.map(account=>({...account,openingBalanceCents:20000}))};binding.update(snapshot(candidate,applied));
   expect(control()).toHaveFocus();
   if(kind==='series'){fireEvent.click(control());expect(control()).toHaveAttribute('aria-pressed','false');}
-  else {if(kind==='chart')fireEvent.keyDown(control(),{key:'ArrowRight'});else fireEvent.change(control(),{target:{value:'2027'}});expect(within(root).getByLabelText('Forecast year')).toHaveValue('2027');expect(within(root).getByTestId('plot-net-worth-readout')).toHaveTextContent('$200.00');expect(control()).toHaveFocus();}
+  else {if(kind==='chart')fireEvent.keyDown(control(),{key:'ArrowRight'});else fireEvent.change(control(),{target:{value:'2027'}});expect(within(root).getByLabelText('Forecast year')).toHaveValue('2027');expect(root.querySelector('.growth-chart-readout')).toHaveTextContent('$200.00');expect(control()).toHaveFocus();}
  });
 
  it('updates selected-year totals from chart keyboard input without replacing the focused chart',()=>{
   const applied=plan(),{root,context}=mountPresentation(applied),view=createEditorViewSession(applied),binding=mountOverview(root,snapshot(applied),context,view);cleanups.push(binding.dispose,()=>context.disclosures.dispose());
   fireEvent.click(within(root).getByText('Forecast charts',{selector:'summary'}));
-  const chart=within(root).getByRole('img',{name:'Net worth over time'});chart.focus();fireEvent.keyDown(chart,{key:'ArrowRight'});
+  const chart=within(root).getByRole('img',{name:'Net worth over time'});chart.focus();fireEvent.keyDown(chart,{key:'Home'});fireEvent.keyDown(chart,{key:'ArrowRight'});
   expect(within(root).getByLabelText('Forecast year')).toHaveValue('2027');expect(root.querySelector('.overview-totals')).toHaveTextContent('Net worth · 2027');expect(chart).toHaveFocus();expect(chart.isConnected).toBe(true);
  });
  it('defers diagnostic tables and preserves amounts during a status-only update',()=>{

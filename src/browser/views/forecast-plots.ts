@@ -22,7 +22,7 @@ function svgElement<K extends keyof SVGElementTagNameMap>(tag:K,attributes:Recor
   return node;
 }
 
-export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSummaryRow[],context:ReportIssueContext,selections?:ScenarioViewSelections,onSelectYear?:()=>void):void {
+export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSummaryRow[],context:ReportIssueContext,selections?:ScenarioViewSelections,onSelectYear?:()=>void,options?:{includeNetWorth?:boolean}):void {
   const section=element('section');section.className='forecast-plots';
   if(!rows.length){section.append(element('p','No forecast years to plot.'));root.append(section);return;}
   const controls=element('div');controls.className='forecast-plot-controls';
@@ -37,6 +37,7 @@ export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSum
     ['Net worth over time',[netWorth],'net-worth'],
     ['Income, expenses and cash flow',cashSeries,'cash-flow'],
   ] as const){
+    if(id==='net-worth'&&options?.includeNetWorth===false)continue;
     const figure=element('figure');figure.className='forecast-plot';
     figure.append(element('figcaption',title));
     if(id==='cash-flow'){

@@ -20,5 +20,5 @@ export function mountWorkspaceShell(root: HTMLElement, _view: EditorViewSession,
     impact.hidden=!route.editor||route.surface!=='edit';
     if (route.editor) editor.dataset.activeEditor = ''; else delete editor.dataset.activeEditor;
     for (const tab of surfaces.querySelectorAll('button')) if (tab.textContent !== 'Close editor') tab.setAttribute('aria-pressed', String(tab.textContent?.toLowerCase() === route.surface));
-  }, dispose() {nav.remove(); surfaces.remove(); layout.remove();}};
+  }, dispose() {nav.remove(); surfaces.remove(); impact.remove(); layout.remove();}};
 }

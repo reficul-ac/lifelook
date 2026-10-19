@@ -1,5 +1,7 @@
 import {createAduComparisonScheduler} from './adu-comparison';
 import {renderAduComparison} from './views/adu-comparison';
+import {mountGrowthAssumptions} from './growth-assumptions-view';
+import {buildGrowthChartModel} from './growth-chart-model';
 import {createEditPreviewCoordinator} from './edit-preview';
 import {selectReportSnapshot} from './report-snapshot';
 import {mountOverview} from './views/overview';
@@ -28,6 +30,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   const coordinator=createEditPreviewCoordinator(controller,{owner:{workspaceGeneration:owner.workspaceGeneration,scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration},isCurrent},{allocationSession:session.view.allocationPreview});
   const disclosures=createDisclosureController(root);
   let focused:ReturnType<typeof mountFocusedEditor>|undefined;
+  let growth:ReturnType<typeof mountGrowthAssumptions>|undefined;
   const origins:FocusedEditTarget[]=[];
   const previewOwner={workspaceGeneration:owner.workspaceGeneration,scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration};
   const createFlow=()=>createPrerequisiteFlow(controller,{owner:previewOwner,isCurrent},target=>{if(origins.at(-1)&&editTargetKey(origins.at(-1)!)===editTargetKey(target))origins.pop();open(target,null);});
@@ -38,6 +41,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
     const snapshot=selectReportSnapshot(controller.getState(),coordinator.getState());
     const edit=targetForReview(target,controller.getState(),snapshot.plan);
     if(!edit)return;
+    if(edit.kind==='growth-assumptions'){if(activateGrowth()&&target.field)growth?.reveal(target.field);return;}
     const returnTo=route.editor?.returnTo??route.destination;
     route.destination=destinationForSection(target.section);open(edit,null);if(route.editor)route.editor.returnTo=returnTo;
     if(target.field)focused?.reveal(target.field);
@@ -51,9 +55,16 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
     shell.update(route);collection();updateReport();
     if(returnFocus){const origin=previous.origin;if(origin?.isConnected)origin.focus();else {const replacement=[...shell.collection.querySelectorAll<HTMLElement>('[data-open-target]')].find(node=>node.dataset.openTarget===origin?.dataset.openTarget);(replacement??shell.collection.querySelector<HTMLElement>('h2'))?.focus();}}
   };
-  const navigate=(destination:Destination)=>{close(false);route={destination,editor:null,surface:'edit'};session.view.selections.destination=destination;shell.update(route);collection();};
+  const navigate=(destination:Destination)=>{close(false);coordinator.select(null);route={destination,editor:null,surface:'edit'};session.view.selections.destination=destination;shell.update(route);collection();growth?.update();updateReport();paintGrowthImpact();};
+  const activateGrowth=()=>{
+    if(!isCurrent())return false;
+    if(route.editor){focused?.dispose();focused=undefined;shell.editor.replaceChildren();prerequisite.dispose();origins.length=0;prerequisite=createFlow();}
+    route={destination:'overview',editor:null,surface:'edit'};session.view.selections.destination='overview';shell.update(route);collection();
+    if(coordinator.getState().target?.kind!=='growth-assumptions')coordinator.select({kind:'growth-assumptions'});
+    growth?.update();paintGrowthImpact();return true;
+  };
   const open=(target:EditTarget,origin:HTMLElement|null)=>{
-    if(target.kind==='growth-assumptions')return;
+    if(target.kind==='growth-assumptions'){activateGrowth();return;}
     if(!isCurrent())return;
     focused?.dispose();focused=undefined;disclosures.closeWithin(root,false);coordinator.select(null);
     const returnTo=route.editor?.returnTo??route.destination;
@@ -70,19 +81,31 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   const heading=element('h2');heading.dataset.forecastName='';heading.textContent=`Forecast · ${manager.getState().document.scenarios.find(s=>s.id===session.scenarioId)!.name}`;
   const attentionRoot=element('div'),reportRoot=element('div'),comparisonRoot=element('details');comparisonRoot.className='applied-project-comparison';comparisonRoot.append(element('summary','Applied project comparison'));
   const projectChoice=element('select');projectChoice.setAttribute('aria-label','Applied ADU project');
-  const comparisonBody=element('div');comparisonRoot.append(projectChoice,comparisonBody);shell.overview.append(heading,attentionRoot,reportRoot,comparisonRoot);
+  const growthRoot=element('aside');growthRoot.className='growth-assumptions-host';
+  const growthImpact=element('div');growthImpact.className='growth-impact-ribbon';growthImpact.dataset.growthImpact='';growthImpact.hidden=true;
+  const comparisonBody=element('div');comparisonRoot.append(projectChoice,comparisonBody);shell.overview.append(heading,attentionRoot,reportRoot,comparisonRoot);shell.overview.parentElement!.before(growthImpact);
   const attention=mountAttention(attentionRoot,context,context.review);
   let shownReport=selectReportSnapshot(controller.getState(),coordinator.getState());
   let shownIssues=coordinator.getState().issues;
-  const overview=mountOverview(reportRoot,shownReport,context,session.view);
+  const overview=mountOverview(reportRoot,shownReport,context,session.view,{growthControls:growthRoot});
+  growth=mountGrowthAssumptions(growthRoot,controller,{preview:coordinator,activate:activateGrowth,isCurrent,context});
+  function paintGrowthImpact():void {
+    const editing=coordinator.getState().target?.kind==='growth-assumptions';growthImpact.hidden=!editing;
+    root.dataset.growthEditing=String(editing);if(!editing)return;
+    const model=buildGrowthChartModel(shownReport,session.view.selections.forecastYear,session.view.growthChart.horizon),point=model.points.find(point=>point.year===model.selectedYear);
+    const show=(value:import('../engine').Available<number>)=>value.status==='available'?formatCents(value.value):value.status==='unsupported-case'?'Unsupported':'Needs data';
+    growthImpact.replaceChildren(element('strong',`${model.selectedYear} · ${model.sourceLabel}`));
+    if(point){growthImpact.append(element('span',`Net worth ${show(point.netWorth)}`));if(point.delta?.status==='available')growthImpact.append(element('span',`Change ${point.delta.value>=0?'+':''}${formatCents(point.delta.value)}`));}
+  }
+
   const paintImpact=()=>{const ribbon=root.querySelector<HTMLElement>('[data-impact-ribbon]');if(!ribbon)return;const row=buildOverviewRows(shownReport).find(row=>row.balance.year===session.view.selections.forecastYear);if(!row)return;
     ribbon.replaceChildren(element('strong',`${row.balance.year} · ${shownReport.status==='preview'?'Preview':shownReport.status==='applied'?'Applied':'Previous results'}`));
     for(const [label,value] of [['Net worth',row.balance.netWorthCents],['Annual cash flow',row.financial.cashFlowCents],['Cash',row.balance.reserveCents]] as const)ribbon.append(element('span',`${label} ${value.status==='available'?formatCents(value.value):value.status==='unsupported-case'?'Unsupported':'Needs data'}`));
   };
-  const updateReport=()=>{if(!isCurrent())return;const next=selectReportSnapshot(controller.getState(),coordinator.getState());
+  const updateReport=()=>{if(!isCurrent())return;growth?.update();paintGrowthImpact();const next=selectReportSnapshot(controller.getState(),coordinator.getState());
     const issues=coordinator.getState().issues;
     if(next.plan===shownReport.plan&&next.projection===shownReport.projection&&next.status===shownReport.status&&next.label===shownReport.label&&next.allowDeltas===shownReport.allowDeltas&&next.comparison?.plan===shownReport.comparison?.plan&&next.comparison?.projection===shownReport.comparison?.projection){if(issues!==shownIssues){shownIssues=issues;attention.update(shownReport,issues);}return;}
-    shownReport=next;shownIssues=issues;overview.update(next);attention.update(next,issues);paintImpact();
+    shownReport=next;shownIssues=issues;overview.update(next);attention.update(next,issues);paintImpact();paintGrowthImpact();
   };
   const paintComparison=()=>{
     if(!isCurrent())return;disclosures.closeWithin(comparisonBody,false);comparisonBody.replaceChildren();
@@ -124,7 +147,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   const workspaceRoot=root.closest<HTMLElement>('.workspace')??root;workspaceRoot.addEventListener('financial-review',review);
   shell.update(route);collection();syncComparisonSelection();paintComparison();
   attention.update(shownReport,[]);
-  const reportYearChanged=()=>{paintImpact();paintComparison();};
+  const reportYearChanged=()=>{paintImpact();paintGrowthImpact();paintComparison();for(const summary of shell.editor.querySelectorAll<HTMLElement>('[data-property-growth-summary]'))summary.dispatchEvent(new Event('forecast-year-selected'));};
   paintImpact();reportRoot.addEventListener('change',reportYearChanged);reportRoot.addEventListener('forecast-year-selected',reportYearChanged);
-  return {dispose(){if(disposed)return;disposed=true;focused?.dispose();prerequisite.dispose();unsubscribePreview();unsubscribe();coordinator.dispose();adu.dispose();overview.dispose();attention.dispose();disclosures.dispose();shell.dispose();reportRoot.removeEventListener('change',reportYearChanged);reportRoot.removeEventListener('forecast-year-selected',reportYearChanged);root.removeEventListener('keydown',escape);root.removeEventListener('editor-discarded',discarded);root.removeEventListener('editor-removed',removed);root.removeEventListener('editor-add-contribution',addContribution);workspaceRoot.removeEventListener('financial-review',review);}};
+  return {dispose(){if(disposed)return;disposed=true;focused?.dispose();prerequisite.dispose();unsubscribePreview();unsubscribe();growth?.dispose();coordinator.dispose();adu.dispose();overview.dispose();attention.dispose();disclosures.dispose();shell.dispose();reportRoot.removeEventListener('change',reportYearChanged);reportRoot.removeEventListener('forecast-year-selected',reportYearChanged);root.removeEventListener('keydown',escape);root.removeEventListener('editor-discarded',discarded);root.removeEventListener('editor-removed',removed);root.removeEventListener('editor-add-contribution',addContribution);workspaceRoot.removeEventListener('financial-review',review);}};
 }

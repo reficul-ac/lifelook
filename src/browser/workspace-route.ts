@@ -9,6 +9,7 @@ export function destinationForSection(section: InputSection): Destination {
   return ({Household: 'household', Income: 'income', 'Expenses and debts': 'spending', Investments: 'accounts', Properties: 'properties'} as const)[section];
 }
 export function targetForReview(target: ReviewTarget, state: IssueViewState, producingPlan: PlanDocument): EditTarget | null {
+  if (target.field==='growthAssumptions'||target.field?.startsWith('growthAssumptions.')||target.field==='inheritAccountIds'||target.field==='inheritPropertyIds') return {kind:'growth-assumptions'};
   if (target.section === 'Household') return {kind: 'record', section: 'household', recordId: 'household'};
   if (target.recordId === producingPlan.cashFlowAllocation?.id || target.recordId === state.allocationDraft?.recordId) return {kind: 'allocation'};
   const property = producingPlan.properties.find(p => p.id === target.recordId || p.loans.some(l => l.id === target.recordId) || p.aduProject?.id === target.recordId);

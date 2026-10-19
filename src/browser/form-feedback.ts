@@ -79,7 +79,7 @@ export function syncFormFeedback(root:HTMLElement,controller:WorkspaceController
     let summary=form.querySelector<HTMLElement>('[data-form-feedback]');
     if(!summary){summary=element('div');summary.dataset.formFeedback='';form.append(summary);}
     context.disclosures.closeWithin(summary,false);summary.replaceChildren();for(const disclosure of form.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]')){const heading=disclosure.querySelector('summary');if(heading)heading.textContent=disclosure.dataset.disclosureName+(disclosure.dataset.disclosureStatus?' · '+disclosure.dataset.disclosureStatus:'');}if(!resolved.length)continue;
-    summary.append(element('strong',resolved.some(item=>item.issue.severity==='error')?'Inputs not applied. Correct these errors and save again.':'Review these inputs.'));
+    summary.append(element('strong',resolved.some(item=>item.issue.severity==='error')?(memory?'Inputs not applied. Correct these errors and Apply again.':'Inputs not applied. Correct these errors and save again.'):'Review these inputs.'));
     const list=element('ul');summary.append(list);
     for(const {issue,path} of resolved){
       const target=path?matching(form,path):undefined,control=target?.matches('input,select,textarea')?target:undefined;

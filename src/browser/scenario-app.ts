@@ -1,23 +1,35 @@
-import {mountBackupControls} from './backup-controls';
+import {mountAppearance} from './ui/appearance';
+import {mountSettings} from './settings';
+import {mountPersistenceStatus} from './persistence-status';
 import {element,button} from './fields';
 import {mountEditorView} from './editor-view';
 import {mountScenarioControls} from './scenario-controls';
 import {registerAppCleanup,unmountApp} from './app-lifecycle';
-import {exportWorkspace,WORKSPACE_STORAGE_KEY} from './workspace-storage';
+import {WORKSPACE_STORAGE_KEY} from './workspace-storage';
 import type {ScenarioManager} from './scenario-manager';
 import type {WorkspaceOperation} from './state';
 export function downloadWorkspaceText(text:string,name:string):void {if(typeof URL.createObjectURL!=='function')return;const url=URL.createObjectURL(new Blob([text],{type:'application/json'})),link=element('a');link.href=url;link.download=name;link.click();URL.revokeObjectURL(url);}
 export function mountScenarioApp(root:HTMLElement,manager:ScenarioManager):void {
- unmountApp(root);root.replaceChildren();root.className='workspace';const header=element('header');header.append(element('h1','LifeLook'));const controlsRoot=element('div'),status=element('p'),drafts=element('p'),announcement=element('p'),recovery=element('div');status.dataset.testid='save-status';drafts.dataset.testid='draft-status';announcement.dataset.testid='save-announcement';announcement.setAttribute('role','status');announcement.className='save-announcement';recovery.dataset.testid='persistence-warning';header.append(controlsRoot,status,drafts,element('small','Unapplied edits stay here while this tab is open. Save to keep them after reload.'),announcement,recovery);const bindingRoot=element('div');root.append(header,bindingRoot);
- let session=manager.getActiveSession(),generation=1,disposed=false,binding=mountEditorView(bindingRoot,session,manager,generation),shownPersistence:unknown;
- const controls=mountScenarioControls(controlsRoot,manager),backupRoot=element('div');header.append(backupRoot);const backups=mountBackupControls(backupRoot,manager);
+ unmountApp(root);root.replaceChildren();root.className='workspace';
+ const header=element('header'),controlsRoot=element('div'),statusRoot=element('div'),drafts=element('p'),announcement=element('p'),settingsPanel=element('section');
+ drafts.dataset.testid='draft-status';announcement.dataset.testid='save-announcement';announcement.setAttribute('role','status');announcement.className='save-announcement';
+ settingsPanel.hidden=true;settingsPanel.dataset.settings='';
+ const settingsButton=button('Settings',()=>{settingsPanel.hidden=!settingsPanel.hidden;settingsButton.setAttribute('aria-expanded',String(!settingsPanel.hidden));});settingsButton.setAttribute('aria-expanded','false');
+ header.append(element('h1','LifeLook'),controlsRoot,statusRoot,drafts,settingsButton,announcement,settingsPanel);
+ const bindingRoot=element('div');root.append(header,bindingRoot);
+ const media=typeof window.matchMedia==='function'?window.matchMedia('(prefers-color-scheme: dark)'):({matches:false,addEventListener(){},removeEventListener(){}} as unknown as MediaQueryList);
+ const appearance=mountAppearance(document.documentElement,{getItem:key=>window.localStorage.getItem(key),setItem:(key,value)=>window.localStorage.setItem(key,value)},media);
+ const settings=mountSettings(settingsPanel,manager,appearance),persistence=mountPersistenceStatus(statusRoot,manager),controls=mountScenarioControls(controlsRoot,manager);
+ let session=manager.getActiveSession(),generation=1,disposed=false,binding=mountEditorView(bindingRoot,session,manager,generation);
  const announce=(event:Event)=>{announcement.textContent=(event as CustomEvent<string>).detail;};root.addEventListener('scenario-announcement',announce);
- const operation=(event:Event)=>{const op=(event as CustomEvent<WorkspaceOperation>).detail,state=manager.getActiveSession().controller.getState(),allocation=op.kind==='save'&&op.recordId===manager.getActiveSession().controller.getAllocationDraft().recordId;
-  announcement.textContent=op.kind==='restore'?'Backup restored.':op.result.accepted?(allocation?'Allocation applied':op.kind==='remove'?'Inputs removed':'Inputs applied')+`${op.result.persisted?'':' in memory'} · v${state.savedPlan.revision}`+(op.result.persisted?'':'. Export a recovery backup.'):(allocation?'Allocation not applied. Review the errors and Apply again.':'Inputs not applied. Review the errors and save again.');};root.addEventListener('editor-operation',operation);
+ const operation=(event:Event)=>{const op=(event as CustomEvent<WorkspaceOperation>).detail;
+  announcement.textContent=op.kind==='restore'?'Backup restored.':op.result.accepted?(op.kind==='remove'?'Record removed.':'Changes applied.')+(op.result.persisted?'':' Not saved locally. Export a recovery backup.'):'Inputs not applied. Review the errors and Apply again.';
+ };root.addEventListener('editor-operation',operation);
  const render=()=>{if(disposed)return;const state=manager.getState();if(state.activeSession!==session){binding.dispose();session=state.activeSession;generation++;binding=mountEditorView(bindingRoot,session,manager,generation);}
-  const editor=session.controller.getState(),name=state.document.scenarios.find(s=>s.id===session.scenarioId)!.name;bindingRoot.querySelector('[data-forecast-name]')!.textContent=`Forecast · ${name}`;status.textContent=`${state.persistence.persisted?'Saved locally':'Unsaved locally'} · Inputs v${editor.savedPlan.revision}`;const count=Object.keys(editor.drafts).length;drafts.textContent=[count?`${count} drafts · Draft edits not applied`:'',editor.allocationDraft?'Allocation edits not applied':''].filter(Boolean).join(' · ');
-  recovery.hidden=state.persistence.persistenceIssues.length===0&&state.persistence.suspension==='none';if(shownPersistence!==state.persistence){shownPersistence=state.persistence;recovery.replaceChildren();if(!recovery.hidden){recovery.append(element('strong',state.persistence.suspension==='external-change'?'The saved workspace changed in another tab. Export your local workspace, then reload.':state.persistence.suspension==='unreadable'?'Unreadable saved data is protected. This workspace remains in memory.':'Inputs are only in memory; browser saving failed.'));for(const issue of state.persistence.persistenceIssues)recovery.append(element('p',issue.explanation));const retry=button('Retry local save',()=>manager.retryLocalSave());retry.disabled=state.persistence.suspension!=='none';recovery.append(button('Export workspace backup',()=>downloadWorkspaceText(exportWorkspace(state.document),'lifelook-workspace.json')),retry);if(state.persistence.recovery)recovery.append(button('Download unreadable saved backup',()=>downloadWorkspaceText(state.persistence.recovery!.raw,'lifelook-unreadable-saved-backup.json')));}}
+  const editor=session.controller.getState(),name=state.document.scenarios.find(s=>s.id===session.scenarioId)!.name;
+  const heading=bindingRoot.querySelector('[data-forecast-name]');if(heading)heading.textContent=`Forecast · ${name}`;
+  const count=Object.keys(editor.drafts).length;const label=[count?`${count} ${count===1?'draft':'drafts'} not applied`:'',editor.allocationDraft?'Allocation draft':''].filter(Boolean).join(' · ');if(drafts.textContent!==label)drafts.textContent=label;
  };
  const unsubscribe=manager.subscribe(render);const storageEvent=(event:StorageEvent)=>{if(event.storageArea&&event.storageArea!==window.localStorage)return;if(event.key===WORKSPACE_STORAGE_KEY||event.key===null)manager.observeExternalStorage(event.newValue);};window.addEventListener('storage',storageEvent);
- registerAppCleanup(root,()=>{if(disposed)return;disposed=true;unsubscribe();controls.dispose();backups.dispose();binding.dispose();root.removeEventListener('scenario-announcement',announce);root.removeEventListener('editor-operation',operation);window.removeEventListener('storage',storageEvent);manager.dispose();});render();
+ registerAppCleanup(root,()=>{if(disposed)return;disposed=true;unsubscribe();controls.dispose();settings.dispose();persistence.dispose();appearance.dispose();binding.dispose();root.removeEventListener('scenario-announcement',announce);root.removeEventListener('editor-operation',operation);window.removeEventListener('storage',storageEvent);manager.dispose();});render();
 }

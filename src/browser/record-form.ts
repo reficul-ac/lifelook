@@ -15,12 +15,12 @@ export interface FormRenderOptions {
 export function renderRecordForm(root: HTMLElement, controller: WorkspaceController, section: EditableSection, recordId: string, title: string, renderFields: (root: HTMLElement, context: FieldContext) => void, ui?: IssueViewContext, options?: FormRenderOptions): HTMLFormElement {
   const form = element('form'); form.dataset.recordId = recordId; form.dataset.editableSection = section;
   if (options) {form.dataset.focusedForm = ''; registerFocusedForm(form, options.memory);}
-  form.append(element('h3', title)); const body = element('div'); body.className = 'record-fields'; form.append(body); root.append(form);
+  form.append(element('h3', options?String(controller.getDraft(section,recordId).value.name||title):title)); const body = element('div'); body.className = 'record-fields'; form.append(body); root.append(form);
   const context: FieldContext = {
     ...(ui ? {ui} : {}), ...(options ? {memory: options.memory, ...(options.requestPrerequisite ? {requestPrerequisite: options.requestPrerequisite} : {})} : {}),
     get draft() {return controller.getDraft(section, recordId);},
     get issues() {return controller.getState().issues;},
-    onChange(path, value) {const draft = controller.getDraft(section, recordId); controller.editDraft(recordId, {...draft, value: setAt(draft.value, path, value)});},
+    onChange(path, value) {if(options&&!form.isConnected)return;const draft = controller.getDraft(section, recordId); controller.editDraft(recordId, {...draft, value: setAt(draft.value, path, value)});},
     refresh() {ui?.disclosures.closeWithin(body, false); refreshFields(body, () => renderFields(body, context)); if (ui) syncFormFeedback(root, controller, ui);},
   };
   context.refresh();
@@ -28,6 +28,6 @@ export function renderRecordForm(root: HTMLElement, controller: WorkspaceControl
     const field = (event.target as HTMLElement).dataset.field;
     if (options && field) {options.memory.touched.add(field); if (ui) syncFormFeedback(root, controller, ui);}
   });
-  form.addEventListener('submit', event => {event.preventDefault(); if (options) {options.memory.attempted = true; options.onSubmit();} else controller.saveRecord(recordId);});
+  form.addEventListener('submit', event => {event.preventDefault();if(options&&!form.isConnected)return; if (options) {options.memory.attempted = true; options.onSubmit();} else controller.saveRecord(recordId);});
   return form;
 }

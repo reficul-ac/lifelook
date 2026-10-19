@@ -1,67 +1,110 @@
 import {createAduComparisonScheduler} from './adu-comparison';
 import {renderAduComparison} from './views/adu-comparison';
+import {createEditPreviewCoordinator} from './edit-preview';
+import {selectReportSnapshot} from './report-snapshot';
+import {mountOverview} from './views/overview';
+import {mountWorkspaceShell} from './workspace-shell';
+import {mountFocusedEditor} from './focused-editor';
+import {renderRecordCollection} from './record-collections';
+import {destinationForSection,targetForReview,type Destination,type WorkspaceRoute} from './workspace-route';
+import {createDisclosureController} from './disclosures';
+import {withProducingPlan,type IssueViewContext} from './issue-presentation';
+import {element} from './fields';
+import {mountAttention} from './views/attention';
+import {createPrerequisiteFlow} from './prerequisite-flow';
+import {editTargetKey} from './record-ui-state';
+import {buildOverviewRows} from './overview-model';
+import {formatCents} from './views/issues';
+import type {PrerequisiteRequest} from './prerequisite-flow';
 import type {ScenarioEditorSession} from './scenario-session';
 import type {ScenarioManager} from './scenario-manager';
-import type {InputSection} from './issue-presentation';
-import {syncFormFeedback} from './form-feedback';
-import {createDisclosureController} from './disclosures';
-import {reviewTarget} from './navigation';
-import type {IssueViewContext} from './issue-presentation';
-import type {PlanDocument} from '../engine';
-import { button,element } from './fields';
-import type {WorkspaceController,WorkspaceOperation} from './state';
-
-import { renderHouseholdForm } from './forms/household';
-import { renderIncomeForm } from './forms/income';
-import { renderExpensesDebtsForm } from './forms/expenses-debts';
-import { renderInvestmentsForm,mountInvestmentAllocation } from './forms/investments';
-import { renderPropertiesForm } from './forms/properties';
-import { renderProjection } from './views/projection';
-import { renderIssues,renderIssueDetails } from './views/issues';
-
+import type {EditTarget} from './edit-types';
 
 export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,manager:ScenarioManager,activationGeneration:number):{dispose():void}{
-  root.replaceChildren();const controller=session.controller;let disposed=false;const target=manager.captureTarget(session.scenarioId)!;
-  const isCurrent=()=>!disposed&&manager.isCurrentTarget(target)&&manager.getActiveSession()===session;
+  root.replaceChildren();const controller=session.controller;let disposed=false;
+  const owner=manager.captureTarget(session.scenarioId)!;
+  const isCurrent=()=>!disposed&&manager.isCurrentTarget(owner)&&manager.getActiveSession()===session;
+  const coordinator=createEditPreviewCoordinator(controller,{owner:{workspaceGeneration:owner.workspaceGeneration,scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration},isCurrent},{allocationSession:session.view.allocationPreview});
   const disclosures=createDisclosureController(root);
-  const context:IssueViewContext={editorView:session.view,disclosures,readState:controller.getState,review:target=>{if(!isCurrent())return;disclosures.closeWithin(root,false);reviewTarget(root,target);}};
-  const layout=element('div');layout.className='workspace-layout';const editor=element('section'),report=element('section');editor.setAttribute('aria-label','Financial inputs');report.setAttribute('aria-label','Saved projection');layout.append(editor,report);root.append(layout);
-  const nav=element('nav');nav.setAttribute('aria-label','Input sections');editor.append(nav);
-  const sections:readonly [string,(root:HTMLElement,controller:WorkspaceController,ui?:IssueViewContext)=>void][]=[['Household',renderHouseholdForm],['Income',renderIncomeForm],['Expenses and debts',renderExpensesDebtsForm],['Investments',renderInvestmentsForm],['Properties',renderPropertiesForm]];
-  const containers=sections.map(([label,renderer],index)=>{const container=element('section');container.hidden=label!==session.view.selections.inputSection;container.dataset.section=label;const tab=button(label,()=>{session.view.selections.inputSection=label as InputSection;containers.forEach(c=>{if(c.container!==container)disclosures.closeWithin(c.container,false);c.container.hidden=c.container!==container;});nav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===tab)));});tab.setAttribute('aria-pressed',String(label===session.view.selections.inputSection));nav.append(tab);editor.append(container);return {container,renderer};});
-  const investments=containers.find(item=>item.container.dataset.section==='Investments')!;
-  const allocationHost=element('div'),investmentRecords=element('div');investments.container.append(allocationHost,investmentRecords);
-  const allocationEditor=mountInvestmentAllocation(allocationHost,controller,context,{view:session.view,ownership:{owner:{scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration},isCurrent:()=>isCurrent()}});
+  let focused:ReturnType<typeof mountFocusedEditor>|undefined;
+  const origins:EditTarget[]=[];
+  const previewOwner={workspaceGeneration:owner.workspaceGeneration,scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration};
+  const createFlow=()=>createPrerequisiteFlow(controller,{owner:previewOwner,isCurrent},target=>{if(origins.at(-1)&&editTargetKey(origins.at(-1)!)===editTargetKey(target))origins.pop();open(target,null);});
+  let prerequisite=createFlow();
+  let route:WorkspaceRoute={destination:session.view.selections.destination??'overview',editor:null,surface:'edit'};
+  const context:IssueViewContext={editorView:session.view,disclosures,readState:controller.getState,review:target=>{
+    if(!isCurrent())return;
+    const snapshot=selectReportSnapshot(controller.getState(),coordinator.getState());
+    const edit=targetForReview(target,controller.getState(),snapshot.plan);
+    if(!edit)return;
+    const returnTo=route.editor?.returnTo??route.destination;
+    open(edit,null);if(route.editor)route.editor.returnTo=returnTo;
+    if(target.field)focused?.reveal(target.field);
+  }};
+  const collection=()=>renderRecordCollection(shell.collection,controller.getState(),route.destination,open,section=>{const recordId=controller.beginAdd(section);open({kind:'record',section,recordId},null);});
+  const close=(returnFocus=true)=>{
+    const previous=route.editor;if(!previous)return;
+    focused?.dispose();focused=undefined;coordinator.select(null);shell.editor.replaceChildren();
+    prerequisite.dispose();origins.length=0;prerequisite=createFlow();
+    route={destination:previous.returnTo,editor:null,surface:'edit'};session.view.selections.destination=route.destination;
+    shell.update(route);collection();updateReport();
+    if(returnFocus){const origin=previous.origin;if(origin?.isConnected)origin.focus();else {const replacement=[...shell.collection.querySelectorAll<HTMLElement>('[data-open-target]')].find(node=>node.dataset.openTarget===origin?.dataset.openTarget);(replacement??shell.collection.querySelector<HTMLElement>('h2'))?.focus();}}
+  };
+  const navigate=(destination:Destination)=>{close(false);route={destination,editor:null,surface:'edit'};session.view.selections.destination=destination;shell.update(route);collection();};
+  const open=(target:EditTarget,origin:HTMLElement|null)=>{
+    if(!isCurrent())return;
+    focused?.dispose();focused=undefined;disclosures.closeWithin(root,false);coordinator.select(null);
+    const returnTo=route.editor?.returnTo??route.destination;
+    route={destination:route.destination,editor:{target,returnTo,origin},surface:'edit'};
+    shell.update(route);coordinator.select(target);focused=mountFocusedEditor(shell.editor,session,target,context,coordinator,{
+      requestPrerequisite:(request:PrerequisiteRequest)=>{if(!isCurrent()||route.editor?.target!==target)return;origins.push(target);prerequisite.begin(target,request);},
+      applied:(applied,result)=>prerequisite.applied(applied,result),
+      ...(origins.length?{cancelPrerequisite:()=>prerequisite.cancel()}:{}),
+    });
+    updateReport();
+    const heading=shell.editor.querySelector<HTMLElement>('h3,h2');if(heading){heading.tabIndex=-1;heading.focus();}
+  };
+  const shell=mountWorkspaceShell(root,session.view,{navigate,open,close:()=>close(),surface:value=>{route.surface=value;shell.update(route);if(value==='edit')focused?.restoreFocus();}});
   const heading=element('h2');heading.dataset.forecastName='';heading.textContent=`Forecast · ${manager.getState().document.scenarios.find(s=>s.id===session.scenarioId)!.name}`;
-  const projectionRoot=element('div'),comparisonRoot=element('div');report.append(heading,projectionRoot,comparisonRoot);
-  let comparisonYear=session.view.selections.forecastYear,schedulerSelection=session.view.selectedAduProjectId;
-  const paintComparison=()=>{if(!isCurrent())return;context.disclosures.closeWithin(comparisonRoot,false);comparisonRoot.replaceChildren();const projects=controller.getState().savedPlan.properties.filter(p=>p.aduProject);if(!projects.length)return;
-    const label=element('label','ADU project comparison'),select=element('select');select.setAttribute('aria-label','ADU project comparison');const empty=element('option','Select a project');empty.value='';select.append(empty);for(const property of projects){const option=element('option',`${property.name} · ${property.aduProject!.name}`);option.value=property.aduProject!.id;select.append(option);}select.value=session.view.selectedAduProjectId??'';label.append(select);comparisonRoot.append(label);
-    select.addEventListener('change',()=>{if(!isCurrent())return;if(select.value)session.view.selectedAduProjectId=select.value;else delete session.view.selectedAduProjectId;schedulerSelection=select.value||undefined;aduScheduler.select(schedulerSelection);});
-    const state=session.view.aduComparison;if(state.status==='calculated'&&state.comparison)renderAduComparison(comparisonRoot,state.comparison,context,session.view.selections.forecastYear);else if(state.status==='pending')comparisonRoot.append(element('p','Calculating applied ADU comparison…'));else if(state.status==='failed'){const issues=element('div');renderIssues(issues,state.issues,context,'ADU comparison unavailable');comparisonRoot.append(issues,button('Request comparison again',()=>{if(isCurrent())aduScheduler.request();}));}
-    comparisonYear=session.view.selections.forecastYear;
+  const attentionRoot=element('div'),reportRoot=element('div'),comparisonRoot=element('details');comparisonRoot.className='applied-project-comparison';comparisonRoot.append(element('summary','Applied project comparison'));
+  const comparisonBody=element('div');comparisonRoot.append(comparisonBody);shell.overview.append(heading,attentionRoot,reportRoot,comparisonRoot);
+  const attention=mountAttention(attentionRoot,context,context.review);
+  let shownReport=selectReportSnapshot(controller.getState(),coordinator.getState());
+  let shownIssues=coordinator.getState().issues;
+  const overview=mountOverview(reportRoot,shownReport,context,session.view);
+  const paintImpact=()=>{const ribbon=root.querySelector<HTMLElement>('[data-impact-ribbon]');if(!ribbon)return;const row=buildOverviewRows(shownReport).find(row=>row.balance.year===session.view.selections.forecastYear);if(!row)return;
+    ribbon.replaceChildren(element('strong',`${row.balance.year} · ${shownReport.status==='preview'?'Preview':shownReport.status==='applied'?'Applied':'Previous results'}`));
+    for(const [label,value] of [['Net worth',row.balance.netWorthCents],['Annual cash flow',row.financial.cashFlowCents],['Cash',row.balance.reserveCents]] as const)ribbon.append(element('span',`${label} ${value.status==='available'?formatCents(value.value):value.status==='unsupported-case'?'Unsupported':'Needs data'}`));
   };
-  const aduScheduler=createAduComparisonScheduler(controller,state=>{if(!isCurrent())return;session.view.aduComparison=state;paintComparison();},{owner:{workspaceGeneration:target.workspaceGeneration,scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration},isCurrent:()=>isCurrent()});
-  const selectedYearChanged=()=>{if(comparisonYear!==session.view.selections.forecastYear)paintComparison();};
-  for(const event of ['change','keydown','pointermove'])report.addEventListener(event,selectedYearChanged);
-
-  let savedIdentity:PlanDocument|undefined,draftKeys='';
-  const render=(operation?:WorkspaceOperation)=>{if(!isCurrent())return;
-    const state=controller.getState(),newKeys=Object.values(state.drafts).filter(d=>d.section!=='household'&&!((state.savedPlan[d.section]??[]) as readonly {id:string}[]).some(r=>r.id===d.recordId)).map(d=>d.recordId).sort().join('|'),changed=savedIdentity!==state.savedPlan;
+  const updateReport=()=>{if(!isCurrent())return;const next=selectReportSnapshot(controller.getState(),coordinator.getState());
+    const issues=coordinator.getState().issues;
+    if(next.plan===shownReport.plan&&next.projection===shownReport.projection&&next.status===shownReport.status&&next.label===shownReport.label&&next.allowDeltas===shownReport.allowDeltas&&next.comparison?.plan===shownReport.comparison?.plan&&next.comparison?.projection===shownReport.comparison?.projection){if(issues!==shownIssues){shownIssues=issues;attention.update(shownReport,issues);}return;}
+    shownReport=next;shownIssues=issues;overview.update(next);attention.update(next,issues);paintImpact();
+  };
+  const paintComparison=()=>{
+    if(!isCurrent())return;disclosures.closeWithin(comparisonBody,false);comparisonBody.replaceChildren();
+    comparisonRoot.hidden=!controller.getState().savedPlan.properties.some(p=>p.aduProject);
+    const state=session.view.aduComparison;
+    if(state.status==='calculated'&&state.comparison)renderAduComparison(comparisonBody,state.comparison,withProducingPlan(context,controller.getState().savedPlan),session.view.selections.forecastYear);
+    else if(state.status==='pending')comparisonBody.append(element('p','Calculating applied ADU comparison…'));
+  };
+  const adu=createAduComparisonScheduler(controller,state=>{if(isCurrent()){session.view.aduComparison=state;paintComparison();}},{owner:{workspaceGeneration:owner.workspaceGeneration,scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration},isCurrent});
+  const unsubscribePreview=coordinator.subscribe(updateReport);
+  const unsubscribe=controller.subscribe(operation=>{
+    if(!isCurrent())return;
     if(operation)root.dispatchEvent(new CustomEvent('editor-operation',{bubbles:true,detail:operation}));
-    if(changed){renderProjection(projectionRoot,state.projection,context,session.view);if(schedulerSelection!==session.view.selectedAduProjectId){schedulerSelection=session.view.selectedAduProjectId;aduScheduler.select(schedulerSelection);}paintComparison();}
-    const active=document.activeElement instanceof HTMLInputElement||document.activeElement instanceof HTMLSelectElement?document.activeElement:undefined;const activeRecord=active?.closest<HTMLElement>('[data-record-id]')?.dataset.recordId,activeField=active?.dataset.field;const selection=active instanceof HTMLInputElement&&active.type==='text'?[active.selectionStart,active.selectionEnd] as const:undefined;
-    if(changed||draftKeys!==newKeys){for(const {container,renderer} of containers){const recordRoot=container===investments.container?investmentRecords:container;disclosures.closeWithin(recordRoot,false);renderer(recordRoot,controller,context);}}
-    syncFormFeedback(editor,controller,context);
-    for(const feedback of editor.querySelectorAll<HTMLElement>('[data-operation-feedback]')){disclosures.closeWithin(feedback,false);feedback.remove();}
-    for(const [recordId,issues] of session.view.removeIssues){
-      const form=[...editor.querySelectorAll<HTMLElement>('form[data-record-id]')].find(node=>node.dataset.recordId===recordId);
-      if(form){const feedback=element('div');feedback.dataset.operationFeedback='';feedback.append(element('strong','Record not removed. Correct the linked inputs, then remove again.'));renderIssueDetails(feedback,issues.map(issue=>({issue})),context);form.append(feedback);}
-    }
-    if(activeField&&activeRecord&&!active?.isConnected){const form=[...editor.querySelectorAll<HTMLElement>('[data-record-id]')].find(node=>node.dataset.recordId===activeRecord);const replacement=[...form?.querySelectorAll<HTMLInputElement|HTMLSelectElement>('[data-field]')??[]].find(node=>node.dataset.field===activeField);replacement?.focus();if(selection&&replacement instanceof HTMLInputElement&&replacement.type==='text')replacement.setSelectionRange(selection[0],selection[1]);}
-    savedIdentity=state.savedPlan;draftKeys=newKeys;
-  };
-  const unsubscribe=controller.subscribe(render);render();aduScheduler.select(session.view.selectedAduProjectId);return {dispose(){if(disposed)return;disposed=true;
-    for(const node of root.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]'))session.view.propertyDisclosures.set(node.dataset.propertyDisclosure!,node.open);
-    unsubscribe();aduScheduler.dispose();allocationEditor.dispose();disclosures.dispose();}};
+    if(!route.editor)collection();updateReport();
+  });
+  const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!root.querySelector('[data-disclosure-panel]')){event.preventDefault();close();}};
+  const discarded=()=>{const target=route.editor?.target;if(target?.kind==='record'&&target.section!=='household'&&!(controller.getState().savedPlan[target.section]??[]).some(record=>record.id===target.recordId)){close();return;}if(target){const origin=route.editor?.origin??null;open(target,origin);}};
+  const removed=()=>close();
+  const review=(event:Event)=>{const request=(event as CustomEvent<{target:import('./issue-presentation').ReviewTarget;handled:boolean}>).detail;if(!isCurrent()||!targetForReview(request.target,controller.getState(),shownReport.plan))return;request.handled=true;context.review(request.target);};
+  const addContribution=(event:Event)=>{const recordId=controller.beginAdd('contributions'),draft=controller.getDraft('contributions',recordId);controller.editDraft(recordId,{...draft,value:{...draft.value,accountId:(event as CustomEvent<string>).detail}});open({kind:'record',section:'contributions',recordId},null);};
+  root.addEventListener('keydown',escape);root.addEventListener('editor-discarded',discarded);root.addEventListener('editor-removed',removed);
+  root.addEventListener('editor-add-contribution',addContribution);
+  const workspaceRoot=root.closest<HTMLElement>('.workspace')??root;workspaceRoot.addEventListener('financial-review',review);
+  shell.update(route);collection();adu.select(session.view.selectedAduProjectId);paintComparison();
+  attention.update(shownReport,[]);
+  paintImpact();reportRoot.addEventListener('change',paintImpact);reportRoot.addEventListener('forecast-year-selected',paintImpact);
+  return {dispose(){if(disposed)return;disposed=true;focused?.dispose();prerequisite.dispose();unsubscribePreview();unsubscribe();coordinator.dispose();adu.dispose();overview.dispose();attention.dispose();disclosures.dispose();shell.dispose();reportRoot.removeEventListener('change',paintImpact);reportRoot.removeEventListener('forecast-year-selected',paintImpact);root.removeEventListener('keydown',escape);root.removeEventListener('editor-discarded',discarded);root.removeEventListener('editor-removed',removed);root.removeEventListener('editor-add-contribution',addContribution);workspaceRoot.removeEventListener('financial-review',review);}};
 }

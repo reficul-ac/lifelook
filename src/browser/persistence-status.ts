@@ -9,7 +9,7 @@ export function mountPersistenceStatus(root:HTMLElement,manager:ScenarioManager)
  const action=(label:string,run:()=>void)=>{const node=button(label,()=>{if(!disposed&&node.isConnected)run();});return node;};
  const render=()=>{
   if(disposed)return;const state=manager.getState(),persistence=state.persistence,label=persistence.persisted?'Applied · Saved locally':'Applied · Not saved locally';if(status.textContent!==label)status.textContent=label;
-  recovery.hidden=persistence.persisted&&persistence.persistenceIssues.length===0&&persistence.suspension==='none';if(previous===persistence)return;previous=persistence;recovery.replaceChildren();if(recovery.hidden)return;
+  recovery.hidden=persistence.persistenceIssues.length===0&&persistence.suspension==='none';if(previous===persistence)return;previous=persistence;recovery.replaceChildren();if(recovery.hidden)return;
   recovery.append(element('strong',persistence.suspension==='external-change'?'The saved workspace changed in another tab. Export your local workspace, then reload.':persistence.suspension==='unreadable'?'Unreadable saved data is protected. Applied inputs remain in memory.':'Applied inputs remain in memory. Browser saving failed.'));
   for(const issue of persistence.persistenceIssues)recovery.append(element('p',issue.explanation));
   const retry=action('Retry local save',()=>manager.retryLocalSave());retry.disabled=persistence.suspension!=='none';recovery.append(action('Export workspace backup',()=>downloadWorkspaceText(manager.exportWorkspace(),'lifelook-workspace.json')),retry);

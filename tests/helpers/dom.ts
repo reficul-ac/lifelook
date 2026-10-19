@@ -8,7 +8,8 @@ export function mountWorkspace(doc:PlanDocument,storage?:StoragePort){
   const {root,manager}=mountScenarioWorkspace(makeScenarioWorkspace(doc),storage);return {root,controller:manager.getActiveSession().controller,manager};
 }
 export function setField(root:HTMLElement,label:string,value:string):void {
-  const control=[...root.querySelectorAll<HTMLInputElement|HTMLSelectElement>('input,select')].find(node=>node.getAttribute('aria-label')===label)??within(root).getByLabelText(label) as HTMLInputElement|HTMLSelectElement;
+  const active=root.querySelector<HTMLElement>('[data-active-editor]')??root;
+  const control=[...active.querySelectorAll<HTMLInputElement|HTMLSelectElement>('input,select')].find(node=>node.getAttribute('aria-label')===label)??within(root).getByLabelText(label) as HTMLInputElement|HTMLSelectElement;
   if(control instanceof HTMLSelectElement)fireEvent.change(control,{target:{value}});else fireEvent.input(control,{target:{value}});
 }
 

@@ -22,7 +22,7 @@ function svgElement<K extends keyof SVGElementTagNameMap>(tag:K,attributes:Recor
   return node;
 }
 
-export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSummaryRow[],context:ReportIssueContext,selections?:ScenarioViewSelections):void {
+export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSummaryRow[],context:ReportIssueContext,selections?:ScenarioViewSelections,onSelectYear?:()=>void):void {
   const section=element('section');section.className='forecast-plots';
   if(!rows.length){section.append(element('p','No forecast years to plot.'));root.append(section);return;}
   const controls=element('div');controls.className='forecast-plot-controls';
@@ -65,7 +65,7 @@ export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSum
     charts.push({svg,readout,series,title});section.append(figure);
   }
   select.addEventListener('change',()=>choose(rows.findIndex(row=>String(row.year)===select.value)));
-  function choose(index:number):void {const next=Math.max(0,Math.min(rows.length-1,index));if(next===selected)return;selected=next;if(selections)selections.forecastYear=rows[selected]!.year;select.value=String(rows[selected]!.year);paint();}
+  function choose(index:number):void {const next=Math.max(0,Math.min(rows.length-1,index));if(next===selected)return;selected=next;if(selections)selections.forecastYear=rows[selected]!.year;select.value=String(rows[selected]!.year);paint();onSelectYear?.();}
   function paint():void {
     for(const chart of charts){
       const lines=chart.series.filter(series=>!hiddenSeries.has(series.key));

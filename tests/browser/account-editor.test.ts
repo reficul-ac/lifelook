@@ -1,10 +1,22 @@
 import {describe, expect, it} from 'vitest';
-import {fireEvent, within} from '@testing-library/dom';
+import {fireEvent, waitFor, within} from '@testing-library/dom';
 import {mountWorkspace, setField} from '../helpers/dom';
 import {makeAllocationPlan} from '../helpers/allocations';
 import {openRecord} from '../helpers/workspace-ui';
 
 describe('account entry', () => {
+  it('associates a blurred rate error with both exact input and supplemental slider', async () => {
+    const {root} = mountWorkspace(makeAllocationPlan());
+    const editor = openRecord(root, {kind: 'record', section: 'accounts', recordId: 'brokerage'});
+    const input = within(editor).getByLabelText('Effective annual account return (%)');
+    setField(editor, 'Effective annual account return (%)', '1.234');
+    await waitFor(() => expect(editor.querySelector('[data-preview-status]')).toHaveAttribute('data-preview-status', 'invalid'));
+    fireEvent.focusOut(input);
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    const slider = within(editor).getByRole('slider');
+    expect(slider).toHaveAttribute('aria-invalid', 'true');
+    expect(slider).toHaveAccessibleDescription(/up to 2 decimal places/);
+  });
   it('starts contributions for an applied account as a separate unapplied record', () => {
     const {root, controller} = mountWorkspace(makeAllocationPlan());
     const editor = openRecord(root, {kind: 'record', section: 'accounts', recordId: 'brokerage'});

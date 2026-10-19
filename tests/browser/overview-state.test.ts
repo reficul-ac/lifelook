@@ -14,6 +14,16 @@ function snapshot(document:PlanDocument,base?:PlanDocument):ReportSnapshot{retur
 const cleanups:(()=>void)[]=[];afterEach(()=>{cleanups.splice(0).forEach(dispose=>dispose());document.body.replaceChildren();});
 
 describe('mounted producing-plan overview',()=>{
+ it('updates selected-year totals from chart keyboard input without replacing the focused chart',()=>{
+  const applied=plan(),{root,context}=mountPresentation(applied),view=createEditorViewSession(applied),binding=mountOverview(root,snapshot(applied),context,view);cleanups.push(binding.dispose,()=>context.disclosures.dispose());
+  fireEvent.click(within(root).getByText('Forecast charts',{selector:'summary'}));
+  const chart=within(root).getByRole('img',{name:'Net worth over time'});chart.focus();fireEvent.keyDown(chart,{key:'ArrowRight'});
+  expect(within(root).getByLabelText('Forecast year')).toHaveValue('2027');expect(root.querySelector('.overview-totals')).toHaveTextContent('Net worth · 2027');expect(chart).toHaveFocus();expect(chart.isConnected).toBe(true);
+ });
+ it('defers diagnostic tables and preserves amounts during a status-only update',()=>{
+  const applied=plan(),report=snapshot(applied),{root,context}=mountPresentation(applied),binding=mountOverview(root,report,context,createEditorViewSession(applied));cleanups.push(binding.dispose,()=>context.disclosures.dispose());
+  expect(root.querySelector('[data-testid="annual-2026-net-worth"]')).toBeNull();const amount=within(root).getByTestId('balance-2026-reserve').firstChild;binding.update({...report,status:'updating',label:'Updating · applied results'});expect(within(root).getByTestId('balance-2026-reserve').firstChild).toBe(amount);fireEvent.click(within(root).getByText('Forecast details',{selector:'summary'}));expect(root.querySelector('[data-testid="annual-2026-net-worth"]')).not.toBeNull();
+ });
  it('retains an open issue while its cause remains and removes obsolete actions on resolution',()=>{
   const base=makePlan(),unknown=makePlan({household:{...base.household,coverageAnswers:{...base.household.coverageAnswers,additionalIncome:{known:false}}}}),{root,context,reviews}=mountPresentation(unknown),view=createEditorViewSession(unknown),binding=mountOverview(root,snapshot(unknown),context,view);cleanups.push(binding.dispose,()=>context.disclosures.dispose());
   fireEvent.click(within(within(root).getByTestId('balance-2026-reserve')).getByRole('button'));
@@ -26,7 +36,7 @@ describe('mounted producing-plan overview',()=>{
   const activeInput=document.createElement('input');document.body.append(activeInput);
   const binding=mountOverview(root,snapshot(applied),context,view);cleanups.push(binding.dispose,()=>context.disclosures.dispose());
   const tableScroll=within(root).getByRole('region',{name:'Annual balance sheet, horizontally scrollable'});tableScroll.scrollLeft=160;
-  const monthToggle=within(root).getByRole('button',{name:'Show months for 2026'});fireEvent.click(monthToggle);
+  fireEvent.click(within(root).getByText('Forecast details',{selector:'summary'}));const monthToggle=within(root).getByRole('button',{name:'Show months for 2026'});fireEvent.click(monthToggle);
   const assets=within(root).getByText('Asset and loan balances · 2026',{selector:'summary'}).parentElement as HTMLDetailsElement;assets.open=true;
   fireEvent.change(within(root).getByLabelText('Forecast year'),{target:{value:'2027'}});activeInput.focus();
   binding.update(snapshot({...plan('Renamed candidate account'),revision:1},applied));
@@ -35,13 +45,13 @@ describe('mounted producing-plan overview',()=>{
  });
  it('switches to financial definitions and closes details removed by changed forecast bounds',()=>{
   const applied=plan(),{root,context}=mountPresentation(applied),view=createEditorViewSession(applied),binding=mountOverview(root,snapshot(applied),context,view);cleanups.push(binding.dispose,()=>context.disclosures.dispose());
-  fireEvent.click(within(root).getByRole('button',{name:'Show months for 2027'}));fireEvent.change(within(root).getByLabelText('Table view'),{target:{value:'financial-overview'}});
+  fireEvent.click(within(root).getByText('Forecast details',{selector:'summary'}));fireEvent.click(within(root).getByRole('button',{name:'Show months for 2027'}));fireEvent.change(within(root).getByLabelText('Table view'),{target:{value:'financial-overview'}});
   expect(within(root).getByRole('table',{name:'Annual financial overview'}).querySelectorAll('thead th')).toHaveLength(7);expect(root).toHaveTextContent('Investment contributions are savings');
   binding.update(snapshot({...applied,horizonYears:1,revision:1},applied));expect(within(root).queryByRole('button',{name:'Hide months for 2027'})).toBeNull();expect(view.reportState.expanded.has('year:2027:months')).toBe(false);
  });
  it('labels debt increases without a beneficial-gain cue and labels candidate-only years',()=>{
   const applied=makePlan(),candidate=makePlan({horizonYears:2,debts:[{id:'debt',name:'Debt',openingBalanceCents:10000,aprBps:0,monthlyPaymentCents:0,firstPaymentMonth:'2026-01'}]}),{root,context}=mountPresentation(applied),view=createEditorViewSession(candidate),binding=mountOverview(root,snapshot(candidate,applied),context,view);cleanups.push(binding.dispose,()=>context.disclosures.dispose());
-  const debt=within(root).getByTestId('balance-2026-loan-balance');expect(debt).toHaveTextContent('Debt increasing');expect(debt).not.toHaveClass('cash-flow-positive');expect(root).toHaveTextContent('No applied comparison');expect(within(root).getByTestId('balance-2026-property-value')).toHaveTextContent('$0.00');
+  const debt=within(root).getByTestId('balance-2026-debt');expect(debt).toHaveTextContent('Debt increasing');expect(debt).not.toHaveClass('cash-flow-positive');expect(root).toHaveTextContent('No applied comparison');expect(within(root).getByTestId('balance-2026-property')).toHaveTextContent('$0.00');
  });
  it('routes candidate-only records and labels from the producing plan without replacing editor state',()=>{
   const applied=makePlan(),candidate=plan('Candidate only'),{root,context}=mountPresentation(applied),producing=withProducingPlan(context,candidate);

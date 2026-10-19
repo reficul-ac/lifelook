@@ -1,3 +1,4 @@
+import type {EditPreviewCoordinator} from '../edit-types';
 import type {Issue,PlanDocument,ProjectionResult} from '../../engine';
 import {createEditorViewSession,normalizeViewYears,type EditorViewSession} from '../scenario-session';
 import {createAllocationPreviewScheduler,type AllocationPreviewOwnership} from '../allocation-preview';
@@ -17,16 +18,17 @@ interface Control {node:HTMLInputElement|HTMLSelectElement;error:HTMLElement;pat
 interface BackdoorControls {toggle:Control;details:HTMLElement;source?:Control|undefined;history?:Control|undefined;sourceTools?:HTMLElement|undefined}
 interface Row {root:HTMLElement;legend:HTMLElement;destination:Control;priority:Control;sponsorHost:HTMLElement;sponsor?:Control|undefined;backdoorHost:HTMLElement;backdoor?:BackdoorControls|undefined;amountHost:HTMLElement;mode:string;maximum?:Control|undefined;percent?:Control|undefined;slider?:Control|undefined;readout:HTMLElement}
 
-export interface AllocationEditorOptions {view:EditorViewSession;ownership?:AllocationPreviewOwnership}
+export interface AllocationEditorOptions {view:EditorViewSession;ownership?:AllocationPreviewOwnership;preview?:Pick<EditPreviewCoordinator,'getState'|'subscribe'|'request'|'apply'|'discard'>}
 
 /** A separate policy transaction. Controls survive preview and unrelated record updates. */
 export function mountCashFlowAllocationEditor(root:HTMLElement,controller:WorkspaceController,context:IssueViewContext,editorOptions?:AllocationEditorOptions):{dispose():void}{
+  const external=editorOptions?.preview;
   root.replaceChildren();root.classList.add('allocation-editor');
   const form=element('form');form.setAttribute('aria-label','Cash flow allocation');form.append(element('h2','Cash flow allocation'));
   const intro=element('p','Allocate the same annual cash flow after taxes and expenses. Existing deposits count toward each total account target.');form.append(intro);
   form.append(element('p','Annual account targets are divided into monthly installments, with cent rounding. A $7,500 annual IRA target contributes $625 at each month end and grows from the next month. Excess funding adapts to available monthly cash while preserving feasible target installments. Cash availability, payroll timing and contribution limits can change the monthly schedule. Traditional 401(k) funding reduces modeled income tax; the allocation budget includes that tax saving.'));
   const yearHost=element('div'),rowHost=element('div'),overflowHost=element('div'),feedback=element('div'),status=element('p'),remaining=element('p'),chart=element('div');status.setAttribute('role','status');status.dataset.allocationStatus='';feedback.dataset.allocationFeedback='';remaining.dataset.allocationRemaining='';chart.dataset.allocationPreview='';
-  form.append(yearHost,rowHost,button('Add allocation',add),overflowHost,button('Apply allocation',()=>controller.applyAllocation()),button('Discard allocation edits',()=>controller.discardAllocationDraft()),feedback,status,remaining,chart);root.append(form);form.addEventListener('submit',event=>{event.preventDefault();controller.applyAllocation();});
+  form.append(yearHost,rowHost,button('Add allocation',add),overflowHost,button('Apply allocation',()=>{if(external)external.apply();else controller.applyAllocation();}),button('Discard allocation edits',()=>{if(external)external.discard();else controller.discardAllocationDraft();}),feedback,status,remaining,chart);root.append(form);form.addEventListener('submit',event=>{event.preventDefault();if(external)external.apply();else controller.applyAllocation();});
   let disposed=false;const view=editorOptions?.view??createEditorViewSession(controller.getState().savedPlan),preview=view.allocationPreview;
   let savedIdentity=controller.getState().savedPlan,draftIdentity=controller.getState().allocationDraft;
   const rows=new Map<string,Row>();let initialized=false;
@@ -166,22 +168,32 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
       }
     }else for(const row of rows.values())row.readout.textContent=report?'Funding is unavailable for the selected year.':'No valid funding preview for the selected year.';
   }
-  const scheduler=createAllocationPreviewScheduler(controller,result=>{
+  const scheduler=external?undefined:createAllocationPreviewScheduler(controller,result=>{
     if(disposed)return;
     if(result.status==='calculated'){const prepared=prepareAllocationPreview(controller);if(prepared.status!=='ready')return;preview.lastValid={plan:prepared.plan,projection:result.projection};preview.status='valid';preview.issues=[];}else{preview.status=result.status;preview.issues=result.issues;}
     syncFeedback([...preview.issues,...controller.getState().issues]);renderPreview();
   },editorOptions?.ownership);
+  function syncExternal(){
+    if(!external||disposed)return;const current=external.getState();
+    preview.status=current.status==='stale'?'invalid':current.status;preview.issues=current.issues;
+    const report=current.current?{plan:current.current.prepared.plan,projection:current.current.projection,basePlan:current.current.prepared.basePlan}:current.lastValid;
+    if(report)preview.lastValid={plan:report.plan,projection:report.projection,...(report.basePlan?{basePlan:report.basePlan}:{})};
+    else if(current.status==='inactive'){const applied=controller.getState();if(applied.savedPlan.cashFlowAllocation)preview.lastValid={plan:applied.savedPlan,projection:applied.projection};else delete preview.lastValid;}
+    syncFeedback([...preview.issues,...controller.getState().issues]);renderPreview();
+  }
+  const unsubscribePreview=external?.subscribe(syncExternal);
   function update(operation?:WorkspaceOperation){
     if(disposed)return;const state=controller.getState(),changed=state.savedPlan!==savedIdentity||state.allocationDraft!==draftIdentity;
     if(initialized&&!changed&&!operation)return;initialized=true;
     const cleared=draftIdentity!==undefined&&state.allocationDraft===undefined;savedIdentity=state.savedPlan;draftIdentity=state.allocationDraft;syncControls();
+    if(external){syncExternal();return;}
     if(cleared||changed&&!state.allocationDraft){if(state.savedPlan.cashFlowAllocation)preview.lastValid={plan:state.savedPlan,projection:state.projection};else delete preview.lastValid;preview.status=preview.lastValid?'valid':'inactive';preview.issues=[];}
-    else if(changed&&state.allocationDraft){preview.status='pending';preview.issues=[];scheduler.request();}
+    else if(changed&&state.allocationDraft){preview.status='pending';preview.issues=[];scheduler?.request();}
     if(operation?.kind==='save'&&operation.recordId===draft().recordId&&!operation.result.accepted){preview.issues=operation.result.issues;preview.status=preview.issues.some(issue=>issue.code==='calculation-failed')?'failed':'invalid';}
     syncFeedback([...preview.issues,...state.issues]);renderPreview();
   }
   const unsubscribe=controller.subscribe(update);
   if(!draftIdentity&&!preview.lastValid&&savedIdentity.cashFlowAllocation){preview.lastValid={plan:savedIdentity,projection:controller.getState().projection};preview.status='valid';}
-  update();if(draftIdentity){const prepared=prepareAllocationPreview(controller);if(prepared.status==='ready'){preview.status='pending';scheduler.request();}else{preview.status=prepared.status;preview.issues=prepared.issues;syncFeedback(preview.issues);}renderPreview();}
-  return {dispose(){if(disposed)return;disposed=true;unsubscribe();scheduler.dispose();context.disclosures.closeWithin(root,false);}};
+  update();if(draftIdentity&&!external){const prepared=prepareAllocationPreview(controller);if(prepared.status==='ready'){preview.status='pending';scheduler?.request();}else{preview.status=prepared.status;preview.issues=prepared.issues;syncFeedback(preview.issues);}renderPreview();}
+  return {dispose(){if(disposed)return;disposed=true;unsubscribe();unsubscribePreview?.();scheduler?.dispose();context.disclosures.closeWithin(root,false);}};
 }

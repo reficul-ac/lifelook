@@ -87,3 +87,7 @@ it('echoes worker ownership and rejects old session or activation replies even w
  const reply=calculateAllocationPreview(worker.request);expect(reply.owner).toEqual(owner);active=false;worker.onmessage?.({data:reply} as MessageEvent);expect(published).toEqual([]);scheduler.dispose();expect(worker.terminated).toBe(true);
 });
 import {calculateAllocationPreview} from '../../src/browser/allocation-preview-worker';
+
+it('uses the applied allocation result without a worker for unchanged inputs',()=>{
+ ControlledWorker.instances=[];vi.stubGlobal('Worker',ControlledWorker);const {controller,published,scheduler}=setup();scheduler.request();flush();expect(ControlledWorker.instances).toHaveLength(0);expect(published).toEqual([{status:'calculated',projection:controller.getState().projection,inputRevision:0}]);expect(controller.getState().savedPlan.revision).toBe(0);scheduler.dispose();
+});

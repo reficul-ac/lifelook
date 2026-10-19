@@ -20,6 +20,7 @@ export function createAllocationPreviewScheduler(controller:WorkspaceController,
       const accept=(preview:CashFlowAllocationPreview)=>{if(current())publish(preview);};
       const prepared=prepareAllocationPreview(controller);
       if(prepared.status!=='ready'){accept(prepared);return;}
+      if(prepared.plan===savedPlan){accept({status:'calculated',projection:controller.getState().projection,inputRevision:savedPlan.revision});return;}
       // Worker absence is the only synchronous fallback. A broken supported worker reports failure.
       if(typeof Worker==='undefined'){accept(controller.previewAllocation());return;}
       let running:Worker,settled=false;

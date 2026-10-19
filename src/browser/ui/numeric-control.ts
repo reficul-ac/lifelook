@@ -66,6 +66,7 @@ export function mountNumericControl(host: HTMLElement, options: NumericControlOp
     group.append(range, rangeHint);
   }
   host.append(group);
+  let disposed = false;
   const parse = options.kind === 'money' ? parseMoneyInput : parseRateInput;
   const syncRange = (raw: string) => {
     if (!range || !rangeHint || !options.slider) return;
@@ -79,6 +80,12 @@ export function mountNumericControl(host: HTMLElement, options: NumericControlOp
   const commit = () => {
     options.onCommit();
     input.dispatchEvent(new CustomEvent('financial-input-commit', {bubbles: true}));
+  };
+  const onTextBlur = () => {
+    // A render can blur a focused field just before replacing it.
+    queueMicrotask(() => {
+      if (!disposed && input.isConnected) commit();
+    });
   };
   const onTextInput = () => {
     const raw = normalizeNumericText(input.value, options.kind);
@@ -103,7 +110,7 @@ export function mountNumericControl(host: HTMLElement, options: NumericControlOp
   };
   const onRangeKeyUp = (event: KeyboardEvent) => { if (sliderKeys.has(event.key)) commit(); };
   input.addEventListener('input', onTextInput);
-  input.addEventListener('blur', commit);
+  input.addEventListener('blur', onTextBlur);
   range?.addEventListener('input', onRangeInput);
   range?.addEventListener('change', commit);
   range?.addEventListener('keydown', onRangeKeyDown);
@@ -115,8 +122,9 @@ export function mountNumericControl(host: HTMLElement, options: NumericControlOp
       syncRange(raw);
     },
     dispose() {
+      disposed = true;
       input.removeEventListener('input', onTextInput);
-      input.removeEventListener('blur', commit);
+      input.removeEventListener('blur', onTextBlur);
       range?.removeEventListener('input', onRangeInput);
       range?.removeEventListener('change', commit);
       range?.removeEventListener('keydown', onRangeKeyDown);

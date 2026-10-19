@@ -74,7 +74,7 @@ describe('precise money and rate controls', () => {
     expect(within(root).getByRole('slider')).toHaveAccessibleName('Expected return (%) adjustment');
   });
 
-  it('steps slider arrow keys in exact units and flushes committed changes', () => {
+  it('steps slider arrow keys in exact units and flushes committed changes', async () => {
     const root = host(), onInput = vi.fn(), onCommit = vi.fn(), commits = vi.fn();
     root.addEventListener('financial-input-commit', commits);
     const control = mountNumericControl(root, {label: 'Expected return (%)', field: 'annualGrowthBps', kind: 'rate', raw: '-5.25', slider: {minUnits: -1000, maxUnits: 2000, stepUnits: 25}, onInput, onCommit});
@@ -90,16 +90,55 @@ describe('precise money and rate controls', () => {
     fireEvent.change(range);
     expect(onCommit).toHaveBeenCalledTimes(2);
     fireEvent.blur(control.input);
+    await Promise.resolve();
     expect(onCommit).toHaveBeenCalledTimes(3);
     expect(commits).toHaveBeenCalledTimes(3);
   });
 
-  it('disposes input and commit listeners without removing unrelated controls', () => {
+  it('does not commit a blurred exact input replaced before the next microtask', async () => {
+    const root = host(), onCommit = vi.fn(), commits = vi.fn();
+    root.addEventListener('financial-input-commit', commits);
+    const control = mountNumericControl(root, {label: 'Amount', field: 'amountCents', kind: 'money', raw: '1.00', onInput: () => {}, onCommit});
+    control.input.focus();
+    control.input.blur();
+    root.replaceChildren(document.createElement('input'));
+    await Promise.resolve();
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(commits).not.toHaveBeenCalled();
+  });
+
+  it('commits one attached exact input blur after the current DOM update', async () => {
+    const root = host(), onCommit = vi.fn(), commits = vi.fn();
+    root.addEventListener('financial-input-commit', commits);
+    const control = mountNumericControl(root, {label: 'Amount', field: 'amountCents', kind: 'money', raw: '1.00', onInput: () => {}, onCommit});
+    control.input.focus();
+    control.input.blur();
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(commits).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    expect(commits).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a pending exact input blur commit when disposed', async () => {
+    const root = host(), onCommit = vi.fn(), commits = vi.fn();
+    root.addEventListener('financial-input-commit', commits);
+    const control = mountNumericControl(root, {label: 'Amount', field: 'amountCents', kind: 'money', raw: '1.00', onInput: () => {}, onCommit});
+    control.input.focus();
+    control.input.blur();
+    control.dispose();
+    await Promise.resolve();
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(commits).not.toHaveBeenCalled();
+  });
+
+  it('disposes input and commit listeners without removing unrelated controls', async () => {
     const root = host(), onInput = vi.fn(), onCommit = vi.fn();
     const control = mountNumericControl(root, {label: 'Amount', field: 'amountCents', kind: 'money', raw: '1.00', onInput, onCommit});
     control.dispose();
     fireEvent.input(control.input, {target: {value: '2.00'}});
     fireEvent.blur(control.input);
+    await Promise.resolve();
     expect(onInput).not.toHaveBeenCalled();
     expect(onCommit).not.toHaveBeenCalled();
   });

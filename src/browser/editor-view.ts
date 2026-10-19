@@ -39,7 +39,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
     const edit=targetForReview(target,controller.getState(),snapshot.plan);
     if(!edit)return;
     const returnTo=route.editor?.returnTo??route.destination;
-    open(edit,null);if(route.editor)route.editor.returnTo=returnTo;
+    route.destination=destinationForSection(target.section);open(edit,null);if(route.editor)route.editor.returnTo=returnTo;
     if(target.field)focused?.reveal(target.field);
   }};
   const collection=()=>renderRecordCollection(shell.collection,controller.getState(),route.destination,open,section=>{const recordId=controller.beginAdd(section);open({kind:'record',section,recordId},null);});
@@ -100,7 +100,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
     comparisonPlan=controller.getState().savedPlan;
     const projects=controller.getState().savedPlan.properties.flatMap(property=>property.aduProject?[property.aduProject]:[]);
     const selected=projects.find(project=>project.id===session.view.selectedAduProjectId)?.id??projects[0]?.id;
-    session.view.selectedAduProjectId=selected;
+    if(selected)session.view.selectedAduProjectId=selected;else delete session.view.selectedAduProjectId;
     projectChoice.replaceChildren(...projects.map(project=>{const option=element('option',project.name);option.value=project.id;return option;}));
     projectChoice.hidden=projects.length<2;projectChoice.value=selected??'';
     comparisonRoot.hidden=!projects.length;
@@ -113,7 +113,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
     if(operation)root.dispatchEvent(new CustomEvent('editor-operation',{bubbles:true,detail:operation}));
     if(!route.editor)collection();updateReport();if(comparisonPlan!==controller.getState().savedPlan)syncComparisonSelection();
   });
-  const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!root.querySelector('[data-disclosure-panel]')){event.preventDefault();close();}};
+  const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!document.querySelector('[data-disclosure-panel]:not([hidden]),[data-disclosure-preview]:not([hidden])')){event.preventDefault();close();}};
   const discarded=()=>{const target=route.editor?.target;if(target?.kind==='record'&&target.section!=='household'&&!(controller.getState().savedPlan[target.section]??[]).some(record=>record.id===target.recordId)){close();return;}if(target){const origin=route.editor?.origin??null;open(target,origin);}};
   const removed=()=>close();
   const review=(event:Event)=>{const request=(event as CustomEvent<{target:import('./issue-presentation').ReviewTarget;handled:boolean}>).detail;if(!isCurrent()||!targetForReview(request.target,controller.getState(),shownReport.plan))return;request.handled=true;context.review(request.target);};

@@ -77,3 +77,29 @@ describe('overview workspace', () => {
     expect(root.querySelector('[data-active-editor]')).toBeNull();
   });
 });
+
+it('lets Escape dismiss a report preview before closing its editor',async()=>{
+ const {createPlan}=await import('../../src/engine');
+ const {openForecastDetails}=await import('../helpers/workspace-ui');
+ const {root}=mountWorkspace(createPlan('2026-10-12','escape-preview'));
+ const editor=openRecord(root,{kind:'record',section:'household',recordId:'household'});
+ openForecastDetails(root);
+ const trigger=root.querySelector<HTMLButtonElement>('[data-testid="annual-2027-federal-income-tax"] button')!;
+ for(let parent=trigger.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)parent.open=true;
+ fireEvent.mouseEnter(trigger);
+ expect(within(document.body).getByRole('tooltip')).toBeVisible();
+ fireEvent.keyDown(editor.querySelector('h3')!,{key:'Escape'});
+ expect(root.querySelector('[data-active-editor]')).toBe(editor);
+ expect(within(document.body).queryByRole('tooltip')).toBeNull();
+});
+
+it('selects the destination of a reviewed property while retaining its return destination',async()=>{
+ const {makeAduPlan}=await import('../helpers/adu');
+ const {reviewTarget}=await import('../../src/browser/navigation');
+ const {root,controller}=mountWorkspace(makeAduPlan());
+ openCollection(root,'income');
+ reviewTarget(root,{section:'Properties',recordId:'home',field:'purchaseDate',label:'Review home'});
+ expect(root.querySelector('button[data-destination="properties"]')).toHaveAttribute('aria-pressed','true');
+ fireEvent.click(within(root).getByRole('button',{name:'Close editor'}));
+ expect(root.querySelector('button[data-destination="income"]')).toHaveAttribute('aria-pressed','true');
+});

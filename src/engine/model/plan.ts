@@ -204,7 +204,12 @@ export interface PropertyLoan {
   readonly financingAtRiskQualification: History<boolean>;
 }
 export interface AppreciationOverride { readonly year: number; readonly rateBps: BasisPoints }
+export type PropertyPurchaseFunding = Readonly<{kind:'household-cash'}>|Readonly<{kind:'taxable-brokerage';accountId:string}>;
+export type PurchaseTaxEstimation = Readonly<{mode:'simple';buildingShareBps:BasisPoints}>|Readonly<{mode:'detailed'}>;
 export interface Property {
+  /** Future acquisitions only; historical purchases are already in opening assets. */
+  readonly purchaseFunding?:PropertyPurchaseFunding;
+  readonly purchaseTaxEstimation?:PurchaseTaxEstimation;
   readonly aduProject?: AduProject;
   readonly id: string;
   readonly name: string;

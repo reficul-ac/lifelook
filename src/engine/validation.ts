@@ -579,27 +579,59 @@ export function validatePlan(raw: unknown): ValidationResult {
   });
   properties.forEach(o => {
     const id = recordId(o); v.enum(o.role, ['primary', 'rental', 'primary-with-adu'], 'role', id);
-    if (v.date(o.purchaseDate, 'purchaseDate', id) && forecastStart && o.purchaseDate > forecastStart) v.issue('purchaseDate', id, 'The property must exist at the forecast start.');
+    const future=v.date(o.purchaseDate, 'purchaseDate', id)&&!!forecastStart&&o.purchaseDate>forecastStart;
+    if(future&&o.aduProject!==undefined)v.issue('purchaseDate',id,'An owned ADU build requires a home owned at forecast start. Plan a future home purchase without an ADU construction project.');
     v.cents(o.purchasePriceCents, 'purchasePriceCents', id); v.cents(o.downPaymentCents, 'downPaymentCents', id); v.cents(o.openingValueCents, 'openingValueCents', id);
     if (typeof o.downPaymentCents === 'number' && typeof o.purchasePriceCents === 'number' && o.downPaymentCents > o.purchasePriceCents) v.issue('downPaymentCents', id, 'Down payment cannot exceed purchase price.');
     v.rate(o.appreciationBps, 'appreciationBps', id);
+    if(o.purchaseFunding!==undefined){
+      const funding=v.object(o.purchaseFunding,'purchaseFunding',id);
+      if(funding){
+        v.enum(funding.kind,['household-cash','taxable-brokerage'],'purchaseFunding.kind',id);
+        if(funding.kind==='taxable-brokerage'&&v.text(funding.accountId,'purchaseFunding.accountId',id)){
+          const account=accountById.get(funding.accountId as string);
+          if(!account)v.issue('purchaseFunding.accountId',id,'The selected down-payment account no longer exists. Choose a saved taxable brokerage account or household cash.','dangling-reference');
+          else if(account.type!=='taxable-brokerage')v.issue('purchaseFunding.accountId',id,'Down-payment investment funding requires a taxable brokerage account. Review the account or choose another funding source.');
+        }
+        const allowed=funding.kind==='taxable-brokerage'?['kind','accountId']:['kind'];
+        if(Object.keys(funding).some(key=>!allowed.includes(key)))v.issue('purchaseFunding',id,'Use only the settings supported by the selected down-payment funding source.');
+      }
+    }
+    if(o.purchaseTaxEstimation!==undefined){
+      const estimate=v.object(o.purchaseTaxEstimation,'purchaseTaxEstimation',id);
+      if(estimate){
+        v.enum(estimate.mode,['simple','detailed'],'purchaseTaxEstimation.mode',id);
+        if(estimate.mode==='simple')v.integer(estimate.buildingShareBps,'purchaseTaxEstimation.buildingShareBps',id,0,10000);
+        const allowed=estimate.mode==='simple'?['mode','buildingShareBps']:['mode'];
+        if(Object.keys(estimate).some(key=>!allowed.includes(key)))v.issue('purchaseTaxEstimation',id,'Use only the settings supported by the selected purchase tax calculation.');
+      }
+    }
     for (const area of ['primaryArea', 'aduArea']) if (o[area] !== undefined || o.role === 'primary-with-adu' && (o.aduProject === undefined || area === 'aduArea')) {
       if (typeof o[area] !== 'number' || !Number.isFinite(o[area]) || (o[area] as number) <= 0 || (o[area] as number) > Number.MAX_SAFE_INTEGER) v.issue(area, id, 'A finite positive living area is required.');
     }
     const overrides = v.array(o.appreciationOverrides, 'appreciationOverrides', id); v.uniqueRows(overrides, row => row.year, 'appreciationOverrides', id);
     overrides.forEach((value, index) => { const row = v.object(value, `appreciationOverrides[${index}]`, id); if (!row) return; v.integer(row.year, `appreciationOverrides[${index}].year`, id, 2026, 9999); v.rate(row.rateBps, `appreciationOverrides[${index}].rateBps`, id); });
-    v.array(o.loans, 'loans', id).forEach(value => {
+    const propertyLoans=v.array(o.loans, 'loans', id);
+    propertyLoans.forEach(value => {
       const loan = v.record(value, 'loans'); if (!loan) return; const loanId = recordId(loan); loanById.set(loanId, loan);
       v.cents(loan.originalPrincipalCents, 'originalPrincipalCents', loanId); v.rate(loan.aprBps, 'aprBps', loanId, false);
       v.date(loan.originationDate, 'originationDate', loanId); v.date(loan.acquisitionDate, 'acquisitionDate', loanId); v.date(loan.firstPaymentDate, 'firstPaymentDate', loanId); v.integer(loan.termMonths, 'termMonths', loanId, 1, 1200);
-      if (isValidISODate(loan.originationDate) && forecastStart && loan.originationDate > forecastStart) v.issue('originationDate', loanId, 'Existing property loans must originate no later than forecast start.');
-      if (isValidISODate(loan.acquisitionDate) && forecastStart && loan.acquisitionDate > forecastStart) v.issue('acquisitionDate', loanId, 'Existing loan acquisition history must be no later than forecast start.');
+      if(future){
+        if(isValidISODate(loan.originationDate)&&loan.originationDate!==o.purchaseDate)v.issue('originationDate',loanId,'A planned purchase mortgage must originate on the purchase date. Later refinancing needs separate support.');
+        if(isValidISODate(loan.acquisitionDate)&&loan.acquisitionDate!==o.purchaseDate)v.issue('acquisitionDate',loanId,'A planned purchase mortgage must acquire the property on the purchase date.');
+        if(isObject(loan.openingBalance)&&loan.openingBalance.known===true&&loan.openingBalance.value!==0)v.issue('openingBalance',loanId,'A future purchase mortgage has no balance at forecast start. Use zero or the planned schedule.');
+        if(loan.collateralPropertyId!==id)v.issue('collateralPropertyId',loanId,'A planned purchase mortgage must be secured by the property being purchased.');
+      }else{
+        if (isValidISODate(loan.originationDate) && forecastStart && loan.originationDate > forecastStart) v.issue('originationDate', loanId, 'Existing property loans must originate no later than forecast start.');
+        if (isValidISODate(loan.acquisitionDate) && forecastStart && loan.acquisitionDate > forecastStart) v.issue('acquisitionDate', loanId, 'Existing loan acquisition history must be no later than forecast start.');
+      }
       if (isValidISODate(loan.originationDate) && isValidISODate(loan.firstPaymentDate) && loan.firstPaymentDate < loan.originationDate) v.issue('firstPaymentDate', loanId, 'The first payment cannot precede origination.');
       v.moneyHistory(loan.openingBalance, 'openingBalance', loanId); v.moneyHistory(loan.openingPayment, 'openingPayment', loanId);
       reference(loan.collateralPropertyId, propertyById, 'collateralPropertyId', loanId);
       const qualification = v.object(loan.proceedsQualification, 'proceedsQualification', loanId);
       if (qualification) {
         v.enum(qualification.kind, ['acquisition', 'refinance', 'cash-out', 'mixed', 'grandfathered', 'unknown'], 'proceedsQualification.kind', loanId);
+        if(future&&qualification.kind!=='acquisition')v.issue('proceedsQualification.kind',loanId,'A future purchase mortgage must use acquisition proceeds. Refinancing and mixed proceeds need separate support.');
         v.booleanHistory(qualification.qualifiedAcquisitionDebt, 'proceedsQualification.qualifiedAcquisitionDebt', loanId); v.moneyHistory(qualification.qualifiedPrincipalCents, 'proceedsQualification.qualifiedPrincipalCents', loanId); v.booleanHistory(qualification.historyComplete, 'proceedsQualification.historyComplete', loanId);
       }
       v.booleanHistory(loan.financingAtRiskQualification, 'financingAtRiskQualification', loanId);
@@ -607,6 +639,7 @@ export function validatePlan(raw: unknown): ValidationResult {
       const total = allocations.reduce((sum: InstanceType<typeof Decimal>, value, index) => {
         const row = v.object(value, `proceedsAllocations[${index}]`, loanId); if (!row) return sum;
         const field = `proceedsAllocations[${index}]`; reference(row.propertyId, propertyById, `${field}.propertyId`, loanId); v.enum(row.use, ['personal', 'rental'], `${field}.use`, loanId); v.allocation(row.share, `${field}.share`, loanId);
+        if(future&&row.propertyId!==id)v.issue(`${field}.propertyId`,loanId,'Future purchase mortgage proceeds must be allocated to the property being purchased.');
         if (row.use === 'rental') reference(row.rentalId, rentalById, `${field}.rentalId`, loanId);
         if(typeof row.rentalId==='string' && projectsByRental.has(row.rentalId))v.issue(`${field}.rentalId`,loanId,'Existing mortgage proceeds cannot reference a future ADU.');
         const linked = typeof row.rentalId === 'string' ? rentalById.get(row.rentalId) : undefined;
@@ -616,6 +649,10 @@ export function validatePlan(raw: unknown): ValidationResult {
       }, new Decimal(0));
       if (total.gt(1)) v.issue('proceedsAllocations', loanId, 'Loan allocation shares cannot total more than one.');
     });
+    if(future&&typeof o.purchasePriceCents==='number'&&typeof o.downPaymentCents==='number'&&propertyLoans.every(loan=>isObject(loan)&&typeof loan.originalPrincipalCents==='number'&&Number.isSafeInteger(loan.originalPrincipalCents)&&loan.originalPrincipalCents>=0)){
+      const funded=propertyLoans.reduce<InstanceType<typeof Decimal>>((total,loan)=>total.plus((loan as Obj).originalPrincipalCents as number),new Decimal(o.downPaymentCents));
+      if(!funded.eq(o.purchasePriceCents))v.issue('loans',id,'Down payment plus purchase mortgage amounts must equal the purchase price. Add a mortgage for the financed amount, or adjust the down payment and loan amounts.');
+    }
   });
   for (const grant of rsuGrantIds) if (loanById.has(grant.grantId)) v.issue(grant.field, grant.accountId, 'IDs must be unique across all document records.', 'duplicate-id');
   debts.forEach(o => {
@@ -625,13 +662,14 @@ export function validatePlan(raw: unknown): ValidationResult {
   });
   rentals.forEach(o => {
     const id = recordId(o); if(o.vacancyBps!==undefined)v.integer(o.vacancyBps,'vacancyBps',id,0,10000); reference(o.propertyId, propertyById, 'propertyId', id); v.cents(o.monthlyRentCents, 'monthlyRentCents', id); v.rate(o.rentGrowthBps, 'rentGrowthBps', id); v.range(o, 'rentStartDate', 'rentEndDate', id);
+    const property = typeof o.propertyId === 'string' ? propertyById.get(o.propertyId) : undefined;
+    const future=property&&isValidISODate(property.purchaseDate)&&forecastStart&&property.purchaseDate>forecastStart;
     if (v.date(o.availableDate, 'availableDate', id)) {
-      if (!projectsByRental.has(id) && forecastStart && o.availableDate > forecastStart) v.issue('availableDate', id, 'Included rental units must already be available at the forecast start.');
+      if (!projectsByRental.has(id) && !future && forecastStart && o.availableDate > forecastStart) v.issue('availableDate', id, 'Included rental units must already be available at the forecast start.');
       if (isValidISODate(o.rentStartDate) && o.rentStartDate < o.availableDate) v.issue('rentStartDate', id, 'Rent cannot begin before the rental unit is available.');
     }
-    const property = typeof o.propertyId === 'string' ? propertyById.get(o.propertyId) : undefined;
     if (property?.role === 'primary') v.issue('propertyId', id, 'Rental units require a rental property or a primary home with an ADU.');
-    if (property && isValidISODate(property.purchaseDate) && isValidISODate(o.availableDate) && o.availableDate < property.purchaseDate && o.convertedFromPersonalUse === true) v.issue('availableDate', id, 'A personal-use conversion cannot precede purchase.');
+    if (property && isValidISODate(property.purchaseDate) && isValidISODate(o.availableDate) && o.availableDate < property.purchaseDate && (o.convertedFromPersonalUse === true||future)) v.issue('availableDate', id, 'A rental cannot become available before the property is purchased.');
     v.booleanHistory(o.activeParticipation, 'activeParticipation', id); v.bool(o.convertedFromPersonalUse, 'convertedFromPersonalUse', id); v.moneyHistory(o.conversionBuildingFmv, 'conversionBuildingFmv', id);
     if (o.sharedAllocation !== undefined) v.allocation(o.sharedAllocation, 'sharedAllocation', id);
     const allocations = v.array(o.loanAllocations, 'loanAllocations', id); v.uniqueRows(allocations, row => row.loanId, 'loanAllocations', id);
@@ -714,8 +752,9 @@ export function validatePlan(raw: unknown): ValidationResult {
       return (rsu.grants as readonly Obj[]).map(grant => settleCents(new Decimal(Number(grant.openingHeldShares)).times(Number(rsu.currentSharePriceCents))));
     });
     const accountTotal = aggregate(accountOpenings, 'accounts.openingBalanceCents');
-    const propertyTotal = aggregate(properties.map(o => Number(o.openingValueCents)), 'properties.openingValueCents');
-    const debtTotal = aggregate([...debts.map(o => Number(o.openingBalanceCents)), ...[...loanById.values()].map(o => isObject(o.openingBalance) && o.openingBalance.known === true ? Number(o.openingBalance.value) : Number(o.originalPrincipalCents))], 'debts.openingBalanceCents');
+    const propertyTotal = aggregate(properties.filter(o=>!forecastStart||String(o.purchaseDate)<=forecastStart).map(o => Number(o.openingValueCents)), 'properties.openingValueCents');
+    const futureLoanIds=new Set(properties.filter(o=>forecastStart&&String(o.purchaseDate)>forecastStart).flatMap(o=>(o.loans as readonly Obj[]).map(loan=>String(loan.id))));
+    const debtTotal = aggregate([...debts.map(o => Number(o.openingBalanceCents)), ...[...loanById.values()].filter(o=>!futureLoanIds.has(String(o.id))).map(o => isObject(o.openingBalance) && o.openingBalance.known === true ? Number(o.openingBalance.value) : Number(o.originalPrincipalCents))], 'debts.openingBalanceCents');
     if (accountTotal !== undefined && propertyTotal !== undefined) aggregate([accountTotal, propertyTotal, Number(root.openingCashCents)], 'openingAssetsCents');
     if (accountTotal !== undefined && propertyTotal !== undefined && debtTotal !== undefined) aggregate([accountTotal, propertyTotal, Number(root.openingCashCents), -debtTotal], 'openingNetWorthCents');
     for (const owner of owners) aggregate(accounts.filter(o => o.ownerId === owner && o.type === 'traditional-ira' && isObject(o.openingIraBasis) && o.openingIraBasis.known === true).map(o => Number((o.openingIraBasis as Obj).value)), `iraBasisByOwner.${owner}`);

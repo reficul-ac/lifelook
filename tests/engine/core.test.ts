@@ -115,8 +115,9 @@ describe('plan structural validation', () => {
   it('rejects invalid allocation fractions', () => {
     reject(makePlan({ properties: [property], rentals: [{ ...rental, sharedAllocation: { numerator: 2, denominator: 1 } }] }), 'rental-a', 'sharedAllocation');
   });
-  it('rejects properties and rentals not existing at forecast start', () => {
-    reject(makePlan({ properties: [{ ...property, purchaseDate: '2026-01-02' }] }), 'property-a', 'purchaseDate');
+  it('requires financing for future purchases and existing availability for legacy rentals', () => {
+    reject(makePlan({ properties: [{ ...property, purchaseDate: '2026-01-02' }] }), 'property-a', 'loans');
+    expect(validatePlan(makePlan({properties:[{...property,purchaseDate:'2026-01-02',downPaymentCents:10_000_000}]})).ok).toBe(true);
     reject(makePlan({ properties: [property], rentals: [{ ...rental, availableDate: '2026-01-02' }] }), 'rental-a', 'availableDate');
   });
   it('requires exact two filer profiles and supported tax policy', () => {

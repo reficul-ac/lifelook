@@ -49,7 +49,11 @@ export function calculateMortgageDeduction(facts:PropertyYearFacts,loans:readonl
     const allocations=q.proceedsAllocations.filter(a=>a.propertyId===l.propertyId&&a.use==='personal');
     if(!allocations.length){unavailable.push(problem(l.loanId,'required-personal-proceeds-allocation','Floor area and paid interest alone do not establish the acquisition-debt principal allocation.'));continue;}
     const share=allocations.reduce((sum,a)=>sum.plus(new Decimal(a.share.numerator).div(a.share.denominator)),new Decimal(0));
-    const average=new Decimal(balance.openingPrincipalCents).plus(balance.closingPrincipalCents).div(2).mul(share);
+    // Publication 936 uses the first day the mortgage secures the home, which
+    // is the original borrowing for a purchase later in this tax year.
+    const firstSecured=q.originationDate.startsWith(`${facts.year}-`)
+      ?q.originalPrincipalCents:balance.openingPrincipalCents;
+    const average=new Decimal(firstSecured).plus(balance.closingPrincipalCents).div(2).mul(share);
     settleCents(average);
     if(loan.openingProvenance==='estimated'||loan.paymentProvenance==='estimated'){
       const assumption='Mortgage interest and average qualified debt are forecast estimates based on the loan schedule; actual balances or payments may differ.';

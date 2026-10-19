@@ -18,6 +18,8 @@ export interface BrokerageFundingEvent {
   readonly accountId: string;
   readonly date: string;
   readonly constructionCents: Cents;
+  /** Omitted for existing ADU construction events. */
+  readonly purpose?: 'property-down-payment';
 }
 
 export interface BrokerageSale extends BrokerageFundingEvent {
@@ -99,7 +101,7 @@ const sum = (values: readonly Cents[]): Cents => cents(values.reduce((total, val
 
 function problem(code: string, year: number, explanation: string): Issue {
   return { code, year, field: 'ownerFunding', severity: 'warning', explanation,
-    resolution: 'Review the brokerage balance, aggregate tax basis, construction payments, and household tax inputs.' };
+    resolution: 'Review the brokerage balance, aggregate tax basis, funded payments, and household tax inputs.' };
 }
 
 class FundingInputError extends Error {}
@@ -224,7 +226,7 @@ export function solveBrokerageFunding<T>(input: BrokerageFundingInput<T>): Avail
       checkMoney(event.constructionCents, true);
       if (!event.id || eventIds.has(event.id) || !accountIds.has(event.accountId)
         || !isValidISODate(event.date) || Number(event.date.slice(0, 4)) !== input.year) {
-        throw new FundingInputError('Construction sales require unique IDs, an existing brokerage account, and a date in the funding year.');
+        throw new FundingInputError('Funding sales require unique IDs, an existing brokerage account, and a date in the funding year.');
       }
       eventIds.add(event.id);
     }
@@ -327,6 +329,6 @@ export function solveBrokerageFunding<T>(input: BrokerageFundingInput<T>): Avail
     }
     if (!(error instanceof CalculationRangeError)) throw error;
     return { status: 'needs-data', issues: [problem('monetary-overflow', input.year,
-      'Brokerage construction funding exceeds the supported monetary range.')] };
+      'Brokerage funding exceeds the supported monetary range.')] };
   }
 }

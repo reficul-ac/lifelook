@@ -108,7 +108,7 @@ describe('atomic property, loan and rental workflows',()=>{
     if(state.projection.years[0]!.household.status==='available')expect(state.projection.years[0]!.household.value.facts.preIra.rentalFacts[0]!.depreciation.federal).toMatchObject({status:'available',value:{depreciationCents:115000}});
   });
 
-  it.each([['Available for rent date','2027-01-01','availableDate'],['Purchase date','2027-01-01','purchaseDate']])('rejects future %s and retains entered text',(label,value,field)=>{
+  it.each([['Available for rent date','2027-01-01','availableDate'],['Purchase date','2027-01-01','openingBalance']])('retains an invalid %s edit when existing property history conflicts',(label,value,field)=>{
     const {root,controller}=mount(),before=controller.getState().savedPlan.revision;
     set(root,label!,value!);click(root,'Save property');
     expect(controller.getState().savedPlan.revision).toBe(before);expect(controller.getState().projection.inputRevision).toBe(before);

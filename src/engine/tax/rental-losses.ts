@@ -98,7 +98,7 @@ function resolveBook(facts: PreIraFacts, opening: HouseholdTaxState, rules: Year
       if (!financing?.known) { missing.push(issue(rental.rentalId, facts.year, book, 'required-at-risk-financing', 'At-risk loss capacity requires a qualified financing answer.')); continue; }
       if (!financing.value) { unsupported.push(issue(rental.rentalId, facts.year, book, 'unsupported-at-risk-financing', 'The financing is outside supported personal-liability or qualified-nonrecourse financing.')); continue; }
     }
-    if (!movements && rental.principalPaidCents > 0 && rental.cashFlowCents < 0) {
+    if (!movements && rental.purchaseOwnerSupportCents===undefined && rental.principalPaidCents > 0 && rental.cashFlowCents < 0) {
       missing.push(issue(rental.rentalId, facts.year, book, 'required-at-risk-repayment-funding', 'Activity cash is insufficient after debt service. Outside funding of qualifying principal cannot be inferred from household cash or wages.')); continue;
     }
     const originalAr = state.lossVintages.filter(v => v.source === 'at-risk');
@@ -107,7 +107,7 @@ function resolveBook(facts: PreIraFacts, opening: HouseholdTaxState, rules: Year
     // Form6198 lines9/18: qualified principal paid from the activity reduces
     // risk. No unentered owner-capital contribution may offset that reduction.
     const movement=movements?.status==='available'?movements.value:undefined;
-    const capacity = sumCents([state.atRiskCents, movement?.ownerCapitalCents??0, movement?.qualifiedBorrowingCents??0, movement?.ownerSupportCents??0, Math.max(0, current.value.taxableProfitCents), -rental.principalPaidCents, -(movement?.nondeductibleExpenseCents??0)]);
+    const capacity = sumCents([state.atRiskCents, movement?.ownerCapitalCents??0, movement?.qualifiedBorrowingCents??0, movement?.ownerSupportCents??0, rental.purchaseOwnerSupportCents??0, Math.max(0, current.value.taxableProfitCents), -rental.principalPaidCents, -(movement?.nondeductibleExpenseCents??0), -(rental.purchaseNondeductibleExpenseCents??0)]);
     if (capacity < 0) { unsupported.push(issue(rental.rentalId, facts.year, book, 'unsupported-at-risk-recapture', 'Qualifying debt repayment makes the year-end amount at risk negative; prior deducted-loss and recapture history is required.')); continue; }
     const arReleased = Math.min(arTotal, Math.max(0, capacity));
     const ar = consume([...originalAr, ...currentVintage], arReleased);
@@ -158,5 +158,11 @@ export function resolveRentalLosses(facts: PreIraFacts, opening: HouseholdTaxSta
     return [book, carried];
   })) as Record<TaxBook, Available<RentalBookState>>])) };
   const issues = [...new Map(Object.values(resolved).flatMap(r => r.status === 'available' ? [] : r.issues).map(i => [JSON.stringify(i), i])).values()];
-  return { year: facts.year, federal: resolved.federal, california: resolved.california, federalAmt: resolved['federal-amt'], californiaAmt: resolved['california-amt'], closing: { ...opening, year: facts.year, rentals }, issues, assumptions: [facts.rentalFacts.some(r=>r.aduRiskMovements)?'Project-attributed owner capital, qualifying draws and explicitly confirmed deficit support enter risk once; household funding gaps remain conditional.':'No activity-level owner capital injections or distributions are modeled; cash gaps do not create at-risk funding.', ...(facts.rentalFacts.some(r => !r.aduRiskMovements && r.principalPaidCents > 0) ? ['Qualifying principal repayments reduce each book’s at-risk capacity under the no-owner-capital assumption; insufficient activity cash leaves repayment funding unknown.'] : [])] };
+  const projectFunding=facts.rentalFacts.some(r=>r.aduRiskMovements),purchaseFunding=facts.rentalFacts.some(r=>r.purchaseOwnerSupportCents!==undefined);
+  return { year: facts.year, federal: resolved.federal, california: resolved.california, federalAmt: resolved['federal-amt'], californiaAmt: resolved['california-amt'], closing: { ...opening, year: facts.year, rentals }, issues, assumptions: [
+    ...(projectFunding?['Project-attributed owner capital, qualifying draws and explicitly confirmed deficit support enter risk once; household funding gaps remain conditional.']:[]),
+    ...(purchaseFunding?['Simple future-purchase planning assumes household cash supports each monthly rental deficit. Supported cash increases the amount at risk once, with principal repayments and nondeductible spending reducing it; household funding gaps remain conditional.']:[]),
+    ...(!projectFunding&&!purchaseFunding?['No activity-level owner capital injections or distributions are modeled; cash gaps do not create at-risk funding.']:[]),
+    ...(facts.rentalFacts.some(r => !r.aduRiskMovements && r.purchaseOwnerSupportCents===undefined && r.principalPaidCents > 0) ? ['Qualifying principal repayments reduce each book’s at-risk capacity under the no-owner-capital assumption; insufficient activity cash leaves repayment funding unknown.'] : []),
+  ] };
 }

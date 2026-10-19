@@ -60,7 +60,8 @@ function summarize(months:readonly MonthlyProjection[],override?:Omit<Projection
     const series=ordered.map(month=>month.properties.find(property=>property.propertyId===propertyId));
     const value=(index:number,key:Exclude<keyof PropertyProjection,'propertyId'>)=>track(series[index]?.[key]??absentRecord(`properties.${propertyId}.${key}`));
     const additions=series.some(r=>r?.completionValueAddedCents)?{completionValueAddedCents:sum(series.map(r=>r?.completionValueAddedCents??absentRecord('completionValueAddedCents')),'completionValueAddedCents'),knownExistingHomeValueCents:value(series.length-1,'knownExistingHomeValueCents'),combinedLivingAreaSqFt:value(series.length-1,'combinedLivingAreaSqFt')}:{};
-    return {...additions,propertyId,openingValueCents:value(0,'openingValueCents'),growthCents:sum(series.map((_,i)=>value(i,'growthCents')),`properties.${propertyId}.growthCents`),closingValueCents:value(series.length-1,'closingValueCents'),loanBalanceCents:value(series.length-1,'loanBalanceCents'),equityCents:value(series.length-1,'equityCents')};
+    const purchase=series.some(r=>r?.purchaseValueAddedCents)?{purchaseValueAddedCents:sum(series.map(r=>r?.purchaseValueAddedCents??absentRecord('purchaseValueAddedCents')),'purchaseValueAddedCents')}:{};
+    return {...additions,...purchase,propertyId,openingValueCents:value(0,'openingValueCents'),growthCents:sum(series.map((_,i)=>value(i,'growthCents')),`properties.${propertyId}.growthCents`),closingValueCents:value(series.length-1,'closingValueCents'),loanBalanceCents:value(series.length-1,'loanBalanceCents'),equityCents:value(series.length-1,'equityCents')};
   });
   const loanIds=[...new Set(ordered.flatMap(month=>month.loans.map(loan=>loan.loanId)))].sort();
   const loans:LoanProjection[]=loanIds.map(loanId=>{

@@ -18,7 +18,7 @@ export interface BrokerageHousehold {
 }
 type Input=AllocationYearInput&Readonly<{year:number;accounts:readonly BrokerageFundingAccount[];events:readonly BrokerageFundingEvent[]}>;
 
-/** Trial taxes retain the same construction/cash footprint; gains alone change the tax facts. */
+/** Trial taxes retain the same funded purchase/construction footprint; gains alone change tax facts. */
 export function resolveAduBrokerageYear(input:Input):Available<BrokerageFundingResult<BrokerageHousehold>>{
  const needed=Array.from({length:12},(_,i)=>total(input.events.filter(e=>Number(e.date.slice(5,7))===i+1).map(e=>e.constructionCents)));
  const policy=input.plan.cashFlowAllocation;
@@ -84,7 +84,8 @@ export function resolveAduBrokerageYear(input:Input):Available<BrokerageFundingR
   const event=input.events.find(event=>event.projectId===projectId&&depositStartMonths.has(event.accountId))!;
   const account=input.plan.accounts.find(account=>account.id===event.accountId)!;
   const month=depositStartMonths.get(event.accountId)!;
-  return{...brokerageFundingIssue('brokerage-funding-deposit-timing',projectId,input.year,`Automatic deposits to ${account.name} resume at the end of ${monthNames[month-1]} ${input.year}. Earlier savings stay in household cash for construction costs that investment sales cannot cover. Saved contribution dates remain unchanged.`),resolution:'Review construction funding, sale timing or investment allocations if you want a different automatic-deposit schedule.'};
+  const purchase=event.purpose==='property-down-payment',payment=purchase?'down payments':'construction costs';
+  return{...brokerageFundingIssue('brokerage-funding-deposit-timing',projectId,input.year,`Automatic deposits to ${account.name} resume at the end of ${monthNames[month-1]} ${input.year}. Earlier savings stay in household cash for ${payment} that investment sales cannot cover. Saved contribution dates remain unchanged.`,event.purpose),resolution:'Review funding, sale timing or investment allocations if you want a different automatic-deposit schedule.'};
  });
  const payload=fallback.value.evaluation.payload;
  const household:HouseholdYear={...payload.household,issues:[...payload.household.issues,...issues],coverage:{...payload.household.coverage,completeHouseholdLiability:false,issues:[...payload.household.coverage.issues,...issues]}};
@@ -92,11 +93,11 @@ export function resolveAduBrokerageYear(input:Input):Available<BrokerageFundingR
 }
 
 export function brokerageFundingProvenance(year:number):RuleProvenance {
- return{status:'provisional',ruleVersion:'adu-brokerage-funding.2',baselineYear:2026,applicableYear:year,
+ return{status:'provisional',ruleVersion:'property-brokerage-funding.3',baselineYear:2026,applicableYear:year,
   sources:['https://www.irs.gov/publications/p550','https://www.irs.gov/instructions/i6251','https://www.irs.gov/taxtopics/tc559','https://www.ftb.ca.gov/file/personal/income-types/capital-gains-and-losses.html'],
-  assumptions:['Construction sales use proportional total account basis and assume long-term holdings, including any recent deposits; actual tax lots and holding periods can differ.','Unknown opening brokerage basis uses a labeled zero-basis planning assumption without changing the saved answer.','Generated sale losses are reported but receive no deduction, offset or carryforward benefit; taxable generated gains sum positive event gains only.','Gross sale proceeds are transfers, not earned income. Only gains enter tax facts; actual household federal, California, AMT, NIIT and modeled deduction interactions determine incremental tax.','Construction and its incremental tax are funded by the sale; tax is reserved in the sale month, independently of actual brokerage withholding or estimated-tax payment dates.','Sales cannot exceed available account value before month-end contributions. Account shortfalls remain explicit conditional funding gaps.','When a labeled timing fallback is needed, automatic deposits into the construction-funding account stay as household cash until its final construction-sale month, then enter at month end. Saved contribution dates remain unchanged; only actual sale proceeds offset construction and tax.']};
+  assumptions:['Construction and down-payment sales use proportional total account basis and assume long-term holdings, including any recent deposits; actual tax lots and holding periods can differ.','Unknown opening brokerage basis uses a labeled zero-basis planning assumption without changing the saved answer.','Generated sale losses are reported but receive no deduction, offset or carryforward benefit; taxable generated gains sum positive event gains only.','Gross sale proceeds are transfers, not earned income. Only gains enter tax facts; actual household federal, California, AMT, NIIT and modeled deduction interactions determine incremental tax.','The selected payment and its incremental tax are funded by the sale; tax is reserved in the sale month, independently of actual brokerage withholding or estimated-tax payment dates.','Sales cannot exceed available account value before month-end contributions. Account shortfalls remain explicit conditional funding gaps.','When a labeled timing fallback is needed, automatic deposits into the funding account stay as household cash until its final sale month, then enter at month end. Saved contribution dates remain unchanged; only actual sale proceeds offset the selected payments and tax.']};
 }
 
-export function brokerageFundingIssue(code:string,recordId:string,year:number,explanation:string):Issue {
- return{code,recordId,year,field:code==='estimated-brokerage-basis'?'openingTaxableBasis':'ownerFunding',severity:code==='brokerage-funding-shortfall'?'warning':'info',explanation,resolution:code==='estimated-brokerage-basis'?'Enter the investment cost basis on the selected account.':'Review construction funding and the selected account.'};
+export function brokerageFundingIssue(code:string,recordId:string,year:number,explanation:string,purpose?:BrokerageFundingEvent['purpose']):Issue {
+ return{code,recordId,year,field:code==='estimated-brokerage-basis'?'openingTaxableBasis':purpose==='property-down-payment'?'purchaseFunding':'ownerFunding',severity:code==='brokerage-funding-shortfall'?'warning':'info',explanation,resolution:code==='estimated-brokerage-basis'?'Enter the investment cost basis on the selected account.':`Review ${purpose==='property-down-payment'?'down-payment':'construction'} funding and the selected account.`};
 }

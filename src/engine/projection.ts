@@ -17,6 +17,7 @@ import {prepareAduTaxYear,finishAduTaxYear} from './property/adu-tax';
 import {cashFlowBeforeInvestments,projectAduMonth,combineAduMonth} from './property/adu-projection';
 import {aduPlanningProvenance} from './rules/adu-planning-v1';
 import {resolveAduPlanningEstimates,aduEstimateProvenance} from './property/adu-planning-estimates';
+import {resolvePurchasePlanningEstimates,purchaseEstimateProvenance} from './property/purchase-planning-estimates';
 import { buildPropertyFacts } from './property/facts';
 import { growMonth, propertyRate } from './growth';
 import { validatePlan } from './validation';
@@ -64,7 +65,7 @@ function interruptedTaxState(opening:HouseholdTaxState,year:number,reason:Availa
 
 /** Pure monthly scenario. Eligibility precedes deposits; residual cash remains a signed reserve. */
 export function calculateProjection(inputs:ValidatedPlan,ruleSet:RuleSet):ProjectionResult {
-  const plan=resolveAduPlanningEstimates(inputs);
+  const plan=resolveAduPlanningEstimates(resolvePurchasePlanningEstimates(inputs));
   const estimates=plan.properties.some(property=>property.aduProject?.taxEstimation?.mode==='simple');
   const months:MonthlyProjection[]=[],years:ProjectionResult['years'][number][]=[],contributions:ContributionRecord[]=[],contributionSchedules:ProjectionResult['contributionSchedules'][number][]=[],taxStates:ProjectionResult['taxStates'][number][]=[],loanSchedules:ProjectionResult['loanSchedules'][number][]=[],cashSchedules:ProjectionResult['cashSchedules'][number][]=[],allIssues:Issue[]=[],allProvenance:RuleProvenance[]=[];
   const range=<T>(recordId:string,year:number,field:string,calculate:()=>T):Available<T>=>{
@@ -87,27 +88,28 @@ export function calculateProjection(inputs:ValidatedPlan,ruleSet:RuleSet):Projec
     // A later overflow uses year prefixes below so earlier valid years stay available.
   }
   const accountExact=new Map<string,Available<Decimal>>(plan.accounts.map(a=>[a.id,available(new Decimal(a.openingBalanceCents))]));
-  const existingHomeExact=new Map<string,Available<Decimal>>(plan.properties.map(p=>[p.id,available(new Decimal(p.openingValueCents))]));
+  const purchases=plan.properties.filter(p=>p.purchaseDate>`${plan.startYear}-01-01`),purchaseIds=new Set(purchases.map(p=>p.id));
+  const existingHomeExact=new Map<string,Available<Decimal>>(plan.properties.map(p=>[p.id,available(new Decimal(purchaseIds.has(p.id)?0:p.openingValueCents))]));
   const priorMarketComplete=new Map(plan.properties.map(p=>[p.id,true]));
   const projects=getAduProjects(plan);
-  const fundedAccountIds=new Set(projects.flatMap(({project})=>project.ownerFunding?.kind==='taxable-brokerage'?[project.ownerFunding.accountId]:[]));
+  const fundedAccountIds=new Set([...projects.flatMap(({project})=>project.ownerFunding?.kind==='taxable-brokerage'?[project.ownerFunding.accountId]:[]),...purchases.flatMap(property=>property.purchaseFunding?.kind==='taxable-brokerage'?[property.purchaseFunding.accountId]:[])]);
   const brokerageBasis=new Map<string,Available<Cents>>(plan.accounts.filter(a=>fundedAccountIds.has(a.id)).map(a=>[a.id,available(a.openingTaxableBasis?.known?a.openingTaxableBasis.value:0)]));
-  const propertyExact=new Map<string,Available<Decimal>>(plan.properties.map(p=>[p.id,available(new Decimal(p.openingValueCents))]));
+  const propertyExact=new Map<string,Available<Decimal>>(plan.properties.map(p=>[p.id,available(new Decimal(purchaseIds.has(p.id)?0:p.openingValueCents))]));
   const declaredLoans=[...plan.properties.flatMap(p=>p.loans.map(loan=>({kind:'original' as const,loan,propertyId:p.id}))),...plan.debts.map(loan=>({kind:'original' as const,loan,...(loan.propertyId?{propertyId:loan.propertyId}:{})})),...projects.flatMap(({project,property})=>project.financing?[{kind:'adu-project' as const,loan:project.financing,propertyId:property.id,projectId:project.id}]:[])].sort((a,b)=>a.loan.id.localeCompare(b.loan.id));
   const loanClosing=new Map<string,Available<Cents>>(),loanOrigin=new Map<string,{opening:OpeningLoanProvenance;payment:OpeningLoanProvenance}>();
   const openingTaxState=initialTaxState(plan);let taxState=openingTaxState,reserve:Available<Cents>=available(plan.openingCashCents),conditionalOnGap=false;let lastEarmarked:Available<Cents>=available(0);
-  const streamDefinitions=[...plan.salaries.map(s=>({id:s.id,kind:'salary' as const})),...plan.otherIncome.map(s=>({id:s.id,kind:'other-income' as const})),...plan.expenses.map(s=>({id:s.id,kind:'expense' as const,...(s.propertyId?{propertyId:s.propertyId}:{})})),...(plan.children??[]).map(child=>({id:child.id,kind:'expense' as const})),...plan.rentals.map(s=>({id:s.id,kind:'rent' as const})),...projects.flatMap(({project,property})=>[...project.costs.map(c=>({id:c.id,kind:'expense' as const,propertyId:property.id})),...project.propertyTax.paymentYears.flatMap(y=>y.payments.map(p=>({id:p.id,kind:'expense' as const,propertyId:property.id})))])].sort((a,b)=>a.kind.localeCompare(b.kind)||a.id.localeCompare(b.id));
+  const streamDefinitions=[...plan.salaries.map(s=>({id:s.id,kind:'salary' as const})),...plan.otherIncome.map(s=>({id:s.id,kind:'other-income' as const})),...plan.expenses.map(s=>({id:s.id,kind:'expense' as const,...(s.propertyId?{propertyId:s.propertyId}:{})})),...(plan.children??[]).map(child=>({id:child.id,kind:'expense' as const})),...purchases.map(property=>({id:property.id,kind:'expense' as const,propertyId:property.id})),...plan.rentals.map(s=>({id:s.id,kind:'rent' as const})),...projects.flatMap(({project,property})=>[...project.costs.map(c=>({id:c.id,kind:'expense' as const,propertyId:property.id})),...project.propertyTax.paymentYears.flatMap(y=>y.payments.map(p=>({id:p.id,kind:'expense' as const,propertyId:property.id})))])].sort((a,b)=>a.kind.localeCompare(b.kind)||a.id.localeCompare(b.id));
   for(let year=plan.startYear;year<plan.startYear+plan.horizonYears;year++) {
     const issueStart=allIssues.length,opening=taxState;
     const aduContext=resolveAduYear(plan,year);
-    const brokerageEvents:BrokerageFundingEvent[]=projects.flatMap(({project,property})=>{
+    const brokerageEvents:BrokerageFundingEvent[]=[...projects.flatMap(({project,property})=>{
       if(project.ownerFunding?.kind!=='taxable-brokerage')return[];
       const accountId=project.ownerFunding.accountId;
       return project.costs.filter(cost=>cost.paymentDate.startsWith(`${year}-`)).map(cost=>{
         const financed=settleCents((project.financing?.draws??[]).filter(draw=>draw.month<=cost.paymentDate.slice(0,7)).flatMap(draw=>draw.costAllocations.filter(a=>a.costId===cost.id)).reduce((n,a)=>n.plus(a.amountCents),new Decimal(0)));
         return{id:cost.id,projectId:project.id,propertyId:property.id,accountId,date:cost.paymentDate,constructionCents:Math.max(0,cost.amountCents-financed)};
       }).filter(e=>e.constructionCents>0);
-    });
+    }),...purchases.flatMap(property=>property.purchaseFunding?.kind==='taxable-brokerage'&&property.purchaseDate.startsWith(`${year}-`)&&property.downPaymentCents>0?[{id:property.id,projectId:property.id,propertyId:property.id,accountId:property.purchaseFunding.accountId,date:property.purchaseDate,constructionCents:property.downPaymentCents,purpose:'property-down-payment' as const}]:[])];
     let brokerage:Available<BrokerageFundingResult<BrokerageHousehold>>|undefined;
     for(const account of plan.accounts.filter(a=>fundedAccountIds.has(a.id)&&!a.openingTaxableBasis?.known))allIssues.push(brokerageFundingIssue('estimated-brokerage-basis',account.id,year,'Investment cost basis is unknown. This funding estimate assumes zero opening basis; saved history remains unknown.'));
     const openingUnrestricted=sum([reserve,lastEarmarked.status==='available'?available(-lastEarmarked.value):lastEarmarked],year,'openingUnrestrictedCashCents');
@@ -133,11 +135,12 @@ export function calculateProjection(inputs:ValidatedPlan,ruleSet:RuleSet):Projec
         yearLoans.push(schedule);loanSchedules.push({loanId:descriptor.loan.id,year,schedule});continue;
       }
       const {loan}=descriptor;
-      const previous=loanClosing.get(loan.id);let schedule:Available<LoanSchedule>;
+      const plannedOrigination=descriptor.propertyId!==undefined&&purchaseIds.has(descriptor.propertyId)&&'originationDate' in loan;
+      const previous=plannedOrigination&&year<=Number(loan.originationDate.slice(0,4))?undefined:loanClosing.get(loan.id);let schedule:Available<LoanSchedule>;
       if(previous&&previous.status!=='available')schedule=previous;
       else {
         const continued:Debt|PropertyLoan=previous?.status==='available'?'originalPrincipalCents' in loan?{...loan,openingBalance:{known:true,value:previous.value}}:{...loan,openingBalanceCents:previous.value}:loan;
-        schedule=range(loan.id,year,'loanSchedule',()=>calculateLoanSchedule(continued,year,1));
+        schedule=range(loan.id,year,'loanSchedule',()=>calculateLoanSchedule(continued,year,1,plannedOrigination?{plannedOrigination:true}:undefined));
         if(schedule.status==='available'){
           const origin=loanOrigin.get(loan.id)??{opening:schedule.value.openingProvenance,payment:schedule.value.paymentProvenance};loanOrigin.set(loan.id,origin);
           const estimateIssues=origin.opening==='estimated'?[{code:'estimated-opening-loan-balance',recordId:loan.id,year,field:'openingBalance',severity:'info' as const,explanation:'This carried balance originated from an estimated scheduled opening balance.',resolution:'Supply the original January opening balance to replace the estimate.'}]:[];
@@ -197,19 +200,19 @@ export function calculateProjection(inputs:ValidatedPlan,ruleSet:RuleSet):Projec
       if(brokerage.status==='available'){
         const payload=brokerage.value.evaluation.payload;
         if(payload.allocation){allocation=available(payload.allocation);knownRequests=payload.allocation.requests;allIssues.push(...payload.allocation.report.reasons);}
-        for(const sale of brokerage.value.sales)if(sale.shortfallCents>0)allIssues.push(brokerageFundingIssue('brokerage-funding-shortfall',sale.projectId,year,'The selected brokerage cannot cover this construction payment and its estimated sale tax. The remaining cost requires additional funding.'));
+        for(const sale of brokerage.value.sales)if(sale.shortfallCents>0)allIssues.push(brokerageFundingIssue('brokerage-funding-shortfall',sale.projectId,year,`The selected brokerage cannot cover this ${sale.purpose==='property-down-payment'?'down payment':'construction payment'} and its estimated sale tax. The remaining cost requires additional funding.`,sale.purpose));
       }else if(plan.cashFlowAllocation)allocation=brokerage;
       for(const source of allocationSources){const requests:Available<readonly ContributionRequest[]>=allocation?.status==='available'?available(allocation.value.requests.filter(r=>r.ruleId===source.id)):allocation??brokerage as Available<never>;requestResults.set(source.id,requests);contributionSchedules.push({ruleId:source.id,year,requests});}
     }
     if(plan.cashFlowAllocation&&!brokerageEvents.length){
-      allocation=combine([cash,taxCash,rules,rsuYear,...requestResults.values(),...yearLoans,...(projects.length?[aduContext.cashComplete,openingUnrestricted]:[])],()=>undefined as never);
+      allocation=combine([cash,taxCash,rules,rsuYear,...requestResults.values(),...yearLoans,...(projects.length||purchases.length?[aduContext.cashComplete,openingUnrestricted]:[])],()=>undefined as never);
       if(allocation.status==='available'&&cash.status==='available'&&taxCash.status==='available'&&rules.status==='available'&&rsuYear.status==='available'){
         const attempted=range(plan.cashFlowAllocation.id,year,'cashFlowAllocation',()=>{
           const loans=taxLoans.map(s=>{if(s.status!=='available')throw new Error('Unavailable loan');return s.value;});
           const property=buildPropertyFacts(plan,taxCash.value,loans,opening,rules.value,aduContext);
           const total=(values:readonly Cents[])=>settleCents(values.reduce((sum,value)=>sum.plus(value),new Decimal(0)));
           return resolveAllocationYear({plan,cash:taxCash.value,legacyRequests:knownRequests,property,loans,opening,rules:rules.value,
-            ...(projects.length?{financedConstructionByMonth:Array.from({length:12},(_,i)=>total(aduContext.projects.map(p=>p.months[i]!.financedCostPaidCents))),openingUnrestrictedCashCents:openingUnrestricted}:{}),
+            ...(projects.length||purchases.length?{financedConstructionByMonth:Array.from({length:12},(_,i)=>total(aduContext.projects.map(p=>p.months[i]!.financedCostPaidCents))),openingUnrestrictedCashCents:openingUnrestricted}:{}),
             openingAccountBalances:new Map([...accountExact].map(([id,balance])=>[id,balance.status==='available'?available(settleCents(balance.value)):balance])),
             cashIncomeByMonth:cash.value.months.map(m=>m.grossIncomeCents),expensesByMonth:cash.value.months.map(m=>m.expensesCents),
             debtPaymentsByMonth:Array.from({length:12},(_,i)=>total(yearLoans.map(s=>{if(s.status!=='available')throw new Error('Unavailable loan');return s.value.months[i]!.paymentCents;}))),
@@ -272,6 +275,7 @@ export function calculateProjection(inputs:ValidatedPlan,ruleSet:RuleSet):Projec
     const childProvenance=plan.children?.length?[childPlanningProvenance(year)]:[];
     allProvenance.push(...rsuProvenance,...taxProvenance,...deductionProvenance,...conversionProvenance,...childProvenance,...(projects.length?aduPlanningProvenance(year):[]));
     const estimateProvenance=estimates?[aduEstimateProvenance(year)]:[];
+    if(purchases.some(property=>property.purchaseTaxEstimation?.mode==='simple'))estimateProvenance.push(purchaseEstimateProvenance(year));
     if(fundedAccountIds.size)estimateProvenance.push(brokerageFundingProvenance(year));
     allProvenance.push(...estimateProvenance);
     const provenance=uniqueProvenance([...(rules.status==='available'?Object.values(rules.value.provenance):[]),...rsuProvenance,...taxProvenance,...deductionProvenance,...conversionProvenance,...childProvenance,...(projects.length?aduPlanningProvenance(year):[]),...estimateProvenance]);
@@ -345,7 +349,7 @@ export function calculateProjection(inputs:ValidatedPlan,ruleSet:RuleSet):Projec
           const value=active?available(0):schedule;
           return {...(descriptor.kind==='adu-project'?{drawCents:active?available(0):schedule}:{}),loanId:loan.id,openingPrincipalCents:value,interestCents:value,paymentCents:value,principalPaidCents:value,closingPrincipalCents:value};
         }
-        const m=schedule.value.months[i]!;return {...(descriptor.kind==='adu-project'?{drawCents:available((m as AduLoanMonth).drawCents)}:{}),loanId:loan.id,openingPrincipalCents:available(m.openingPrincipalCents),interestCents:available(m.interestCents),paymentCents:available(m.paymentCents),principalPaidCents:available(m.principalPaidCents),closingPrincipalCents:available(m.closingPrincipalCents)};
+        const m=schedule.value.months[i]!;return {...(descriptor.kind==='adu-project'?{drawCents:available((m as AduLoanMonth).drawCents)}:'drawCents' in m&&typeof m.drawCents==='number'?{drawCents:available(m.drawCents)}:{}),loanId:loan.id,openingPrincipalCents:available(m.openingPrincipalCents),interestCents:available(m.interestCents),paymentCents:available(m.paymentCents),principalPaidCents:available(m.principalPaidCents),closingPrincipalCents:available(m.closingPrincipalCents)};
       });
       const properties:PropertyProjection[]=[...plan.properties].sort((a,b)=>a.id.localeCompare(b.id)).map(property=>{
         const previous=propertyExact.get(property.id)!,knownHome=existingHomeExact.get(property.id)!;
@@ -353,7 +357,8 @@ export function calculateProjection(inputs:ValidatedPlan,ruleSet:RuleSet):Projec
         const existingGrowth=knownHome.status==='available'?range(property.id,year,'knownExistingHomeValueCents',()=>growMonth(knownHome.value,propertyRate(property,year),0)):knownHome;
         existingHomeExact.set(property.id,existingGrowth.status==='available'?available(existingGrowth.value.closingExact):existingGrowth);
         const projectContext=aduContext.projects.find(p=>p.propertyId===property.id),lifecycle=projectContext?.months[i];
-        const addition=lifecycle?.completionValueAddedCents??available(0);
+        const purchaseValueCents=purchaseIds.has(property.id)&&property.purchaseDate.slice(0,7)===`${year}-${String(month).padStart(2,'0')}`?property.openingValueCents:0;
+        const addition=sum([lifecycle?.completionValueAddedCents??available(0),available(purchaseValueCents)],year,'propertyValueAddedCents',property.id);
         const nextExact=combine([growth,addition],()=>growth.status==='available'?growth.value.closingExact.plus(numeric(addition)):new Decimal(0));
         const settled=nextExact.status==='available'?range(property.id,year,'propertyValueCents',()=>settleCents(nextExact.value)):nextExact;
         propertyExact.set(property.id,settled.status==='available'?nextExact:settled);
@@ -367,8 +372,8 @@ export function calculateProjection(inputs:ValidatedPlan,ruleSet:RuleSet):Projec
         const linkedLoans=declaredLoans.filter(l=>l.propertyId===property.id).map(l=>loans.find(v=>v.loanId===l.loan.id)!.closingPrincipalCents);
         const loanBalanceCents=sum(linkedLoans,year,'loanBalanceCents',property.id),equityCents=sum([closingValueCents,loanBalanceCents.status==='available'?available(-loanBalanceCents.value):loanBalanceCents],year,'equityCents',property.id);
         const area:Available<number>=property.primaryArea===undefined?{status:'needs-data',issues:[{code:'required-primary-area',recordId:property.id,year,field:'primaryArea',severity:'warning',explanation:'Combined living area requires the original home area.',resolution:'Enter the original home living area in square feet.'}]}:available(property.primaryArea+(property.aduProject&&property.aduProject.completionDate.slice(0,7)<=`${year}-${String(month).padStart(2,'0')}`?property.aduArea??0:0));
-        const extra=projectContext?{completionValueAddedCents:addition,knownExistingHomeValueCents:existingGrowth.status==='available'?available(existingGrowth.value.closingCents):existingGrowth,combinedLivingAreaSqFt:area}:{};
-        return {propertyId:property.id,openingValueCents,growthCents,closingValueCents,loanBalanceCents,equityCents,...extra};
+        const extra=projectContext?{completionValueAddedCents:lifecycle?.completionValueAddedCents??available(0),knownExistingHomeValueCents:existingGrowth.status==='available'?available(existingGrowth.value.closingCents):existingGrowth,combinedLivingAreaSqFt:area}:{};
+        return {propertyId:property.id,openingValueCents,growthCents,closingValueCents,loanBalanceCents,equityCents,...(purchaseIds.has(property.id)?{purchaseValueAddedCents:available(purchaseValueCents)}:{}),...extra};
       });
       const loanBalanceCents=sum(loans.map(l=>l.closingPrincipalCents),year,'loanBalanceCents'),debtPaymentCents=sum(loans.map(l=>l.paymentCents),year,'debtPaymentCents'),interestCents=sum(loans.map(l=>l.interestCents),year,'interestCents'),principalPaidCents=sum(loans.map(l=>l.principalPaidCents),year,'principalPaidCents');
       const accountBalanceCents=sum(accounts.map(a=>a.closingCents),year,'accountBalanceCents'),accountGrowthCents=sum(accounts.map(a=>a.growthCents),year,'accountGrowthCents'),propertyValueCents=sum(properties.map(p=>p.closingValueCents),year,'propertyValueCents'),propertyGrowthCents=sum(properties.map(p=>p.growthCents),year,'propertyGrowthCents'),equityCents=sum(properties.map(p=>p.equityCents),year,'equityCents');

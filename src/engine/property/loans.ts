@@ -12,6 +12,8 @@ export type OpeningLoanProvenance = 'known' | 'estimated';
 export interface LoanMonth {
   readonly loanId: string;
   readonly date: ISODate;
+  /** A planned purchase mortgage enters the balance sheet at closing. */
+  readonly drawCents?: Cents;
   readonly openingPrincipalCents: Cents;
   readonly interestCents: Cents;
   readonly paymentCents: Cents;
@@ -122,6 +124,7 @@ function historicalOpening(loan: PropertyLoan, startYear: number): Cents {
  */
 export function calculateLoanSchedule(
   loan: Debt | PropertyLoan, startYear: number, horizonYears: number,
+  options?: Readonly<{ plannedOrigination?: boolean }>,
 ): LoanSchedule {
   calendarDate(startYear, 1, 1);
   if (!Number.isInteger(horizonYears) || horizonYears < 1 || horizonYears > 40) {
@@ -136,16 +139,25 @@ export function calculateLoanSchedule(
   let openingProvenance: OpeningLoanProvenance;
   let paymentProvenance: OpeningLoanProvenance;
   let qualification: MortgageQualificationEvidence | undefined;
+  let originationIndex: number | undefined;
   if (propertyLoan) {
     requireNonnegativeCents(loan.originalPrincipalCents);
     const first = parseISODate(loan.firstPaymentDate);
     firstIndex = monthIndex(first.year, first.month);
-    opening = loan.openingBalance.known
+    const planned = options?.plannedOrigination
+      || loan.originationDate > calendarDate(startYear, 1, 1);
+    if (planned) {
+      const originated = parseISODate(loan.originationDate);
+      originationIndex = monthIndex(originated.year, originated.month);
+    }
+    const notYetOriginated = originationIndex !== undefined
+      && originationIndex >= monthIndex(startYear, 1);
+    opening = notYetOriginated ? 0 : loan.openingBalance.known
       ? loan.openingBalance.value : historicalOpening(loan, startYear);
     payment = loan.openingPayment.known
       ? loan.openingPayment.value
       : scheduledPayment(loan.originalPrincipalCents, loan.aprBps, loan.termMonths);
-    openingProvenance = loan.openingBalance.known ? 'known' : 'estimated';
+    openingProvenance = notYetOriginated || loan.openingBalance.known ? 'known' : 'estimated';
     paymentProvenance = loan.openingPayment.known ? 'known' : 'estimated';
     qualification = {
       collateralPropertyId: loan.collateralPropertyId,
@@ -182,9 +194,22 @@ export function calculateLoanSchedule(
   for (let offset = 0; offset < horizonYears * 12; offset += 1) {
     const year = startYear + Math.floor(offset / 12);
     const month = offset % 12 + 1;
-    const activePayment = monthIndex(year, month) >= firstIndex ? payment : 0;
+    const index = monthIndex(year, month);
+    const beforeOrigination = originationIndex !== undefined && index < originationIndex;
+    const drawCents = propertyLoan && index === originationIndex ? loan.originalPrincipalCents : 0;
+    const activePayment = index >= firstIndex ? payment : 0;
     let step: PaymentStep;
-    try { step = paymentStep(opening, loan.aprBps, activePayment); }
+    try {
+      if (beforeOrigination) {
+        step = { interestCents: 0, paymentCents: 0, principalPaidCents: 0, closingPrincipalCents: 0 };
+      } else if (index === originationIndex && index < firstIndex) {
+        // Closing posts the mortgage once. The first regular interest period
+        // begins next month; prepaid closing interest needs separate inputs.
+        step = { interestCents: 0, paymentCents: 0, principalPaidCents: 0, closingPrincipalCents: drawCents };
+      } else {
+        step = paymentStep(settleCents(new Decimal(opening).plus(drawCents)), loan.aprBps, activePayment);
+      }
+    }
     catch (error) {
       if (error instanceof CalculationRangeError) {
         throw new CalculationRangeError(
@@ -200,7 +225,8 @@ export function calculateLoanSchedule(
       resolution: 'Increase the scheduled payment or account for the growing debt in the plan.',
     }] : [];
     months.push({ loanId: loan.id, date: calendarDate(year, month, 31),
-      openingPrincipalCents: opening, ...step, openingProvenance, issues });
+      openingPrincipalCents: opening, ...(originationIndex !== undefined ? { drawCents } : {}),
+      ...step, openingProvenance, issues });
     scheduleIssues.push(...issues);
     opening = step.closingPrincipalCents;
   }

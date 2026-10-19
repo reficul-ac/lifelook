@@ -80,6 +80,21 @@ describe('qualified personal deductions', () => {
     expect(r.status).toBe('available');
     if(r.status==='available')expect(r.value.issues.some(i=>i.code==='estimated-mortgage-deduction')).toBe(false);
   });
+  it('uses the principal when a midyear purchase mortgage first secures the home for its debt limit', () => {
+    const input=loadReferences<Input,unknown>('itemized-2026').find(c=>c.id==='post-2017-interest-only-federal')!.input;
+    const property:PropertyYearFacts={...input.property!,personal:{...input.property!.personal,
+      loans:input.property!.personal.loans.map(loan=>({...loan,qualification:{...loan.qualification!,
+        acquisitionDate:'2026-06-15',originationDate:'2026-06-15'}}))}};
+    const loans=input.loans!.map(loan=>({...loan,averageBalanceEvidence:loan.averageBalanceEvidence.map(balance=>({
+      ...balance,openingPrincipalCents:0,
+      monthlyOpeningPrincipalCents:[0,0,0,0,0,0,100000000,100000000,100000000,100000000,100000000,100000000],
+      monthlyClosingPrincipalCents:[0,0,0,0,0,100000000,100000000,100000000,100000000,100000000,100000000,100000000],
+    }))}));
+    const result=calculateMortgageDeduction(property,loans,'federal',rules);
+    expect(result).toMatchObject({status:'available',value:{
+      averageQualifiedDebtCents:100000000,allowedInterestCents:4500000,
+    }});
+  });
   it('California standard is independent of unknown filer ages', () => {
     const filers=makePlan().household.filers.map(f=>({...f,birthDate:{known:false as const}}));
     expect(standardDeduction(filers,2026,'california',rules)).toEqual({status:'available',value:1180000});

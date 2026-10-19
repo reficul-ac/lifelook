@@ -43,6 +43,7 @@ export interface RsuPeriod {
   readonly grants:readonly RsuGrantMonth[];
 }
 export interface PropertyProjection {
+  readonly purchaseValueAddedCents?:Available<Cents>;
   readonly completionValueAddedCents?:Available<Cents>;
   readonly knownExistingHomeValueCents?:Available<Cents>;
   readonly combinedLivingAreaSqFt?:Available<number>;

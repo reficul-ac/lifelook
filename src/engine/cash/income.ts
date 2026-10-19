@@ -95,7 +95,9 @@ export function resolveCashYear(plan: ValidatedPlan, year: number, selection?:Ca
   }
   for(const e of [...plan.expenses].sort((a,b)=>a.id.localeCompare(b.id))) {
     if(!include(e.id))continue;
-    const months=expenseAmounts(e,year);
+    const propertyId=e.propertyId??plan.rentals.find(r=>r.id===e.rentalId)?.propertyId;
+    const property=plan.properties.find(p=>p.id===propertyId),ownershipMonth=property?.purchaseDate.slice(0,7);
+    const months=expenseAmounts(e,year).map((amount,index)=>ownershipMonth&&`${year}-${String(index+1).padStart(2,'0')}`<ownershipMonth?0:amount);
     streams.push({id:e.id,kind:'expense',months,annualCents:sum(months),...(e.propertyId?{propertyId:e.propertyId}:{})});
   }
   for(const child of [...(plan.children??[])].sort((a,b)=>a.id.localeCompare(b.id))) {
@@ -104,6 +106,10 @@ export function resolveCashYear(plan: ValidatedPlan, year: number, selection?:Ca
     streams.push({id:child.id,kind:'expense',months,annualCents:sum(months)});
   }
   for(const property of plan.properties) {
+    if(property.purchaseDate>`${plan.startYear}-01-01`&&include(property.id)){
+      const months=Array.from({length:12},(_,index)=>property.purchaseDate.slice(0,7)===`${year}-${String(index+1).padStart(2,'0')}`?property.downPaymentCents:0);
+      streams.push({id:property.id,kind:'expense',months,annualCents:sum(months),propertyId:property.id});
+    }
     const project=property.aduProject;if(!project)continue;
     for(const cost of project.costs) {
       if(!include(cost.id))continue;
@@ -123,8 +129,10 @@ export function resolveCashYear(plan: ValidatedPlan, year: number, selection?:Ca
     const startYear=Number(r.rentStartDate.slice(0,4));
     const amount=new Decimal(r.monthlyRentCents).mul(new Decimal(1).plus(new Decimal(r.rentGrowthBps).div(10000)).pow(Math.max(0,year-startYear)));
     const collected=r.vacancyBps===undefined?amount:amount.times(new Decimal(10000).minus(r.vacancyBps).div(10000));
+    const property=plan.properties.find(p=>p.id===r.propertyId),ownedStart=property?maxDate(r.rentStartDate,property.purchaseDate):r.rentStartDate;
+    const start=maxDate(ownedStart,r.availableDate);
     const exact=Array.from({length:12},(_,i)=>{
-      const from=maxDate(r.rentStartDate,calendarDate(year,i+1,1));
+      const from=maxDate(start,calendarDate(year,i+1,1));
       const to=minDate(r.rentEndDate??calendarDate(year,12,31),calendarDate(year,i+1,daysInMonth(year,i+1)));
       return from>to?new Decimal(0):collected.mul(day(to)-day(from)+1).div(daysInMonth(year,i+1));
     });

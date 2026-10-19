@@ -54,13 +54,15 @@ export function checkCoverage(plan: ValidatedPlan, year: number): Coverage {
     if (answer.known && answer.value) add('unsupported-tax-case', plan.id, `household.coverageAnswers.${field}`, 'The household reports an income, credit, or distribution circumstance beyond the modeled tax scope.', 'Add support for this circumstance before treating the result as complete household liability.', false);
   });
   plan.otherIncome.filter(income => income.classification === 'ordinary-taxable' && income.niitTreatment === 'unknown').forEach(income => add('required-data', income.id, 'niitTreatment', 'NIIT treatment of this taxable income is unresolved.', 'Classify its treatment as included or excluded before calculating NIIT.'));
-  plan.properties.forEach(property => property.loans.forEach(loan => {
+  plan.properties.filter(property=>property.purchaseDate<=`${year}-12-31`).forEach(property => property.loans.forEach(loan => {
     required(loan.proceedsQualification.qualifiedAcquisitionDebt, loan.id, 'proceedsQualification.qualifiedAcquisitionDebt');
     required(loan.proceedsQualification.qualifiedPrincipalCents, loan.id, 'proceedsQualification.qualifiedPrincipalCents');
     required(loan.proceedsQualification.historyComplete, loan.id, 'proceedsQualification.historyComplete');
     if (loan.proceedsQualification.kind !== 'acquisition' && (loan.proceedsQualification.kind === 'unknown' || !loan.proceedsQualification.historyComplete.known || !loan.proceedsQualification.historyComplete.value)) add('unsupported-tax-case', loan.id, 'proceedsQualification', 'Advanced mortgage qualification requires complete qualifying proceeds history.', 'Supply supported financing and acquisition history before claiming mortgage deductions.');
   }));
   plan.rentals.forEach(rental => {
+    const owner=plan.properties.find(property=>property.id===rental.propertyId);
+    if(owner&&owner.purchaseDate>`${year}-12-31`)return;
     const property=plan.properties.find(p=>p.aduProject?.rentalId===rental.id);
     if(property&&!aduTaxActivityStarted(plan,property,year))return;
     required(rental.activeParticipation, rental.id, 'activeParticipation');
@@ -84,6 +86,16 @@ export function checkCoverage(plan: ValidatedPlan, year: number): Coverage {
     }
   });
   for(const property of plan.properties){
+    if(property.purchaseDate>`${plan.startYear}-01-01`&&property.purchaseDate<=`${year}-12-31`){
+      if(property.purchaseFunding?.kind==='taxable-brokerage'){
+        completeHouseholdLiability=false;
+        issues.push({code:'purchase-funding-estimate',recordId:property.id,year,field:'purchaseFunding',severity:'info',explanation:'The down payment assumes proportional sales of long-term brokerage holdings. Unknown account basis is estimated as zero, and realized losses receive no tax deduction, offset or carryforward benefit.',resolution:'Review the selected account and its investment cost basis before relying on the planning estimate.'});
+      }
+      if(property.purchaseTaxEstimation?.mode==='simple'){
+        completeHouseholdLiability=false;
+        issues.push({code:'property-purchase-estimate',recordId:property.id,year,field:'purchaseTaxEstimation',severity:'info',explanation:'The planned purchase uses estimates for unanswered ordinary rental and purchase-loan tax details, with the selected building share of the purchase price used for depreciation. Known tax answers are preserved.',resolution:'Review the purchase tax assumptions or choose detailed tax inputs.'});
+      }
+    }
     if(property.aduProject?.ownerFunding?.kind==='taxable-brokerage'){
       completeHouseholdLiability=false;
       issues.push({code:'brokerage-funding-estimate',recordId:property.aduProject.id,year,field:'ownerFunding',severity:'info',explanation:'ADU funding assumes proportional sales of long-term brokerage holdings. Unknown account basis is estimated as zero, and realized losses receive no tax deduction, offset or carryforward benefit.',resolution:'Review the selected account and its investment cost basis before relying on the planning estimate.'});

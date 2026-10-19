@@ -37,6 +37,9 @@ export interface RentalTaxBookFacts {
 }
 export type RentalCashField='rentCents'|'operatingExpenseCents'|'capitalExpenseCents'|'debtPaymentCents'|'cashInterestCents'|'principalPaidCents'|'cashFlowCents';
 export interface RentalYearFacts {
+  /** Simple future-purchase planning assumes household cash supports monthly deficits. */
+  readonly purchaseOwnerSupportCents?: Cents;
+  readonly purchaseNondeductibleExpenseCents?: Cents;
   /** Project annual cash availability; numeric compatibility fields must not replace it. */
   readonly aduCash?:Readonly<Record<RentalCashField,Available<Cents>>>;
   readonly aduRiskMovements?:Readonly<Record<TaxBook,Available<AduRiskMovements>>>;
@@ -128,10 +131,17 @@ export function buildPropertyFacts(
   const year = cash.year;
   const aduContext=adu??(plan.properties.some(p=>p.aduProject)?resolveAduYear(plan,year):undefined);
   const prepared=aduContext?.projects.length?prepareAduTaxYear(plan,aduContext,opening,rules):undefined;
-  const properties = new Map(plan.properties.map(property => [property.id, property]));
-  const units = [...plan.rentals].sort((a, b) => a.id.localeCompare(b.id));
+  const properties = new Map(plan.properties.filter(property => property.purchaseDate <= `${year}-12-31`)
+    .map(property => [property.id, property]));
+  const units = plan.rentals.filter(unit => properties.has(unit.propertyId)).sort((a, b) => a.id.localeCompare(b.id));
   const unitsById = new Map(units.map(unit => [unit.id, unit]));
   const streamById = new Map(cash.streams.map(stream => [stream.id, stream]));
+  const supportedUnits=units.filter(unit=>{
+    const property=properties.get(unit.propertyId)!;
+    return property.purchaseDate>`${plan.startYear}-01-01`&&property.purchaseTaxEstimation?.mode==='simple';
+  });
+  const purchaseExpenseMonths=new Map(supportedUnits.map(unit=>[unit.id,Array<Cents>(12).fill(0)]));
+  const purchasePaymentMonths=new Map(supportedUnits.map(unit=>[unit.id,Array<Cents>(12).fill(0)]));
   const expenses: ExpenseAllocationRecord[] = [];
   for (const expense of [...plan.expenses].sort((a, b) => a.id.localeCompare(b.id))) {
     const propertyId = expense.propertyId ?? (expense.rentalId ? unitsById.get(expense.rentalId)?.propertyId : undefined);
@@ -145,6 +155,16 @@ export function buildPropertyFacts(
     const allocation=resolved?resolved.status==='available'?resolved.value:{personalCents:0,rentalCentsByUnit:{[projectUnit!.id]:0}}:allocateExpense(expense,property,units,paidCents);
     expenses.push({ expenseId: expense.id, propertyId, taxCategory: expense.taxCategory,
       paidCents, ...allocation, ...(resolved?{allocation:resolved}:{}), ...(expense.mortgageInsuranceQualification?{mortgageInsuranceQualification:expense.mortgageInsuranceQualification}:{}) });
+    if(supportedUnits.length){
+      const cashMonths=streamById.get(expense.id)?.months??Array<Cents>(12).fill(0);
+      for(let index=0;index<12;index++){
+        const paid=monthly?.status==='available'?monthly.value[index]!:allocateExpense(expense,property,units,cashMonths[index]!);
+        for(const unit of supportedUnits){
+          const amounts=purchaseExpenseMonths.get(unit.id)!;
+          amounts[index]=sum([amounts[index]!,paid.rentalCentsByUnit[unit.id]??0]);
+        }
+      }
+    }
   }
   const personalExpenses = expenses.filter(expense => properties.get(expense.propertyId)?.role !== 'rental');
   const personalCategory = (category: Expense['taxCategory']): Cents => sum(personalExpenses
@@ -165,7 +185,7 @@ export function buildPropertyFacts(
     const declared = property?.loans.find(loan => loan.id === schedule.loanId);
     const linkedDebt = !declared && plan.debts.find(debt => debt.id === schedule.loanId);
     const ownerProperty = property ?? (linkedDebt && linkedDebt.propertyId ? properties.get(linkedDebt.propertyId) : undefined);
-    if (!ownerProperty) continue;
+    if (!ownerProperty || !properties.has(ownerProperty.id)) continue;
     const months = schedule.months.filter(month => Number(month.date.slice(0, 4)) === year);
     const paymentCents = sum(months.map(month => month.paymentCents));
     const interestCents = sum(months.map(month => month.interestCents));
@@ -176,6 +196,13 @@ export function buildPropertyFacts(
     const payment = allocateShares(paymentCents, shares);
     const interest = allocateShares(interestCents, shares);
     const paidInterest = allocateShares(paidInterestCents, shares);
+    for(const month of months){
+      const allocated=allocateShares(month.paymentCents,shares),index=Number(month.date.slice(5,7))-1;
+      for(const unit of supportedUnits){
+        const amounts=purchasePaymentMonths.get(unit.id)!;
+        amounts[index]=sum([amounts[index]!,allocated.rentalCentsByUnit[unit.id]??0]);
+      }
+    }
     const eligibility: Available<Cents>[] = [];
     for (const unit of units) {
       if(shares[unit.id]?.gt(0))rentalFinancing[unit.id]!.push(declared?.financingAtRiskQualification??{known:false});
@@ -213,6 +240,12 @@ export function buildPropertyFacts(
     const cashInterestCents = sum(rentalInterest[unit.id]!);
     const principalPaidCents = settleCents(new Decimal(debtPaymentCents).minus(cashInterestCents));
     const eligibleInterestCents = sumAvailable(rentalEligibleInterest[unit.id]!);
+    const supportExpenses=purchaseExpenseMonths.get(unit.id),supportPayments=purchasePaymentMonths.get(unit.id);
+    const purchaseSupport=supportExpenses&&supportPayments?{
+      purchaseOwnerSupportCents:sum(supportExpenses.map((amount,index)=>Math.max(0,
+        sum([amount,supportPayments[index]!,-(streamById.get(unit.id)?.months[index]??0)])))),
+      purchaseNondeductibleExpenseCents:nonDeductibleCashCents,
+    }:{};
     const depreciation: Partial<Record<TaxBook, Available<DepreciationYear>>> = {};
     const rentalBooks: Partial<Record<TaxBook, Available<RentalTaxBookFacts>>> = {};
     const closingBooks: Partial<Record<TaxBook, Available<RentalBookState>>> = {};
@@ -252,7 +285,7 @@ export function buildPropertyFacts(
     const financing = rentalFinancing[unit.id]!;
     const financingAtRiskQualification:History<boolean> = financing.some(h=>h.known&&!h.value)?{known:true,value:false}:financing.some(h=>!h.known)?{known:false}:{known:true,value:true};
     rentals.push({ rentalId: unit.id, propertyId: unit.propertyId, unit, rentCents,
-      financingAtRiskQualification,
+      financingAtRiskQualification,...purchaseSupport,
       operatingExpenseCents, capitalExpenseCents, debtPaymentCents, cashInterestCents,
       principalPaidCents, cashFlowCents: settleCents(new Decimal(rentCents)
         .minus(operatingExpenseCents).minus(nonDeductibleCashCents).minus(capitalExpenseCents).minus(debtPaymentCents)),

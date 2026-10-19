@@ -204,4 +204,69 @@ describe('fixed-rate loans and debt cash schedules', () => {
         50000, 40000, 30000, 20000, 10000, 0],
     });
   });
+
+  it('draws a future purchase mortgage once at closing and starts regular interest the following month', () => {
+    const loan = propertyLoan({
+      originationDate: '2027-06-15', acquisitionDate: '2027-06-15',
+      firstPaymentDate: '2027-07-31', aprBps: 1200,
+      openingBalance: { known: true, value: 0 },
+      openingPayment: { known: true, value: 10000 },
+    });
+    const schedule = calculateLoanSchedule(loan, 2026, 3);
+    expect(schedule.months.slice(0, 17).every(month => month.openingPrincipalCents === 0
+      && month.closingPrincipalCents === 0 && month.interestCents === 0
+      && month.paymentCents === 0)).toBe(true);
+    expect(schedule.months[17]).toMatchObject({
+      date: '2027-06-30', openingPrincipalCents: 0, drawCents: 120000,
+      interestCents: 0, paymentCents: 0, principalPaidCents: 0,
+      closingPrincipalCents: 120000,
+    });
+    expect(schedule.months[18]).toMatchObject({
+      openingPrincipalCents: 120000, drawCents: 0, interestCents: 1200,
+      paymentCents: 10000, principalPaidCents: 8800, closingPrincipalCents: 111200,
+    });
+    expect(schedule.months.reduce((sum, month) => sum + (month.drawCents ?? 0), 0)).toBe(120000);
+    expect(schedule.issues.some(issue => issue.code === 'estimated-opening-loan-balance')).toBe(false);
+  });
+
+  it('honors an explicitly scheduled closing-month mortgage payment', () => {
+    const schedule = calculateLoanSchedule(propertyLoan({
+      originationDate: '2027-06-15', acquisitionDate: '2027-06-15',
+      firstPaymentDate: '2027-06-30', aprBps: 1200,
+      openingPayment: { known: true, value: 10000 },
+    }), 2027, 1);
+    expect(schedule.months[5]).toMatchObject({
+      openingPrincipalCents: 0, drawCents: 120000, interestCents: 1200,
+      paymentCents: 10000, principalPaidCents: 8800, closingPrincipalCents: 111200,
+    });
+  });
+
+  it('recognizes a planned January 1 closing when annual schedules restart', () => {
+    const schedule = calculateLoanSchedule(propertyLoan({
+      originationDate: '2028-01-01', acquisitionDate: '2028-01-01',
+      firstPaymentDate: '2028-02-29', aprBps: 0,
+      openingBalance: { known: true, value: 0 },
+    }), 2028, 1, { plannedOrigination: true });
+    expect(schedule.months[0]).toMatchObject({
+      openingPrincipalCents: 0, drawCents: 120000, interestCents: 0,
+      paymentCents: 0, closingPrincipalCents: 120000,
+    });
+    expect(schedule.months[1]).toMatchObject({
+      openingPrincipalCents: 120000, drawCents: 0,
+      paymentCents: 10000, closingPrincipalCents: 110000,
+    });
+  });
+
+  it('continues the actual post-purchase balance without originating the mortgage again', () => {
+    const schedule = calculateLoanSchedule(propertyLoan({
+      originationDate: '2027-06-15', acquisitionDate: '2027-06-15',
+      firstPaymentDate: '2027-07-31', aprBps: 0,
+      openingBalance: { known: true, value: 60000 },
+    }), 2028, 1, { plannedOrigination: true });
+    expect(schedule.months[0]).toMatchObject({
+      openingPrincipalCents: 60000, drawCents: 0,
+      paymentCents: 10000, closingPrincipalCents: 50000,
+    });
+    expect(schedule.months.reduce((sum, month) => sum + (month.drawCents ?? 0), 0)).toBe(0);
+  });
 });

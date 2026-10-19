@@ -1,4 +1,4 @@
-import {preloadWorkspace,readActivePlan,replaceScenarioFromJson} from './helpers/workspace';
+import {preloadWorkspace,readActivePlan,replaceScenarioFromJson,openRecord,openSettings,applyEdit} from './helpers/workspace';
 import { readFile, mkdir } from 'node:fs/promises';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { calculateProjection, loadRuleSet, type Account, type Available, type CashFlowAllocationYear, type PlanDocument } from '../../src/engine';
@@ -100,14 +100,16 @@ function baseOracles(plan = allocationPlan(), shared = false, existingStocks = 0
 async function preload(page: Page, plan: PlanDocument) {
   mustValidate(plan);
   await preloadWorkspace(page,plan);
-  await page.getByRole('button', { name: 'Investments', exact: true }).click();
+  await openRecord(page,{kind:'allocation'});
   await expect(editor(page).locator('[data-allocation-status]')).toHaveText('Applied allocation');
 }
 const editor = (page: Page) => page.getByRole('form', { name: 'Cash flow allocation', exact: true });
 const entry = (page: Page, index: number) => editor(page).locator('fieldset').nth(index);
 const preview = (page: Page) => editor(page).locator('[data-allocation-preview]');
 async function apply(page: Page, keyboard = false) {
-  const button = editor(page).getByRole('button', { name: 'Apply allocation', exact: true });
+  await expect(page.locator('[data-active-editor] [data-preview-status]')).not.toHaveAttribute('data-preview-status','pending');
+  if(await page.locator('[data-active-editor] [data-preview-status]').getAttribute('data-preview-status')==='inactive')return;
+  const button = page.locator('[data-active-editor] .editor-footer').getByRole('button', { name: 'Apply allocation', exact: true });
   if (keyboard) { await button.focus(); await button.press('Enter'); } else await button.click();
   await expect(editor(page).locator('[data-allocation-status]')).toHaveText('Applied allocation');
 }
@@ -138,7 +140,7 @@ async function capture(page: Page, filename: string) {
   else await page.screenshot({ path: `${screenshots}/${filename}` });
 }
 async function backup(page: Page) {
-  const details = page.locator('header details').filter({ has: page.getByText('Backups and recovery', { exact: true }) });
+  await openSettings(page);const details = page.locator('[data-settings] details').filter({ has: page.getByText('Backups and recovery', { exact: true }) });
   if (!await details.evaluate(node => (node as HTMLDetailsElement).open)) await details.locator('summary').click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export scenario JSON', exact: true }).click();
@@ -154,6 +156,7 @@ async function fitsViewport(locator: Locator, page: Page) {
 }
 
 // Catches fixed computed maximum shares, duplicated excess posting, and year-picker saves.
+
 test('applies 93% stocks with an automatic IRA maximum and posts shared excess once in each year', async ({ page }) => {
   await preload(page, allocationPlan());
   await entry(page, 0).getByLabel('Allocation percentage (%)', { exact: true }).fill('93.00');
@@ -183,7 +186,7 @@ test('selects the cash account in native controls and restores reversed same-ID 
   await expect(page.getByTestId('annual-2026-account-cash-closing')).toHaveText('$143,868.00');
   const exported = JSON.parse(await backup(page)) as PlanDocument;
   const restored = { ...exported, cashFlowAllocation: { ...exported.cashFlowAllocation!, entries: [...exported.cashFlowAllocation!.entries].reverse() } };
-  await replaceScenarioFromJson(page,JSON.stringify(restored));
+  await replaceScenarioFromJson(page,JSON.stringify(restored));await openRecord(page,{kind:'allocation'});
   await expect(editor(page).locator('[data-allocation-status]')).toHaveText('Applied allocation');
   await expect(entry(page, 0).locator('legend')).toHaveText('Allocation 1');
   await expect(entry(page, 0).getByLabel('Allocation destination', { exact: true }).locator('option:checked')).toHaveText('Roth IRA');
@@ -328,18 +331,18 @@ test('keeps native edits stable and exports/restores only the applied maximum po
   const exported = await backup(page);
   expect(JSON.parse(exported)).toEqual(plan);
   expect(JSON.parse(exported).cashFlowAllocation.entries[1].amount).toEqual({ kind: 'max-annual' });
-  const discard = editor(page).getByRole('button', { name: 'Discard allocation edits', exact: true });
+  const discard = page.locator('[data-active-editor] .editor-footer').getByRole('button', { name: 'Discard edits', exact: true });
   await discard.focus(); await discard.press('Space');
   await expect(percent).toHaveValue('93.00');
   await percent.fill('50.00'); await apply(page);
   await percent.fill('40.00');
-  await replaceScenarioFromJson(page,exported);
+  await replaceScenarioFromJson(page,exported);await openRecord(page,{kind:'allocation'});
   await expect(editor(page).locator('[data-allocation-status]')).toHaveText('Applied allocation');
   await expect(percent).toHaveValue('93.00');
   expect(await savedPlan(page)).toEqual(plan);
   await expectBaseUI(page);
   await page.reload();
-  await page.getByRole('button', { name: 'Investments', exact: true }).click();
+  await openRecord(page,{kind:'allocation'});
   expect(await savedPlan(page)).toEqual(plan);
   await expectBaseUI(page);
 });

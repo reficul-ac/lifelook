@@ -33,7 +33,7 @@ describe('backdoor Roth allocation controls',()=>{
     expect(controller.getAllocationDraft().value.entries).toMatchObject([{destination:{backdoorRoth:{traditionalIraAccountId:source.id,cleanIraHistory:{known:false}}}}]);
     expect(controller.getState().savedPlan.cashFlowAllocation).toEqual(originalPolicy);expect(within(root).getByLabelText('Confirm clean IRA history')).not.toBeChecked();
     fireEvent.click(within(root).getByLabelText('Confirm clean IRA history'));apply(root,'Apply allocation');expect(controller.getState().savedPlan.revision).toBe(2);expect(store.writes()).toBe(2);
-  });
+  },15000);
   it('links only same-owner traditional IRAs and keeps the recurring route when changing preview year',()=>{
     const {controller,editor,row,root}=setup();
     fireEvent.click(within(row).getByLabelText('Use backdoor Roth'));

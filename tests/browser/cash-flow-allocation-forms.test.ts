@@ -1,3 +1,4 @@
+import {openRecord} from '../helpers/workspace-ui';
 import {mustValidate} from '../helpers/plans';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {fireEvent,within} from '@testing-library/dom';
@@ -13,10 +14,10 @@ import {reviewTarget} from '../../src/browser/navigation';
 let frames:Map<number,FrameRequestCallback>,sequence:number;
 beforeEach(()=>{frames=new Map();sequence=0;vi.stubGlobal('requestAnimationFrame',(cb:FrameRequestCallback)=>{frames.set(++sequence,cb);return sequence;});vi.stubGlobal('cancelAnimationFrame',(id:number)=>frames.delete(id));vi.stubGlobal('Worker',undefined);});
 afterEach(()=>vi.unstubAllGlobals());
-function flush(){const current=[...frames.values()];frames.clear();current.forEach(cb=>cb(0));}
-function setup(plan=makeAllocationPlan({horizonYears:2})){const result=mountWorkspace(plan);fireEvent.click(within(result.root.querySelector('nav')!).getByRole('button',{name:'Investments'}));return {...result,editor:within(result.root).getByRole('form',{name:'Cash flow allocation'})};}
+function flush(){document.querySelector<HTMLElement>('[data-active-editor] form')?.dispatchEvent(new CustomEvent('financial-input-commit',{bubbles:true}));const current=[...frames.values()];frames.clear();current.forEach(cb=>cb(0));}
+function setup(plan=makeAllocationPlan({horizonYears:2})){const result=mountWorkspace(plan);openRecord(result.root,{kind:'allocation'});return {...result,editor:within(result.root).getByRole('form',{name:'Cash flow allocation'})};}
 const row=(editor:HTMLElement,index=1)=>within(editor).getByRole('group',{name:`Allocation ${index}`});
-const click=(root:HTMLElement,name:string)=>fireEvent.click(within(root).getByRole('button',{name}));
+const click=(root:HTMLElement,name:string)=>{const active=root.closest<HTMLElement>('[data-active-editor]');if(active&&(name==='Apply allocation'||name==='Discard allocation edits')){flush();fireEvent.click(within(active).getByRole('button',{name:name==='Discard allocation edits'?'Discard edits':/^Apply allocation$|^Review inputs$/}));}else fireEvent.click(within(root).getByRole('button',{name}));};
 
 describe('native allocation policy editor',()=>{
  it.each(['primary','excess'])('selects an account named cash in the %s destination without selecting savings',kind=>{
@@ -32,14 +33,14 @@ describe('native allocation policy editor',()=>{
  });
  it('restores an account with ID cash distinctly in both native destination controls',()=>{
   const base=makeAllocationPlan(),{root,manager}=setup();const imported=makeAllocationPlan({accounts:[...base.accounts,{...base.accounts[0]!,id:'cash',name:'Named cash brokerage'}],cashFlowAllocation:makeAllocationPolicy({entries:[{id:'cash-account-row',priority:1,destination:{kind:'account',accountId:'cash'},amount:{kind:'percent',percentBps:1000}}],overflow:{id:'cash-account-excess',destination:{kind:'account',accountId:'cash'}}})});
-  expect(manager.replaceScenario(manager.captureTarget('master')!,mustValidate(imported)).accepted).toBe(true);const editor=within(root).getByRole('form',{name:'Cash flow allocation'});
+  expect(manager.replaceScenario(manager.captureTarget('master')!,mustValidate(imported)).accepted).toBe(true);openRecord(root,{kind:'allocation'});const editor=within(root).getByRole('form',{name:'Cash flow allocation'});
   for(const select of [within(row(editor)).getByLabelText('Allocation destination'),within(editor).getByLabelText('Excess allocation account')])expect((select as HTMLSelectElement).selectedOptions[0]).toHaveTextContent('Named cash brokerage');
  });
  it('restores same-ID entries in document order with fresh scenario controls and field routing',()=>{
   const plan=makeAllocationPlan({cashFlowAllocation:makeAllocationPolicy({entries:[{id:'stocks-row',priority:1,destination:{kind:'account',accountId:'brokerage'},amount:{kind:'percent',percentBps:1000}},{id:'cash-row',priority:2,destination:{kind:'cash'},amount:{kind:'percent',percentBps:2000}}]})});
   const {root,manager,editor:oldEditor}=setup(plan),oldText=within(row(oldEditor,2)).getByLabelText('Allocation percentage (%)');
   expect(manager.replaceScenario(manager.captureTarget('master')!,mustValidate({...plan,cashFlowAllocation:{...plan.cashFlowAllocation!,entries:[...plan.cashFlowAllocation!.entries].reverse()}})).accepted).toBe(true);
-  const editor=within(root).getByRole('form',{name:'Cash flow allocation'}),text=within(row(editor)).getByLabelText('Allocation percentage (%)');expect(text).not.toBe(oldText);expect(text).toHaveAttribute('data-field','entries.0.amount.percentBps');setField(row(editor),'Allocation percentage (%)','23.45');expect(manager.getActiveSession().controller.getAllocationDraft().value.entries).toMatchObject([{id:'cash-row',amount:{percentBps:'23.45'}},{id:'stocks-row',amount:{percentBps:'10.00'}}]);
+  openRecord(root,{kind:'allocation'});const editor=within(root).getByRole('form',{name:'Cash flow allocation'}),text=within(row(editor)).getByLabelText('Allocation percentage (%)');expect(text).not.toBe(oldText);expect(text).toHaveAttribute('data-field','entries.0.amount.percentBps');setField(row(editor),'Allocation percentage (%)','23.45');expect(manager.getActiveSession().controller.getAllocationDraft().value.entries).toMatchObject([{id:'cash-row',amount:{percentBps:'23.45'}},{id:'stocks-row',amount:{percentBps:'10.00'}}]);
  });
  it('retains standalone allocation controls during a same-ID policy reorder',()=>{
   const plan=makeAllocationPlan({cashFlowAllocation:makeAllocationPolicy({entries:[{id:'stocks-row',priority:1,destination:{kind:'account',accountId:'brokerage'},amount:{kind:'percent',percentBps:1000}},{id:'cash-row',priority:2,destination:{kind:'cash'},amount:{kind:'percent',percentBps:2000}}]})}),controller=createRetainedController(plan,{getItem:()=>null,setItem(){}}),root=document.createElement('div');document.body.append(root);const disclosures=createDisclosureController(root),mounted=mountCashFlowAllocationEditor(root,controller,{disclosures,readState:controller.getState,review(){}}),first=row(root),second=row(root,2),text=within(second).getByLabelText('Allocation percentage (%)');controller.resetPlan({...plan,cashFlowAllocation:{...plan.cashFlowAllocation!,entries:[...plan.cashFlowAllocation!.entries].reverse()}});expect([...root.querySelectorAll('fieldset')]).toEqual([second,first]);expect(within(row(root)).getByLabelText('Allocation percentage (%)')).toBe(text);expect(text).toHaveAttribute('data-field','entries.0.amount.percentBps');mounted.dispose();disclosures.dispose();
@@ -48,8 +49,8 @@ describe('native allocation policy editor',()=>{
   const {root,controller,editor}=setup();expect(editor).not.toHaveAttribute('data-editable-section');
   expect(within(editor).getByLabelText('Allocation year')).toHaveValue('2026');expect(within(editor).getByLabelText('Excess allocation account')).toHaveValue('cash:');
   const unrelated=controller.beginAdd('expenses');click(editor,'Add allocation');const first=row(editor);setField(first,'Allocation destination','account:brokerage');setField(first,'Allocation priority','3');setField(first,'Allocation percentage (%)','12.34');
-  const draft=controller.getAllocationDraft();expect(draft.value.entries).toMatchObject([{id:expect.any(String),priority:'3',amount:{kind:'percent',percentBps:'12.34'}}]);expect(within(root).getByTestId('draft-status')).toHaveTextContent('Allocation edits not applied');
-  click(editor,'Apply allocation');expect(controller.getState().savedPlan.cashFlowAllocation?.entries[0]).toMatchObject({id:(draft.value.entries as any[])[0].id,priority:3,amount:{kind:'percent',percentBps:1234}});expect(controller.getState().drafts[unrelated]).toBeDefined();expect(within(root).getByTestId('save-announcement')).toHaveTextContent('Allocation applied');
+  const draft=controller.getAllocationDraft();expect(draft.value.entries).toMatchObject([{id:expect.any(String),priority:'3',amount:{kind:'percent',percentBps:'12.34'}}]);expect(within(root).getByTestId('draft-status')).toHaveTextContent('Allocation draft');
+  click(editor,'Apply allocation');expect(controller.getState().savedPlan.cashFlowAllocation?.entries[0]).toMatchObject({id:(draft.value.entries as any[])[0].id,priority:3,amount:{kind:'percent',percentBps:1234}});expect(controller.getState().drafts[unrelated]).toBeDefined();expect(within(root).getByTestId('save-announcement')).toHaveTextContent('Changes applied');
   click(editor,'Add allocation');click(editor,'Discard allocation edits');expect(controller.getState().allocationDraft).toBeUndefined();expect(within(editor).getAllByRole('group',{name:/^Allocation \d+$/})).toHaveLength(1);
  });
  it('pairs exact text with a native range while preserving focused controls during rapid edits',()=>{
@@ -59,7 +60,7 @@ describe('native allocation policy editor',()=>{
  });
  it('reopens a retained policy draft and calculates its full forecast without applying it',()=>{
   const {root,controller,editor}=setup();click(editor,'Add allocation');setField(row(editor),'Allocation percentage (%)','45.67');const retained=controller.getAllocationDraft();unmountApp(root);
-  const disclosures=createDisclosureController(root),mounted=mountCashFlowAllocationEditor(editor.parentElement!,controller,{disclosures,readState:controller.getState,review:target=>reviewTarget(root,target)});flush();const reopened=within(root).getByRole('form',{name:'Cash flow allocation'});expect(row(reopened)).toHaveTextContent('Requested: 45.67%');expect(controller.getAllocationDraft()).toBe(retained);expect(controller.getState().savedPlan.revision).toBe(0);mounted.dispose();disclosures.dispose();
+  const disclosures=createDisclosureController(root),mounted=mountCashFlowAllocationEditor(root,controller,{disclosures,readState:controller.getState,review:target=>reviewTarget(root,target)});flush();const reopened=within(root).getByRole('form',{name:'Cash flow allocation'});expect(row(reopened)).toHaveTextContent('Requested: 45.67%');expect(controller.getAllocationDraft()).toBe(retained);expect(controller.getState().savedPlan.revision).toBe(0);mounted.dispose();disclosures.dispose();
  });
  it('explains exact percentage limits in user units without discarding out-of-range raw text',()=>{
   const {editor}=setup();click(editor,'Add allocation');setField(row(editor),'Allocation percentage (%)','101.00');flush();const text=within(row(editor)).getByLabelText('Allocation percentage (%)');expect(text).toHaveValue('101.00');expect(text).toHaveAccessibleDescription('Enter a percentage from 0% to 100%.');
@@ -76,7 +77,7 @@ describe('native allocation policy editor',()=>{
  it('retains invalid raw text and last valid preview with honest stale status and actionable errors',()=>{
   const {root,controller,editor}=setup();click(editor,'Add allocation');setField(row(editor),'Allocation percentage (%)','20.00');flush();expect(editor.querySelector('svg')).not.toBeNull();const applied=controller.getState().projection;
   const text=within(row(editor)).getByLabelText('Allocation percentage (%)');setField(row(editor),'Allocation percentage (%)','not a percent');flush();expect(text).toHaveValue('not a percent');expect(editor).toHaveTextContent('Stale preview');expect(editor).toHaveTextContent('Invalid allocation edits');expect(editor.querySelector('svg')).not.toBeNull();expect(text).toHaveAttribute('aria-invalid','true');
-  click(editor,'Apply allocation');expect(controller.getState().projection).toBe(applied);click(editor,'Review Allocation percentage (%)');expect(text).toHaveFocus();expect(root.querySelector('[data-section="Investments"]')).toBeVisible();
+  click(editor,'Apply allocation');expect(controller.getState().projection).toBe(applied);click(editor,'Review Allocation percentage (%)');expect(text).toHaveFocus();expect(root.querySelector('[data-active-editor]')).toBeVisible();
  });
  it('keeps controls and draft scope across unrelated saves and clamps view-only year to the full forecast',()=>{
   const {root,controller,editor}=setup();click(editor,'Add allocation');setField(row(editor),'Allocation percentage (%)','10.00');flush();const draft=controller.getAllocationDraft(),slider=within(row(editor)).getByRole('slider');setField(editor,'Allocation year','2027');expect(editor).toHaveTextContent('Original cash flow · 2027');expect(controller.getAllocationDraft()).toBe(draft);
@@ -111,7 +112,7 @@ describe('native allocation policy editor',()=>{
  });
  it('replaces an applied preview when restore changes the policy even without an open draft',()=>{
   const plan=makeAllocationPlan({cashFlowAllocation:makeAllocationPolicy({entries:[{id:'cash-row',priority:1,destination:{kind:'cash'},amount:{kind:'percent',percentBps:2000}}]})});
-  const {root,manager,editor}=setup(plan);expect(editor.querySelector('svg')).not.toBeNull();const {cashFlowAllocation:_,...restored}=makeAllocationPlan();expect(manager.replaceScenario(manager.captureTarget('master')!,mustValidate(restored)).accepted).toBe(true);const fresh=within(root).getByRole('form',{name:'Cash flow allocation'});expect(fresh.querySelector('svg')).toBeNull();expect(fresh).toHaveTextContent('No allocation policy applied.');
+  const {root,manager,editor}=setup(plan);expect(editor.querySelector('svg')).not.toBeNull();const {cashFlowAllocation:_,...restored}=makeAllocationPlan();expect(manager.replaceScenario(manager.captureTarget('master')!,mustValidate(restored)).accepted).toBe(true);openRecord(root,{kind:'allocation'});const fresh=within(root).getByRole('form',{name:'Cash flow allocation'});expect(fresh.querySelector('svg')).toBeNull();expect(fresh).toHaveTextContent('No allocation policy applied.');
  });
  it('shows a rejected Apply immediately even when the queued invalid preview has not run',()=>{
   const {controller,editor}=setup();click(editor,'Add allocation');setField(row(editor),'Allocation percentage (%)','20.00');flush();setField(row(editor),'Allocation percentage (%)','bad');click(editor,'Apply allocation');
@@ -119,7 +120,7 @@ describe('native allocation policy editor',()=>{
  });
  it('removes by stable ID, supports nested review focus, and cancels queued previews on actual unmount',()=>{
   const {root,controller,editor}=setup();click(editor,'Add allocation');click(editor,'Add allocation');const second=(controller.getAllocationDraft().value.entries as any[])[1].id;click(row(editor),'Remove allocation');expect(controller.getAllocationDraft().value.entries).toMatchObject([{id:second}]);
-  expect(reviewTarget(root,{section:'Investments',recordId:controller.getAllocationDraft().recordId,field:'entries.0.amount.percentBps',label:'Review allocation'})).toBe(true);expect(within(row(editor)).getByLabelText('Allocation percentage (%)')).toHaveFocus();expect(frames.size).toBeGreaterThan(0);unmountApp(root);expect(frames.size).toBe(0);controller.editAllocationDraft(controller.getAllocationDraft());expect(frames.size).toBe(0);
+  expect(reviewTarget(root,{section:'Investments',recordId:controller.getAllocationDraft().recordId,field:'entries.0.amount.percentBps',label:'Review allocation'})).toBe(true);expect(document.activeElement).toHaveAttribute('data-field','entries.0.amount.percentBps');root.querySelector<HTMLElement>('[data-active-editor] form')!.dispatchEvent(new CustomEvent('financial-input-commit',{bubbles:true}));expect(frames.size).toBeGreaterThan(0);unmountApp(root);expect(frames.size).toBe(0);controller.editAllocationDraft(controller.getAllocationDraft());expect(frames.size).toBe(0);
  });
 });
 
@@ -129,7 +130,7 @@ class EditorWorker {
  constructor(readonly url:URL,readonly options:WorkerOptions){EditorWorker.instances.push(this);}
  postMessage(request:unknown){this.request=request;}
  terminate(){this.terminated=true;}
- reply(){const {generation,plan,ruleSet,inputRevision,owner}=this.request;this.onmessage?.({data:{generation,owner,preview:{status:'calculated',projection:calculateProjection(plan,ruleSet),inputRevision}}} as MessageEvent);}
+ reply(){const {jobId,token,plan,ruleSet,owner}=this.request;this.onmessage?.({data:{jobId,token,owner,result:{status:'calculated',projection:calculateProjection(plan,ruleSet)}}} as MessageEvent);}
 }
 describe('editor worker lifecycle',()=>{
  it('rejects obsolete worker replies and terminates calculation on real app unmount',()=>{

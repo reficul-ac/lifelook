@@ -277,7 +277,7 @@ for (const monthly of [200000, 205000]) test(`retains refused workplace excess w
     await panel.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(trigger).toBeFocused();
     await trigger.click();
-    const outside = editor(page).getByLabel('Allocation year', { exact: true });
+    const outside = page.getByLabel('Scenario', { exact: true });
     await outside.click();
     await expect(panel).toBeHidden();
     await expect(outside).toBeFocused();

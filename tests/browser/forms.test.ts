@@ -13,6 +13,54 @@ import { startBrowserApp } from '../../src/browser/main';
 import {openRecord,applyEdit,openSettings} from '../helpers/workspace-ui';
 
 function storage(fail=false){const values=new Map<string,string>();return {getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>{if(fail)throw new Error('quota');values.set(key,value);}};}
+
+function dateRefreshFixture(){
+  const form=document.createElement('form'),body=document.createElement('div'),output=document.createElement('output');form.append(body,output);document.body.append(form);
+  let draft={recordId:'date-interaction',section:'household' as const,value:{completionDate:'2028-02-28',availableDate:'2028-03-01'}};
+  const context:FieldContext={get draft(){return draft;},issues:[],onChange(path,value){draft={...draft,value:setAt(draft.value,path,value) as typeof draft.value};},refresh(){const open=body.querySelector('details')?.open??false;body.replaceChildren();render(open);}};
+  function render(open=false){
+    renderField(body,context,['completionDate'],'Completion date',{kind:'date',refresh:true});
+    const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Linked dates';details.open=open;details.append(summary);body.append(details);
+    renderField(details,context,['availableDate'],'Available date',{kind:'date',refresh:true});
+    const action=document.createElement('button');action.type='button';action.textContent='Use date';action.addEventListener('click',()=>{if(action.isConnected)output.textContent=draft.value.completionDate;});body.append(action);
+  }
+  render();return {form,body,output};
+}
+
+describe('native date structural refresh interactions',()=>{
+  it('retains the next action through a held pointer and refreshes only after activation',async()=>{
+    const {form,body,output}=dateRefreshFixture(),input=within(body).getByLabelText('Completion date') as HTMLInputElement,action=within(body).getByRole('button',{name:'Use date'});
+    input.focus();fireEvent.input(input,{target:{value:'2028-02-29'}});fireEvent.pointerDown(action);action.focus();await Promise.resolve();
+    expect(action.isConnected).toBe(true);expect(output).toBeEmptyDOMElement();
+    fireEvent.pointerUp(action);fireEvent.click(action);
+    await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
+    await waitFor(()=>expect(output).toHaveTextContent('2028-02-29'));
+    expect(within(form).getByLabelText('Completion date')).toHaveValue('2028-02-29');
+  });
+  it('keeps a keyboard-focused next action connected until it activates',async()=>{
+    const {body,output}=dateRefreshFixture(),input=within(body).getByLabelText('Completion date') as HTMLInputElement,action=within(body).getByRole('button',{name:'Use date'});
+    input.focus();fireEvent.input(input,{target:{value:'2028-02-29'}});fireEvent.keyDown(input,{key:'Tab'});action.focus();fireEvent.keyUp(action,{key:'Tab'});await Promise.resolve();
+    expect(action.isConnected).toBe(true);expect(action).toHaveFocus();
+    fireEvent.click(action);await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));await waitFor(()=>expect(output).toHaveTextContent('2028-02-29'));
+  });
+  it('preserves the next focused native date and its unfinished value until it leaves',async()=>{
+    const {body}=dateRefreshFixture(),first=within(body).getByLabelText('Completion date') as HTMLInputElement,second=within(body).getByLabelText('Available date') as HTMLInputElement;
+    (second.closest('details') as HTMLDetailsElement).open=true;
+    first.focus();fireEvent.input(first,{target:{value:'2028-02-29'}});second.focus();fireEvent.input(second,{target:{value:''}});await Promise.resolve();
+    expect(within(body).getByLabelText('Available date')).toBe(second);expect(second).toHaveFocus();expect(second.value).toBe('');
+    fireEvent.input(second,{target:{value:'2028-03-31'}});second.blur();
+    await waitFor(()=>expect(within(body).getByLabelText('Available date')).toHaveValue('2028-03-31'));
+  });
+  it('keeps a disclosure opened by the next activation open through the refresh',async()=>{
+    const {body}=dateRefreshFixture(),input=within(body).getByLabelText('Completion date') as HTMLInputElement,summary=within(body).getByText('Linked dates',{selector:'summary'});
+    input.focus();fireEvent.input(input,{target:{value:'2028-02-29'}});fireEvent.pointerDown(summary);summary.focus();await Promise.resolve();
+    fireEvent.pointerUp(summary);fireEvent.click(summary);
+    await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
+    await waitFor(()=>expect(within(body).getByText('Linked dates',{selector:'summary'}).parentElement).toHaveAttribute('open'));
+    expect(within(body).getByLabelText('Completion date')).toHaveValue('2028-02-29');
+  });
+});
+
 describe('native workspace drafts and explicit record saves',()=>{
   it.each(['checkbox','select','switch'] as const)('preserves Unknown / Yes / No histories with a %s presentation hint',kind=>{
     const root=document.createElement('section');document.body.append(root);

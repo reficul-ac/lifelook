@@ -87,7 +87,7 @@ test('previews without persistence and applies one exact category revision while
  await configure(page,true);expect(await readActivePlan(page)).toEqual(original);
  await expect(page.locator('.growth-chart-readout')).toContainText('+$270.00');
  const growth=rail(page);await expect(growth.getByRole('checkbox',{name:'Custom exception',exact:true})).not.toBeChecked();await expect(growth.getByRole('checkbox',{name:'Scheduled employer RSUs',exact:true})).toHaveCount(0);await expect(growth).toContainText('Scheduled');
- const comparison=page.getByRole('switch',{name:'Show applied plan',exact:true});await comparison.focus();await comparison.press('Space');await expect(comparison).not.toBeChecked();await comparison.press('Space');await expect(comparison).toBeChecked();
+ const comparison=page.getByRole('switch',{name:'Show applied plan',exact:true});await comparison.focus();await comparison.press('Space');await expect(comparison).not.toBeChecked();await expect(page.locator('.growth-chart [data-series="applied"] circle')).toBeHidden();await comparison.press('Space');await expect(comparison).toBeChecked();await expect(page.locator('.growth-chart [data-series="applied"] circle')).toBeVisible();
  await growth.getByRole('button',{name:'Apply growth changes',exact:true}).click();
  await expect.poll(async()=>(await readActivePlan(page)).revision).toBe(1);
  const saved=await readActivePlan(page);expect(saved.growthAssumptions).toEqual({stocksBps:770,propertyBps:300});

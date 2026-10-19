@@ -35,19 +35,65 @@ export function refreshFields(root:HTMLElement,render:()=>void):void {
 export const taxCategoryOptions=[{value:'property-tax',label:'Property tax'},{value:'homeowners-insurance',label:'Homeowners insurance'},{value:'mortgage-insurance',label:'Mortgage insurance'},{value:'repair',label:'Repairs'},{value:'operating',label:'Operating costs'},{value:'capital',label:'Capital improvements'},{value:'personal',label:'Personal costs'}];
 const shortLabel=(label:string):string=>label.replace(/^(?:Filer \d+ |Property expense |Property |Salary |Income |Expense |Debt |Account |Contribution )/,'');
 let fieldSequence=0;
+/** Retain native segments until focus leaves, then finish any pointer activation first. */
+function nativeDateRefresh(input:HTMLInputElement,refresh:()=>void):()=>boolean {
+  const doc=input.ownerDocument,view=doc.defaultView!;
+  let tracking=false,pending=false,pointerDown=false,frame:number|undefined;
+  const stop=()=>{
+    tracking=false;pointerDown=false;
+    if(frame!==undefined){view.cancelAnimationFrame(frame);frame=undefined;}
+    doc.removeEventListener('pointerdown',pointerStart,true);
+    doc.removeEventListener('pointerup',pointerEnd,true);
+    doc.removeEventListener('pointercancel',pointerEnd,true);
+    doc.removeEventListener('click',pointerEnd,true);
+    doc.removeEventListener('focusout',focusOut,true);
+    view.removeEventListener('blur',windowBlur);
+  };
+  const flush=(activated=false)=>{
+    if(!tracking)return;
+    if(!input.isConnected){pending=false;stop();return;}
+    if(pointerDown)return;
+    const active=doc.activeElement;
+    if(active instanceof HTMLInputElement&&(active.type==='date'||active.type==='month'))return;
+    // Tab must leave the next action available for Enter/Space activation.
+    if(!activated&&active instanceof HTMLElement&&active.matches('button,summary,a[href],[role="button"]')&&input.closest('form')?.contains(active))return;
+    const changed=pending;pending=false;stop();if(changed)refresh();
+  };
+  const pointerStart=()=>{pointerDown=true;};
+  const pointerEnd=()=>{
+    pointerDown=false;
+    // Start a frame only after release/click/cancel, never during a held press.
+    // Native click handlers and disclosure default actions finish before this frame.
+    if(frame===undefined)frame=view.requestAnimationFrame(()=>{frame=undefined;flush(true);});
+  };
+  const focusOut=()=>queueMicrotask(flush);
+  const windowBlur=()=>{pointerDown=false;queueMicrotask(flush);};
+  const start=()=>{
+    if(tracking)return;tracking=true;
+    doc.addEventListener('pointerdown',pointerStart,true);
+    doc.addEventListener('pointerup',pointerEnd,true);
+    doc.addEventListener('pointercancel',pointerEnd,true);
+    doc.addEventListener('click',pointerEnd,true);
+    doc.addEventListener('focusout',focusOut,true);
+    view.addEventListener('blur',windowBlur);
+  };
+  input.addEventListener('focus',start);
+  input.addEventListener('blur',focusOut);
+  return ()=>{
+    if(!tracking&&doc.activeElement!==input)return false;
+    start();pending=true;return true;
+  };
+}
 export function renderField(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,options:FieldOptions={}):HTMLInputElement|HTMLSelectElement {
   if(options.kind==='money'&&!label.includes('$'))label+=' ($)';
   const wrapper=element('div');wrapper.className='field-wrapper';wrapper.dataset.fieldWrapper='';
   const kind=options.kind??'text',value=valueAt(context.draft.value,path),key=path.join('.');
   let control:HTMLInputElement|HTMLSelectElement;
-  let pendingDateRefresh=false;
+  let deferDateRefresh:(()=>boolean)|undefined;
   const change=(raw:unknown)=>{
     context.onChange(path,options.optional&&raw===''?undefined:raw);
     if(!options.refresh||kind==='checkbox'||kind==='switch')return;
-    // Rebuilding a focused native date loses browser-owned unfinished segments.
-    // Its draft and preview update immediately; refresh dependent fields after blur.
-    if((kind==='date'||kind==='month')&&document.activeElement===control)pendingDateRefresh=true;
-    else context.refresh();
+    if(!deferDateRefresh?.())context.refresh();
   };
   if(kind==='money'||kind==='rate') {
     control=mountNumericControl(wrapper,{label,field:key,kind,raw:value===undefined?'':String(value),...(options.slider?{slider:options.slider}:{}),onInput:change,onCommit:()=>{}}).input;
@@ -55,10 +101,7 @@ export function renderField(root:HTMLElement,context:FieldContext,path:FieldPath
   } else if(kind==='date'||kind==='month') {
     control=mountDateControl(wrapper,{label,field:key,kind,raw:value===undefined?'':String(value),onInput:change,onCommit:()=>{}}).input;
     const caption=wrapper.querySelector('label');if(caption)caption.textContent=options.visibleLabel??shortLabel(label);
-    const dateInput=control;
-    dateInput.addEventListener('blur',()=>queueMicrotask(()=>{
-      if(pendingDateRefresh&&dateInput.isConnected&&document.activeElement!==dateInput){pendingDateRefresh=false;context.refresh();}
-    }));
+    deferDateRefresh=nativeDateRefresh(control,()=>context.refresh());
   } else if(kind==='checkbox'||kind==='switch') {
     control=mountSwitchControl(wrapper,{label,field:key,checked:value===true,onChange:change}).input;
     const caption=wrapper.querySelector('label > span');if(caption)caption.textContent=options.visibleLabel??shortLabel(label);

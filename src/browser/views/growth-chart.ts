@@ -122,7 +122,7 @@ export function mountGrowthChart(root:HTMLElement,initial:GrowthChartModel,optio
   const point=model.points.find(point=>point.year===selectedYear);yearSelect.value=String(selectedYear);
   if(!point){crosshair.setAttribute('visibility','hidden');producingDot.setAttribute('visibility','hidden');appliedDot.setAttribute('visibility','hidden');return;}
   crosshair.setAttribute('visibility','visible');crosshair.setAttribute('x1',String(geometry.x(point.year)));crosshair.setAttribute('x2',String(geometry.x(point.year)));
-  for(const [dot,value] of [[producingDot,point.netWorth],[appliedDot,point.appliedNetWorth]] as const){dot.setAttribute('visibility',value?.status==='available'?'visible':'hidden');if(value?.status==='available'){dot.setAttribute('cx',String(geometry.x(point.year)));dot.setAttribute('cy',String(geometry.y(value.value)));}}
+  for(const [dot,value] of [[producingDot,point.netWorth],[appliedDot,point.appliedNetWorth]] as const){dot.setAttribute('visibility',value?.status==='available'&&(dot!==appliedDot||model.canCompare&&options.view.showComparison)?'visible':'hidden');if(value?.status==='available'){dot.setAttribute('cx',String(geometry.x(point.year)));dot.setAttribute('cy',String(geometry.y(value.value)));}}
   const currentGeneration=generation,currentContext=context;
   const guarded:ReportIssueContext={...currentContext,review:target=>{if(!disposed&&generation===currentGeneration)currentContext.review(target);}};
   const list=element('dl');

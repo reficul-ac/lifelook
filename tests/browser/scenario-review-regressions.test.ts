@@ -9,13 +9,14 @@ import {mountScenarioWorkspace, setField} from '../helpers/dom';
 import {makeAllocationPlan} from '../helpers/allocations';
 import {makePlan, mustValidate} from '../helpers/plans';
 import {makeScenarioWorkspace, memoryWorkspaceStorage} from '../helpers/scenarios';
+import {openRecord,openSettings,applyEdit} from '../helpers/workspace-ui';
 
 const click=(root:HTMLElement,name:string)=>fireEvent.click(within(root).getByRole('button',{name}));
 afterEach(()=>{for(const root of document.querySelectorAll<HTMLElement>('.workspace'))unmountApp(root);vi.restoreAllMocks();vi.unstubAllGlobals();});
 
 it.each(['discard','apply','saved input'] as const)('reconciles allocation preview after inactive %s',async action=>{
  const {root,manager}=mountScenarioWorkspace(makeScenarioWorkspace(makeAllocationPlan()));
- click(root,'Investments');click(root,'Add allocation');setField(root,'Allocation percentage (%)','20.00');
+ openRecord(root,{kind:'allocation'});click(root,'Add allocation');setField(root,'Allocation percentage (%)','20.00');
  await waitFor(()=>expect(root.querySelector('[data-allocation-remaining]')).toHaveTextContent('80.00%'));
  const source=manager.getActiveSession();
  if(action==='saved input')expect(source.controller.applyAllocation().accepted).toBe(true);
@@ -30,14 +31,14 @@ it.each(['discard','apply','saved input'] as const)('reconciles allocation previ
  const state=source.controller.getState();
  expect(source.view.allocationPreview.lastValid?.plan).toBe(state.savedPlan);
  expect(source.view.allocationPreview.lastValid?.projection).toBe(state.projection);
- manager.switchScenario('master');
+ manager.switchScenario('master');openRecord(root,{kind:'allocation'});
  expect(root.querySelector('[data-allocation-status]')).toHaveTextContent('Applied allocation');
  expect(root.querySelector('[data-allocation-remaining]')).toHaveTextContent(action==='discard'?'100.00%':'80.00%');
 });
 
-it.each(['edit','save','discard'] as const)('clears only relevant retained feedback after inactive household %s',action=>{
+it.each(['edit','save','discard'] as const)('clears only relevant retained feedback after inactive household %s',async action=>{
  const {root,manager}=mountScenarioWorkspace(makeScenarioWorkspace());
- setField(root,'Opening cash reserve ($)','1.234');click(root,'Save household');
+ openRecord(root,{kind:'record',section:'household',recordId:'household'});setField(root,'Opening cash reserve ($)','1.234');await applyEdit(root);
  const source=manager.getActiveSession(),unrelated=[{code:'invalid-input',recordId:'other',severity:'error' as const,explanation:'Other error',resolution:'Correct it'}];
  source.view.taskIssues.set('other',unrelated);
  manager.forkScenario(manager.captureTarget('master')!,'Fork');
@@ -49,7 +50,7 @@ it.each(['edit','save','discard'] as const)('clears only relevant retained feedb
  }
  expect(source.view.taskIssues.has('household')).toBe(false);
  expect(source.view.taskIssues.get('other')).toBe(unrelated);
- manager.switchScenario('master');
+ manager.switchScenario('master');openRecord(root,{kind:'record',section:'household',recordId:'household'});
  expect(within(root).getByLabelText('Opening cash reserve ($)')).not.toHaveAttribute('aria-invalid','true');
 });
 
@@ -78,7 +79,7 @@ it.each([
  const doc=makeScenarioWorkspace(),store=memoryWorkspaceStorage(new Map([[WORKSPACE_STORAGE_KEY,JSON.stringify(doc)]]));
  const {root,manager}=mountScenarioWorkspace(doc,store.port);
  if(kind==='delete')manager.forkScenario(manager.captureTarget('master')!,'Experiment');
- const source=manager.getActiveSession();setField(root,'Opening cash reserve ($)','1.234');
+ const source=manager.getActiveSession();openRecord(root,{kind:'record',section:'household',recordId:'household'});setField(root,'Opening cash reserve ($)','1.234');
  const frames=new Map<number,FrameRequestCallback>();let frameId=0;
  vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{frames.set(++frameId,callback);return frameId;});
  vi.stubGlobal('cancelAnimationFrame',(id:number)=>frames.delete(id));
@@ -104,8 +105,8 @@ it('keeps pending recovery retry available after read failure without losing cur
  const manager=createScenarioManager(makeScenarioWorkspace(),{getItem(key){if(readsFail)throw Error('read');return store.port.getItem(key);},setItem(key,value){if(writesFail)throw Error('quota');store.port.setItem(key,value);}},loadRuleSet(),{persisted:false,persistenceIssues:[],observedRaw:raw,suspension:'unreadable',recovery:{key:WORKSPACE_STORAGE_KEY,raw}},()=> 'recovered');
  const root=document.createElement('main');document.body.replaceChildren(root);mountScenarioApp(root,manager);
  expect(manager.replaceUnreadableData({kind:'plan',plan:mustValidate(makePlan({openingCashCents:9900}))})).toMatchObject({accepted:true,persisted:false});
- fireEvent.click(within(root).getByText('Backups and recovery',{selector:'summary'}));
- setField(root,'Opening cash reserve ($)','1.234');const source=manager.getActiveSession(),before=manager.getState().document;
+ openSettings(root);fireEvent.click(within(root).getByText('Backups and recovery',{selector:'summary'}));
+ openRecord(root,{kind:'record',section:'household',recordId:'household'});setField(root,'Opening cash reserve ($)','1.234');const source=manager.getActiveSession(),before=manager.getState().document;
  readsFail=true;click(root,'Retry unreadable data replacement');
  expect(manager.getState().persistence.persistenceIssues).toEqual(expect.arrayContaining([expect.objectContaining({code:'storage-read-failed'})]));
  expect(within(root).getByRole('button',{name:'Retry unreadable data replacement'})).toBeEnabled();

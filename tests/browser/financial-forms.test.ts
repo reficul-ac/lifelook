@@ -10,7 +10,7 @@ import { calculateProjection, loadRuleSet, validatePlan, type PlanDocument } fro
 import { makePlan } from '../helpers/plans';
 import { makeEstimatedMortgagePlan } from '../helpers/estimated-mortgage';
 import { loadReferences } from '../helpers/references';
-import {openRecord, waitForPreview} from '../helpers/workspace-ui';
+import {openRecord, waitForPreview, openForecastDetails} from '../helpers/workspace-ui';
 
 function mount(renderer: (root: HTMLElement, controller: WorkspaceController) => void, plan = makePlan()) {
   const root = document.createElement('section'); document.body.replaceChildren(root);
@@ -183,7 +183,7 @@ it('keeps short labels, entry consequences and eligibility guidance attached to 
 });
 
 it('keeps qualified schedule-estimated mortgages usable for taxes, ratios and cash funding', () => {
-  const { root } = mountWorkspace(makeEstimatedMortgagePlan());
+  const { root } = mountWorkspace(makeEstimatedMortgagePlan());openForecastDetails(root);
   const queries = within(root);
   const money = /^\$[\d,]+\.\d{2}$/;
   for (const year of [2026, 2027, 2028]) {

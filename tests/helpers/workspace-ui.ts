@@ -25,4 +25,23 @@ export async function applyEdit(root: HTMLElement): Promise<void> {
 }
 export function openSettings(root: HTMLElement): HTMLElement {const panel=root.querySelector<HTMLElement>('[data-settings]')!;if(panel.hidden)fireEvent.click(within(root).getByRole('button',{name:'Settings'}));return panel;}
 export function openForecastDetails(root: HTMLElement): HTMLElement {const summary=within(root).getByText('Forecast details',{selector:'summary'});const details=summary.parentElement as HTMLDetailsElement;if(!details.open)fireEvent.click(summary);return details;}
-export function revealControl(root: HTMLElement,label: string): HTMLElement {let control=within(root).getByLabelText(label) as HTMLElement;const step=control.closest<HTMLElement>('[data-editor-step]')?.dataset.editorStep;if(step){const form=control.closest('form')??root;const tab=[...form.querySelectorAll<HTMLElement>('[data-select-editor-step]')].find(node=>node.dataset.selectEditorStep===step);if(tab)fireEvent.click(tab);control=within(root).getByLabelText(label) as HTMLElement;}const ancestors:HTMLDetailsElement[]=[];for(let parent=control.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)ancestors.unshift(parent);for(const details of ancestors)if(!details.open)fireEvent.click(details.querySelector(':scope > summary')!);return control;}
+export function revealControl(root: HTMLElement,label: string): HTMLElement {
+  // Keep label verification local: jsdom computes input.labels against every mounted label.
+  const find=()=>{
+    const candidates=[...root.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>('input,select,textarea')].filter(node=>node.getAttribute('aria-label')===label);
+    const scope=candidates.length===1?candidates[0]!.closest<HTMLElement>('[data-field-wrapper]')??candidates[0]!.parentElement??root:root;
+    return within(scope).getByLabelText(label) as HTMLElement;
+  };
+  let control=find();
+  const step=control.closest<HTMLElement>('[data-editor-step]')?.dataset.editorStep;
+  if(step){
+    const form=control.closest('form')??root;
+    const tab=[...form.querySelectorAll<HTMLElement>('[data-select-editor-step]')].find(node=>node.dataset.selectEditorStep===step);
+    if(tab)fireEvent.click(tab);
+    control=find();
+  }
+  const ancestors:HTMLDetailsElement[]=[];
+  for(let parent=control.parentElement;parent&&root.contains(parent);parent=parent.parentElement)if(parent instanceof HTMLDetailsElement)ancestors.unshift(parent);
+  for(const details of ancestors)if(!details.open)fireEvent.click(details.querySelector(':scope > summary')!);
+  return control;
+}

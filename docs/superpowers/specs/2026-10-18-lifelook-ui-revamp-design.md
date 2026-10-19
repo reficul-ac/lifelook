@@ -2,7 +2,7 @@
 
 Date: 2026-10-18
 
-Status: Proposed specification for written review. The interaction direction has been approved; implementation requires written-spec and implementation-plan review.
+Status: Approved for implementation planning on 2026-10-18. Execution requires review of the implementation plan and selection of an execution method.
 
 ## 1. Intended outcome
 

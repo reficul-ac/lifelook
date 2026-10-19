@@ -3,7 +3,7 @@ import { exportPlan,savePlan,type StoragePort } from './storage';
 import {fromDraftValue,toDraftValue} from './draft-codec';
 export {fromDraftValue,toDraftValue} from './draft-codec';
 import {buildEditCandidate,equalActiveEdit} from './edit-candidate';
-import type {EditTarget,PreparedEdit} from './edit-types';
+import type {CalculatedEdit,EditTarget,PreparedEdit,ReadyEdit} from './edit-types';
 
 export type EditableSection='household'|'salaries'|'otherIncome'|'expenses'|'children'|'debts'|'accounts'|'contributions'|'properties'|'rentals';
 export type RawObject=Record<string,unknown>;
@@ -47,8 +47,10 @@ export function prepareAduComparison(controller:WorkspaceController,projectId:st
 export function prepareAllocationPreview(controller:WorkspaceController):PreparedAllocationPreview {
   const bridge=allocationBridges.get(controller);if(!bridge)throw new Error('Unknown allocation workspace.');return bridge.prepare();
 }
-const editBridges=new WeakMap<WorkspaceController,{prepare(target:EditTarget):PreparedEdit}>();
+const editBridges=new WeakMap<WorkspaceController,{prepare(target:EditTarget):PreparedEdit;complete(prepared:ReadyEdit,projection:ProjectionResult):CalculatedEdit|null;apply(calculated:CalculatedEdit):SaveRecordResult}>();
 export function prepareEdit(controller:WorkspaceController,target:EditTarget):PreparedEdit {const bridge=editBridges.get(controller);if(!bridge)throw Error('Unknown editing workspace.');return bridge.prepare(target);}
+export function completePreparedEdit(controller:WorkspaceController,prepared:ReadyEdit,projection:ProjectionResult):CalculatedEdit|null {return editBridges.get(controller)?.complete(prepared,projection)??null;}
+export function applyCalculatedEdit(controller:WorkspaceController,calculated:CalculatedEdit):SaveRecordResult {const bridge=editBridges.get(controller);if(!bridge)throw Error('Unknown editing workspace.');return bridge.apply(calculated);}
 export function allocationPreviewEpoch(controller:WorkspaceController):number {return allocationBridges.get(controller)?.epoch()??0;}
 export function allocationCalculationFailure(inputRevision:number):CashFlowAllocationPreview {
   return {status:'failed',inputRevision,issues:[{code:'calculation-failed',field:'cashFlowAllocation',severity:'error',explanation:'These allocation inputs could not be calculated. The saved plan and projection have been retained.',resolution:'Correct the draft inputs and request a new preview or Apply again.'}]};
@@ -67,22 +69,34 @@ function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort
   const operate=(kind:'save'|'remove',recordId:string,action:()=>SaveRecordResult):SaveRecordResult=>{operationDepth++;let outcome:SaveRecordResult;try{outcome=action();}finally{operationDepth--;}if(operationDepth===0)notify({kind,recordId,result:outcome});return outcome;};
   const persistence=():WorkspaceInitialization=>port?.readPersistence()??{persisted,persistenceIssues};
   const result=(accepted:boolean):SaveRecordResult=>({accepted,...persistence(),issues});
-  const persistApplied=():SaveRecordResult=>{
-    if(port){const outcome=port.retry();issues=outcome.accepted?[]:outcome.issues;notify();return result(outcome.accepted);}
-    const saved=savePlan(storage!,savedPlan);persisted=saved.persisted;persistenceIssues=saved.issues.filter(issue=>issue.code==='storage-write-failed');issues=[];notify();return result(true);
+  const commitProjection=(candidate:ValidatedPlan,candidateProjection:ProjectionResult,clear:readonly string[],clearAllocation=false):SaveRecordResult=>{
+    const commit=()=>{savedPlan=candidate;projection=candidateProjection;issues=[];
+      drafts=Object.fromEntries(Object.entries(drafts).filter(([id])=>!clear.includes(id)));clear.forEach(id=>bases.delete(id));
+      if(clearAllocation){allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;allocationEpoch++;}
+    };
+    if(port){const outcome=port.publish(candidate,candidateProjection,commit);if(!outcome.accepted){issues=outcome.issues;notify();return result(false);}}
+    else{commit();const saved=savePlan(storage!,savedPlan);persisted=saved.persisted;persistenceIssues=saved.issues.filter(issue=>issue.code==='storage-write-failed');}
+    notify();return result(true);
   };
   const publish=(candidate:PlanDocument,clear:readonly string[],clearAllocation=false):SaveRecordResult=>{
     const validation=validatePlan(candidate);if(!validation.ok){issues=validation.issues;notify();return result(false);}
     let candidateProjection:ProjectionResult;
-    try { candidateProjection=calculateProjection(validation.plan,ruleSet); }
-    catch { issues=[{code:'calculation-failed',field:'plan',severity:'error',explanation:'These inputs could not be calculated. The saved plan and projection have been retained.',resolution:'Correct the draft inputs before saving again.'}];notify();return result(false); }
-    const commit=()=>{savedPlan=validation.plan;projection=candidateProjection;issues=[];
-      drafts=Object.fromEntries(Object.entries(drafts).filter(([id])=>!clear.includes(id)));clear.forEach(id=>bases.delete(id));
-      if(clearAllocation){allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;}
-    };
-    if(port){const outcome=port.publish(validation.plan,candidateProjection,commit);if(!outcome.accepted){issues=outcome.issues;notify();return result(false);}}
-    else{commit();const saved=savePlan(storage!,savedPlan);persisted=saved.persisted;persistenceIssues=saved.issues.filter(issue=>issue.code==='storage-write-failed');}
-    notify();return result(true);
+    try {candidateProjection=calculateProjection(validation.plan,ruleSet);}
+    catch {issues=[{code:'calculation-failed',field:'plan',severity:'error',explanation:'These inputs could not be calculated. The saved plan and projection have been retained.',resolution:'Correct the draft inputs before saving again.'}];notify();return result(false);}
+    return commitProjection(validation.plan,candidateProjection,clear,clearAllocation);
+  };
+  const issued=new WeakMap<ReadyEdit,{key:string;generation:number;epoch:number;token:number;base:ValidatedPlan;plan:ValidatedPlan;fingerprint:string;rulesFingerprint:string}>();
+  const receipts=new WeakSet<CalculatedEdit>(),consumed=new WeakSet<CalculatedEdit>();
+  const fresh=(prepared:ReadyEdit):boolean=>{
+    const capture=issued.get(prepared);return !!capture&&capture.base===savedPlan&&capture.base===prepared.basePlan&&capture.epoch===controllerEpoch&&capture.epoch===prepared.controllerEpoch&&capture.generation===(draftGenerations.get(capture.key)??0)&&capture.generation===prepared.draftGeneration&&capture.token===prepared.token&&capture.plan===prepared.plan&&prepared.ruleSet===ruleSet&&capture.fingerprint===JSON.stringify(prepared.plan)&&capture.rulesFingerprint===JSON.stringify(ruleSet);
+  };
+  const complete=(prepared:ReadyEdit,calculated:ProjectionResult):CalculatedEdit|null=>{
+    if(!fresh(prepared)||calculated.inputRevision!==prepared.plan.revision)return null;
+    const receipt=Object.freeze({prepared,projection:calculated});receipts.add(receipt);return receipt;
+  };
+  const commitCalculated=(calculated:CalculatedEdit):SaveRecordResult=>{
+    if(!receipts.has(calculated)||consumed.has(calculated)||!fresh(calculated.prepared)||calculated.projection.inputRevision!==calculated.prepared.plan.revision){issues=[{code:'stale-edit-preview',field:'plan',severity:'error',explanation:'This preview no longer matches the current draft and applied inputs.',resolution:'Wait for a current preview before applying.'}];notify();return result(false);}
+    const target=calculated.prepared.target,outcome=commitProjection(calculated.prepared.plan,calculated.projection,target.kind==='record'?[target.recordId]:[],target.kind==='allocation');if(outcome.accepted)consumed.add(calculated);return outcome;
   };
   const householdValue=()=>({household:savedPlan.household,taxPolicy:savedPlan.taxPolicy,startYear:savedPlan.startYear,horizonYears:savedPlan.horizonYears,openingCashCents:savedPlan.openingCashCents});
   const propertyValue=(id:string)=>({property:savedPlan.properties.find(p=>p.id===id),rentals:savedPlan.rentals.filter(r=>r.propertyId===id),expenses:savedPlan.expenses.filter(e=>e.propertyId===id||e.rentalId&&savedPlan.rentals.some(r=>r.id===e.rentalId&&r.propertyId===id))});
@@ -122,13 +136,15 @@ function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort
     const candidate=buildEditCandidate(savedPlan,target,decoded.value);
     if(equalActiveEdit(candidate,savedPlan))return {status:'unchanged'};
     const validated=validatePlan(candidate);if(!validated.ok)return {status:'invalid',issues:validated.issues};
-    return {status:'ready',target:{...target},plan:validated.plan,basePlan:savedPlan,ruleSet,controllerEpoch,draftGeneration:draftGenerations.get(editKey(target))??0,token:++preparationToken};
+    const prepared:ReadyEdit=Object.freeze({status:'ready',target:Object.freeze({...target}),plan:validated.plan,basePlan:savedPlan,ruleSet,controllerEpoch,draftGeneration:draftGenerations.get(editKey(target))??0,token:++preparationToken});
+    issued.set(prepared,{key:editKey(target),generation:prepared.draftGeneration,epoch:controllerEpoch,token:prepared.token,base:savedPlan,plan:prepared.plan,fingerprint:JSON.stringify(prepared.plan),rulesFingerprint:JSON.stringify(ruleSet)});return prepared;
   };
   const saveTarget=(target:EditTarget):SaveRecordResult=>{
     const prepared=prepare(target);
     if(prepared.status==='unchanged'){issues=[];notify();return result(true);}
     if(prepared.status!=='ready'){issues=prepared.issues;notify();return result(false);}
-    return publish(prepared.plan,target.kind==='record'?[target.recordId]:[],target.kind==='allocation');
+    try {const receipt=complete(prepared,calculateProjection(prepared.plan,prepared.ruleSet));return receipt?commitCalculated(receipt):result(false);}
+    catch {issues=[{code:'calculation-failed',field:'plan',severity:'error',explanation:'These inputs could not be calculated. The saved plan and projection have been retained.',resolution:'Correct the draft inputs before saving again.'}];notify();return result(false);}
   };
   const controller:WorkspaceController={
     getState:()=>({savedPlan,drafts,projection,...persistence(),issues,...(allocationDraft?{allocationDraft}:{})}),getDraft,getAllocationDraft,
@@ -151,5 +167,5 @@ function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort
     },
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},exportBackup:()=>exportPlan(savedPlan),
     resetPlan(next,initial={persisted:true,persistenceIssues:[]}){if(port)throw new Error('Managed editors require a scenario replacement.');const validated=requiredPlan(next),calculated=calculateProjection(validated,ruleSet);allocationEpoch++;controllerEpoch++;draftGenerations.clear();savedPlan=validated;projection=calculated;drafts={};bases.clear();allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;persisted=initial.persisted;persistenceIssues=initial.persistenceIssues;issues=[];notify({kind:'restore',persisted});},
-  };editBridges.set(controller,{prepare});allocationBridges.set(controller,{prepare:prepareAllocation,epoch:()=>allocationEpoch,adu(projectId){if(!savedPlan.properties.some(p=>p.aduProject?.id===projectId))return{status:'invalid',issues:[{code:'required-adu-project',recordId:projectId,field:'aduComparison',severity:'warning',explanation:'This project is absent from the applied scenario.',resolution:'Select an applied ADU project.'}]};return{status:'ready',plan:savedPlan,ruleSet,projection,inputRevision:savedPlan.revision};}});return controller;
+  };editBridges.set(controller,{prepare,complete,apply(calculated){const target=calculated.prepared.target,id=target.kind==='record'?target.recordId:getAllocationDraft().recordId;return operate('save',id,()=>commitCalculated(calculated));}});allocationBridges.set(controller,{prepare:prepareAllocation,epoch:()=>allocationEpoch,adu(projectId){if(!savedPlan.properties.some(p=>p.aduProject?.id===projectId))return{status:'invalid',issues:[{code:'required-adu-project',recordId:projectId,field:'aduComparison',severity:'warning',explanation:'This project is absent from the applied scenario.',resolution:'Select an applied ADU project.'}]};return{status:'ready',plan:savedPlan,ruleSet,projection,inputRevision:savedPlan.revision};}});return controller;
 }

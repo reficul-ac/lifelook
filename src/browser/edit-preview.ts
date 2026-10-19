@@ -7,6 +7,7 @@ export function createEditPreviewCoordinator(controller:WorkspaceController,owne
   const owner=Object.freeze({...ownership.owner}),quietMs=options.quietMs??100,maxWaitMs=options.maxWaitMs??300,listeners=new Set<(state:EditPreviewState)=>void>();
   let state:EditPreviewState={status:'inactive',target:null,current:null,lastValid:null,issues:[]},disposed=false,jobId=0,worker:Worker|undefined,timer:ReturnType<typeof setTimeout>|undefined,frame:number|undefined,firstRequest:number|undefined;
   let previous=controller.getState(),completedInputs:ReturnType<WorkspaceController['getState']>|undefined;
+  const draftIdentity=(inputs:ReturnType<WorkspaceController['getState']>,target:EditTarget)=>target.kind==='allocation'?inputs.allocationDraft:target.kind==='growth-assumptions'?inputs.growthDraft:inputs.drafts[target.recordId];
   const sameOwner=(reply:EditPreviewOwner)=>reply&&reply.scenarioId===owner.scenarioId&&reply.sessionGeneration===owner.sessionGeneration&&reply.activationGeneration===owner.activationGeneration&&reply.workspaceGeneration===owner.workspaceGeneration;
   const active=()=>!disposed&&ownership.isCurrent();
   const emit=(next:EditPreviewState)=>{
@@ -52,7 +53,7 @@ export function createEditPreviewCoordinator(controller:WorkspaceController,owne
   const request=(flush=false)=>{
     if(!active()||!state.target)return;
     const inputs=controller.getState(),target=state.target;
-    if(state.current&&completedInputs&&inputs.savedPlan===completedInputs.savedPlan&&(target.kind==='allocation'?inputs.allocationDraft===completedInputs.allocationDraft:inputs.drafts[target.recordId]===completedInputs.drafts[target.recordId]))return;
+    if(state.current&&completedInputs&&inputs.savedPlan===completedInputs.savedPlan&&draftIdentity(inputs,target)===draftIdentity(completedInputs,target))return;
     cancel();const now=Date.now();firstRequest??=now;
     const base=controller.getState().savedPlan,lastValid=state.lastValid&&state.lastValid.basePlan!==base?{...state.lastValid,basePlan:null}:state.lastValid;
     emit({...state,status:'pending',current:null,lastValid,issues:[]});
@@ -69,12 +70,12 @@ export function createEditPreviewCoordinator(controller:WorkspaceController,owne
     const next=controller.getState(),before=previous;previous=next;
     if(disposed||!state.target)return;
     if(operation?.kind==='restore'){select(null);return;}
-    const target=state.target,changed=next.savedPlan!==before.savedPlan||(target.kind==='allocation'?next.allocationDraft!==before.allocationDraft:next.drafts[target.recordId]!==before.drafts[target.recordId]);
+    const target=state.target,changed=next.savedPlan!==before.savedPlan||draftIdentity(next,target)!==draftIdentity(before,target);
     if(changed)request();
   });
   return {getState:()=>state,subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},select,request,
     apply(){if(!active()||!state.current)return reject();const result=applyCalculatedEdit(controller,state.current);if(result.accepted){stop();emit({status:'inactive',target:state.target,current:null,lastValid:null,issues:[]});}else request();return result;},
-    discard(){if(!active()||!state.target)return;const target=state.target;stop();if(target.kind==='allocation')controller.discardAllocationDraft();else controller.discardDraft(target.recordId);stop();emit({status:'inactive',target,current:null,lastValid:null,issues:[]});},
+    discard(){if(!active()||!state.target)return;const target=state.target;stop();if(target.kind==='allocation')controller.discardAllocationDraft();else if(target.kind==='growth-assumptions')controller.discardGrowthDraft();else controller.discardDraft(target.recordId);stop();emit({status:'inactive',target,current:null,lastValid:null,issues:[]});},
     dispose(){if(disposed)return;disposed=true;stop();unsubscribe();state={status:'inactive',target:null,current:null,lastValid:null,issues:[]};listeners.clear();},
   };
 }

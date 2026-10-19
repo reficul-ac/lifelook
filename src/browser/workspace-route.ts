@@ -1,9 +1,9 @@
 import type {PlanDocument} from '../engine';
-import type {EditTarget} from './edit-types';
+import type {EditTarget,FocusedEditTarget} from './edit-types';
 import type {InputSection, IssueViewState, ReviewTarget} from './issue-presentation';
 
 export type Destination = 'overview' | 'income' | 'accounts' | 'properties' | 'spending' | 'household';
-export interface WorkspaceRoute {destination: Destination; editor: {target: EditTarget; returnTo: Destination; origin: HTMLElement | null} | null; surface: 'edit' | 'forecast'}
+export interface WorkspaceRoute {destination: Destination; editor: {target: FocusedEditTarget; returnTo: Destination; origin: HTMLElement | null} | null; surface: 'edit' | 'forecast'}
 export const destinations: readonly [Destination, string][] = [['overview', 'Overview'], ['income', 'Income'], ['accounts', 'Accounts'], ['properties', 'Properties'], ['spending', 'Spending & debts'], ['household', 'Household']];
 export function destinationForSection(section: InputSection): Destination {
   return ({Household: 'household', Income: 'income', 'Expenses and debts': 'spending', Investments: 'accounts', Properties: 'properties'} as const)[section];

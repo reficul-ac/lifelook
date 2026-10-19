@@ -18,6 +18,11 @@ function replaceOwned<T extends {readonly id:string}>(base:readonly T[],owned:(r
 export function buildEditCandidate(base:ValidatedPlan,target:EditTarget,decoded:RawObject):PlanDocument {
   const revision=base.revision+1;
   if(target.kind==='allocation')return {...base,cashFlowAllocation:decoded as unknown as NonNullable<PlanDocument['cashFlowAllocation']>,revision};
+  if(target.kind==='growth-assumptions'){
+    const defaults=decoded.defaults as NonNullable<PlanDocument['growthAssumptions']>,accounts=new Set(decoded.inheritAccountIds as string[]),properties=new Set(decoded.inheritPropertyIds as string[]);
+    const {growthAssumptions:previous,...rest}=base;
+    return {...rest,revision,...(Object.keys(defaults).length?{growthAssumptions:defaults}:{}),accounts:base.accounts.map(account=>{const {growthSource,...custom}=account;return accounts.has(account.id)?{...custom,growthSource:'stocks-default'}:custom;}),properties:base.properties.map(property=>{const {appreciationSource,...custom}=property;return properties.has(property.id)?{...custom,appreciationSource:'property-default'}:custom;})};
+  }
   const {section,recordId}=target;
   if(section==='household')return {...base,...decoded,revision};
   if(section==='properties'){

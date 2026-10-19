@@ -15,7 +15,7 @@ export function createRecordEditorMemory(): RecordEditorMemory {
   return {step: 'basics', openGroups: new Set(), touched: new Set(), attempted: false, modes: new Map(), scrollTop: 0, focus: null};
 }
 export function editTargetKey(target: EditTarget): string {
-  return target.kind === 'allocation' ? 'allocation' : `${target.section}:${target.recordId}`;
+  return target.kind === 'record' ? `${target.section}:${target.recordId}` : target.kind;
 }
 export function swapMode(memory: RecordEditorMemory, key: string, from: string, to: string, current: RawObject, fallback: RawObject): RawObject {
   memory.modes.set(`${key}:${from}`, structuredClone(current));

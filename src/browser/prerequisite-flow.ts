@@ -1,14 +1,14 @@
 import type {Account,Salary} from '../engine/model/plan';
-import type {EditPreviewOwner,EditTarget} from './edit-types';
+import type {EditPreviewOwner,FocusedEditTarget} from './edit-types';
 import type {RawObject,SaveRecordResult,WorkspaceController} from './state';
 export type PrerequisiteRequest=
   | {section:'accounts';defaults:RawObject;link(origin:RawObject,applied:Account):RawObject}
   | {section:'salaries';defaults:RawObject;link(origin:RawObject,applied:Salary):RawObject};
-export function createPrerequisiteFlow(controller:WorkspaceController,ownership:{owner:EditPreviewOwner;isCurrent():boolean},navigate:(target:EditTarget)=>void):{begin(origin:EditTarget,request:PrerequisiteRequest):void;applied(target:EditTarget,result:SaveRecordResult):void;cancel():void;dispose():void} {
-  type Detour={origin:EditTarget;target:Readonly<{kind:'record';section:'accounts'|'salaries';recordId:string}>;request:PrerequisiteRequest};
+export function createPrerequisiteFlow(controller:WorkspaceController,ownership:{owner:EditPreviewOwner;isCurrent():boolean},navigate:(target:FocusedEditTarget)=>void):{begin(origin:FocusedEditTarget,request:PrerequisiteRequest):void;applied(target:FocusedEditTarget,result:SaveRecordResult):void;cancel():void;dispose():void} {
+  type Detour={origin:FocusedEditTarget;target:Readonly<{kind:'record';section:'accounts'|'salaries';recordId:string}>;request:PrerequisiteRequest};
   const stack:Detour[]=[],owner={...ownership.owner};let disposed=false,invalidated=false;
   const current=()=>!disposed&&!invalidated&&ownership.isCurrent()&&owner.scenarioId===ownership.owner.scenarioId&&owner.sessionGeneration===ownership.owner.sessionGeneration&&owner.activationGeneration===ownership.owner.activationGeneration&&owner.workspaceGeneration===ownership.owner.workspaceGeneration;
-  const matches=(left:EditTarget,right:EditTarget)=>left.kind===right.kind&&(left.kind==='allocation'||right.kind==='record'&&left.section===right.section&&left.recordId===right.recordId);
+  const matches=(left:FocusedEditTarget,right:FocusedEditTarget)=>left.kind===right.kind&&(left.kind==='allocation'||right.kind==='record'&&left.section===right.section&&left.recordId===right.recordId);
   const unsubscribe=controller.subscribe(operation=>{if(operation?.kind==='restore'){invalidated=true;stack.length=0;}});
   return {
     begin(origin,request){

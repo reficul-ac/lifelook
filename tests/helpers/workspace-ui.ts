@@ -1,12 +1,12 @@
 import {fireEvent, waitFor, within} from '@testing-library/dom';
 import {editTargetKey} from '../../src/browser/record-ui-state';
-import type {EditTarget} from '../../src/browser/edit-types';
+import type {FocusedEditTarget} from '../../src/browser/edit-types';
 import type {Destination} from '../../src/browser/workspace-route';
-const destination = (target: EditTarget): Destination => target.kind === 'allocation' || target.section === 'accounts' || target.section === 'contributions' ? 'accounts' : target.section === 'salaries' || target.section === 'otherIncome' ? 'income' : target.section === 'properties' || target.section === 'rentals' ? 'properties' : target.section === 'household' ? 'household' : 'spending';
+const destination = (target: FocusedEditTarget): Destination => target.kind === 'allocation' || target.section === 'accounts' || target.section === 'contributions' ? 'accounts' : target.section === 'salaries' || target.section === 'otherIncome' ? 'income' : target.section === 'properties' || target.section === 'rentals' ? 'properties' : target.section === 'household' ? 'household' : 'spending';
 export function openCollection(root: HTMLElement, value: Destination): HTMLElement {
   const tab = root.querySelector<HTMLButtonElement>(`button[data-destination="${value}"]`); if (!tab) throw Error(`Missing destination ${value}`); fireEvent.click(tab); return root.querySelector<HTMLElement>('[data-collection]')!;
 }
-export function openRecord(root: HTMLElement, target: EditTarget): HTMLElement {
+export function openRecord(root: HTMLElement, target: FocusedEditTarget): HTMLElement {
   const collection = openCollection(root, destination(target));
   const action = [...collection.querySelectorAll<HTMLButtonElement>('[data-open-target]')].find(node => node.dataset.openTarget === editTargetKey(target));
   if (!action) throw Error(`Missing record ${editTargetKey(target)}`); fireEvent.click(action); return root.querySelector<HTMLElement>('[data-active-editor]')!;

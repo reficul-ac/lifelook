@@ -4,7 +4,7 @@ import {createRecordEditorMemory, editTargetKey} from './record-ui-state';
 import {revealEditorField} from './ui/editor-groups';
 import type {FormRenderOptions} from './record-form';
 import type {ScenarioEditorSession} from './scenario-session';
-import type {EditTarget, EditPreviewCoordinator} from './edit-types';
+import type {FocusedEditTarget, EditPreviewCoordinator} from './edit-types';
 import type {IssueViewContext} from './issue-presentation';
 import {renderHouseholdForm} from './forms/household';
 import {renderIncomeForm} from './forms/income';
@@ -16,7 +16,7 @@ import type {PrerequisiteRequest} from './prerequisite-flow';
 import type {SaveRecordResult} from './state';
 import {renderIssueDetails} from './views/issues';
 
-export function mountFocusedEditor(root: HTMLElement, session: ScenarioEditorSession, target: EditTarget, context: IssueViewContext, coordinator: EditPreviewCoordinator, options?: {requestPrerequisite(request: PrerequisiteRequest): void; applied(target: EditTarget, result: SaveRecordResult): void; cancelPrerequisite?: () => void}): {reveal(field: string): boolean;restoreFocus():void; dispose(): void} {
+export function mountFocusedEditor(root: HTMLElement, session: ScenarioEditorSession, target: FocusedEditTarget, context: IssueViewContext, coordinator: EditPreviewCoordinator, options?: {requestPrerequisite(request: PrerequisiteRequest): void; applied(target: FocusedEditTarget, result: SaveRecordResult): void; cancelPrerequisite?: () => void}): {reveal(field: string): boolean;restoreFocus():void; dispose(): void} {
   const controller = session.controller, key = editTargetKey(target);
   let memory = session.view.editorMemory.get(key);
   if (!memory) {memory = createRecordEditorMemory(); session.view.editorMemory.set(key, memory);}

@@ -19,7 +19,7 @@ import {formatCents} from './views/issues';
 import type {PrerequisiteRequest} from './prerequisite-flow';
 import type {ScenarioEditorSession} from './scenario-session';
 import type {ScenarioManager} from './scenario-manager';
-import type {EditTarget} from './edit-types';
+import type {EditTarget,FocusedEditTarget} from './edit-types';
 
 export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,manager:ScenarioManager,activationGeneration:number):{dispose():void}{
   root.replaceChildren();const controller=session.controller;let disposed=false;
@@ -28,7 +28,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   const coordinator=createEditPreviewCoordinator(controller,{owner:{workspaceGeneration:owner.workspaceGeneration,scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration},isCurrent},{allocationSession:session.view.allocationPreview});
   const disclosures=createDisclosureController(root);
   let focused:ReturnType<typeof mountFocusedEditor>|undefined;
-  const origins:EditTarget[]=[];
+  const origins:FocusedEditTarget[]=[];
   const previewOwner={workspaceGeneration:owner.workspaceGeneration,scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration};
   const createFlow=()=>createPrerequisiteFlow(controller,{owner:previewOwner,isCurrent},target=>{if(origins.at(-1)&&editTargetKey(origins.at(-1)!)===editTargetKey(target))origins.pop();open(target,null);});
   let prerequisite=createFlow();
@@ -53,6 +53,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   };
   const navigate=(destination:Destination)=>{close(false);route={destination,editor:null,surface:'edit'};session.view.selections.destination=destination;shell.update(route);collection();};
   const open=(target:EditTarget,origin:HTMLElement|null)=>{
+    if(target.kind==='growth-assumptions')return;
     if(!isCurrent())return;
     focused?.dispose();focused=undefined;disclosures.closeWithin(root,false);coordinator.select(null);
     const returnTo=route.editor?.returnTo??route.destination;

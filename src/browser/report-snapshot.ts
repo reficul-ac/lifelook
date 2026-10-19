@@ -18,7 +18,7 @@ export function selectReportSnapshot(state:WorkspaceState,preview:EditPreviewSta
  if(preview.status==='inactive')return {...applied,comparison:null,status:'applied',label:'Applied results',allowDeltas:false};
  const current=preview.current;
  if(preview.status==='valid'&&current&&current.prepared.basePlan===state.savedPlan&&current.projection.inputRevision===current.prepared.plan.revision){
-  const target=current.prepared.target,label=target.kind==='allocation'?'Cash flow allocation':getRecordLabel(current.prepared.plan,target.recordId);
+  const target=current.prepared.target,label=target.kind==='allocation'?'Cash flow allocation':target.kind==='growth-assumptions'?'Growth assumptions':getRecordLabel(current.prepared.plan,target.recordId);
   return {plan:current.prepared.plan,projection:current.projection,comparison:applied,status:'preview',label:`Preview · ${label}`,allowDeltas:true};
  }
  const retained=preview.lastValid??(current?{plan:current.prepared.plan,projection:current.projection,basePlan:current.prepared.basePlan}:null);

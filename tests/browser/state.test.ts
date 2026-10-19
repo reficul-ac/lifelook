@@ -1,9 +1,10 @@
 import { describe,expect,it } from 'vitest';
-import { createWorkspace,fromDraftValue,type WorkspaceOperation } from '../../src/browser/state';
+import { createWorkspace,fromDraftValue,prepareEdit,type WorkspaceOperation } from '../../src/browser/state';
 import { loadRuleSet } from '../../src/engine';
 import { makePlan } from '../helpers/plans';
 const storage={getItem:()=>null,setItem:()=>{}};
 describe('record identity and independent draft transactions',()=>{
+  it('prepares invalid inputs without publishing validation feedback',()=>{const controller=createWorkspace(makePlan(),storage),draft=controller.getDraft('household','household');controller.editDraft('household',{...draft,value:{...draft.value,openingCashCents:'-'}});const before=controller.getState();expect(prepareEdit(controller,{kind:'record',section:'household',recordId:'household'}).status).toBe('invalid');expect(controller.getState().issues).toBe(before.issues);expect(controller.getState().savedPlan).toBe(before.savedPlan);});
   it('retains ordinary fractional living areas without treating them as money or whole numbers',()=>{
     expect(fromDraftValue({primaryArea:'1500.5',aduArea:'500.25'},'home')).toEqual({value:{primaryArea:1500.5,aduArea:500.25},issues:[]});
     expect(fromDraftValue({primaryArea:'1e3'},'home').issues).toContainEqual(expect.objectContaining({field:'primaryArea'}));

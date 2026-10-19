@@ -1,6 +1,6 @@
 import { afterEach,describe,expect,it,vi } from 'vitest';
 import * as engine from '../../src/engine';
-import { createWorkspace,type CashFlowAllocationDraft,type WorkspaceOperation } from '../../src/browser/state';
+import { createWorkspace,prepareEdit,type CashFlowAllocationDraft,type WorkspaceOperation } from '../../src/browser/state';
 import { makeAllocationPlan } from '../helpers/allocations';
 
 function setup(failStorage=false){
@@ -16,6 +16,7 @@ function edit(controller:ReturnType<typeof createWorkspace>,percent='50.00'):Cas
 }
 afterEach(()=>vi.restoreAllMocks());
 describe('independent atomic allocation drafts',()=>{
+ it('does not create an edit or write by opening an absent policy',()=>{const {controller,writes}=setup();controller.getAllocationDraft();expect(prepareEdit(controller,{kind:'allocation'})).toEqual({status:'unchanged'});expect(controller.applyAllocation().accepted).toBe(true);expect(controller.getState().savedPlan.revision).toBe(0);expect(writes()).toBe(0);});
  it('caches inert defaults without activating or revising a policy and reserves their IDs',()=>{
   const {controller,writes}=setup(),before=controller.getState(),draft=controller.getAllocationDraft();
   expect(controller.getAllocationDraft()).toBe(draft);expect(controller.getState().allocationDraft).toBeUndefined();

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { fireEvent, getByLabelText, getByRole } from '@testing-library/dom';
 import type { PlanDocument } from '../../src/engine';
 import { validatePlan } from '../../src/engine';
-import { createWorkspace } from '../../src/browser/state';
+import { createWorkspace,prepareEdit } from '../../src/browser/state';
 import { loadPlan, PLAN_STORAGE_KEY, restorePlan } from '../../src/browser/storage';
 import { renderPropertiesForm } from '../../src/browser/forms/properties';
 import { renderExpensesDebtsForm } from '../../src/browser/forms/expenses-debts';
@@ -53,6 +53,7 @@ describe('review: atomic save, restore and overlapping drafts', () => {
     const { controller, storage } = workspace(); editProperty(controller); editExpense(controller);
     expect(controller.saveRecord('insurance').accepted).toBe(true);
     const before = controller.getState(), bytes = storage.getItem(PLAN_STORAGE_KEY);
+    expect(prepareEdit(controller,{kind:'record',section:'properties',recordId:'home'}).status).toBe('stale');
     expect(controller.saveProperty('home').accepted).toBe(false);
     expect(controller.getState().savedPlan).toBe(before.savedPlan); expect(controller.getState().projection).toBe(before.projection);
     expect(controller.getState().persisted).toBe(before.persisted); expect(storage.getItem(PLAN_STORAGE_KEY)).toBe(bytes);

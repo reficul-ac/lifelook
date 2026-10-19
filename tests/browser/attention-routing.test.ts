@@ -50,6 +50,10 @@ describe('current-report attention',()=>{
 });
 
 describe('global persistence and settings',()=>{
+ it('does not repeat saved announcements when an ordinary draft changes',async()=>{
+  const {manager}=managerSetup(),root=document.createElement('div');document.body.append(root);const binding=mountPersistenceStatus(root,manager);cleanups.push(binding.dispose);const status=within(root).getByTestId('save-status'),mutations:MutationRecord[]=[];const observer=new MutationObserver(records=>mutations.push(...records));observer.observe(status,{subtree:true,childList:true,characterData:true});cleanups.push(()=>observer.disconnect());
+  const controller=manager.getActiveSession().controller,draft=controller.getDraft('household','household');controller.editDraft('household',{...draft,value:{...draft.value,openingCashCents:'12.34'}});await Promise.resolve();expect(mutations).toHaveLength(0);expect(status).toHaveTextContent('Saved locally');
+ });
  it('keeps an accepted storage failure visible through appearance changes and valid missing-data edits',()=>{
   const {manager}=managerSetup(),root=document.createElement('main');document.body.append(root);const status=document.createElement('div'),settings=document.createElement('div');root.append(status,settings);const persistence=mountPersistenceStatus(status,manager),appearance=mountAppearance(document.documentElement,{getItem(){throw Error('blocked');},setItem(){throw Error('blocked');}},{matches:false,addEventListener(){},removeEventListener(){}} as unknown as MediaQueryList),binding=mountSettings(settings,manager,appearance);cleanups.push(persistence.dispose,binding.dispose,appearance.dispose);
   const controller=manager.getActiveSession().controller,draft=controller.getDraft('household','household'),base=controller.getState().savedPlan;controller.editDraft('household',{...draft,value:toDraftValue({household:{...base.household,coverageAnswers:{...base.household.coverageAnswers,additionalIncome:{known:false}}},taxPolicy:base.taxPolicy,startYear:base.startYear,horizonYears:base.horizonYears,openingCashCents:12500})});

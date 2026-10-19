@@ -26,7 +26,7 @@ export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSum
   const section=element('section');section.className='forecast-plots';
   if(!rows.length){section.append(element('p','No forecast years to plot.'));root.append(section);return;}
   const controls=element('div');controls.className='forecast-plot-controls';
-  const label=element('label','Plot year'),select=element('select');
+  const label=element('label','Plot year'),select=element('select');select.setAttribute('aria-label','Plot year');
   for(const row of rows){const option=element('option',String(row.year));option.value=String(row.year);select.append(option);}
   label.append(select);controls.append(label);
   const help=element('small','Hover over a year, select it above, or focus a plot and use the arrow keys.');help.id='forecast-plot-help';controls.append(help);section.append(controls);

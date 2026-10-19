@@ -9,7 +9,8 @@ import {renderRecordCollection} from './record-collections';
 import {destinationForSection,targetForReview,type Destination,type WorkspaceRoute} from './workspace-route';
 import {createDisclosureController} from './disclosures';
 import {withProducingPlan,type IssueViewContext} from './issue-presentation';
-import {element} from './fields';
+import {button,element} from './fields';
+import {renderIssueDetails} from './views/issues';
 import {mountAttention} from './views/attention';
 import {createPrerequisiteFlow} from './prerequisite-flow';
 import {editTargetKey} from './record-ui-state';
@@ -67,7 +68,8 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   const shell=mountWorkspaceShell(root,session.view,{navigate,open,close:()=>close(),surface:value=>{route.surface=value;shell.update(route);if(value==='edit')focused?.restoreFocus();}});
   const heading=element('h2');heading.dataset.forecastName='';heading.textContent=`Forecast · ${manager.getState().document.scenarios.find(s=>s.id===session.scenarioId)!.name}`;
   const attentionRoot=element('div'),reportRoot=element('div'),comparisonRoot=element('details');comparisonRoot.className='applied-project-comparison';comparisonRoot.append(element('summary','Applied project comparison'));
-  const comparisonBody=element('div');comparisonRoot.append(comparisonBody);shell.overview.append(heading,attentionRoot,reportRoot,comparisonRoot);
+  const projectChoice=element('select');projectChoice.setAttribute('aria-label','Applied ADU project');
+  const comparisonBody=element('div');comparisonRoot.append(projectChoice,comparisonBody);shell.overview.append(heading,attentionRoot,reportRoot,comparisonRoot);
   const attention=mountAttention(attentionRoot,context,context.review);
   let shownReport=selectReportSnapshot(controller.getState(),coordinator.getState());
   let shownIssues=coordinator.getState().issues;
@@ -87,13 +89,29 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
     const state=session.view.aduComparison;
     if(state.status==='calculated'&&state.comparison)renderAduComparison(comparisonBody,state.comparison,withProducingPlan(context,controller.getState().savedPlan),session.view.selections.forecastYear);
     else if(state.status==='pending')comparisonBody.append(element('p','Calculating applied ADU comparison…'));
+    else if(state.status==='failed'){
+      comparisonBody.append(element('p','Applied ADU comparison is unavailable.'),button('Retry comparison',()=>adu.request()));
+      renderIssueDetails(comparisonBody,state.issues.map(issue=>({issue})),withProducingPlan(context,controller.getState().savedPlan));
+    }
   };
   const adu=createAduComparisonScheduler(controller,state=>{if(isCurrent()){session.view.aduComparison=state;paintComparison();}},{owner:{workspaceGeneration:owner.workspaceGeneration,scenarioId:session.scenarioId,sessionGeneration:session.generation,activationGeneration},isCurrent});
+  let selectedComparisonProject:string|undefined,comparisonPlan=controller.getState().savedPlan;
+  const syncComparisonSelection=()=>{
+    comparisonPlan=controller.getState().savedPlan;
+    const projects=controller.getState().savedPlan.properties.flatMap(property=>property.aduProject?[property.aduProject]:[]);
+    const selected=projects.find(project=>project.id===session.view.selectedAduProjectId)?.id??projects[0]?.id;
+    session.view.selectedAduProjectId=selected;
+    projectChoice.replaceChildren(...projects.map(project=>{const option=element('option',project.name);option.value=project.id;return option;}));
+    projectChoice.hidden=projects.length<2;projectChoice.value=selected??'';
+    comparisonRoot.hidden=!projects.length;
+    if(selected!==selectedComparisonProject){selectedComparisonProject=selected;adu.select(selected);}
+  };
+  projectChoice.onchange=()=>{if(!isCurrent())return;session.view.selectedAduProjectId=projectChoice.value;syncComparisonSelection();};
   const unsubscribePreview=coordinator.subscribe(updateReport);
   const unsubscribe=controller.subscribe(operation=>{
     if(!isCurrent())return;
     if(operation)root.dispatchEvent(new CustomEvent('editor-operation',{bubbles:true,detail:operation}));
-    if(!route.editor)collection();updateReport();
+    if(!route.editor)collection();updateReport();if(comparisonPlan!==controller.getState().savedPlan)syncComparisonSelection();
   });
   const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!root.querySelector('[data-disclosure-panel]')){event.preventDefault();close();}};
   const discarded=()=>{const target=route.editor?.target;if(target?.kind==='record'&&target.section!=='household'&&!(controller.getState().savedPlan[target.section]??[]).some(record=>record.id===target.recordId)){close();return;}if(target){const origin=route.editor?.origin??null;open(target,origin);}};
@@ -103,8 +121,9 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   root.addEventListener('keydown',escape);root.addEventListener('editor-discarded',discarded);root.addEventListener('editor-removed',removed);
   root.addEventListener('editor-add-contribution',addContribution);
   const workspaceRoot=root.closest<HTMLElement>('.workspace')??root;workspaceRoot.addEventListener('financial-review',review);
-  shell.update(route);collection();adu.select(session.view.selectedAduProjectId);paintComparison();
+  shell.update(route);collection();syncComparisonSelection();paintComparison();
   attention.update(shownReport,[]);
-  paintImpact();reportRoot.addEventListener('change',paintImpact);reportRoot.addEventListener('forecast-year-selected',paintImpact);
-  return {dispose(){if(disposed)return;disposed=true;focused?.dispose();prerequisite.dispose();unsubscribePreview();unsubscribe();coordinator.dispose();adu.dispose();overview.dispose();attention.dispose();disclosures.dispose();shell.dispose();reportRoot.removeEventListener('change',paintImpact);reportRoot.removeEventListener('forecast-year-selected',paintImpact);root.removeEventListener('keydown',escape);root.removeEventListener('editor-discarded',discarded);root.removeEventListener('editor-removed',removed);root.removeEventListener('editor-add-contribution',addContribution);workspaceRoot.removeEventListener('financial-review',review);}};
+  const reportYearChanged=()=>{paintImpact();paintComparison();};
+  paintImpact();reportRoot.addEventListener('change',reportYearChanged);reportRoot.addEventListener('forecast-year-selected',reportYearChanged);
+  return {dispose(){if(disposed)return;disposed=true;focused?.dispose();prerequisite.dispose();unsubscribePreview();unsubscribe();coordinator.dispose();adu.dispose();overview.dispose();attention.dispose();disclosures.dispose();shell.dispose();reportRoot.removeEventListener('change',reportYearChanged);reportRoot.removeEventListener('forecast-year-selected',reportYearChanged);root.removeEventListener('keydown',escape);root.removeEventListener('editor-discarded',discarded);root.removeEventListener('editor-removed',removed);root.removeEventListener('editor-add-contribution',addContribution);workspaceRoot.removeEventListener('financial-review',review);}};
 }

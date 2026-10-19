@@ -1,4 +1,4 @@
-import {preloadWorkspace,readActivePlan,replaceScenarioFromJson,openRecord,openSettings,applyEdit} from './helpers/workspace';
+import {preloadWorkspace,readActivePlan,replaceScenarioFromJson,openRecord,openSettings,openForecastDetails,applyEdit} from './helpers/workspace';
 import { readFile, mkdir } from 'node:fs/promises';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { calculateProjection, loadRuleSet, type Account, type Available, type CashFlowAllocationYear, type PlanDocument } from '../../src/engine';
@@ -101,6 +101,7 @@ async function preload(page: Page, plan: PlanDocument) {
   mustValidate(plan);
   await preloadWorkspace(page,plan);
   await openRecord(page,{kind:'allocation'});
+  await openForecastDetails(page);
   await expect(editor(page).locator('[data-allocation-status]')).toHaveText('Applied allocation');
 }
 const editor = (page: Page) => page.getByRole('form', { name: 'Cash flow allocation', exact: true });
@@ -121,6 +122,7 @@ async function savedPlan(page: Page): Promise<PlanDocument> {
   return readActivePlan(page);
 }
 async function expectBaseUI(page: Page, plan = allocationPlan(), shared = false, existingStocks = 0) {
+  await openForecastDetails(page);
   for (const want of baseOracles(plan, shared, existingStocks)) {
     await selectYear(page, want.year);
     await expect(preview(page)).toContainText(`Original cash flow · ${want.year}: ${money(want.total)}`);

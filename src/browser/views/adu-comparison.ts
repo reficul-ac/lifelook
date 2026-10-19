@@ -1,8 +1,9 @@
 import type {AduBuildComparison} from '../../engine';
-import type {IssueViewContext} from '../issue-presentation';
+import {withProducingPlan,type IssueViewContext} from '../issue-presentation';
 import {appendAmount,appendCoverage,appendProvenance,element,moneyEntry,renderIssues} from './issues';
 export function renderAduComparison(root:HTMLElement,comparison:AduBuildComparison,context:IssueViewContext,year:number):void {
- const section=element('section');section.className='adu-comparison-report';section.append(element('h3',`ADU build versus no build · ${year}`));
+ context=withProducingPlan(context,context.readState().savedPlan);
+ const section=element('section');section.className='adu-comparison-report';section.append(element('h3',`ADU build versus no build · ${year}`),element('p','Applied project comparison'));
  const row=comparison.years.find(y=>y.year===year);if(!row){section.append(element('p','This year is outside the calculated comparison.'));root.append(section);return;}
  const policy=context.readState().savedPlan.cashFlowAllocation;
  section.append(element('p','Changes compare the applied build with an independently calculated household forecast that removes this project. Other projects and the original home remain.'));

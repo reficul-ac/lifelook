@@ -1,7 +1,7 @@
 import {calculateFundingNeed,aduSum} from '../../engine/property/adu-projection';
 import {moneyEntry} from './issues';
 import {normalizeViewYears,type EditorViewSession} from '../scenario-session';
-import {getRecordLabel,type IssueViewContext} from '../issue-presentation';
+import {getRecordLabel,type ReportIssueContext} from '../issue-presentation';
 import type { AnnualProjection,MonthlyProjection,MonetaryField,ProjectionResult,RsuGrantMonth } from '../../engine';
 import { appendAmount,appendCoverage,appendProvenance,element,renderIssues } from './issues';
 import { renderTaxExplanation } from './tax-explanation';
@@ -20,7 +20,7 @@ const columns:readonly {key:MonetaryField;label:string}[]=[
 const slug=(key:string)=>key.replace(/Cents$/,'').replace(/[A-Z]/g,c=>`-${c.toLowerCase()}`);
 const available=(value:number)=>({status:'available' as const,value});
 type FundingSales=NonNullable<MonthlyProjection['brokerageFunding']>['sales'];
-function fundingSummary(root:HTMLElement,sales:FundingSales,context:IssueViewContext,prefix:string):void {
+function fundingSummary(root:HTMLElement,sales:FundingSales,context:ReportIssueContext,prefix:string):void {
   const list=element('dl');
   const purchases=sales.some(s=>s.purpose==='property-down-payment'),construction=sales.some(s=>s.purpose!=='property-down-payment');
   const amount=(field:'grossSaleCents'|'realizedGainCents'|'constructionFundedCents'|'shortfallCents')=>aduSum(sales.map(s=>available(s[field])),field);
@@ -34,17 +34,17 @@ function fundingSummary(root:HTMLElement,sales:FundingSales,context:IssueViewCon
 function assetTable(root:HTMLElement,caption:string,headers:readonly string[]):HTMLTableSectionElement {
   const scroll=element('div');scroll.className='projection-table-wrap';const table=element('table');table.append(element('caption',caption));const head=element('thead'),line=element('tr');for(const label of headers){const cell=element('th',label);cell.scope='col';line.append(cell);}head.append(line);table.append(head);const body=element('tbody');table.append(body);scroll.append(table);root.append(scroll);return body;
 }
-function rsuGrantTable(root:HTMLElement,grants:readonly RsuGrantMonth[],prefix:string,context:IssueViewContext,showMonth=false):void {
+function rsuGrantTable(root:HTMLElement,grants:readonly RsuGrantMonth[],prefix:string,context:ReportIssueContext,showMonth=false):void {
   const quantities=[['vestedShares','Service vested shares'],['withheldShares','Withheld shares'],['heldShares','Held shares'],['unvestedShares','Unvested shares'],['unsettledShares','Unsettled shares']] as const;
   const amounts=[['openingValueCents','Opening held value'],['growthCents','Unrealized growth'],['vestedValueCents','Vested value'],['taxableIncomeCents','Taxable compensation'],['withholdingCents','Withholding funding'],['closingValueCents','Held value'],['unvestedValueCents','Unvested value']] as const;
   const body=assetTable(root,'RSU grants and held shares',[...(showMonth?['Month']:[]),'Account / grant',...quantities.map(([,label])=>label),...amounts.map(([,label])=>label),'Held-share basis']);
-  for(const grant of grants){const row=element('tr'),period={year:grant.year,month:grant.month},id=showMonth?`${prefix}-${String(grant.month).padStart(2,'0')}`:prefix;if(showMonth)row.append(element('td',`${grant.year}-${String(grant.month).padStart(2,'0')}`));const label=element('th',`${getRecordLabel(context.readState().savedPlan,grant.accountId)} / ${getRecordLabel(context.readState().savedPlan,grant.grantId)}`);label.scope='row';row.append(label);
+  for(const grant of grants){const row=element('tr'),period={year:grant.year,month:grant.month},id=showMonth?`${prefix}-${String(grant.month).padStart(2,'0')}`:prefix;if(showMonth)row.append(element('td',`${grant.year}-${String(grant.month).padStart(2,'0')}`));const label=element('th',`${getRecordLabel(context.producingPlan,grant.accountId)} / ${getRecordLabel(context.producingPlan,grant.grantId)}`);label.scope='row';row.append(label);
     for(const [key] of quantities)row.append(element('td',new Intl.NumberFormat('en-US',{maximumFractionDigits:6}).format(grant[key])));
     for(const [key,title] of amounts){const cell=element('td');cell.dataset.testid=`${id}-rsu-${grant.grantId}-${key==='taxableIncomeCents'?'taxable-income':slug(key)}`;const value=grant[key];appendAmount(cell,value===null?{status:'unsupported-case',issues:grant.unvestedValueIssue?[grant.unvestedValueIssue]:[]}:available(value),context,{label:title,period});row.append(cell);}
     const basis=element('td');if(grant.basis.known)appendAmount(basis,available(grant.basis.value),context,{label:'Held-share basis',period});else basis.textContent='Unknown';row.append(basis);body.append(row);
   }
 }
-function movementTable(root:HTMLElement,rows:readonly (AnnualProjection|MonthlyProjection)[],caption:string,context:IssueViewContext):void {
+function movementTable(root:HTMLElement,rows:readonly (AnnualProjection|MonthlyProjection)[],caption:string,context:ReportIssueContext):void {
   const scroll=element('div');scroll.className='projection-table-wrap';scroll.style.overflowX='auto';
   const table=element('table');table.append(element('caption',caption));const head=element('thead'),header=element('tr');
   const period=element('th','Period');period.scope='col';header.append(period);
@@ -57,14 +57,14 @@ function movementTable(root:HTMLElement,rows:readonly (AnnualProjection|MonthlyP
   }
   table.append(body);scroll.append(table);root.append(scroll);
 }
-function records(root:HTMLElement,row:AnnualProjection|MonthlyProjection,prefix:string,context:IssueViewContext):void {
+function records(root:HTMLElement,row:AnnualProjection|MonthlyProjection,prefix:string,context:ReportIssueContext):void {
   if(!row.accounts.length&&!row.properties.length&&!row.loans.length&&!row.rsu)return;
   const details=element('details');details.append(element('summary',`Asset and loan balances · ${'date'in row?row.date:row.year}`));
   function table(caption:string,headers:readonly string[]):{table:HTMLTableElement;body:HTMLTableSectionElement}{
     const body=assetTable(details,caption,headers);return{table:body.parentElement as HTMLTableElement,body};
   }
   function cell(line:HTMLTableRowElement,value:Parameters<typeof appendAmount>[1],id?:string){const node=element('td');if(id)node.dataset.testid=id;appendAmount(node,value,context,{label:id??'Asset balance',period:{year:row.year,...('month' in row?{month:row.month}:{})}});line.append(node);}
-  const plan=context.readState().savedPlan,ordinary=row.accounts.filter(account=>plan.accounts.find(a=>a.id===account.accountId)?.type!=='rsu'),rsuAccounts=row.accounts.filter(account=>plan.accounts.find(a=>a.id===account.accountId)?.type==='rsu');
+  const plan=context.producingPlan,ordinary=row.accounts.filter(account=>plan.accounts.find(a=>a.id===account.accountId)?.type!=='rsu'),rsuAccounts=row.accounts.filter(account=>plan.accounts.find(a=>a.id===account.accountId)?.type==='rsu');
   if(ordinary.length){
     const conversions=ordinary.some(account=>account.conversionInCents!==undefined||account.conversionOutCents!==undefined);
     const sales=ordinary.some(account=>account.withdrawalCents!==undefined);
@@ -77,8 +77,8 @@ function records(root:HTMLElement,row:AnnualProjection|MonthlyProjection,prefix:
     if(row.rsu.status==='available')rsuGrantTable(details,row.rsu.value.grants,prefix,context);
     else{const status=element('p');appendAmount(status,row.rsu,context,{label:'RSU aggregate',period:{year:row.year,...('month' in row?{month:row.month}:{})}});details.append(status);}
   }
-  if(row.properties.length){const projectValues=row.properties.some(p=>p.completionValueAddedCents),purchaseValues=row.properties.some(p=>p.purchaseValueAddedCents);const {body}=table('Property values and equity',['Property','Opening value','Growth',...(purchaseValues?['Purchase value added']:[]),...(projectValues?['Completion value added','Known original-home value','Combined living area (sq ft)']:[]),'Closing value','Closing loans','Equity']);for(const property of row.properties){const line=element('tr');line.append(element('th',getRecordLabel(context.readState().savedPlan,property.propertyId)));cell(line,property.openingValueCents);cell(line,property.growthCents);if(purchaseValues)cell(line,property.purchaseValueAddedCents??available(0),`${prefix}-property-${property.propertyId}-purchase-value`);if(projectValues){cell(line,property.completionValueAddedCents??available(0),`${prefix}-property-${property.propertyId}-completion-value`);cell(line,property.knownExistingHomeValueCents??property.closingValueCents);const area=element('td');if(property.combinedLivingAreaSqFt?.status==='available')area.textContent=String(property.combinedLivingAreaSqFt.value);else if(property.combinedLivingAreaSqFt)appendAmount(area,property.combinedLivingAreaSqFt,context,{label:'Combined living area'},'ratio');line.append(area);}cell(line,property.closingValueCents);cell(line,property.loanBalanceCents);cell(line,property.equityCents,`${prefix}-property-${property.propertyId}-equity`);body.append(line);}}
-  if(row.loans.length){const draws=row.loans.some(l=>l.drawCents);const {body}=table('Loan balances and payments',['Loan','Opening principal',...(draws?['Draw receipts']:[]),'Interest','Full payment','Principal paid','Closing principal']);for(const loan of row.loans){const line=element('tr');line.append(element('th',getRecordLabel(context.readState().savedPlan,loan.loanId)));cell(line,loan.openingPrincipalCents);if(draws)cell(line,loan.drawCents??available(0));cell(line,loan.interestCents);cell(line,loan.paymentCents);cell(line,loan.principalPaidCents);cell(line,loan.closingPrincipalCents,`${prefix}-loan-${loan.loanId}-closing`);body.append(line);}}
+  if(row.properties.length){const projectValues=row.properties.some(p=>p.completionValueAddedCents),purchaseValues=row.properties.some(p=>p.purchaseValueAddedCents);const {body}=table('Property values and equity',['Property','Opening value','Growth',...(purchaseValues?['Purchase value added']:[]),...(projectValues?['Completion value added','Known original-home value','Combined living area (sq ft)']:[]),'Closing value','Closing loans','Equity']);for(const property of row.properties){const line=element('tr');line.append(element('th',getRecordLabel(context.producingPlan,property.propertyId)));cell(line,property.openingValueCents);cell(line,property.growthCents);if(purchaseValues)cell(line,property.purchaseValueAddedCents??available(0),`${prefix}-property-${property.propertyId}-purchase-value`);if(projectValues){cell(line,property.completionValueAddedCents??available(0),`${prefix}-property-${property.propertyId}-completion-value`);cell(line,property.knownExistingHomeValueCents??property.closingValueCents);const area=element('td');if(property.combinedLivingAreaSqFt?.status==='available')area.textContent=String(property.combinedLivingAreaSqFt.value);else if(property.combinedLivingAreaSqFt)appendAmount(area,property.combinedLivingAreaSqFt,context,{label:'Combined living area'},'ratio');line.append(area);}cell(line,property.closingValueCents);cell(line,property.loanBalanceCents);cell(line,property.equityCents,`${prefix}-property-${property.propertyId}-equity`);body.append(line);}}
+  if(row.loans.length){const draws=row.loans.some(l=>l.drawCents);const {body}=table('Loan balances and payments',['Loan','Opening principal',...(draws?['Draw receipts']:[]),'Interest','Full payment','Principal paid','Closing principal']);for(const loan of row.loans){const line=element('tr');line.append(element('th',getRecordLabel(context.producingPlan,loan.loanId)));cell(line,loan.openingPrincipalCents);if(draws)cell(line,loan.drawCents??available(0));cell(line,loan.interestCents);cell(line,loan.paymentCents);cell(line,loan.principalPaidCents);cell(line,loan.closingPrincipalCents,`${prefix}-loan-${loan.loanId}-closing`);body.append(line);}}
   if(row.adu){const list=element('dl');for(const [field,label,slug] of [['constructionCostCents','Staged construction cash','construction-cost'],['financingProceedsCents','Dedicated financing receipts','financing-proceeds'],['financedCostPaidCents','Financed construction paid','financed-cost'],['projectTaxPaidCents','Incremental property tax paid','tax-paid'],['completionValueAddedCents','Completion value added','completion-value'],['earmarkedCashCents','Restricted construction cash','restricted-cash'],['unrestrictedCashCents','Unrestricted cash','unrestricted-cash'],['allocationCashFlowCents','Cash available from income for investment allocation','allocation-cash']] as const)moneyEntry(list,label,row.adu[field],context,`${prefix}-adu-${slug}`);details.append(list,element('small','Loan receipts are not income. Restricted proceeds fund only attributed construction costs. The income allocation budget adds back financed construction paid; interest and principal remain cash costs. Construction in progress has no modeled market value; known original-home value remains visible.'));
   }
   if(row.brokerageFunding?.sales.length){fundingSummary(details,row.brokerageFunding.sales,context,prefix);details.append(element('small','Brokerage sale proceeds are an asset-to-cash transfer. Only the gain enters taxes; the additional sale tax is reserved in the sale month. Remaining investments continue growing from their reduced balance.'));
@@ -89,17 +89,18 @@ function records(root:HTMLElement,row:AnnualProjection|MonthlyProjection,prefix:
   if(!row.accounts.length&&!row.properties.length&&!row.loans.length&&!row.rsu)details.append(element('p','No asset or loan records in this period.'));
   root.append(details);
 }
-function expandButton(root:HTMLElement,label:string,hiddenLabel:string,target:HTMLElement,id:string,render:()=>void,context:IssueViewContext):void {
-  target.id=id;target.hidden=true;const button=element('button',label);button.type='button';button.setAttribute('aria-controls',id);button.setAttribute('aria-expanded','false');
-  let rendered=false;
-  button.addEventListener('click',()=>{if(!target.hidden)context.disclosures.closeWithin(target,false);target.hidden=!target.hidden;if(!target.hidden&&!rendered){render();rendered=true;}button.textContent=target.hidden?label:hiddenLabel;button.setAttribute('aria-expanded',String(!target.hidden));});root.append(button,target);
+function expandButton(root:HTMLElement,label:string,hiddenLabel:string,target:HTMLElement,id:string,render:(target:HTMLElement)=>void,context:ReportIssueContext,view?:EditorViewSession):void {
+  const key=id.startsWith('months-')?`year:${id.slice(7)}:months`:`year:${id.slice(16)}:tax`;
+  target.id=id;target.hidden=!view?.reportState.expanded.has(key);const button=element('button',target.hidden?label:hiddenLabel);button.type='button';button.setAttribute('aria-controls',id);button.setAttribute('aria-expanded',String(!target.hidden));
+  let rendered=!target.hidden;if(rendered)render(target);
+  button.onclick=event=>{const liveButton=event.currentTarget as HTMLButtonElement,liveTarget=liveButton.nextElementSibling as HTMLElement;if(!liveTarget.hidden)context.disclosures.closeWithin(liveTarget,false);liveTarget.hidden=!liveTarget.hidden;if(!liveTarget.hidden&&!rendered){render(liveTarget);rendered=true;}liveButton.textContent=liveTarget.hidden?label:hiddenLabel;liveButton.setAttribute('aria-expanded',String(!liveTarget.hidden));if(liveTarget.hidden)view?.reportState.expanded.delete(key);else view?.reportState.expanded.add(key);};root.append(button,target);
 }
-export function renderProjection(root:HTMLElement,result:ProjectionResult,context:IssueViewContext,view?:EditorViewSession):void {
-  if(view)normalizeViewYears(view,context.readState().savedPlan);
-  context.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2','Projection'),element('p',`Inputs v${result.inputRevision}`));
+export function renderProjection(root:HTMLElement,result:ProjectionResult,context:ReportIssueContext,view?:EditorViewSession,options?:{readonly compact:boolean}):void {
+  if(view)normalizeViewYears(view,context.producingPlan);
+  context.disclosures.closeWithin(root,false);root.replaceChildren();if(!options?.compact)root.append(element('h2','Projection'),element('p',`Inputs v${result.inputRevision}`));
   appendCoverage(root,result.coverage);if(result.months.some(m=>m.adu)){const need=element('dl');moneyEntry(need,'Peak household funding need',calculateFundingNeed(result.months),context,'adu-forecast-funding-need');root.append(need);}
   const fundingSales=result.months.flatMap(m=>m.brokerageFunding?.sales??[]),fundingIncomplete=result.months.some(m=>m.brokerageFunding?.issues?.length);
-  const plan=context.readState().savedPlan,hasPurchases=plan.properties.some(p=>p.purchaseDate>`${plan.startYear}-01-01`),purchaseFunding=hasPurchases&&plan.properties.some(p=>p.purchaseDate>`${plan.startYear}-01-01`&&p.purchaseFunding?.kind==='taxable-brokerage');
+  const plan=context.producingPlan,hasPurchases=plan.properties.some(p=>p.purchaseDate>`${plan.startYear}-01-01`),purchaseFunding=hasPurchases&&plan.properties.some(p=>p.purchaseDate>`${plan.startYear}-01-01`&&p.purchaseFunding?.kind==='taxable-brokerage');
   if(fundingSales.length||fundingIncomplete){
     const funding=element('section');funding.append(element('h3',`${purchaseFunding?'Property':'ADU'} investment funding · ${fundingIncomplete?'available periods only':'forecast total'}`));
     if(fundingSales.length)fundingSummary(funding,fundingSales,context,'forecast');
@@ -108,30 +109,30 @@ export function renderProjection(root:HTMLElement,result:ProjectionResult,contex
     root.append(funding);
   }
   if(result.years.some(year=>year.conditionalOnGap)){const notice=element('p','Some balances depend on covering a modeled cash gap.');notice.setAttribute('role','status');notice.className='forecast-conditional';root.append(notice);}
-  const overview=result.years.map(projectionSummary);renderForecastSummary(root,overview,context);renderForecastPlots(root,overview,context,view?.selections);
+  const overview=result.years.map(projectionSummary);if(!options?.compact){renderForecastSummary(root,overview,context);renderForecastPlots(root,overview,context,view?.selections);}
   if(result.years.some(year=>year.cashFlowAllocation!==undefined)){const allocation=element('div');renderAllocationYears(allocation,result.years,context);root.append(allocation);}
-  const hasRsu=context.readState().savedPlan.accounts.some(account=>account.type==='rsu');
+  const hasRsu=context.producingPlan.accounts.some(account=>account.type==='rsu');
   const how=element('details');how.append(element('summary','How calculated'),element('p',hasRsu?'Annual income tax is reserved across months in proportion to positive cash income and taxable RSU compensation, or in equal monthly amounts when both are zero. Payroll taxes follow combined cumulative salary and RSU wages. Shares sold for withholding fund the modeled tax reserve; withholding is not final tax liability.':'Annual income tax is reserved across months in proportion to positive gross cash income, or in equal monthly amounts when positive income is zero. Payroll taxes follow cumulative wages.'),element('p','Annual expenses are divided by 12 into monthly budgets. Investment deposits enter at month end and grow from the following month. Asset growth changes value, not spendable cash.'));root.append(how);
   const assumptions=element('details');assumptions.append(element('summary','Forecast assumptions'),element('p',hasPurchases?'Planned homes and purchase mortgages enter at closing. Down payments are paid once from household cash or the selected brokerage, with estimated sale taxes included. Property growth begins after the closing month. Closing costs and prepaid closing interest are not added automatically.':result.months.some(m=>m.adu)?'Declared ADU draws fund their attributed stages. Later balances remain conditional on covering any unrestricted cash gap. Planned contributions retain their legal eligibility; account growth starts after month-end deposits.':hasRsu?'Contributions remain planned when cash is insufficient. Later balances are conditional on covering the cash gap; no borrowing, discretionary sales or withdrawals are added. Sell-to-cover follows the entered percentages.':'Contributions remain planned when cash is insufficient. Later balances are conditional on covering the cash gap; no borrowing, sales or withdrawals are added.'));root.append(assumptions);
   appendProvenance(root,result.provenance);
   const independent=result.rsuSchedules?.filter(schedule=>schedule.schedule.status!=='available'||result.years.find(year=>year.year===schedule.year)?.rsu?.status!=='available')??[];
-  if(independent.length){const schedules=element('details');schedules.append(element('summary','Independent RSU schedules'));for(const schedule of independent){schedules.append(element('h3',`${getRecordLabel(context.readState().savedPlan,schedule.accountId)} · ${schedule.year}`));if(schedule.schedule.status==='available')rsuGrantTable(schedules,schedule.schedule.value,`independent-${schedule.year}`,context,true);else appendAmount(schedules,schedule.schedule,context,{label:'Independent RSU schedule',period:{year:schedule.year}});}root.append(schedules);}
+  if(independent.length){const schedules=element('details');schedules.append(element('summary','Independent RSU schedules'));for(const schedule of independent){schedules.append(element('h3',`${getRecordLabel(context.producingPlan,schedule.accountId)} · ${schedule.year}`));if(schedule.schedule.status==='available')rsuGrantTable(schedules,schedule.schedule.value,`independent-${schedule.year}`,context,true);else appendAmount(schedules,schedule.schedule,context,{label:'Independent RSU schedule',period:{year:schedule.year}});}root.append(schedules);}
   if(result.contributionSchedules.length){
     const details=element('details');details.append(element('summary','Contribution request schedules'));const failures=result.contributionSchedules.filter(schedule=>schedule.requests.status!=='available').length;if(failures)root.append(element('span',`${failures} contribution schedules unavailable · Open request schedules`));
     const table=element('table');table.append(element('caption','Contribution request schedules'));const head=element('thead'),header=element('tr');for(const label of ['Rule','Year','Request schedule']){const cell=element('th',label);cell.scope='col';header.append(cell);}head.append(header);table.append(head);const body=element('tbody');
-    for(const schedule of result.contributionSchedules){const row=element('tr'),cell=element('td');row.append(element('th',getRecordLabel(context.readState().savedPlan,schedule.ruleId)),element('td',String(schedule.year)));cell.dataset.testid=`contribution-schedule-${schedule.year}-${schedule.ruleId}`;if(schedule.requests.status==='available')cell.textContent=`${schedule.requests.value.length} monthly requests`;else appendAmount(cell,schedule.requests,context,{label:'Contribution request schedule',period:{year:schedule.year}});row.append(cell);body.append(row);}table.append(body);details.append(table);root.append(details);
+    for(const schedule of result.contributionSchedules){const row=element('tr'),cell=element('td');row.append(element('th',getRecordLabel(context.producingPlan,schedule.ruleId)),element('td',String(schedule.year)));cell.dataset.testid=`contribution-schedule-${schedule.year}-${schedule.ruleId}`;if(schedule.requests.status==='available')cell.textContent=`${schedule.requests.value.length} monthly requests`;else appendAmount(cell,schedule.requests,context,{label:'Contribution request schedule',period:{year:schedule.year}});row.append(cell);body.append(row);}table.append(body);details.append(table);root.append(details);
   }
   for(const year of result.years){
-    const section=element('section');section.append(element('h3',String(year.year)));
+    const section=element('section');section.dataset.reportKey=`year:${year.year}`;section.append(element('h3',String(year.year)));
     if(year.fundingStatus==='unavailable')section.append(element('p','Funding unknown'));
     else if(!year.conditionalOnGap)section.append(element('p','No modeled cash gap'));
     if(year.conditionalOnGap)section.append(element('p','Conditional: cash gap'));
-    appendCoverage(section,year.coverage);movementTable(section,[year],'Annual flows and December balances',context);
+    appendCoverage(section,year.coverage);const annual=options?.compact?element('details'):section;if(annual!==section){annual.append(element('summary',`Annual calculation detail · ${year.year}`));section.append(annual);}movementTable(annual,[year],'Annual flows and December balances',context);
     const ratios=element('dl');for(const [key,label]of [['expenseRatio','Expense / income'],['taxRatio','Tax / income'],['contributionRatio','Eligible contributions / income'],['cashFlowMargin','Cash flow / income']] as const){ratios.append(element('dt',label));const value=element('dd');appendAmount(value,year.ratios[key],context,{label,period:{year:year.year}},'ratio');ratios.append(value);}section.append(ratios);
     records(section,year,`annual-${year.year}`,context);
     const monthly=element('div'),months=result.months.filter(month=>month.year===year.year);
-    expandButton(section,`Show months for ${year.year}`,`Hide months for ${year.year}`,monthly,`months-${year.year}`,()=>{movementTable(monthly,months,`Monthly flows and closing balances for ${year.year}`,context);for(const month of months)records(monthly,month,`monthly-${month.date}`,context);},context);
-    const explanation=element('div');expandButton(section,`Tax explanation for ${year.year}`,`Hide tax explanation for ${year.year}`,explanation,`tax-explanation-${year.year}`,()=>renderTaxExplanation(explanation,year,context),context);
+    expandButton(section,`Show months for ${year.year}`,`Hide months for ${year.year}`,monthly,`months-${year.year}`,target=>{movementTable(target,months,`Monthly flows and closing balances for ${year.year}`,context);for(const month of months)records(target,month,`monthly-${month.date}`,context);},context,view);
+    const explanation=element('div');expandButton(section,`Tax explanation for ${year.year}`,`Hide tax explanation for ${year.year}`,explanation,`tax-explanation-${year.year}`,target=>renderTaxExplanation(target,year,context),context,view);
     root.append(section);
   }
   const issues=element('div');renderIssues(issues,result.issues,context);root.append(issues);

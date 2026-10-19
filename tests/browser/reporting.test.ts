@@ -1,5 +1,5 @@
 import {mountPresentation} from '../helpers/presentation';
-import type {IssueViewContext} from '../../src/browser/issue-presentation';
+import type {ReportIssueContext} from '../../src/browser/issue-presentation';
 import { describe,expect,it } from 'vitest';
 import { fireEvent,within } from '@testing-library/dom';
 import { calculateProjection,loadRuleSet } from '../../src/engine';
@@ -13,7 +13,7 @@ const currency=(cents:number)=>new Intl.NumberFormat('en-US',{style:'currency',c
 const slug=(key:string)=>key.replace(/Cents$/,'').replace(/[A-Z]/g,c=>`-${c.toLowerCase()}`);
 function fixture(id:string){return loadReferences<PlanDocument,ProjectionResult>('projection').find(c=>c.id===id)!;}
 function result(id:string){return calculateProjection(mustValidate(fixture(id).input),loadRuleSet());}
-let context:IssueViewContext;
+let context:ReportIssueContext;
 function root(plan=fixture('two-salaries-home-adu').input){const mounted=mountPresentation(plan);context=mounted.context;return mounted.root;}
 describe('traceable projection reporting',()=>{
   it('displays every aggregate column from the independent annual worksheet with saved revision',()=>{

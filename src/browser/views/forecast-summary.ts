@@ -1,4 +1,4 @@
-import type {IssueViewContext} from '../issue-presentation';
+import type {ReportIssueContext} from '../issue-presentation';
 import type {ProjectionSummaryRow} from '../projection-summary';
 import {appendAmount,element} from './issues';
 
@@ -11,7 +11,7 @@ const columns:readonly {key:Exclude<keyof ProjectionSummaryRow,'year'>;label:str
   {key:'cashFlowCents',label:'Cash Flow',slug:'cash-flow'},
 ];
 
-export function renderForecastSummary(root:HTMLElement,rows:readonly ProjectionSummaryRow[],context:IssueViewContext):void {
+export function renderForecastSummary(root:HTMLElement,rows:readonly ProjectionSummaryRow[],context:ReportIssueContext):void {
   const section=element('section');section.className='forecast-summary';
   const scroll=element('div');scroll.className='forecast-summary-wrap';scroll.tabIndex=0;
   scroll.setAttribute('role','region');scroll.setAttribute('aria-label','Annual financial overview, horizontally scrollable');

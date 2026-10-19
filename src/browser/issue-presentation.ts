@@ -9,7 +9,9 @@ export type IssueGroup=Readonly<{key:string;issues:readonly Issue[];periods:read
 export type InputSection='Household'|'Income'|'Expenses and debts'|'Investments'|'Properties';
 export type ReviewTarget=Readonly<{section:InputSection;recordId:string;field?:string;label:string}>;
 export type IssueViewState=Pick<WorkspaceState,'savedPlan'|'drafts'|'allocationDraft'>;
-export interface IssueViewContext {readonly editorView?:EditorViewSession;readonly disclosures:DisclosureController;readonly readState:()=>IssueViewState;readonly review:(target:ReviewTarget)=>void;/** Plan that produced a report, including a retained valid preview. */readonly allocationPlan?:PlanDocument}
+export interface IssueViewContext {readonly editorView?:EditorViewSession;readonly disclosures:DisclosureController;readonly readState:()=>IssueViewState;readonly review:(target:ReviewTarget)=>void;readonly producingPlan?:PlanDocument;/** Legacy allocation adapter; new reports use producingPlan. */readonly allocationPlan?:PlanDocument}
+export type ReportIssueContext=IssueViewContext&{readonly producingPlan:PlanDocument};
+export function withProducingPlan(context:IssueViewContext,plan:PlanDocument):ReportIssueContext{return {...context,producingPlan:plan};}
 export type AmountScope=Readonly<{label:string;period?:ReportPeriod}>;
 export function groupIssueOccurrences(items:readonly IssueOccurrence[]):readonly IssueGroup[]{
   const groups=new Map<string,{key:string;issues:Issue[];periods:ReportPeriod[]}>();
@@ -77,7 +79,7 @@ export function getRecordLabel(plan:PlanDocument,id:string):string{
   return id;
 }
 export function resolveIssueTargets(issue:Issue,state:IssueViewState,sourcePlan:PlanDocument=state.savedPlan):readonly ReviewTarget[]{
-  const plan=state.savedPlan,id=issue.recordId,field=normalizeFieldPath(issue.field??'');
+  const plan=sourcePlan,id=issue.recordId,field=normalizeFieldPath(issue.field??'');
   const policy=sourcePlan.cashFlowAllocation;
   if(policy&&(id===policy.id||policy.entries.some(entry=>entry.id===id)||id===policy.overflow.id)){
     const match=/^(?:cashFlowAllocation\.)?entries\.(\d+)(?:\.(.*))?$/.exec(field);
@@ -92,8 +94,8 @@ export function resolveIssueTargets(issue:Issue,state:IssueViewState,sourcePlan:
       return resolveIssueTargets({...issue,recordId:source!.id,field:suffix},{...state,savedPlan:{...document,contributions:[...plan.contributions,{id:source!.id,accountId:account.id,priority:0,startDate:`${issue.year??plan.startYear}-01-01`,amount:{kind:'fixed',monthlyCents:0},...(salary?{sponsoringSalaryId:salary.id}:{} )}]}});
     }
     if(salary&&/sponsoringSalaryId|employerId|compensation|wages|startDate|endDate/.test(suffix))return [{section:'Income',recordId:salary.id,label:`Review ${salary.name}`}];
-    if(account&&issue.code==='mandatory-roth-catchup')return resolveIssueTargets({...issue,recordId:account.id,field:'type'},state);
-    if(account&&/^(openingIraBasis|ownerId|type|openingBalanceCents)(?:\.|$)/.test(suffix))return resolveIssueTargets({...issue,recordId:account.id,field:suffix},state);
+    if(account&&issue.code==='mandatory-roth-catchup')return resolveIssueTargets({...issue,recordId:account.id,field:'type'},state,sourcePlan);
+    if(account&&/^(openingIraBasis|ownerId|type|openingBalanceCents)(?:\.|$)/.test(suffix))return resolveIssueTargets({...issue,recordId:account.id,field:suffix},state,sourcePlan);
     const raw=state.allocationDraft?.recordId===policy.id?state.allocationDraft.value:plan.cashFlowAllocation;
     const rows=raw?.entries;
     const index=source&&Array.isArray(rows)?rows.findIndex(row=>row&&typeof row==='object'&&row.id===source.id):-1;

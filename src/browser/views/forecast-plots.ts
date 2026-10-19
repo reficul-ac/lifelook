@@ -1,17 +1,17 @@
 import type {ScenarioViewSelections} from '../scenario-session';
 import type { ProjectionSummaryRow } from '../projection-summary';
-import type { IssueViewContext } from '../issue-presentation';
+import type { ReportIssueContext } from '../issue-presentation';
 import { appendAmount, element, formatCents } from './issues';
 
 type SeriesKey=Exclude<keyof ProjectionSummaryRow,'year'>;
 interface Series {key:SeriesKey;id:string;label:string;color:string;dash?:string}
-const netWorth:Series={key:'netWorthCents',id:'net-worth',label:'Net Worth',color:'#205e44'};
+const netWorth:Series={key:'netWorthCents',id:'net-worth',label:'Net Worth',color:'var(--chart-1)'};
 const cashSeries:readonly Series[]=[
-  {key:'totalIncomeCents',id:'total-income',label:'Total Income',color:'#325f9b',dash:'8 4'},
-  {key:'cashIncomeCents',id:'cash-income',label:'Cash Income',color:'#6b7439',dash:'3 4'},
-  {key:'postTaxIncomeCents',id:'post-tax-income',label:'Post Tax Income',color:'#205e44'},
-  {key:'expensesCents',id:'expenses',label:'Expenses',color:'#a34b27'},
-  {key:'cashFlowCents',id:'cash-flow',label:'Cash Flow',color:'#7752a0'},
+  {key:'totalIncomeCents',id:'total-income',label:'Total Income',color:'var(--chart-2)',dash:'8 4'},
+  {key:'cashIncomeCents',id:'cash-income',label:'Cash Income',color:'var(--chart-3)',dash:'3 4'},
+  {key:'postTaxIncomeCents',id:'post-tax-income',label:'Post Tax Income',color:'var(--chart-1)'},
+  {key:'expensesCents',id:'expenses',label:'Expenses',color:'var(--chart-4)'},
+  {key:'cashFlowCents',id:'cash-flow',label:'Cash Flow',color:'var(--chart-5)'},
 ];
 const width=720,height=260,left=112,right=40,top=20,bottom=38;
 const axisMoney=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',notation:'compact',minimumFractionDigits:0,maximumFractionDigits:1});
@@ -22,7 +22,7 @@ function svgElement<K extends keyof SVGElementTagNameMap>(tag:K,attributes:Recor
   return node;
 }
 
-export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSummaryRow[],context:IssueViewContext,selections?:ScenarioViewSelections):void {
+export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSummaryRow[],context:ReportIssueContext,selections?:ScenarioViewSelections):void {
   const section=element('section');section.className='forecast-plots';
   if(!rows.length){section.append(element('p','No forecast years to plot.'));root.append(section);return;}
   const controls=element('div');controls.className='forecast-plot-controls';

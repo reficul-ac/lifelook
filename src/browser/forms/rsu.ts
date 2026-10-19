@@ -2,7 +2,7 @@ import {fieldMemory,swapMode} from '../record-ui-state';
 import {renderEditorGroup} from '../ui/editor-groups';
 import Decimal from 'decimal.js';
 import {calendarDate,daysInMonth,isValidISODate,parseISODate} from '../../engine/dates';
-import {element,parseMoneyInput,renderField,renderHistory,renderRows,valueAt,type FieldContext,type FieldPath} from '../fields';
+import {button,element,parseMoneyInput,renderField,renderHistory,renderRows,valueAt,type FieldContext,type FieldPath} from '../fields';
 import type {RawObject,WorkspaceController} from '../state';
 
 function grantId(controller:WorkspaceController,context:FieldContext):string {
@@ -52,6 +52,8 @@ function newRsuPriceTarget(context:FieldContext,startYear:number):RawObject {
 export function renderRsuFields(root:HTMLElement,controller:WorkspaceController,context:FieldContext):void {
   const startYear=controller.getState().savedPlan.startYear;
   renderField(root,context,['rsu','employerId'],'RSU employer ID',{hint:'Use the same employer ID as this owner’s salary when both come from the same employer.'});
+  if(context.requestPrerequisite)root.append(button('Add employer salary',()=>context.requestPrerequisite!({section:'salaries',defaults:{ownerId:context.draft.value.ownerId},link(origin,salary){return {...origin,rsu:{...origin.rsu as RawObject,employerId:salary.employerId}};}})));
+  else if(!controller.getState().savedPlan.salaries.length)root.append(element('p','Apply the employer’s salary in Income, then use its employer identity here.'));
   renderField(root,context,['rsu','currentSharePriceCents'],'Current share price ($)',{kind:'money',hint:`Assumed on Jan 1, ${startYear}. Grant prices determine awarded shares independently.`});
   renderField(root,context,['annualGrowthBps'],'Effective annual share price growth (%)',{kind:'rate',hint:`Applies after the last share price target, or from Jan 1, ${startYear} when no targets are entered. Price growth changes held asset value without generating cash.`});
   const priceRoot=context.memory?renderEditorGroup(root,{id:'rsu-price',label:'Price assumptions',advanced:true},context.memory,()=>{}):root;

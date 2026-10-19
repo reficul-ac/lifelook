@@ -1,3 +1,5 @@
+import {createRecordEditorMemory,swapMode} from '../record-ui-state';
+import type {PrerequisiteRequest} from '../prerequisite-flow';
 import type {EditPreviewCoordinator} from '../edit-types';
 import type {Issue,PlanDocument,ProjectionResult} from '../../engine';
 import {createEditorViewSession,normalizeViewYears,type EditorViewSession} from '../scenario-session';
@@ -18,18 +20,19 @@ interface Control {node:HTMLInputElement|HTMLSelectElement;error:HTMLElement;pat
 interface BackdoorControls {toggle:Control;details:HTMLElement;source?:Control|undefined;history?:Control|undefined;sourceTools?:HTMLElement|undefined}
 interface Row {root:HTMLElement;legend:HTMLElement;destination:Control;priority:Control;sponsorHost:HTMLElement;sponsor?:Control|undefined;backdoorHost:HTMLElement;backdoor?:BackdoorControls|undefined;amountHost:HTMLElement;mode:string;maximum?:Control|undefined;percent?:Control|undefined;slider?:Control|undefined;readout:HTMLElement}
 
-export interface AllocationEditorOptions {view:EditorViewSession;ownership?:AllocationPreviewOwnership;preview?:Pick<EditPreviewCoordinator,'getState'|'subscribe'|'request'|'apply'|'discard'>}
+export interface AllocationEditorOptions {view:EditorViewSession;ownership?:AllocationPreviewOwnership;preview?:Pick<EditPreviewCoordinator,'getState'|'subscribe'|'request'|'apply'|'discard'>;requestPrerequisite?(request:PrerequisiteRequest):void}
 
 /** A separate policy transaction. Controls survive preview and unrelated record updates. */
 export function mountCashFlowAllocationEditor(root:HTMLElement,controller:WorkspaceController,context:IssueViewContext,editorOptions?:AllocationEditorOptions):{dispose():void}{
   const external=editorOptions?.preview;
   root.replaceChildren();root.classList.add('allocation-editor');
   const form=element('form');form.setAttribute('aria-label','Cash flow allocation');form.append(element('h2','Cash flow allocation'));
-  const intro=element('p','Allocate the same annual cash flow after taxes and expenses. Existing deposits count toward each total account target.');form.append(intro);
-  form.append(element('p','Annual account targets are divided into monthly installments, with cent rounding. A $7,500 annual IRA target contributes $625 at each month end and grows from the next month. Excess funding adapts to available monthly cash while preserving feasible target installments. Cash availability, payroll timing and contribution limits can change the monthly schedule. Traditional 401(k) funding reduces modeled income tax; the allocation budget includes that tax saving.'));
-  const yearHost=element('div'),rowHost=element('div'),overflowHost=element('div'),feedback=element('div'),status=element('p'),remaining=element('p'),chart=element('div');status.setAttribute('role','status');status.dataset.allocationStatus='';feedback.dataset.allocationFeedback='';remaining.dataset.allocationRemaining='';chart.dataset.allocationPreview='';
-  form.append(yearHost,rowHost,button('Add allocation',add),overflowHost,button('Apply allocation',()=>{if(external)external.apply();else controller.applyAllocation();}),button('Discard allocation edits',()=>{if(external)external.discard();else controller.discardAllocationDraft();}),feedback,status,remaining,chart);root.append(form);form.addEventListener('submit',event=>{event.preventDefault();if(external)external.apply();else controller.applyAllocation();});
+  const intro=element('p','Choose where available cash goes. Existing deposits count toward each account target.');form.append(intro);
+  const timing=element('details');timing.append(element('summary','How allocation works'),element('p','Annual account targets are divided into monthly installments, with cent rounding. A $7,500 annual IRA target contributes $625 at each month end and grows from the next month. Excess funding adapts to available monthly cash while preserving feasible target installments. Cash availability, payroll timing and contribution limits can change the monthly schedule. Traditional 401(k) funding reduces modeled income tax; the allocation budget includes that tax saving.'));form.append(timing);
+  const yearHost=element('div'),rowHost=element('div'),overflowHost=element('div'),feedback=element('div'),status=element('p'),budget=element('p'),remaining=element('p'),chart=element('div');status.setAttribute('role','status');status.dataset.allocationStatus='';feedback.dataset.allocationFeedback='';budget.dataset.allocationBudget='';remaining.dataset.allocationRemaining='';chart.dataset.allocationPreview='';
+  form.append(yearHost,budget,rowHost,button('Add allocation',add),overflowHost,button('Apply allocation',()=>{if(external)external.apply();else controller.applyAllocation();}),button('Discard allocation edits',()=>{if(external)external.discard();else controller.discardAllocationDraft();}),feedback,status,remaining,chart);root.append(form);form.addEventListener('submit',event=>{event.preventDefault();if(external)external.apply();else controller.applyAllocation();});
   let disposed=false;const view=editorOptions?.view??createEditorViewSession(controller.getState().savedPlan),preview=view.allocationPreview;
+  const memory=view.editorMemory.get('allocation')??createRecordEditorMemory();view.editorMemory.set('allocation',memory);
   let savedIdentity=controller.getState().savedPlan,draftIdentity=controller.getState().allocationDraft;
   const rows=new Map<string,Row>();let initialized=false;
   const draft=()=>controller.getAllocationDraft();
@@ -43,7 +46,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
     node.addEventListener(kind==='select'||kind==='checkbox'?'change':'input',()=>write(node instanceof HTMLInputElement&&node.type==='checkbox'?node.checked:node.value));return control;
   }
   const year=field(yearHost,'Allocation year','','select',value=>{view.selections.allocationYear=Number(value);renderPreview();});delete year.node.dataset.field;
-  const overflow=field(overflowHost,'Excess allocation account','overflow.destination.accountId','select',value=>edit(['overflow','destination'],destination(String(value))));
+  const overflow=field(overflowHost,'Excess allocation account','overflow.destination.accountId','select',value=>{const raw=object(object(draft().value.overflow).destination);edit(['overflow','destination'],swapMode(memory,'allocation-overflow',destinationValue(raw),String(value),raw,destination(String(value))));});
   overflow.node.parentElement!.dataset.fieldGroup='overflow.destination';overflow.node.parentElement!.dataset.groupLabel='Excess allocation account';
   const overflowSponsorHost=element('div'),overflowBackdoorHost=element('div');overflowHost.append(overflowSponsorHost,overflowBackdoorHost);let overflowSponsor:Control|undefined,overflowBackdoor:BackdoorControls|undefined;
   function options(control:Control,choices:readonly {value:string;label:string}[],value:string,missingLabel=value){
@@ -59,12 +62,12 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
   function createRow(id:string):Row{
     const row=element('fieldset'),legend=element('legend');row.append(legend);
     const dest=field(row,'Allocation destination','','select',value=>{
-      const i=index(id);if(i<0)return;const current=draft(),next=setAt(current.value,['entries',i,'destination'],destination(String(value))),account=controller.getState().savedPlan.accounts.find(a=>a.id===destination(String(value)).accountId);
+      const i=index(id);if(i<0)return;const current=draft(),raw=object(entries(current.value)[i]?.destination),next=setAt(current.value,['entries',i,'destination'],swapMode(memory,`allocation-destination:${id}`,destinationValue(raw),String(value),raw,destination(String(value)))),account=controller.getState().savedPlan.accounts.find(a=>a.id===destination(String(value)).accountId);
       if(object(entries(next)[i]?.amount).kind==='max-annual'&&!retirement(account?.type))entries(next)[i]!.amount={kind:'percent',percentBps:'0.00'};
       controller.editAllocationDraft({...current,value:next});
     });
     const priority=field(row,'Allocation priority','','text',value=>edit(['entries',index(id),'priority'],value));priority.node.inputMode='numeric';
-    const sponsorHost=element('div'),backdoorHost=element('div'),amountHost=element('div'),readout=element('p');readout.dataset.allocationReadout=id;row.append(sponsorHost,backdoorHost,amountHost,readout,button('Remove allocation',()=>edit(['entries'],entries(draft().value).filter(entry=>entry.id!==id))));
+    const sponsorHost=element('div'),backdoorHost=element('div'),amountHost=element('div'),readout=element('p');readout.dataset.allocationReadout=id;const funding=element('details');funding.append(element('summary','Funding details'),readout);row.append(sponsorHost,backdoorHost,amountHost,funding,button('Remove allocation',()=>edit(['entries'],entries(draft().value).filter(entry=>entry.id!==id))));
     return {root:row,legend,destination:dest,priority,sponsorHost,backdoorHost,amountHost,readout,mode:''};
   }
   function syncSponsor(host:HTMLElement,current:Control|undefined,dest:RawObject,path:string,label:string,write:(value:string|boolean)=>void):Control|undefined{
@@ -91,13 +94,17 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
       current.details.append(element('p','Model new nondeductible IRA deposits followed immediately by Roth conversions. The IRA contribution limit is used once; the conversion is an account transfer.'));
       current.source=field(current.details,'Traditional IRA for conversion',`${prefix}.backdoorRoth.traditionalIraAccountId`,'select',value=>edit([...getPath(),'backdoorRoth','traditionalIraAccountId'],value));
       const sourceTools=element('div');current.sourceTools=sourceTools;
-      sourceTools.append(button('Add empty traditional IRA',()=>{
-        const activePath=getPath(),latest=object(activePath.reduce<unknown>((node,key)=>object(node)[key],draft().value)),owner=controller.getState().savedPlan.accounts.find(a=>a.id===latest.accountId)?.ownerId;
-        if(!owner)return;
-        const id=controller.beginAdd('accounts'),accountDraft=controller.getDraft('accounts',id);
-        controller.editDraft(id,{...accountDraft,value:{...accountDraft.value,name:'Backdoor IRA',ownerId:owner,type:'traditional-ira',openingBalanceCents:'0.00',annualGrowthBps:'0.00',openingIraBasis:{known:true,value:'0.00'}}});
-        if(controller.saveRecord(id).accepted)edit([...getPath(),'backdoorRoth','traditionalIraAccountId'],id);
-      }));current.details.append(sourceTools);
+      if(editorOptions?.requestPrerequisite)sourceTools.append(button('Add source IRA',()=>{
+        const sourcePath=[...getPath()],raw=draft().value,latest=object(sourcePath.reduce<unknown>((node,key)=>object(node)[key],raw)),owner=controller.getState().savedPlan.accounts.find(a=>a.id===latest.accountId)?.ownerId;
+        if(!owner)return;const entryId=sourcePath[0]==='entries'?entries(raw)[Number(sourcePath[1])]?.id:undefined;
+        editorOptions.requestPrerequisite!({section:'accounts',defaults:{name:'Backdoor IRA',ownerId:owner,type:'traditional-ira',openingBalanceCents:'0.00',annualGrowthBps:'0.00',openingIraBasis:{known:true,value:'0.00'}},link(origin,applied){
+          if(applied.type!=='traditional-ira'||applied.ownerId!==owner)return origin;
+          const path=entryId===undefined?sourcePath:['entries',entries(origin).findIndex(entry=>entry.id===entryId),'destination'];
+          if(path[1]===-1)return origin;
+          return setAt(origin,[...path,'backdoorRoth','traditionalIraAccountId'],applied.id);
+        }});
+      }));else sourceTools.append(element('p','Apply a traditional IRA in Accounts, then select it here.'));
+      current.details.append(sourceTools);
       current.history=field(current.details,'Confirm clean IRA history',`${prefix}.backdoorRoth.cleanIraHistory`,'checkbox',checked=>edit([...getPath(),'backdoorRoth','cleanIraHistory'],{known:true,value:checked}));
       current.details.append(element('small','Confirm zero existing traditional/SEP/SIMPLE IRA balances and basis, no outstanding rollovers, and no federal/California basis differences. Existing Roth IRA balances are allowed. Other balances or unresolved history require separate conversion support.'));
     }
@@ -124,7 +131,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
       const mode=`${retirement(account?.type)}:${amount.kind}`;
       if(row.mode!==mode){
         context.disclosures.closeWithin(row.amountHost,false);row.amountHost.replaceChildren();row.maximum=row.percent=row.slider=undefined;row.mode=mode;
-        if(retirement(account?.type))row.maximum=field(row.amountHost,'Max out for the year',`${prefix}.amount.kind`,'checkbox',value=>edit(['entries',index(id),'amount'],value?{kind:'max-annual'}:{kind:'percent',percentBps:'0.00'}));
+        if(retirement(account?.type))row.maximum=field(row.amountHost,'Max out for the year',`${prefix}.amount.kind`,'checkbox',value=>{const amount=object(entries(draft().value)[index(id)]?.amount);edit(['entries',index(id),'amount'],swapMode(memory,`allocation-amount:${id}`,String(amount.kind),value?'max-annual':'percent',amount,value?{kind:'max-annual'}:{kind:'percent',percentBps:'0.00'}));});
         if(amount.kind==='max-annual')row.amountHost.append(element('p',retirement(account?.type)?'Automatic annual maximum · calculated for the selected year.':'Annual maximum is unavailable for this destination. Choose an eligible retirement account.'));
         else {
           row.percent=field(row.amountHost,'Allocation percentage (%)',`${prefix}.amount.percentBps`,'text',value=>edit(['entries',index(id),'amount','percentBps'],value));
@@ -157,6 +164,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
     status.textContent=preview.status==='inactive'?'No allocation policy applied.':preview.status==='valid'?(controller.getState().allocationDraft?'Allocation preview · edits not applied':'Applied allocation'):preview.status==='pending'?(preview.lastValid?'Stale preview · updating allocation preview.':'Updating allocation preview.'):preview.status==='invalid'?(preview.lastValid?'Invalid allocation edits · Stale preview shows the last valid allocation.':'Invalid allocation edits · no valid preview available.'):(preview.lastValid?'Allocation preview failed · Stale preview shows the last valid allocation.':'Allocation preview failed · no valid preview available.');
     const report=preview.lastValid?.projection.years.find(year=>year.year===view.selections.allocationYear)?.cashFlowAllocation;
     if(report&&preview.lastValid)renderAllocationPie(chart,report,preview.lastValid.plan,context);else{context.disclosures.closeWithin(chart,false);chart.replaceChildren();}
+    budget.textContent=report?.status==='available'?`Cash available for allocation: ${formatCents(report.value.originalCashFlowCents)} · ${view.selections.allocationYear}`:'Cash available for allocation: needs data';
     remaining.textContent='';
     if(report?.status==='available'){
       const value=report.value,percent=(cents:number)=>value.originalCashFlowCents>0?`${(cents/value.originalCashFlowCents*100).toFixed(2)}%`:'N/A · no positive budget';
@@ -185,7 +193,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
   function update(operation?:WorkspaceOperation){
     if(disposed)return;const state=controller.getState(),changed=state.savedPlan!==savedIdentity||state.allocationDraft!==draftIdentity;
     if(initialized&&!changed&&!operation)return;initialized=true;
-    const cleared=draftIdentity!==undefined&&state.allocationDraft===undefined;savedIdentity=state.savedPlan;draftIdentity=state.allocationDraft;syncControls();
+    const cleared=draftIdentity!==undefined&&state.allocationDraft===undefined;savedIdentity=state.savedPlan;draftIdentity=state.allocationDraft;if(cleared||operation?.kind==='save'&&operation.result.accepted&&operation.recordId===draft().recordId)memory.modes.clear();syncControls();
     if(external){syncExternal();return;}
     if(cleared||changed&&!state.allocationDraft){if(state.savedPlan.cashFlowAllocation)preview.lastValid={plan:state.savedPlan,projection:state.projection};else delete preview.lastValid;preview.status=preview.lastValid?'valid':'inactive';preview.issues=[];}
     else if(changed&&state.allocationDraft){preview.status='pending';preview.issues=[];scheduler?.request();}

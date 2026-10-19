@@ -1,3 +1,5 @@
+import {openRecord} from '../helpers/workspace-ui';
+import {memoryWorkspaceStorage} from '../helpers/scenarios';
 import {mustValidate} from '../helpers/plans';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {fireEvent,within} from '@testing-library/dom';
@@ -11,26 +13,29 @@ const flush=()=>{const queued=[...frames.values()];frames.clear();queued.forEach
 function setup(withTraditional=true){
   const base=makeAllocationPlan();
   const plan=makeAllocationPlan({horizonYears:2,salaries:[{...base.salaries[0]!,annualGrossCents:25200000}],accounts:[...base.accounts.filter(a=>withTraditional||a.type!=='traditional-ira'),{...base.accounts[1]!,id:'other-ira',name:'Other owner IRA',ownerId:'owner-b'},{...base.accounts[1]!,id:'roth',name:'Roth IRA',type:'roth-ira'}]});
-  const result=mountWorkspace(plan);fireEvent.click(within(result.root.querySelector('nav')!).getByRole('button',{name:'Investments'}));
+  const store=memoryWorkspaceStorage(),result=mountWorkspace(plan,store.port);openRecord(result.root,{kind:'allocation'});
   const editor=within(result.root).getByRole('form',{name:'Cash flow allocation'});
   fireEvent.click(within(editor).getByRole('button',{name:'Add allocation'}));
   const row=within(editor).getByRole('group',{name:'Allocation 1'});
   setField(row,'Allocation destination','account:roth');
-  return {...result,editor,row};
+  return {...result,store,editor,row};
 }
 describe('backdoor Roth allocation controls',()=>{
-  it('adds an empty paired IRA to the plan without claiming the other history is confirmed',()=>{
-    const {controller,row}=setup(false);
+  it('requires two explicit applies for a source IRA and allocation',()=>{
+    const {controller,root,row,store}=setup(false),openingCount=controller.getState().savedPlan.accounts.length,originalPolicy=controller.getState().savedPlan.cashFlowAllocation;
     fireEvent.click(within(row).getByLabelText('Use backdoor Roth'));
-    fireEvent.click(within(row).getByRole('button',{name:'Add empty traditional IRA'}));
+    fireEvent.click(within(row).getByRole('button',{name:'Add source IRA'}));
+    expect(controller.getState().savedPlan.accounts).toHaveLength(openingCount);expect(store.writes()).toBe(0);
+    fireEvent.click(within(root).getByRole('button',{name:'Cancel and return'}));expect(controller.getState().savedPlan.accounts).toHaveLength(openingCount);
+    fireEvent.click(within(root).getByRole('button',{name:'Add source IRA'}));apply(root,'Apply account');
     const source=controller.getState().savedPlan.accounts.find(a=>a.ownerId==='owner-a'&&a.type==='traditional-ira')!;
-    expect(source).toMatchObject({openingBalanceCents:0,openingIraBasis:{known:true,value:0}});
+    expect(source).toMatchObject({openingBalanceCents:0,openingIraBasis:{known:true,value:0}});expect(controller.getState().savedPlan.revision).toBe(1);expect(store.writes()).toBe(1);
     expect(controller.getAllocationDraft().value.entries).toMatchObject([{destination:{backdoorRoth:{traditionalIraAccountId:source.id,cleanIraHistory:{known:false}}}}]);
-    expect(within(row).getByLabelText('Traditional IRA for conversion')).toHaveValue(source.id);
-    expect(within(row).getByLabelText('Confirm clean IRA history')).not.toBeChecked();
+    expect(controller.getState().savedPlan.cashFlowAllocation).toEqual(originalPolicy);expect(within(root).getByLabelText('Confirm clean IRA history')).not.toBeChecked();
+    fireEvent.click(within(root).getByLabelText('Confirm clean IRA history'));apply(root,'Apply allocation');expect(controller.getState().savedPlan.revision).toBe(2);expect(store.writes()).toBe(2);
   });
   it('links only same-owner traditional IRAs and keeps the recurring route when changing preview year',()=>{
-    const {controller,editor,row}=setup();
+    const {controller,editor,row,root}=setup();
     fireEvent.click(within(row).getByLabelText('Use backdoor Roth'));
     const source=within(row).getByLabelText('Traditional IRA for conversion');
     expect(within(source).getByRole('option',{name:'IRA'})).toBeDefined();
@@ -41,9 +46,9 @@ describe('backdoor Roth allocation controls',()=>{
     flush();
     const route={traditionalIraAccountId:'ira',cleanIraHistory:{known:true,value:true}};
     expect(controller.getAllocationDraft().value.entries).toMatchObject([{destination:{accountId:'roth',backdoorRoth:route},amount:{kind:'max-annual'}}]);
-    expect(row).toHaveTextContent('Backdoor Roth');
+    preview(root);expect(row).toHaveTextContent('Backdoor Roth');
     setField(editor,'Allocation year','2027');
-    fireEvent.click(within(editor).getByRole('button',{name:'Apply allocation'}));
+    apply(root,'Apply allocation');
     expect(controller.getState().savedPlan.cashFlowAllocation?.entries[0]?.destination).toEqual({kind:'account',accountId:'roth',backdoorRoth:route});
     for(const year of controller.getState().projection.years){
       const roth=year.accounts.find(a=>a.accountId==='roth')!;
@@ -51,7 +56,7 @@ describe('backdoor Roth allocation controls',()=>{
     }
   });
   it('preserves raw route edits for excess and removes them when switching to a non-Roth destination',()=>{
-    const {controller,editor,row}=setup();
+    const {controller,editor,row,root}=setup();
     setField(editor,'Excess allocation account','account:roth');
     const toggles=within(editor).getAllByLabelText('Use backdoor Roth');
     fireEvent.click(toggles[1]!);
@@ -70,11 +75,11 @@ describe('backdoor Roth allocation controls',()=>{
     fireEvent.click(within(row).getByLabelText('Use backdoor Roth'));
     fireEvent.click(within(row).getByLabelText('Confirm clean IRA history'));
     fireEvent.click(within(editor).getByRole('button',{name:'Add allocation'}));
-    fireEvent.click(within(editor).getByRole('button',{name:'Apply allocation'}));
+    apply(root,'Apply allocation');
     const saved=controller.getState().savedPlan;
     expect(saved.cashFlowAllocation).toBeDefined();
     expect(manager.replaceScenario(manager.captureTarget(manager.getState().document.activeScenarioId)!,mustValidate({...saved,cashFlowAllocation:{...saved.cashFlowAllocation!,entries:[...saved.cashFlowAllocation!.entries].reverse()}})).accepted).toBe(true);const fresh=manager.getActiveSession().controller;
-    const moved=within(root).getByRole('group',{name:'Allocation 2'});
+    openRecord(root,{kind:'allocation'});const moved=within(root).getByRole('group',{name:'Allocation 2'});
     fireEvent.click(within(moved).getByLabelText('Confirm clean IRA history'));
     expect(fresh.getAllocationDraft().value.entries).toMatchObject([{destination:{kind:'cash'}},{destination:{accountId:'roth',backdoorRoth:{cleanIraHistory:{known:true,value:false}}}}]);
     expect((fresh.getAllocationDraft().value.entries as any[])[0].destination.backdoorRoth).toBeUndefined();
@@ -84,7 +89,7 @@ describe('backdoor Roth allocation controls',()=>{
     fireEvent.click(within(row).getByLabelText('Use backdoor Roth'));
     fireEvent.click(within(row).getByLabelText('Confirm clean IRA history'));
     fireEvent.click(within(row).getByLabelText('Max out for the year'));
-    fireEvent.click(within(editor).getByRole('button',{name:'Apply allocation'}));
+    apply(root,'Apply allocation');
     expect(controller.getState().savedPlan.revision).toBe(1);
     const closing=within(root).getByTestId('annual-2026-account-roth-closing');
     fireEvent.click(closing.closest('details')!.querySelector('summary')!);
@@ -100,4 +105,11 @@ describe('backdoor Roth allocation controls',()=>{
     expect(traditional.cells[5]).toHaveTextContent('$7,500.00');
     expect(traditional.cells[6]).toHaveTextContent('$0.00');
   });
+});
+
+function preview(root:HTMLElement){root.querySelector<HTMLElement>('[data-active-editor] form')!.dispatchEvent(new CustomEvent('financial-input-commit',{bubbles:true}));flush();}
+function apply(root:HTMLElement,label:string){const active=root.querySelector<HTMLElement>('[data-active-editor]')!;preview(root);fireEvent.click(within(active).getByRole('button',{name:new RegExp('^'+label+'$')}));}
+
+it('restores an unfinished allocation mode without including inactive values',()=>{
+ const {controller,row}=setup();setField(row,'Allocation percentage (%)','25.67');fireEvent.click(within(row).getByLabelText('Use backdoor Roth'));fireEvent.click(within(row).getByLabelText('Confirm clean IRA history'));fireEvent.click(within(row).getByLabelText('Max out for the year'));fireEvent.click(within(row).getByLabelText('Max out for the year'));expect(within(row).getByLabelText('Allocation percentage (%)')).toHaveValue('25.67');setField(row,'Allocation destination','account:brokerage');expect(controller.getAllocationDraft().value.entries).toMatchObject([{destination:{kind:'account',accountId:'brokerage'}}]);expect((controller.getAllocationDraft().value.entries as any[])[0].destination.backdoorRoth).toBeUndefined();setField(row,'Allocation destination','account:roth');expect(controller.getAllocationDraft().value.entries).toMatchObject([{destination:{accountId:'roth',backdoorRoth:{traditionalIraAccountId:'ira',cleanIraHistory:{known:true,value:true}}}}]);
 });

@@ -10,6 +10,7 @@ import { calculateProjection, loadRuleSet, validatePlan, type PlanDocument } fro
 import { makePlan } from '../helpers/plans';
 import { makeEstimatedMortgagePlan } from '../helpers/estimated-mortgage';
 import { loadReferences } from '../helpers/references';
+import {openRecord, waitForPreview} from '../helpers/workspace-ui';
 
 function mount(renderer: (root: HTMLElement, controller: WorkspaceController) => void, plan = makePlan()) {
   const root = document.createElement('section'); document.body.replaceChildren(root);
@@ -171,14 +172,14 @@ it('saves fixed and salary percentage requests with sponsorship and visible prio
   expect(controller.getState().savedPlan.revision).toBe(2); sameCalculation(controller);
 });
 
-it('keeps short labels, entry consequences and eligibility guidance attached to the native controls',()=>{
-  const fixture=loadReferences<PlanDocument,unknown>('projection').find(c=>c.id==='two-salaries-home-adu')!.input;const {root,controller}=mountWorkspace(fixture);const nav=within(root.querySelector('nav')!);
-  nav.getByRole('button',{name:'Income'}).click();const salary=[...root.querySelectorAll('form')].find(form=>form.dataset.recordId===fixture.salaries[0]!.id)!;
+it('keeps short labels, entry consequences and eligibility guidance attached to the native controls',async()=>{
+  const fixture=loadReferences<PlanDocument,unknown>('projection').find(c=>c.id==='two-salaries-home-adu')!.input;const {root,controller}=mountWorkspace(fixture);
+  const editor=openRecord(root,{kind:'record',section:'salaries',recordId:fixture.salaries[0]!.id}),salary=editor.querySelector('form')!;
   const name=salary.querySelector<HTMLElement>('[data-field="name"]')!;expect(name.closest('[data-field-wrapper]')!.querySelector('label')).toHaveTextContent(/^name$/i);expect(name).toHaveAccessibleName('Salary name');
   expect(salary.querySelector('[data-field="endDate"]')).toHaveAccessibleDescription('Includes this date. Blank means no end.');expect(salary.querySelector('[data-field="raiseDay"]')).toHaveAccessibleDescription('Shorter months use their last day.');
-  setField(salary,'Salary end date','2026-12-31');fireEvent.click(within(salary).getByText('Save salary',{selector:'button'}));expect(controller.getState().savedPlan.salaries.find(s=>s.id===fixture.salaries[0]!.id)?.endDate).toBe('2026-12-31');sameCalculation(controller);
-  nav.getByRole('button',{name:'Expenses and debts'}).click();const expense=root.querySelector<HTMLElement>('[data-section="Expenses and debts"]')!;expect(expense.querySelector('[data-field="startDate"]')).toHaveAccessibleDescription(/Monthly budgets begin on this date/);expect(expense).toHaveTextContent('Add each mortgage once, under its property.');
-  nav.getByRole('button',{name:'Investments'}).click();const investments=root.querySelector<HTMLElement>('[data-section="Investments"]')!;expect(investments).toHaveTextContent('Different from account balance; enter 0 only if confirmed.');expect(investments).toHaveTextContent('Lower numbers receive available contribution limits first.');
+  setField(salary,'Salary end date','2026-12-31');await waitForPreview(root);fireEvent.click(within(editor).getByRole('button',{name:'Apply salary changes'}));expect(controller.getState().savedPlan.salaries.find(s=>s.id===fixture.salaries[0]!.id)?.endDate).toBe('2026-12-31');sameCalculation(controller);
+  const expense=document.createElement('section');document.body.append(expense);renderExpensesDebtsForm(expense,controller);expect(expense.querySelector('[data-field="startDate"]')).toHaveAccessibleDescription(/Monthly budgets begin on this date/);expect(expense).toHaveTextContent('Add each mortgage once, under its property.');
+  const investments=document.createElement('section');document.body.append(investments);renderInvestmentsForm(investments,controller);expect(investments).toHaveTextContent('Different from account balance; enter 0 only if confirmed.');expect(investments).toHaveTextContent('Lower numbers receive available contribution limits first.');
 });
 
 it('keeps qualified schedule-estimated mortgages usable for taxes, ratios and cash funding', () => {
@@ -205,7 +206,7 @@ it('keeps qualified schedule-estimated mortgages usable for taxes, ratios and ca
     fireEvent.click(sources);
     expect(within(sources.parentElement!).getByText(/Mortgage interest.*forecast estimates.*loan schedule/, { selector: 'li' })).toBeVisible();
   }
-  fireEvent.click(within(root.querySelector('nav')!).getByRole('button', { name: 'Properties' }));
+  openRecord(root,{kind:'record',section:'properties',recordId:makeEstimatedMortgagePlan().properties[0]!.id});
   const summary = queries.getByText(/^Loan — Synthetic fixed mortgage/, { selector: 'summary' });
   expect(summary).toHaveTextContent('Opening balance estimated');
   fireEvent.click(summary);

@@ -35,17 +35,17 @@ export function setAduCompletionDate(bundle:PropertyDraftBundle,date:string):Pro
  let result=withProject(bundle,{...project,completionDate:date,...(anchor?{__draft:{...metadata,lastValidCompletionDate:anchor}}:{})});
  if(!isValidISODate(date)||!previousCompletion)return result;
  const next=followingMonth(date),previous=followingMonth(previousCompletion),stage=singleStage(project);
- const costs=stage&&stage.paymentDate===previousCompletion?[{...stage,paymentDate:date}]:project.costs;
+ const costs=stage&&!(stage.__draft as RawObject|undefined)?.paymentDateEntered&&stage.paymentDate===previousCompletion?[{...stage,paymentDate:date}]:project.costs;
  result=withProject(result,{...result.property.aduProject as RawObject,costs});
  if(next&&previous)result={...result,rentals:bundle.rentals.map(rental=>rental.id===project.rentalId?{
   ...rental,
-  ...(rental.availableDate===`${previous}-01`?{availableDate:`${next}-01`}:{}),
-  ...(rental.rentStartDate===`${previous}-01`?{rentStartDate:`${next}-01`}:{}),
+  ...(!(rental.__draft as RawObject|undefined)?.availableDateEntered&&rental.availableDate===`${previous}-01`?{availableDate:`${next}-01`}:{}),
+  ...(!(rental.__draft as RawObject|undefined)?.rentStartDateEntered&&rental.rentStartDate===`${previous}-01`?{rentStartDate:`${next}-01`}:{}),
  }:rental)};
  const loan=simpleLoan(project);
  if(loan)result=withProject(result,{...result.property.aduProject as RawObject,financing:{...loan.financing,
-  ...(next&&previous&&loan.financing.firstAmortizingPaymentMonth===previous?{firstAmortizingPaymentMonth:next}:{}),
-  draws:[{...loan.draw,...(loan.draw.month===previousCompletion.slice(0,7)?{month:date.slice(0,7)}:{})}],
+  ...(!(loan.financing.__draft as RawObject|undefined)?.firstAmortizingPaymentMonthEntered&&next&&previous&&loan.financing.firstAmortizingPaymentMonth===previous?{firstAmortizingPaymentMonth:next}:{}),
+  draws:[{...loan.draw,...(!(loan.draw.__draft as RawObject|undefined)?.monthEntered&&loan.draw.month===previousCompletion.slice(0,7)?{month:date.slice(0,7)}:{})}],
  }});
  return result;
 }

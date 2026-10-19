@@ -47,4 +47,10 @@ describe('effective annual growth', () => {
     Object.freeze(p);
     expect(propertyRate(p,2026)).toBe(300);expect(propertyRate(p,2027)).toBe(-100);expect(propertyRate(p,2028)).toBe(300);
   });
+  it('lets a zero calendar-year override take precedence over an inherited base rate', () => {
+    const p:Property={id:'home',name:'Home',role:'primary',purchaseDate:'2020-01-01',purchasePriceCents:1000000,downPaymentCents:1000000,openingValueCents:1000000,appreciationBps:300,appreciationSource:'property-default',appreciationOverrides:[{year:2027,rateBps:0}],loans:[]};
+    expect(propertyRate(p,2026,{propertyBps:400})).toBe(400);
+    expect(propertyRate(p,2027,{propertyBps:400})).toBe(0);
+    expect(propertyRate(p,2028,{propertyBps:400})).toBe(400);
+  });
 });

@@ -134,6 +134,7 @@ export interface Account {
   readonly type: AccountType;
   readonly openingBalanceCents: Cents;
   readonly annualGrowthBps: BasisPoints;
+  readonly growthSource?: 'stocks-default';
   readonly openingIraBasis: History<Cents>;
   /** Aggregate investment basis on January 1; omitted or unknown means unanswered. Taxable brokerage only. */
   readonly openingTaxableBasis?: History<Cents>;
@@ -219,6 +220,7 @@ export interface Property {
   readonly downPaymentCents: Cents;
   readonly openingValueCents: Cents;
   readonly appreciationBps: BasisPoints;
+  readonly appreciationSource?: 'property-default';
   readonly appreciationOverrides: readonly AppreciationOverride[];
   readonly primaryArea?: number;
   readonly aduArea?: number;
@@ -278,6 +280,10 @@ export interface RentalUnit {
   readonly taxHistory: Readonly<Record<TaxBook, History<RentalBookState>>>;
   readonly qbi: RentalQbi;
 }
+export interface GrowthAssumptions {
+  readonly stocksBps?: BasisPoints;
+  readonly propertyBps?: BasisPoints;
+}
 export interface PlanDocument {
   readonly schemaVersion: 1;
   readonly id: string;
@@ -285,6 +291,7 @@ export interface PlanDocument {
   readonly startYear: number;
   readonly horizonYears: number;
   readonly openingCashCents: Cents;
+  readonly growthAssumptions?: GrowthAssumptions;
   readonly household: Household;
   readonly taxPolicy: TaxPolicy;
   readonly salaries: readonly Salary[];

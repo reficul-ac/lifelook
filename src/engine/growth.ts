@@ -1,4 +1,4 @@
-import type { BasisPoints, Cents, Property } from './model/plan';
+import type { Account, BasisPoints, Cents, GrowthAssumptions, Property } from './model/plan';
 import { Decimal, assertMonetaryRange, settleCents } from './money';
 
 /** Internal calculation record: closingExact must never enter JSON reporting. */
@@ -22,6 +22,9 @@ export function growMonth(opening: Decimal, annualBps: BasisPoints, monthEndDepo
   const growthCents=settleCents(new Decimal(closingCents).minus(openingCents).minus(depositsCents));
   return {closingExact,openingCents,depositsCents,growthCents,closingCents};
 }
-export function propertyRate(property: Property, year: number): BasisPoints {
-  return property.appreciationOverrides.find(o=>o.year===year)?.rateBps??property.appreciationBps;
+export function accountGrowthRate(account: Account, assumptions?: GrowthAssumptions): BasisPoints {
+  return account.type!=='rsu'&&account.growthSource==='stocks-default'?(assumptions?.stocksBps??account.annualGrowthBps):account.annualGrowthBps;
+}
+export function propertyRate(property: Property, year: number, assumptions?: GrowthAssumptions): BasisPoints {
+  return property.appreciationOverrides.find(o=>o.year===year)?.rateBps??(property.appreciationSource==='property-default'?(assumptions?.propertyBps??property.appreciationBps):property.appreciationBps);
 }

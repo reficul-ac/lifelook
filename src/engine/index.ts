@@ -1,5 +1,6 @@
 /** Browser consumers use this boundary; engine calculations have no browser dependencies. */
 export { calculateProjection, allocateAnnualTax } from './projection';
+export { accountGrowthRate, propertyRate } from './growth';
 export { summarizeYear, summarizeProjectionYear } from './reporting';
 export { createPlan, validatePlan } from './validation';
 export { loadRuleSet } from './rules/registry';

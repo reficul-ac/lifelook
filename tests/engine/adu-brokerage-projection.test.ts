@@ -39,8 +39,21 @@ describe('ADU brokerage construction funding in the household forecast',()=>{
   const ledger=year.accounts.find(account=>account.accountId==='brokerage')!;
   expect(aduValue(ledger.withdrawalCents!)).toBe(sale.grossSaleCents);
   for(const month of result.months.slice(0,5))expect(aduValue(month.accounts.find(account=>account.accountId==='brokerage')!.contributionCents)).toBe(0);
+  const inherited=project({...plan,growthAssumptions:{stocksBps:800},accounts:plan.accounts.map(a=>a.id==='brokerage'?{...a,annualGrowthBps:500,growthSource:'stocks-default'}:a)});
+  expect(inherited.months).toEqual(result.months);
+  expect(inherited.years).toEqual(result.years);
   expect(plan).toEqual(before);
- },15000);
+ },45000);
+
+ it('uses inherited rates in a shared brokerage funding ledger',()=>{
+  const base=fundedPlan(5_000_000),explicit={...base,accounts:base.accounts.map(a=>({...a,annualGrowthBps:770})),properties:base.properties.map(p=>({...p,appreciationBps:400,appreciationOverrides:[{year:2028,rateBps:-100}]}))};
+  const inherited={...explicit,growthAssumptions:{stocksBps:770,propertyBps:400},accounts:explicit.accounts.map(a=>({...a,annualGrowthBps:500,growthSource:'stocks-default' as const})),properties:explicit.properties.map(p=>({...p,appreciationBps:300,appreciationSource:'property-default' as const}))};
+  const expected=project(explicit),actual=project(inherited);
+  expect(actual.months).toEqual(expected.months);
+  expect(actual.years).toEqual(expected.years);
+  expect(inherited.accounts[0]!.annualGrowthBps).toBe(500);
+  expect(inherited.properties[0]!.appreciationBps).toBe(300);
+ });
 
  it('transfers existing brokerage assets to construction once without creating income or reducing cash twice',()=>{
   const plan=fundedPlan(),before=structuredClone(plan),result=project(plan),year=result.years[1]!;

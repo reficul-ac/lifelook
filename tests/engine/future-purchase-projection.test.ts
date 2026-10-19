@@ -86,6 +86,19 @@ describe('future property purchases in the household forecast',()=>{
   expect(aduValue(closing.reserveCents)).toBe(-5_000_000);
  });
 
+ it('uses inherited rates in a shared brokerage funding ledger',()=>{
+  const base=makeAduPlan({horizonYears:2,openingCashCents:0,accounts:[brokerage({annualGrowthBps:770,openingTaxableBasis:{known:true,value:5_000_000}})]},{ownerFunding:{kind:'taxable-brokerage',accountId:'brokerage'},costs:[{id:'building-stage',name:'Build',paymentDate:'2027-07-01',amountCents:15_000_000,category:'building',treatments:makeAduTreatments(15_000_000)}]});
+  const future:Property={...home({purchaseDate:'2027-07-15'}),purchaseFunding:{kind:'taxable-brokerage',accountId:'brokerage'}};
+  const explicit={...base,properties:[...base.properties,future].map(p=>({...p,appreciationBps:400}))};
+  const inherited={...explicit,growthAssumptions:{stocksBps:770,propertyBps:400},accounts:explicit.accounts.map(a=>({...a,annualGrowthBps:500,growthSource:'stocks-default' as const})),properties:explicit.properties.map(p=>({...p,appreciationBps:300,appreciationSource:'property-default' as const}))};
+  const expected=project(explicit),actual=project(inherited);
+  expect(actual.months).toEqual(expected.months);
+  expect(actual.years).toEqual(expected.years);
+  const sales=actual.months.flatMap(m=>m.brokerageFunding?.sales??[]);
+  expect(sales).toHaveLength(2);
+  expect(sales[1]).toMatchObject({propertyId:'future-home',purpose:'property-down-payment'});
+ });
+
  it('deducts cash down payments from automatic saving budgets without a funding loop',()=>{
   const salary={id:'salary',name:'Salary',ownerId:'owner-a',employerId:'employer',annualGrossCents:12_000_000,startDate:'2026-01-01',annualRaiseBps:0,raiseMonth:1,raiseDay:1,changes:[]};
   const plan=makePlan({horizonYears:2,openingCashCents:20_000_000,salaries:[salary],accounts:[brokerage()],cashFlowAllocation:makeAllocationPolicy({overflow:{id:'overflow',destination:{kind:'account',accountId:'brokerage'}}}),properties:[home()]});

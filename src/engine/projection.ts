@@ -19,7 +19,7 @@ import {aduPlanningProvenance} from './rules/adu-planning-v1';
 import {resolveAduPlanningEstimates,aduEstimateProvenance} from './property/adu-planning-estimates';
 import {resolvePurchasePlanningEstimates,purchaseEstimateProvenance} from './property/purchase-planning-estimates';
 import { buildPropertyFacts } from './property/facts';
-import { growMonth, propertyRate } from './growth';
+import { accountGrowthRate, growMonth, propertyRate } from './growth';
 import { validatePlan } from './validation';
 import { resolveYearRules } from './rules/projection';
 import type { RuleSet } from './rules/types';
@@ -185,7 +185,7 @@ export function calculateProjection(inputs:ValidatedPlan,ruleSet:RuleSet):Projec
           const loans=taxLoans.map(s=>{if(s.status!=='available')throw new Error('Unavailable tax loan');return s.value;});
           const total=(values:readonly number[])=>settleCents(values.reduce((n,v)=>n.plus(v),new Decimal(0)));
           return resolveAduBrokerageYear({plan,year,cash:taxCash.value,legacyRequests:knownRequests,property:buildPropertyFacts(plan,taxCash.value,loans,opening,rules.value,aduContext),loans,opening,rules:rules.value,
-            accounts:tracked.map(a=>{const balance=accountExact.get(a.id)!,basis=brokerageBasis.get(a.id)!;if(balance.status!=='available'||basis.status!=='available')throw new Error('Unavailable brokerage opening ledger');return{accountId:a.id,annualGrowthBps:a.annualGrowthBps,openingExact:balance.value,openingBasisCents:basis.value};}),events:brokerageEvents,
+            accounts:tracked.map(a=>{const balance=accountExact.get(a.id)!,basis=brokerageBasis.get(a.id)!;if(balance.status!=='available'||basis.status!=='available')throw new Error('Unavailable brokerage opening ledger');return{accountId:a.id,annualGrowthBps:accountGrowthRate(a,plan.growthAssumptions),openingExact:balance.value,openingBasisCents:basis.value};}),events:brokerageEvents,
             financedConstructionByMonth:Array.from({length:12},(_,i)=>total(aduContext.projects.map(p=>p.months[i]!.financedCostPaidCents))),openingUnrestrictedCashCents:openingUnrestricted,
             openingAccountBalances:new Map([...accountExact].map(([id,balance])=>[id,balance.status==='available'?available(settleCents(balance.value)):balance])),
             cashIncomeByMonth:cash.value.months.map(m=>m.grossIncomeCents),expensesByMonth:cash.value.months.map(m=>m.expensesCents),
@@ -331,7 +331,7 @@ export function calculateProjection(inputs:ValidatedPlan,ruleSet:RuleSet):Projec
         const netDepositCents=sum([contributionCents,conversionInCents,conversionOutCents.status==='available'?available(-conversionOutCents.value):conversionOutCents],year,'netDepositCents',account.id);
         const openingCents=previous.status==='available'?range(account.id,year,'openingCents',()=>settleCents(previous.value)):previous;
         if(previous.status!=='available')return {accountId:account.id,openingCents,contributionCents,growthCents:previous,closingCents:previous,...conversions};
-        const growth=range(account.id,year,'growthCents',()=>growMonth(previous.value,account.annualGrowthBps,netDepositCents.status==='available'?netDepositCents.value:0));
+        const growth=range(account.id,year,'growthCents',()=>growMonth(previous.value,accountGrowthRate(account,plan.growthAssumptions),netDepositCents.status==='available'?netDepositCents.value:0));
         const growthCents=growth.status==='available'?available(growth.value.growthCents):growth;
         const closingCents:Available<Cents>=growth.status!=='available'?growth:netDepositCents.status!=='available'?netDepositCents:available(growth.value.closingCents);
         if(growth.status==='available'&&netDepositCents.status==='available')accountExact.set(account.id,available(growth.value.closingExact));
@@ -353,8 +353,8 @@ export function calculateProjection(inputs:ValidatedPlan,ruleSet:RuleSet):Projec
       });
       const properties:PropertyProjection[]=[...plan.properties].sort((a,b)=>a.id.localeCompare(b.id)).map(property=>{
         const previous=propertyExact.get(property.id)!,knownHome=existingHomeExact.get(property.id)!;
-        const growth=previous.status==='available'?range(property.id,year,'propertyGrowthCents',()=>growMonth(previous.value,propertyRate(property,year),0)):previous;
-        const existingGrowth=knownHome.status==='available'?range(property.id,year,'knownExistingHomeValueCents',()=>growMonth(knownHome.value,propertyRate(property,year),0)):knownHome;
+        const growth=previous.status==='available'?range(property.id,year,'propertyGrowthCents',()=>growMonth(previous.value,propertyRate(property,year,plan.growthAssumptions),0)):previous;
+        const existingGrowth=knownHome.status==='available'?range(property.id,year,'knownExistingHomeValueCents',()=>growMonth(knownHome.value,propertyRate(property,year,plan.growthAssumptions),0)):knownHome;
         existingHomeExact.set(property.id,existingGrowth.status==='available'?available(existingGrowth.value.closingExact):existingGrowth);
         const projectContext=aduContext.projects.find(p=>p.propertyId===property.id),lifecycle=projectContext?.months[i];
         const purchaseValueCents=purchaseIds.has(property.id)&&property.purchaseDate.slice(0,7)===`${year}-${String(month).padStart(2,'0')}`?property.openingValueCents:0;

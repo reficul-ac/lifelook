@@ -4,6 +4,8 @@ import { loadRuleSet } from '../../src/engine/rules/registry';
 import { MAX_CENTS } from '../../src/engine/money';
 import type { Account, PlanDocument, RsuGrant } from '../../src/engine/model/plan';
 import { makePlan, mustValidate } from '../helpers/plans';
+import { makeScheduledGrowthPlan } from '../helpers/growth';
+import { validatePlan } from '../../src/engine/validation';
 
 const grant=(overrides:Partial<RsuGrant>={}):RsuGrant=>({id:'initial',name:'Initial grant',startDate:'2025-12-01',grantValueCents:12000000,grantSharePriceCents:10000,vestingMonths:12,vestingFrequency:'monthly',cliffMonths:0,withholdingBps:3000,taxTreatment:'settle-at-vest',openingHeldShares:0,openingBasis:{known:true,value:0},...overrides});
 const account=(grants:readonly RsuGrant[]= [grant()],overrides:Partial<Account>={}):Account=>({id:'equity',name:'Private employer RSUs',ownerId:'owner-a',type:'rsu',openingBalanceCents:0,annualGrowthBps:0,openingIraBasis:{known:false},rsu:{employerId:'employer',currentSharePriceCents:10000,grants},...overrides});
@@ -11,6 +13,26 @@ const project=(overrides:Partial<PlanDocument>={})=>calculateProjection(mustVali
 function money(value:{status:string;value?:number}):number {expect(value.status).toBe('available');return value.value!;}
 
 describe('RSU compensation, tax funding and asset integration',()=>{
+  it('keeps scheduled valuations and all share quantities independent of either category default',()=>{
+    const plan=makeScheduledGrowthPlan(),baseline=calculateProjection(mustValidate(plan),loadRuleSet());
+    expect(baseline.years.map(y=>money(y.accounts.find(a=>a.accountId==='scheduled')!.closingCents))).toEqual([20_000,20_400]);
+    for(const growthAssumptions of [{stocksBps:770},{propertyBps:400},{stocksBps:1200,propertyBps:900}]){
+      const changed=calculateProjection(mustValidate({...plan,growthAssumptions}),loadRuleSet());
+      expect(changed.years.map(y=>money(y.accounts.find(a=>a.accountId==='scheduled')!.closingCents))).toEqual([20_000,20_400]);
+      expect(changed.months.map(m=>m.rsu)).toEqual(baseline.months.map(m=>m.rsu));
+      expect(changed.rsuSchedules).toEqual(baseline.rsuSchedules);
+      expect(changed.years.map(y=>money(y.grossIncomeCents))).toEqual([0,0]);
+    }
+  });
+  it('rejects stock inheritance on scheduled and unscheduled RSU accounts',()=>{
+    const plan=makeScheduledGrowthPlan(),scheduled=plan.accounts.find(a=>a.type==='rsu')!;
+    for(const priceTargets of [scheduled.rsu!.priceTargets,undefined]){
+      const raw={...plan,growthAssumptions:{stocksBps:770},accounts:[{...scheduled,growthSource:'stocks-default',rsu:{...scheduled.rsu!,priceTargets}}]};
+      const result=validatePlan(raw);
+      expect(result.ok).toBe(false);
+      if(!result.ok)expect(result.issues).toContainEqual(expect.objectContaining({recordId:'scheduled',field:'growthSource'}));
+    }
+  });
   it('uses a target vest price for wages, withholding, tax funding and retained assets',()=>{
     const initial=grant({startDate:'2026-06-01',vestingMonths:1,grantValueCents:1000000});
     const equity=project({accounts:[account([initial],{rsu:{employerId:'employer',currentSharePriceCents:10000,grants:[initial],priceTargets:[{date:'2026-07-01',sharePriceCents:20000}]}})]});

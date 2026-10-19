@@ -358,6 +358,11 @@ export function validatePlan(raw: unknown): ValidationResult {
   const horizonValid = v.integer(root.horizonYears, 'horizonYears', v.planId, 1, 40);
   if (startValid && horizonValid && (root.startYear as number) + (root.horizonYears as number) - 1 > 9999) v.issue('horizonYears', v.planId, 'The forecast exceeds the supported calendar.');
   v.cents(root.openingCashCents, 'openingCashCents', v.planId, true);
+  const growthAssumptions = root.growthAssumptions === undefined ? undefined : v.object(root.growthAssumptions, 'growthAssumptions', v.planId);
+  if (growthAssumptions) {
+    if (growthAssumptions.stocksBps !== undefined) v.rate(growthAssumptions.stocksBps, 'growthAssumptions.stocksBps', v.planId);
+    if (growthAssumptions.propertyBps !== undefined) v.rate(growthAssumptions.propertyBps, 'growthAssumptions.propertyBps', v.planId);
+  }
   const forecastStart = startValid ? `${root.startYear}-01-01` : '';
 
   const owners = new Set<string>();
@@ -481,6 +486,11 @@ export function validatePlan(raw: unknown): ValidationResult {
     const id = recordId(o); reference(o.ownerId, owners, 'ownerId', id);
     v.enum(o.type, ['taxable-brokerage', 'traditional-401k', 'roth-401k', 'traditional-ira', 'roth-ira', 'rsu'], 'type', id);
     v.cents(o.openingBalanceCents, 'openingBalanceCents', id); v.rate(o.annualGrowthBps, 'annualGrowthBps', id); v.moneyHistory(o.openingIraBasis, 'openingIraBasis', id);
+    if (o.growthSource !== undefined) {
+      v.enum(o.growthSource, ['stocks-default'], 'growthSource', id);
+      if (o.growthSource === 'stocks-default' && growthAssumptions?.stocksBps === undefined) v.issue('growthSource', id, 'Stock default inheritance requires a configured stock growth rate.');
+      if (o.type === 'rsu') v.issue('growthSource', id, 'RSU accounts use their own share prices and annual growth rate.');
+    }
     if(o.openingTaxableBasis!==undefined){
       v.moneyHistory(o.openingTaxableBasis,'openingTaxableBasis',id);
       if(o.type!=='taxable-brokerage')v.issue('openingTaxableBasis',id,'Investment cost basis belongs only to taxable brokerage accounts.');
@@ -584,6 +594,10 @@ export function validatePlan(raw: unknown): ValidationResult {
     v.cents(o.purchasePriceCents, 'purchasePriceCents', id); v.cents(o.downPaymentCents, 'downPaymentCents', id); v.cents(o.openingValueCents, 'openingValueCents', id);
     if (typeof o.downPaymentCents === 'number' && typeof o.purchasePriceCents === 'number' && o.downPaymentCents > o.purchasePriceCents) v.issue('downPaymentCents', id, 'Down payment cannot exceed purchase price.');
     v.rate(o.appreciationBps, 'appreciationBps', id);
+    if (o.appreciationSource !== undefined) {
+      v.enum(o.appreciationSource, ['property-default'], 'appreciationSource', id);
+      if (o.appreciationSource === 'property-default' && growthAssumptions?.propertyBps === undefined) v.issue('appreciationSource', id, 'Property default inheritance requires a configured property growth rate.');
+    }
     if(o.purchaseFunding!==undefined){
       const funding=v.object(o.purchaseFunding,'purchaseFunding',id);
       if(funding){

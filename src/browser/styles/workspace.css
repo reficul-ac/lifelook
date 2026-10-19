@@ -1,0 +1,693 @@
+/* Shell and scenario header. */
+.workspace {
+  max-width: 100%;
+  min-height: 100dvh;
+}
+
+.workspace > header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem 1.5rem;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.workspace > header h1 {
+  font-size: 1.35rem;
+  margin: 0;
+  letter-spacing: -.04em;
+}
+
+.workspace > header > div:first-of-type {
+  flex: 1;
+  min-width: 14rem;
+}
+
+.workspace > header > p {
+  margin: 0;
+  font-size: .8rem;
+}
+
+.workspace > header > [data-testid=persistence-warning] {
+  flex-basis: 100%;
+}
+
+.scenario-controls {
+  grid-template-columns: minmax(10rem,20rem) 1fr;
+}
+
+/* Navigation and shared layout. */
+.workspace-nav {
+  display: flex;
+  gap: .25rem;
+  padding: 1rem 2rem;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+  overflow: auto;
+  flex-wrap: nowrap;
+}
+
+.workspace-nav button {
+  flex-shrink: 0;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+  font-size: .85rem;
+}
+
+.workspace-nav button[aria-pressed=true] {
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border-color: var(--border);
+}
+
+.workspace .workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(0,1fr);
+  gap: 1.5rem;
+  max-width: 1800px;
+  margin: auto;
+  padding: 1.5rem 2rem;
+  align-items: start;
+}
+
+.workspace-overview,
+.record-collection,
+/* Focused editor and actions. */
+.focused-editor {
+  min-width: 0;
+}
+
+/* Compact record collections. */
+.record-collection {
+  max-width: 72rem;
+  width: 100%;
+  margin: auto;
+}
+
+.record-collection > h2 {
+  margin-top: 0;
+}
+
+.collection-actions {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 1.5rem;
+}
+
+.record-summary {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1.15rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.record-summary > div {
+  min-width: 0;
+}
+
+.record-summary h3 {
+  margin: 0 0 .35rem;
+  overflow-wrap: anywhere;
+}
+
+.record-summary p {
+  font-size: .85rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.record-summary small {
+  display: inline-block;
+  margin: .4rem .6rem 0 0;
+}
+
+.record-summary > button {
+  flex-shrink: 0;
+}
+
+.focused-editor {
+  border: 1px solid var(--border);
+  border-radius: .7rem;
+  background: var(--surface-panel);
+  overflow: hidden;
+  animation: editor-enter 180ms ease-out;
+}
+
+.focused-editor-content {
+  padding: 1.25rem;
+  max-height: calc(100dvh - 20rem);
+  overflow: auto;
+  scroll-padding-bottom: 2rem;
+}
+
+.focused-editor form {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  margin: 0;
+  background: transparent;
+}
+
+.focused-editor .record-fields {
+  display: block;
+}
+
+.focused-editor h2 {
+  font-size: 1rem;
+}
+
+.focused-editor form h3 {
+  font-size: 1.2rem;
+  margin-top: 0;
+}
+
+.focused-editor details {
+  border: 1px solid var(--border);
+}
+
+.editor-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--surface-panel);
+  border-top: 1px solid var(--border);
+  padding: 1rem;
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  z-index: 3;
+}
+
+.editor-footer > p,
+.editor-footer > small {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: .8rem;
+}
+
+.editor-footer > .primary-action {
+  flex: 1;
+}
+
+.editor-footer > .editor-announcement:empty {
+  display: none;
+}
+
+.editor-surfaces {
+  display: flex;
+  justify-content: flex-end;
+  gap: .5rem;
+  padding: 1rem 2rem 0;
+}
+
+/* Overview, selected-year impact and attention. */
+.workspace-overview > [data-forecast-name] {
+  font-size: .85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 0;
+}
+
+.workspace-overview table {
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-overview .balance-sheet-wrap {
+  overflow: auto;
+  max-width: 100%;
+}
+
+.workspace-overview table th {
+  white-space: nowrap;
+}
+
+.workspace-overview .overview-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(8rem,1fr));
+  gap: 1rem;
+}
+
+/* Settings and linked editor groups. */
+.workspace-settings {
+  flex-basis: 100%;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.workspace-settings > label {
+  max-width: 20rem;
+}
+
+.applied-project-comparison {
+  margin-top: 1rem;
+}
+
+.record-fields > [data-editor-group] {
+  grid-column: 1/-1;
+}
+
+.record-fields > [data-editor-group] > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(180px,1fr));
+  gap: 0 .8rem;
+}
+
+.impact-ribbon {
+  display: flex;
+  gap: .35rem 1rem;
+  flex-wrap: wrap;
+  margin: .6rem 1rem 0;
+  padding: .75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  background: var(--surface-panel);
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.impact-ribbon strong {
+  flex-basis: 100%;
+}
+
+.impact-ribbon span {
+  white-space: normal;
+}
+
+.overview-source {
+  font-size: .85rem;
+  color: var(--text-muted);
+}
+
+.overview-controls {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.overview-controls label {
+  flex: 1;
+  min-width: 8rem;
+  max-width: 16rem;
+}
+
+.overview-totals {
+  margin: 1rem 0 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: .6rem;
+  background: var(--surface-panel);
+}
+
+.overview-totals dt {
+  font-size: .8rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.overview-totals dd {
+  font-size: 1.35rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.overview-delta {
+  display: block;
+  font-size: .7rem;
+  color: var(--text-muted);
+}
+
+.attention-list {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  background: var(--surface-panel);
+}
+
+.attention-list li {
+  display: flex;
+  gap: .35rem .65rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.attention-list li > strong {
+  flex-basis: 100%;
+  font-size: .75rem;
+  color: var(--text-muted);
+}
+
+.attention-list li > span {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.attention-list li > button {
+  font-size: .75rem;
+}
+
+.attention > p:empty {
+  display: none;
+}
+
+/* Compact scenario controls and persistence status. */
+.workspace > header > .scenario-controls {
+  display: contents;
+}
+
+.workspace > header > .scenario-controls > label {
+  flex: 0 1 17rem;
+  margin: 0;
+}
+
+.workspace > header > .scenario-controls > .scenario-actions {
+  align-self: center;
+}
+
+.workspace > header > .scenario-controls > details {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  flex: 0 1 auto;
+}
+
+.workspace > header > .scenario-controls > details[open] {
+  flex-basis: 100%;
+  order: 8;
+}
+
+.workspace > header > .scenario-controls > details > summary {
+  display: flex;
+  align-items: center;
+  font-size: .8rem;
+}
+
+.workspace > header > .save-announcement:empty,
+.workspace > header > [data-testid=draft-status]:empty {
+  display: none;
+}
+
+.workspace > header > div:has(> [data-testid=save-status]) {
+  flex: none;
+}
+
+.workspace > header > div > [data-testid=save-status] {
+  font-size: .75rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.workspace > header > button {
+  margin-left: auto;
+}
+
+.forecast-details {
+  margin-top: 1rem;
+}
+
+.editor-footer button.secondary {
+  flex: 0 1 auto;
+}
+
+.focused-editor button.destructive {
+  font-size: .8rem;
+}
+
+.editor-surfaces button {
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+
+.editor-surfaces button[aria-pressed=true] {
+  background: var(--surface-raised);
+}
+
+/* Interaction motion. */
+@keyframes editor-enter {
+  from {
+    opacity: 0;
+    transform: translateY(.3rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Keep at least 600px for the report and 380px for the editor. */
+@media (min-width: 1180px) {
+  .workspace [data-editing=true] > .workspace-layout {
+    grid-template-columns: minmax(600px,1fr) minmax(380px,440px);
+  }
+
+  [data-editing=true] > .workspace-layout > .workspace-overview {
+    grid-column: 1;
+  }
+
+  [data-editing=true] > .workspace-layout > .focused-editor {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: 1rem;
+  }
+
+  .editor-surfaces > button:nth-child(-n+2) {
+    display: none;
+  }
+
+  .impact-ribbon {
+    display: none;
+  }
+
+  .workspace [data-editing=true] > .workspace-layout > .focused-editor {
+    display: flex;
+    flex-direction: column;
+    height: min(46rem,calc(100dvh - 18rem));
+    max-height: calc(100dvh - 18rem);
+  }
+
+  .workspace [data-editing=true] .focused-editor-content {
+    min-height: 0;
+    max-height: none;
+    flex: 1;
+    overflow: auto;
+  }
+
+  .workspace [data-editing=true] .editor-footer {
+    flex-shrink: 0;
+    position: static;
+  }
+}
+
+/* Narrow Edit/Forecast surfaces with a bounded, scrollable editor body. */
+@media (max-width: 1179px) {
+  [data-editing=true][data-surface=edit] > .workspace-layout > .workspace-overview {
+    display: none;
+  }
+
+  [data-editing=true][data-surface=forecast] > .workspace-layout > .focused-editor {
+    display: none;
+  }
+
+  .focused-editor-content {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .focused-editor {
+    overflow: visible;
+  }
+
+  .editor-footer {
+    bottom: 0;
+  }
+
+  .editor-surfaces {
+    position: sticky;
+    top: 0;
+    background: var(--surface-page);
+    z-index: 5;
+  }
+
+  .workspace:has([data-editing=true]):not(:has([data-settings]:not([hidden]))) {
+    height: 100dvh;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .workspace:has([data-editing=true]) > header {
+    flex-shrink: 0;
+  }
+
+  .workspace:has([data-editing=true]):not(:has([data-settings]:not([hidden]))) > [data-editing] {
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0,1fr);
+    min-height: 0;
+    flex: 1;
+  }
+
+  .workspace:has([data-editing=true]):not(:has([data-settings]:not([hidden]))) .workspace-layout {
+    min-height: 0;
+    overflow: auto;
+    margin: 0;
+    padding-top: .7rem;
+  }
+
+  .workspace:has([data-editing=true]):not(:has([data-settings]:not([hidden]))) .focused-editor {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .workspace:has([data-editing=true]):not(:has([data-settings]:not([hidden]))) .focused-editor-content {
+    min-height: 4rem;
+    flex: 1;
+    overflow: auto;
+    max-height: none;
+  }
+
+  .workspace:has([data-editing=true]):not(:has([data-settings]:not([hidden]))) .editor-footer {
+    flex-shrink: 0;
+    position: static;
+  }
+
+  .editor-footer > small {
+    font-size: .7rem;
+  }
+
+  .editor-footer p {
+    font-size: .75rem;
+  }
+
+  .editor-footer button {
+    font-size: .8rem;
+  }
+
+  .editor-footer > p:empty {
+    display: none;
+  }
+}
+
+/* Phone spacing and header order. */
+@media (max-width: 650px) {
+  .workspace > header {
+    padding: .8rem 1rem;
+    gap: .4rem .6rem;
+  }
+
+  .workspace > header > div:first-of-type {
+    min-width: 0;
+    flex-basis: calc(100% - 6rem);
+  }
+
+  .scenario-controls {
+    grid-template-columns: minmax(0,1fr);
+  }
+
+  .workspace-nav {
+    padding: .7rem 1rem;
+  }
+
+  .workspace .workspace-layout {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .editor-surfaces {
+    padding: .6rem 1rem;
+  }
+
+  .focused-editor-content {
+    padding: 1rem;
+  }
+
+  .editor-footer {
+    padding: .8rem;
+  }
+
+  .collection-actions button {
+    flex: 1;
+  }
+
+  .record-summary {
+    align-items: flex-start;
+  }
+
+  .record-summary h3 {
+    font-size: 1rem;
+  }
+
+  .record-fields > [data-editor-group] > div {
+    display: block;
+  }
+
+  .workspace > header > .scenario-controls > label {
+    flex: 1;
+    min-width: 9rem;
+    font-size: .7rem;
+  }
+
+  .workspace > header > .scenario-controls > .scenario-actions button {
+    font-size: .75rem;
+    padding: .4rem .6rem;
+  }
+
+  .workspace > header > .scenario-controls > details > summary {
+    font-size: .75rem;
+  }
+
+  .workspace > header > .scenario-controls > .scenario-actions {
+    order: 4;
+  }
+
+  .workspace > header > .scenario-controls > details {
+    order: 5;
+  }
+
+  .workspace > header > div:has(> [data-testid=save-status]) {
+    order: 6;
+    margin-left: auto;
+  }
+
+  .workspace > header > button {
+    order: 3;
+    font-size: .8rem;
+  }
+
+  .workspace > header > [data-testid=draft-status] {
+    order: 7;
+  }
+
+  .workspace > header > .workspace-settings {
+    order: 9;
+  }
+
+  .workspace > header > .save-announcement {
+    order: 8;
+  }
+
+  .workspace > header > div:has(> [data-testid=persistence-warning]:not([hidden])) {
+    flex-basis: 100%;
+    margin: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focused-editor {
+    animation: none;
+  }
+}

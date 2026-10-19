@@ -1,3 +1,5 @@
+import {fieldMemory,swapMode} from '../record-ui-state';
+import {renderEditorGroup} from '../ui/editor-groups';
 import Decimal from 'decimal.js';
 import {calendarDate,daysInMonth,isValidISODate,parseISODate} from '../../engine/dates';
 import {element,parseMoneyInput,renderField,renderHistory,renderRows,valueAt,type FieldContext,type FieldPath} from '../fields';
@@ -14,13 +16,15 @@ export function newRsuGrant(controller:WorkspaceController,context:FieldContext)
   return {id:grantId(controller,context),name:'Initial award',startDate:`${controller.getState().savedPlan.startYear}-01-01`,grantValueCents:'0.00',grantSharePriceCents:'0.00',vestingMonths:'48',vestingFrequency:'monthly',cliffMonths:'0',withholdingBps:'0.00',taxTreatment:'settle-at-vest',openingHeldShares:'0',openingBasis:{known:true,value:'0.00'}};
 }
 export function changeAccountType(controller:WorkspaceController,context:FieldContext,type:unknown):void {
-  const value:RawObject={...context.draft.value,type};
-  if(type!=='taxable-brokerage')delete value.openingTaxableBasis;
-  if(type==='rsu'){
-    value.openingBalanceCents='0.00';value.openingIraBasis={known:false};
-    value.rsu??={employerId:'',currentSharePriceCents:'0.00',grants:[newRsuGrant(controller,context)]};
-  }else delete value.rsu;
-  context.onChange([],value);
+  const current=context.draft.value,from=String(current.type),to=String(type);
+  if(from===to)return;
+  const owned=['openingBalanceCents','annualGrowthBps','openingIraBasis','openingTaxableBasis','rsu'];
+  const subtree=Object.fromEntries(owned.filter(key=>Object.hasOwn(current,key)).map(key=>[key,current[key]]));
+  const fallback:RawObject={openingBalanceCents:from==='rsu'?'0.00':current.openingBalanceCents??'0.00',annualGrowthBps:current.annualGrowthBps??'0.00',openingIraBasis:{known:false}};
+  if(to==='rsu'){fallback.openingBalanceCents='0.00';fallback.rsu={employerId:'',currentSharePriceCents:'0.00',grants:[newRsuGrant(controller,context)]};}
+  const restored=swapMode(fieldMemory(context),'account-type',from,to,subtree,fallback);
+  const value:RawObject={...current,type};for(const key of owned)delete value[key];
+  context.onChange([],{...value,...restored});
 }
 function awardedShares(grant:RawObject):string {
   if(grant.awardedShares!==undefined){const override=String(grant.awardedShares);return /^\d+(?:\.\d{1,6})?$/.test(override)&&new Decimal(override).isPositive()?new Decimal(override).toFixed().replace(/(\.\d*?)0+$/,'$1').replace(/\.$/,''):'Unavailable';}
@@ -50,8 +54,9 @@ export function renderRsuFields(root:HTMLElement,controller:WorkspaceController,
   renderField(root,context,['rsu','employerId'],'RSU employer ID',{hint:'Use the same employer ID as this owner’s salary when both come from the same employer.'});
   renderField(root,context,['rsu','currentSharePriceCents'],'Current share price ($)',{kind:'money',hint:`Assumed on Jan 1, ${startYear}. Grant prices determine awarded shares independently.`});
   renderField(root,context,['annualGrowthBps'],'Effective annual share price growth (%)',{kind:'rate',hint:`Applies after the last share price target, or from Jan 1, ${startYear} when no targets are entered. Price growth changes held asset value without generating cash.`});
-  root.append(element('p','Optional share price targets set the expected price on future dates. Between dates, the price grows or falls at a steady compound rate to reach each target.'));
-  renderRows(root,context,['rsu','priceTargets'],'Share price target',()=>newRsuPriceTarget(context,startYear),(body,path)=>{
+  const priceRoot=context.memory?renderEditorGroup(root,{id:'rsu-price',label:'Price assumptions',advanced:true},context.memory,()=>{}):root;
+  priceRoot.append(element('p','Optional share price targets set the expected price on future dates. Between dates, the price grows or falls at a steady compound rate to reach each target.'));
+  renderRows(priceRoot,context,['rsu','priceTargets'],'Share price target',()=>newRsuPriceTarget(context,startYear),(body,path)=>{
     renderField(body,context,[...path,'date'],'Target date',{kind:'date',hint:`After Jan 1, ${startYear} and later than the previous target.`});
     renderField(body,context,[...path,'sharePriceCents'],'Target share price ($)',{kind:'money'});
   });
@@ -64,8 +69,9 @@ export function renderRsuFields(root:HTMLElement,controller:WorkspaceController,
     renderField(body,context,[...path,'cliffMonths'],'Cliff (months)',{kind:'integer',hint:'0 means no cliff. A cliff catches up earned shares on its date.'});
     renderField(body,context,[...path,'withholdingBps'],'Shares sold for withholding (%)',{kind:'rate',hint:'0–100%. A withholding assumption, not a tax rate; sold shares fund modeled taxes.'});
     renderField(body,context,[...path,'taxTreatment'],'Settlement treatment',{kind:'select',options:[{value:'settle-at-vest',label:'Shares delivered at vest'},{value:'deferred',label:'Deferred settlement'}],hint:'Deferred settlement retains the service vesting schedule, while household tax and cash forecasts are unsupported.'});
-    const held=renderField(body,context,[...path,'openingHeldShares'],'Opening held shares',{hint:`Actual net shares remaining immediately before Jan 1, ${startYear}; prior vesting is not reconstructed.`});if(held instanceof HTMLInputElement)held.inputMode='decimal';
-    renderHistory(body,context,[...path,'openingBasis'],'Opening held-share basis ($)',{kind:'money',hint:'Unknown basis still permits held-value forecasts. Enter 0 only if confirmed.'});
+    const holdings=context.memory?renderEditorGroup(body,{id:`${String(valueAt(context.draft.value,[...path,'id']))}:holdings`,label:'Opening holdings and basis',advanced:true},context.memory,()=>{}):body;
+    const held=renderField(holdings,context,[...path,'openingHeldShares'],'Opening held shares',{hint:`Actual net shares remaining immediately before Jan 1, ${startYear}; prior vesting is not reconstructed.`});if(held instanceof HTMLInputElement)held.inputMode='decimal';
+    renderHistory(holdings,context,[...path,'openingBasis'],'Opening held-share basis ($)',{kind:'money',hint:'Unknown basis still permits held-value forecasts. Enter 0 only if confirmed.'});
     renderGrantPreview(body,context,path,startYear);
   });
   const assumptions=element('details');assumptions.append(element('summary','RSU valuation and tax assumptions'),element('p','Delivered stock creates compensation and held assets without creating spendable wage cash. Shares sold for withholding offset the modeled tax reserve; final federal, California and employee payroll liability uses combined salary and RSU wages.'),element('p','The withholding percentage is a withholding assumption, not a tax rate. Sale proceeds are valued at the vest price with no transaction fee or capital gain. Vesting and withholding use fractional-share estimates; actual broker rounding may differ. Remaining unvested and deferred unsettled shares are excluded from available assets.'),element('p','The reserve plans assessed liability; it does not forecast actual payroll remittances or refund dates.'),element('p','Share price targets start from the current price on January 1 of the forecast start year and use compound growth between target dates. After the last target, the effective annual share price growth applies; without targets, it applies from the forecast start. This price path also applies before future grants start. Later discretionary sales and deferred-settlement tax timing are outside this forecast.'));

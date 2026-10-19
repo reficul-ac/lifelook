@@ -1,4 +1,5 @@
 import type {EditorViewSession} from './scenario-session';
+import type {RecordEditorMemory} from './record-ui-state';
 import {MAX_CENTS} from '../engine/money';
 import {formatCents} from './views/issues';
 import type {Issue} from '../engine';
@@ -58,6 +59,8 @@ export function registerFormSummary(node:HTMLDetailsElement,read:()=>string):voi
 const taskIssues=new WeakMap<HTMLElement,readonly Issue[]>();
 export function setFormTaskIssues(form:HTMLElement,issues:readonly Issue[],view?:EditorViewSession):void {if(view&&form.dataset.recordId){if(issues.length)view.taskIssues.set(form.dataset.recordId,issues);else view.taskIssues.delete(form.dataset.recordId);}else taskIssues.set(form,issues);}
 const lastIssues=new WeakMap<HTMLElement,readonly Issue[]>();
+const focusedMemories=new WeakMap<HTMLElement,RecordEditorMemory>();
+export function registerFocusedForm(form:HTMLElement,memory:RecordEditorMemory):void {focusedMemories.set(form,memory);}
 let groupErrorSequence=0;
 export function syncFormFeedback(root:HTMLElement,controller:WorkspaceController,context:IssueViewContext):void{
   const state=controller.getState();
@@ -65,12 +68,13 @@ export function syncFormFeedback(root:HTMLElement,controller:WorkspaceController
     const id=form.dataset.recordId!,draft=controller.getDraft(form.dataset.editableSection as EditableSection,id);
     const ownedIssues=(context.editorView?context.editorView.taskIssues.get(id):taskIssues.get(form))??[];
     const combined=[...state.issues,...ownedIssues];
-    const resolved=[...resolveFormIssues(draft,state.savedPlan.id,[...new Map(combined.map(issue=>[JSON.stringify(issue),issue])).values()])],fresh=lastIssues.get(form)!==state.issues;
-    for(const issue of ownedIssues)if(!resolved.some(item=>JSON.stringify(item.issue)===JSON.stringify(issue)))resolved.push({issue,scope:'record'});
+    const memory=focusedMemories.get(form);
+    const resolved=[...resolveFormIssues(draft,state.savedPlan.id,[...new Map(combined.map(issue=>[JSON.stringify(issue),issue])).values()])].filter(item=>!memory||memory.attempted||!!item.path&&[...memory.touched].some(key=>item.path!.join('.')===key||item.path!.join('.').startsWith(key+'.'))),fresh=lastIssues.get(form)!==state.issues;
+    for(const issue of ownedIssues)if((!memory||memory.attempted)&&!resolved.some(item=>JSON.stringify(item.issue)===JSON.stringify(issue)))resolved.push({issue,scope:'record'});
     for(const disclosure of form.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]')){const read=summaries.get(disclosure);if(read)disclosure.dataset.disclosureStatus=read();const heading=disclosure.querySelector('summary');if(heading)heading.textContent=disclosure.dataset.disclosureName+(disclosure.dataset.disclosureStatus?' · '+disclosure.dataset.disclosureStatus:'');}
     const previous=lastIssues.get(form);lastIssues.set(form,state.issues);
     if(!resolved.length&&!previous?.length&&!form.querySelector('[data-form-feedback]'))continue;
-    for(const control of form.querySelectorAll<HTMLElement>('[data-field],[data-field-group]')){control.removeAttribute('aria-invalid');const hints=control.dataset.hintIds;if(hints)control.setAttribute('aria-describedby',hints);else control.removeAttribute('aria-describedby');}
+    for(const control of form.querySelectorAll<HTMLElement>('[data-field],[data-field-group],[data-numeric-slider]')){control.removeAttribute('aria-invalid');const hints=control.dataset.hintIds;if(hints)control.setAttribute('aria-describedby',hints);else control.removeAttribute('aria-describedby');}
     for(const error of form.querySelectorAll<HTMLElement>('[data-field-error]'))error.replaceChildren();
     let summary=form.querySelector<HTMLElement>('[data-form-feedback]');
     if(!summary){summary=element('div');summary.dataset.formFeedback='';form.append(summary);}
@@ -88,7 +92,7 @@ export function syncFormFeedback(root:HTMLElement,controller:WorkspaceController
           error=[...target.children].find(node=>node.hasAttribute('data-group-error')) as HTMLElement|undefined;
           if(!error){error=element('small');error.dataset.groupError='';error.dataset.fieldError=path.join('.');error.id=`group-error-${++groupErrorSequence}`;error.className='field-error';target.append(error);}
         }
-        if(error){error.append(element('span',message));if(issue.severity==='error'){const invalid=control??target;invalid.setAttribute('aria-invalid','true');invalid.setAttribute('aria-describedby',[invalid.dataset.hintIds,error.id].filter(Boolean).join(' '));}}
+        if(error){error.append(element('span',message));if(issue.severity==='error'){const invalid=control??target;invalid.setAttribute('aria-invalid','true');invalid.setAttribute('aria-describedby',[invalid.dataset.hintIds,error.id].filter(Boolean).join(' '));const range=control?.closest('[data-field-wrapper]')?.querySelector<HTMLElement>('[data-numeric-slider]');if(range){range.setAttribute('aria-invalid','true');range.setAttribute('aria-describedby',[range.dataset.hintIds,error.id].filter(Boolean).join(' '));}}}
         if(fresh&&issue.severity==='error')revealField(form,path,false);
       }
       else for(const linked of resolveIssueTargets(issue,context.readState())){

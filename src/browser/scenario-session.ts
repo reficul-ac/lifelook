@@ -1,17 +1,20 @@
+import type {Destination} from './workspace-route';
+import type {ReportViewState} from './views/report-state';
+import type {RecordEditorMemory} from './record-ui-state';
 import type {AduComparisonViewState} from './adu-comparison';
 import type {Issue,PlanDocument,ProjectionResult} from '../engine';
 import type {InputSection} from './issue-presentation';
 import type {ProjectionSummaryRow} from './projection-summary';
 import type {WorkspaceController,WorkspaceState} from './state';
 export type ForecastPlotSeriesKey=Exclude<keyof ProjectionSummaryRow,'year'>;
-export interface ScenarioViewSelections {inputSection:InputSection;forecastYear:number;allocationYear:number;hiddenPlotSeries:Set<ForecastPlotSeriesKey>}
-export interface AllocationPreviewSession {lastValid?:{plan:PlanDocument;projection:ProjectionResult};status:'pending'|'valid'|'invalid'|'failed'|'inactive';issues:readonly Issue[];entryIdSequence:number}
-export interface EditorViewSession {selectedAduProjectId?:string;aduComparison:AduComparisonViewState;selections:ScenarioViewSelections;allocationPreview:AllocationPreviewSession;taskIssues:Map<string,readonly Issue[]>;removeIssues:Map<string,readonly Issue[]>;propertyDisclosures:Map<string,boolean>}
+export interface ScenarioViewSelections {destination:Destination;inputSection:InputSection;forecastYear:number;allocationYear:number;hiddenPlotSeries:Set<ForecastPlotSeriesKey>}
+export interface AllocationPreviewSession {lastValid?:{plan:PlanDocument;projection:ProjectionResult;basePlan?:PlanDocument};status:'pending'|'valid'|'invalid'|'failed'|'inactive';issues:readonly Issue[];entryIdSequence:number}
+export interface EditorViewSession {editorMemory:Map<string,RecordEditorMemory>;reportState:ReportViewState;selectedAduProjectId?:string;aduComparison:AduComparisonViewState;selections:ScenarioViewSelections;allocationPreview:AllocationPreviewSession;taskIssues:Map<string,readonly Issue[]>;removeIssues:Map<string,readonly Issue[]>;propertyDisclosures:Map<string,boolean>}
 export interface ScenarioEditorSession {scenarioId:string;generation:number;controller:WorkspaceController;view:EditorViewSession}
 export interface PreviewOwner {scenarioId:string;sessionGeneration:number;activationGeneration:number}
 export function createEditorViewSession(plan:PlanDocument,selections?:ScenarioViewSelections):EditorViewSession {
   const selected=plan.properties.find(p=>p.aduProject)?.aduProject?.id;
-  const view:EditorViewSession={...(selected?{selectedAduProjectId:selected}:{}),aduComparison:{status:'inactive',issues:[]},selections:selections?{...selections,hiddenPlotSeries:new Set(selections.hiddenPlotSeries)}:{inputSection:'Household',forecastYear:plan.startYear,allocationYear:plan.startYear,hiddenPlotSeries:new Set()},allocationPreview:{status:'inactive',issues:[],entryIdSequence:0},taskIssues:new Map(),removeIssues:new Map(),propertyDisclosures:new Map()};normalizeViewYears(view,plan);return view;
+  const view:EditorViewSession={editorMemory:new Map(),reportState:{tableView:'balance-sheet',expanded:new Set(),scroll:new Map()},...(selected?{selectedAduProjectId:selected}:{}),aduComparison:{status:'inactive',issues:[]},selections:selections?{...selections,destination:'overview',hiddenPlotSeries:new Set(selections.hiddenPlotSeries)}:{destination:'overview',inputSection:'Household',forecastYear:plan.startYear,allocationYear:plan.startYear,hiddenPlotSeries:new Set()},allocationPreview:{status:'inactive',issues:[],entryIdSequence:0},taskIssues:new Map(),removeIssues:new Map(),propertyDisclosures:new Map()};normalizeViewYears(view,plan);return view;
 }
 export function normalizeViewYears(view:EditorViewSession,plan:PlanDocument):void {
   if(view.selectedAduProjectId&&!plan.properties.some(p=>p.aduProject?.id===view.selectedAduProjectId)){delete view.selectedAduProjectId;view.aduComparison={status:'inactive',issues:[]};}

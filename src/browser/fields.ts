@@ -1,23 +1,16 @@
+import {mountNumericControl} from './ui/numeric-control';
+import {renderRecordForm, type FormRenderOptions} from './record-form';
+import type {RecordEditorMemory} from './record-ui-state';
+import type {PrerequisiteRequest} from './prerequisite-flow';
 import type {IssueViewContext} from './issue-presentation';
 import {syncFormFeedback} from './form-feedback';
-import type { Available,BasisPoints,Cents,Issue } from '../engine';
-import { MAX_CENTS } from '../engine/money';
+import type {Issue} from '../engine';
 import type { EditableSection,RawObject,RecordDraft,WorkspaceController } from './state';
 
 export type FieldPath=readonly (string|number)[];
-export interface FieldContext {readonly ui?:IssueViewContext;readonly draft:RecordDraft;readonly issues:readonly Issue[];onChange(path:FieldPath,value:unknown):void;refresh():void}
-export interface FieldOptions {readonly visibleLabel?:string;readonly help?:string;readonly kind?:'money'|'rate'|'integer'|'text'|'date'|'month'|'select'|'checkbox';readonly options?:readonly (string|Readonly<{value:string;label:string}>)[];readonly hint?:string;readonly optional?:boolean;readonly refresh?:boolean}
-function parseUnits(text:string,limit:number,label:string):Available<number>{
-  const trimmed=text.trim();
-  const issue:Issue={code:'invalid-input',field:label,severity:'error',explanation:`Enter ${label} as an ordinary decimal with at most two decimal places; blank is unknown.`,resolution:'Use digits and an optional decimal point, without exponents or separators.'};
-  if(!/^-?\d+(?:\.\d{1,2})?$/.test(trimmed))return {status:'needs-data',issues:[issue]};
-  const negative=trimmed.startsWith('-'),unsigned=negative?trimmed.slice(1):trimmed,[whole='',fraction='']=unsigned.split('.');
-  const exact=BigInt(whole)*100n+BigInt(fraction.padEnd(2,'0'));
-  if(exact>BigInt(limit))return {status:'needs-data',issues:[{...issue,explanation:`This ${label} exceeds the supported input range.`}]};
-  return {status:'available',value:Number(negative?-exact:exact)};
-}
-export const parseMoneyInput=(text:string):Available<Cents>=>parseUnits(text,MAX_CENTS,'money');
-export const parseRateInput=(text:string):Available<BasisPoints>=>parseUnits(text,100000,'rate');
+export interface FieldContext {readonly ui?:IssueViewContext;readonly memory?:RecordEditorMemory;requestPrerequisite?(request:PrerequisiteRequest):void;readonly draft:RecordDraft;readonly issues:readonly Issue[];onChange(path:FieldPath,value:unknown):void;refresh():void}
+export interface FieldOptions {readonly slider?:{minUnits:number;maxUnits:number;stepUnits:number};readonly visibleLabel?:string;readonly help?:string;readonly kind?:'money'|'rate'|'integer'|'text'|'date'|'month'|'select'|'checkbox';readonly options?:readonly (string|Readonly<{value:string;label:string}>)[];readonly hint?:string;readonly optional?:boolean;readonly refresh?:boolean}
+export {parseMoneyInput,parseRateInput} from './input-parsers';
 export function valueAt(value:unknown,path:FieldPath):unknown{return path.reduce<unknown>((current,key)=>current&&typeof current==='object'?(current as Record<string|number,unknown>)[key]:undefined,value);}
 export function setAt(value:RawObject,path:FieldPath,entry:unknown):RawObject {
   if(!path.length)return entry as RawObject;
@@ -42,14 +35,28 @@ const shortLabel=(label:string):string=>label.replace(/^(?:Filer \d+ |Property e
 let fieldSequence=0;
 export function renderField(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,options:FieldOptions={}):HTMLInputElement|HTMLSelectElement {
   if(options.kind==='money'&&!label.includes('$'))label+=' ($)';
-  const wrapper=element('div');wrapper.className='field-wrapper';wrapper.dataset.fieldWrapper='';const caption=element('label',options.visibleLabel??shortLabel(label));wrapper.append(caption);const kind=options.kind??'text';
-  const control=kind==='select'?element('select'):element('input');control.id=`field-${++fieldSequence}`;caption.htmlFor=control.id;control.dataset.fieldLabel=label;control.dataset.fieldKind=kind;control.name=path.join('.');control.dataset.field=path.join('.');control.setAttribute('aria-label',label);
-  if(control instanceof HTMLSelectElement){for(const option of options.options??[]){const value=typeof option==='string'?option:option.value,name=typeof option==='string'?option:option.label;const child=element('option',name);child.value=value;control.append(child);}}
-  else {control.type=kind==='checkbox'?'checkbox':kind==='date'?'date':kind==='month'?'month':'text';if(kind==='money'||kind==='rate')control.inputMode='decimal';if(kind==='integer')control.inputMode='numeric';if(['primaryArea','aduArea'].includes(String(path[path.length-1])))control.inputMode='decimal';}
-  const value=valueAt(context.draft.value,path);
-  if(control instanceof HTMLInputElement&&control.type==='checkbox')control.checked=value===true;else control.value=value===undefined?'':String(value);
-  control.addEventListener(kind==='select'||kind==='checkbox'?'change':'input',()=>{const next=control instanceof HTMLInputElement&&control.type==='checkbox'?control.checked:control.value;context.onChange(path,options.optional&&next===''?undefined:next);if(options.refresh)context.refresh();});
-  wrapper.append(control);if(options.hint){const hint=element('small',options.hint);hint.id=`${control.id}-hint`;wrapper.append(hint);control.dataset.hintIds=hint.id;control.setAttribute('aria-describedby',hint.id);}if(options.help&&context.ui)wrapper.append(context.ui.disclosures.createTrigger({label:'ⓘ',accessibleLabel:`ⓘ About ${options.visibleLabel??shortLabel(label)}`,preview:options.help,title:label,renderDetails:node=>{node.textContent=options.help!;}}));const error=element('small');error.id=`${control.id}-error`;error.dataset.fieldError=path.join('.');error.className='field-error';wrapper.append(error);root.append(wrapper);return control;
+  const wrapper=element('div');wrapper.className='field-wrapper';wrapper.dataset.fieldWrapper='';
+  const kind=options.kind??'text',value=valueAt(context.draft.value,path),key=path.join('.');
+  const change=(raw:unknown)=>{context.onChange(path,options.optional&&raw===''?undefined:raw);if(options.refresh)context.refresh();};
+  let control:HTMLInputElement|HTMLSelectElement;
+  if(kind==='money'||kind==='rate') {
+    control=mountNumericControl(wrapper,{label,field:key,kind,raw:value===undefined?'':String(value),...(options.slider?{slider:options.slider}:{}),onInput:change,onCommit:()=>{}}).input;
+    const caption=wrapper.querySelector('label');if(caption)caption.textContent=options.visibleLabel??shortLabel(label);
+  } else {
+    const caption=element('label',options.visibleLabel??shortLabel(label));wrapper.append(caption);
+    control=kind==='select'?element('select'):element('input');control.id=`field-${++fieldSequence}`;caption.htmlFor=control.id;
+    if(control instanceof HTMLSelectElement){for(const option of options.options??[]){const entry=element('option',typeof option==='string'?option:option.label);entry.value=typeof option==='string'?option:option.value;control.append(entry);}}
+    else {control.type=kind==='checkbox'?'checkbox':kind==='date'?'date':kind==='month'?'month':'text';if(kind==='integer')control.inputMode='numeric';if(['primaryArea','aduArea'].includes(String(path.at(-1))))control.inputMode='decimal';}
+    if(control instanceof HTMLInputElement&&kind==='checkbox')control.checked=value===true;else control.value=value===undefined?'':String(value);
+    control.addEventListener(kind==='select'||kind==='checkbox'?'change':'input',()=>change(control instanceof HTMLInputElement&&kind==='checkbox'?control.checked:control.value));
+    if(kind==='date'||kind==='month'||kind==='select'||kind==='checkbox')control.addEventListener('change',()=>control.dispatchEvent(new CustomEvent('financial-input-commit',{bubbles:true})));
+    wrapper.append(control);
+  }
+  control.dataset.fieldLabel=label;control.dataset.fieldKind=kind;control.name=key;control.dataset.field=key;control.setAttribute('aria-label',label);
+  if(options.hint){const hint=element('small',options.hint);hint.id=`${control.id}-hint`;wrapper.append(hint);control.dataset.hintIds=hint.id;control.setAttribute('aria-describedby',hint.id);const range=wrapper.querySelector('input[type=range]');if(range)range.setAttribute('aria-describedby',[range.getAttribute('aria-describedby'),hint.id].filter(Boolean).join(' '));}
+  if(options.help&&context.ui)wrapper.append(context.ui.disclosures.createTrigger({label:'ⓘ',accessibleLabel:`ⓘ About ${options.visibleLabel??shortLabel(label)}`,preview:options.help,title:label,renderDetails:node=>{node.textContent=options.help!;}}));
+  const range=wrapper.querySelector<HTMLElement>('input[data-numeric-slider]');if(range)range.dataset.hintIds=range.getAttribute('aria-describedby')??'';
+  const error=element('small');error.id=`${control.id}-error`;error.dataset.fieldError=key;error.className='field-error';wrapper.append(error);root.append(wrapper);return control;
 }
 export function renderBooleanHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,options:Pick<FieldOptions,'visibleLabel'|'hint'|'help'>={}):HTMLSelectElement {
   const history=valueAt(context.draft.value,path) as {known?:boolean;value?:boolean}|undefined;
@@ -71,7 +78,8 @@ export function renderRows(root:HTMLElement,context:FieldContext,path:FieldPath,
   (rows??[]).forEach((_,index)=>{const row=element('fieldset');row.append(element('legend',`${label} ${index+1}`));renderRow(row,[...path,index],index);row.append(button(`Remove ${label} ${index+1}`,()=>{context.onChange(path,(valueAt(context.draft.value,path) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));group.append(row);});
   group.append(button(`Add ${label}`,()=>{context.onChange(path,[...((valueAt(context.draft.value,path) as readonly RawObject[])??[]),makeRow()]);context.refresh();}));root.append(group);
 }
-export function renderRecordSection(root:HTMLElement,controller:WorkspaceController,section:EditableSection,title:string,render:(root:HTMLElement,context:FieldContext)=>void,makeNew?:()=>RawObject,ui?:IssueViewContext,heading=title):void {
+export function renderRecordSection(root:HTMLElement,controller:WorkspaceController,section:EditableSection,title:string,render:(root:HTMLElement,context:FieldContext)=>void,makeNew?:()=>RawObject,ui?:IssueViewContext,heading=title,options?:FormRenderOptions):void {
+  if(options){if(options.section===section)renderRecordForm(root,controller,section,options.recordId,title,render,ui,options);return;}
   ui?.disclosures.closeWithin(root,false);root.replaceChildren();if(heading)root.append(element('h2',heading));
   const state=controller.getState();const records=section==='household'?['household']:[...new Set([...((state.savedPlan[section]??[]) as readonly {id:string}[]).map(r=>r.id),...Object.values(state.drafts).filter(d=>d.section===section).map(d=>d.recordId)])];
   for(const id of records){const card=element('form');card.dataset.recordId=id;card.dataset.editableSection=section;card.append(element('h3',section==='household'?'Applied household inputs':String(controller.getDraft(section,id).value.name??'New record')));const body=element('div');body.className='record-fields';card.append(body);

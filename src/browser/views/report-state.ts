@@ -1,4 +1,6 @@
 import type {DisclosureController,DisclosureOptions} from '../disclosures';
+import type {PlanDocument} from '../../engine';
+import type {EditorViewSession} from '../scenario-session';
 
 export interface ReportViewState {
  tableView:'balance-sheet'|'financial-overview';
@@ -6,6 +8,10 @@ export interface ReportViewState {
  scroll:Map<string,{top:number;left:number}>;
 }
 export function createReportViewState():ReportViewState{return {tableView:'balance-sheet',expanded:new Set(),scroll:new Map()};}
+/** Candidate bounds normalize report years without changing applied ADU ownership. */
+export function normalizeReportYears(view:EditorViewSession,plan:PlanDocument):void {
+ for(const key of ['forecastYear','allocationYear'] as const){const year=view.selections[key];if(!Number.isInteger(year)||year<plan.startYear||year>=plan.startYear+plan.horizonYears)view.selections[key]=plan.startYear;}
+}
 
 /** Stable triggers keep the shared overlay attached to the current report cause. */
 export function createReportDisclosureScope(disclosures:DisclosureController):{controller:DisclosureController;begin():void;finish():boolean;dispose():void} {

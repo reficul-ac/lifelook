@@ -1,6 +1,7 @@
 import {calculateFundingNeed,aduSum} from '../../engine/property/adu-projection';
 import {moneyEntry} from './issues';
-import {normalizeViewYears,type EditorViewSession} from '../scenario-session';
+import type {EditorViewSession} from '../scenario-session';
+import {normalizeReportYears} from './report-state';
 import {getRecordLabel,type ReportIssueContext} from '../issue-presentation';
 import type { AnnualProjection,MonthlyProjection,MonetaryField,ProjectionResult,RsuGrantMonth } from '../../engine';
 import { appendAmount,appendCoverage,appendProvenance,element,renderIssues } from './issues';
@@ -96,7 +97,7 @@ function expandButton(root:HTMLElement,label:string,hiddenLabel:string,target:HT
   button.onclick=event=>{const liveButton=event.currentTarget as HTMLButtonElement,liveTarget=liveButton.nextElementSibling as HTMLElement;if(!liveTarget.hidden)context.disclosures.closeWithin(liveTarget,false);liveTarget.hidden=!liveTarget.hidden;if(!liveTarget.hidden&&!rendered){render(liveTarget);rendered=true;}liveButton.textContent=liveTarget.hidden?label:hiddenLabel;liveButton.setAttribute('aria-expanded',String(!liveTarget.hidden));if(liveTarget.hidden)view?.reportState.expanded.delete(key);else view?.reportState.expanded.add(key);};root.append(button,target);
 }
 export function renderProjection(root:HTMLElement,result:ProjectionResult,context:ReportIssueContext,view?:EditorViewSession,options?:{readonly compact:boolean}):void {
-  if(view)normalizeViewYears(view,context.producingPlan);
+  if(view)normalizeReportYears(view,context.producingPlan);
   context.disclosures.closeWithin(root,false);root.replaceChildren();if(!options?.compact)root.append(element('h2','Projection'),element('p',`Inputs v${result.inputRevision}`));
   appendCoverage(root,result.coverage);if(result.months.some(m=>m.adu)){const need=element('dl');moneyEntry(need,'Peak household funding need',calculateFundingNeed(result.months),context,'adu-forecast-funding-need');root.append(need);}
   const fundingSales=result.months.flatMap(m=>m.brokerageFunding?.sales??[]),fundingIncomplete=result.months.some(m=>m.brokerageFunding?.issues?.length);

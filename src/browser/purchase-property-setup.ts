@@ -23,6 +23,18 @@ function principal(property:RawObject):string|undefined {
 export function updatePropertyPurchaseDraft(bundle:RawObject,path:FieldPath,entry:unknown,startYear:number,nextId:()=>string,newProperty:boolean):RawObject {
  const previous=bundle.property as RawObject,next=setAt(bundle,path,entry),property=next.property as RawObject;
  const changed=path.join('.'),future=isFuturePropertyPurchase(property,startYear),previousFuture=isFuturePropertyPurchase(previous,startYear);
+ const loanDate=/^property\.loans\.(\d+)\.(firstPaymentDate|originationDate|acquisitionDate)$/.exec(changed);
+ if(loanDate){const loan=valueAtLoan(property,loanDate[1]);if(loan)loan.__draft={...(loan.__draft as RawObject|undefined),[`${loanDate[2]}Entered`]:true};}
+ const rentalDate=/^rentals\.(\d+)\.(availableDate|rentStartDate)$/.exec(changed);
+ if(rentalDate){const unit=(next.rentals as RawObject[])[Number(rentalDate[1])];if(unit)unit.__draft={...(unit.__draft as RawObject|undefined),[`${rentalDate[2]}Entered`]:true};}
+ const project=property.aduProject as RawObject|undefined;
+ if(project){
+  const stageDate=/^property\.aduProject\.costs\.(\d+)\.paymentDate$/.exec(changed);if(stageDate){const stage=(project.costs as RawObject[])[Number(stageDate[1])];if(stage)stage.__draft={...(stage.__draft as RawObject|undefined),paymentDateEntered:true};}
+  const financing=project.financing as RawObject|undefined;if(financing){
+   if(changed==='property.aduProject.financing.firstAmortizingPaymentMonth')financing.__draft={...(financing.__draft as RawObject|undefined),firstAmortizingPaymentMonthEntered:true};
+   const drawDate=/^property\.aduProject\.financing\.draws\.(\d+)\.month$/.exec(changed);if(drawDate){const draw=(financing.draws as RawObject[])[Number(drawDate[1])];if(draw)draw.__draft={...(draw.__draft as RawObject|undefined),monthEntered:true};}
+  }
+ }
  if(changed==='property.openingValueCents'&&future)property.__draft={...(property.__draft as RawObject|undefined),purchaseValueEntered:true};
  if(future&&!property.aduProject){
   if(!property.purchaseFunding)property.purchaseFunding={kind:'household-cash'};
@@ -33,10 +45,10 @@ export function updatePropertyPurchaseDraft(bundle:RawObject,path:FieldPath,entr
  }
  if(changed==='property.purchaseDate'&&isValidISODate(property.purchaseDate)&&(newProperty||previousFuture)){
   const oldDates=[previous.purchaseDate,...(!previousFuture?[`${startYear}-01-01`]:[])],newDate=property.purchaseDate;
-  next.rentals=(next.rentals as readonly RawObject[]).map(unit=>({...unit,...(oldDates.includes(unit.availableDate)?{availableDate:newDate}:{}),...(oldDates.includes(unit.rentStartDate)?{rentStartDate:newDate}:{})}));
+  next.rentals=(next.rentals as readonly RawObject[]).map(unit=>({...unit,...(!(unit.__draft as RawObject|undefined)?.availableDateEntered&&oldDates.includes(unit.availableDate)?{availableDate:newDate}:{}),...(!(unit.__draft as RawObject|undefined)?.rentStartDateEntered&&oldDates.includes(unit.rentStartDate)?{rentStartDate:newDate}:{})}));
   next.expenses=(next.expenses as readonly RawObject[]).map(expense=>({...expense,...(oldDates.includes(expense.startDate)?{startDate:newDate}:{})}));
   const oldPaymentDates=[purchaseFirstPaymentDate(previous.purchaseDate),...(newProperty&&!previousFuture?[`${startYear}-01-31`]:[])];
-  property.loans=(property.loans as readonly RawObject[]).map(loan=>({...loan,...(loan.originationDate===previous.purchaseDate?{originationDate:newDate}:{}),...(loan.acquisitionDate===previous.purchaseDate?{acquisitionDate:newDate}:{}),...(oldPaymentDates.includes(loan.firstPaymentDate as string)?{firstPaymentDate:purchaseFirstPaymentDate(newDate)??newDate}:{})}));
+  property.loans=(property.loans as readonly RawObject[]).map(loan=>({...loan,...(!(loan.__draft as RawObject|undefined)?.originationDateEntered&&loan.originationDate===previous.purchaseDate?{originationDate:newDate}:{}),...(!(loan.__draft as RawObject|undefined)?.acquisitionDateEntered&&loan.acquisitionDate===previous.purchaseDate?{acquisitionDate:newDate}:{}),...(!(loan.__draft as RawObject|undefined)?.firstPaymentDateEntered&&oldPaymentDates.includes(loan.firstPaymentDate as string)?{firstPaymentDate:purchaseFirstPaymentDate(newDate)??newDate}:{})}));
  }
  if(future&&(changed==='property.purchasePriceCents'||changed==='property.downPaymentCents')){
   const oldPrincipal=principal(previous),newPrincipal=principal(property),loans=property.loans as readonly RawObject[];

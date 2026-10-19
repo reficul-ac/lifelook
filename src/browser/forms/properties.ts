@@ -1,240 +1,69 @@
+import type {FormRenderOptions} from '../record-form';
 import {idFor} from '../record-ids';
 import {renderAduProjectFields} from './adu-project';
 import {addAduProjectDraft,removeAduProjectDraft,type PropertyDraftBundle} from '../adu-project-draft';
-import {Decimal,settleCents} from '../../engine/money';
-import {formatCents} from '../views/issues';
-import {calculateLoanSchedule} from '../../engine/property/loans';
-import {scheduledPayment} from '../../engine/property/loans';
-import {createPropertyRentalDraft,isFuturePropertyPurchase,purchaseFirstPaymentDate,updatePropertyPurchaseDraft} from '../purchase-property-setup';
-import type {PropertyLoan} from '../../engine';
+import {isFuturePropertyPurchase,updatePropertyPurchaseDraft} from '../purchase-property-setup';
 import type {IssueViewContext} from '../issue-presentation';
-import {syncFormFeedback,setFormTaskIssues,registerFormSummary} from '../form-feedback';
-import { defaultRentalAllocation,initializePurchaseLoan,type Property,type RentalUnit,type TaxBook,type PurchaseLoanInput } from '../../engine';
-import { button,element,refreshFields,renderField,renderBooleanHistory,setAt,valueAt,type FieldContext,type FieldPath,type FieldOptions,taxCategoryOptions } from '../fields';
-import { fromDraftValue,toDraftValue,type RawObject,type WorkspaceController } from '../state';
+import {syncFormFeedback,setFormTaskIssues,registerFocusedForm} from '../form-feedback';
+import {button,element,refreshFields,type FieldContext} from '../fields';
+import {prepareEdit,type RawObject,type WorkspaceController} from '../state';
+import {fieldMemory} from '../record-ui-state';
+import {renderPropertyBasics} from './property-basics';
+import {renderPropertyFinancing} from './property-financing';
+import {renderPropertyRentals} from './property-rentals';
+import {renderPropertyCosts} from './property-costs';
+import {renderPropertyHistory} from './property-history';
+import {at,details,disclosureStates,disclosureRoots,captureDisclosures} from './property-fields-shared';
 
-const books:readonly [TaxBook,string][]=[['federal','Federal rental tax history'],['california','California rental tax history'],['federal-amt','Federal AMT rental tax history'],['california-amt','California AMT rental tax history']];
-const bookAmounts:readonly [string,string][]=[['recoveryBasisCents','Original building recovery basis (excludes land)'],['adjustedBuildingBasisCents','Adjusted building basis'],['cumulativeDepreciationCents','Prior depreciation'],['atRiskCents','Opening amount at risk'],['atRiskSuspendedCents','Suspended at-risk losses'],['passiveSuspendedCents','Suspended passive losses']];
-const zeroBook={recoveryBasisCents:0,adjustedBuildingBasisCents:0,cumulativeDepreciationCents:0,atRiskCents:0,atRiskSuspendedCents:0,passiveSuspendedCents:0,lossVintages:[]};
-const unknown=()=>({known:false});
-function group(root:HTMLElement,name:string):HTMLFieldSetElement {const node=element('fieldset');node.append(element('legend',name));root.append(node);return node;}
-interface PropertyDisclosureOptions {readonly key:string;readonly initialOpen?:boolean;readonly status?:string}
-const disclosureStates=new WeakMap<HTMLElement,Map<string,boolean>>(),disclosureRoots=new WeakMap<HTMLElement,HTMLElement>();
-function ownerFor(node:HTMLElement):HTMLElement {for(let parent:HTMLElement|null=node;parent;parent=parent.parentElement){const owner=disclosureRoots.get(parent);if(owner)return owner;}return node;}
-function captureDisclosures(root:HTMLElement):void {const owner=ownerFor(root),state=disclosureStates.get(owner)??new Map<string,boolean>();for(const node of root.querySelectorAll<HTMLDetailsElement>('details[data-property-disclosure]'))state.set(node.dataset.propertyDisclosure!,node.open);disclosureStates.set(owner,state);}
-function details(root:HTMLElement,name:string,options:PropertyDisclosureOptions):HTMLDetailsElement {
-  const owner=ownerFor(root),state=disclosureStates.get(owner)??new Map<string,boolean>();disclosureStates.set(owner,state);
-  const node=element('details');node.dataset.propertyDisclosure=options.key;node.dataset.disclosureName=name;node.dataset.disclosureStatus=options.status??'';node.open=state.get(options.key)??options.initialOpen??false;state.set(options.key,node.open);disclosureRoots.set(node,owner);
-  node.append(element('summary',name+(options.status?' · '+options.status:'')));node.addEventListener('toggle',()=>{if(node.isConnected)state.set(options.key,node.open);});root.append(node);return node;
-}
-function unknownCount(value:unknown):number {if(!value||typeof value!=='object')return 0;if('known' in value)return value.known?0:1;return Object.values(value).reduce<number>((count,item)=>count+unknownCount(item),0);}
-
-function at(context:FieldContext,path:FieldPath):any{return valueAt(context.draft.value,path);}
-function field(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,options:FieldOptions={}):void {renderField(root,context,path,label,options);}
-function displayed(context:FieldContext,path:FieldPath,value:unknown,change:(value:unknown)=>void):FieldContext {
-  return {...(context.ui?{ui:context.ui}:{}),get draft(){return {...context.draft,value:setAt(context.draft.value,path,value)};},get issues(){return context.issues;},onChange(_path,value){change(value);},refresh(){context.refresh();}};
-}
-function booleanHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string):void {
-  const help:Record<string,string>={'Active participation':'Participation in rental management decisions is independent of floor area or ownership share.','Qualified acquisition debt':'Loan proceeds must qualify as acquisition debt under the applicable mortgage-interest rules.','QBI qualification':'Qualified business income eligibility depends on rental business facts; it is independent of cash flow.'};renderBooleanHistory(root,context,path,label,help[label]?{help:help[label]}:{});
-}
-function moneyHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,estimate=false):void {
-  const history=at(context,path) as {known?:boolean;value?:string}|undefined;
-  field(root,displayed(context,path,history?.known?'known':'unknown',value=>{context.onChange(path,value==='known'?{known:true,value:''}:unknown());context.refresh();}),path,`${label} history`,{kind:'select',options:[{value:'unknown',label:estimate?'Use schedule estimate':'Unknown'},{value:'known',label:estimate?'Enter known value':'Enter value'}]});
-  if(history?.known)field(root,context,[...path,'value'],label,{kind:'money'});
-}
-function rows(root:HTMLElement,context:FieldContext,path:FieldPath,legend:string,addLabel:string,removeLabel:string,create:()=>RawObject,render:(root:HTMLElement,path:FieldPath,index:number)=>void):void {
-  const values=at(context,path) as readonly RawObject[]|undefined;
-  for(const [index] of (values??[]).entries()){
-    const row=group(root,`${legend} ${index+1}`);render(row,[...path,index],index);
-    row.append(button(removeLabel,()=>{context.onChange(path,(at(context,path) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));
-  }
-  root.append(button(addLabel,()=>{context.onChange(path,[...((at(context,path) as readonly RawObject[])??[]),create()]);context.refresh();}));
-}
-interface Choice {readonly value:string;readonly label:string}
-interface NamedProperty {readonly id:string;readonly name:string;readonly role:string;readonly loans:readonly {id:string;name:string}[]}
-function propertyRecords(controller:WorkspaceController,context:FieldContext):readonly NamedProperty[] {
-  return [...controller.getState().savedPlan.properties.filter(p=>p.id!==context.draft.recordId),at(context,['property']) as NamedProperty];
-}
-function propertyOptions(controller:WorkspaceController,context:FieldContext):readonly Choice[] {
-  return propertyRecords(controller,context).map(p=>({value:p.id,label:p.name||'Current property'}));
-}
-function rentalOptions(controller:WorkspaceController,context:FieldContext,propertyId?:string):readonly Choice[] {
-  return propertyRecords(controller,context).filter(p=>!propertyId||p.id===propertyId).flatMap(property=>{
-    const units=property.id===context.draft.recordId?at(context,['rentals']) as readonly {id:string}[]:controller.getState().savedPlan.rentals.filter(r=>r.propertyId===property.id);
-    const kind=property.role==='primary-with-adu'?'ADU':property.role==='rental'?'Whole rental':'Rental unit';
-    return units.map((unit,index)=>({value:unit.id,label:`${kind} ${index+1} — ${property.name||'Current property'}`}));
-  });
-}
-function loanOptions(controller:WorkspaceController,context:FieldContext):readonly Choice[] {
-  return propertyRecords(controller,context).flatMap(property=>property.loans.map((loan,index)=>({value:loan.id,label:`${loan.name||`Loan ${index+1}`} — ${property.name||'Current property'}`})));
-}
-function historyBook(root:HTMLElement,context:FieldContext,path:FieldPath,name:string):void {
-  const history=at(context,path) as {known?:boolean;value?:RawObject}|undefined;
-  const isZero=history?.known&&bookAmounts.every(([key])=>history.value?.[key]==='0.00')&&Array.isArray(history.value?.lossVintages)&&history.value.lossVintages.length===0;
-  const shortName=name.replace(' rental tax history',' history'),owner=at(context,path.slice(0,-2)) as RawObject;const disclosure=details(root,shortName,{key:`${String(owner.id)}:${String(path[path.length-1])}`,status:!history?.known?'Unknown':isZero?'Confirmed zero':'Entered amounts'});disclosure.dataset.fieldGroup=path.join('.');registerFormSummary(disclosure,()=>{const current=at(context,path) as {known?:boolean;value?:RawObject}|undefined;return !current?.known?'Unknown':bookAmounts.every(([key])=>/^0(?:\.0{1,2})?$/.test(String(current.value?.[key]??'')))&&Array.isArray(current.value?.lossVintages)&&current.value.lossVintages.length===0?'Confirmed zero':'Entered amounts';});const section=group(disclosure,'Opening amounts');
-  field(section,displayed(context,path,history?.known?isZero?'known-zero':'known':'unknown',value=>{
-    context.onChange(path,value==='unknown'?unknown():{known:true,value:value==='known-zero'?toDraftValue(zeroBook):Object.fromEntries([...bookAmounts.map(([key])=>[key,'']),['lossVintages',[]]])});context.refresh();
-  }),path,'History status',{kind:'select',options:[{value:'unknown',label:'Unknown'},{value:'known',label:'Enter amounts'},{value:'known-zero',label:'All amounts and losses are zero'}]});
-  if(!history?.known)return;
-  for(const [key,label]of bookAmounts)field(section,context,[...path,'value',key],label,{kind:'money'});
-  const losses=group(section,'Rental loss history');losses.dataset.fieldGroup=[...path,'value','lossVintages'].join('.');losses.dataset.groupLabel='Rental loss history';
-  rows(losses,context,[...path,'value','lossVintages'],'Rental loss vintage','Add rental loss vintage','Remove rental loss vintage',()=>({year:'',source:'passive',amountCents:'',activeParticipation:unknown(),qbiQualification:unknown()}),(row,p)=>{
-    field(row,context,[...p,'year'],'Loss year',{kind:'integer'});field(row,context,[...p,'source'],'Loss source',{kind:'select',options:[{value:'at-risk',label:'At-risk'},{value:'passive',label:'Passive'}]});field(row,context,[...p,'amountCents'],'Loss amount',{kind:'money'});
-    booleanHistory(row,context,[...p,'activeParticipation'],'Participation when loss arose');booleanHistory(row,context,[...p,'qbiQualification'],'QBI qualification when loss arose');
-  });
-}
-function allocationFields(root:HTMLElement,context:FieldContext,path:FieldPath):void {
-  field(root,context,[...path,'numerator'],'Rental portion',{kind:'integer'});field(root,context,[...path,'denominator'],'Total portions',{kind:'integer',hint:'1 of 4 = 25%.'});
-}
-function purchaseTerms(context:FieldContext,loan:RawObject) {
-  const decoded=fromDraftValue({purchasePriceCents:at(context,['property','purchasePriceCents']),downPaymentCents:at(context,['property','downPaymentCents']),aprBps:loan.aprBps,termMonths:loan.termMonths},String(loan.id));
-  return decoded.issues.length?{status:'needs-data' as const,issues:decoded.issues}:initializePurchaseLoan(decoded.value as unknown as PurchaseLoanInput);
-}
-function loanWithTerms(loan:RawObject,result:{originalPrincipalCents:number;monthlyPaymentCents:number}):RawObject {
-  const entered=toDraftValue(result) as RawObject;
-  return {...loan,originalPrincipalCents:entered.originalPrincipalCents,__draft:{paymentEstimate:entered.monthlyPaymentCents}};
-}
-function loanStatus(context:FieldContext,controller:WorkspaceController,path:FieldPath):string {const decoded=fromDraftValue(at(context,path),context.draft.recordId);if(decoded.issues.length)return 'Opening inputs unavailable';try{const schedule=calculateLoanSchedule(decoded.value as unknown as PropertyLoan,controller.getState().savedPlan.startYear,1);return `Opening balance ${schedule.openingProvenance==='known'?'entered':'estimated'}`;}catch{return 'Opening inputs unavailable';}}
-function renderLoan(root:HTMLElement,controller:WorkspaceController,context:FieldContext,path:FieldPath):void {
-  const loan=at(context,path) as RawObject,future=isFuturePropertyPurchase(at(context,['property']),controller.getState().savedPlan.startYear),saved=controller.getState().projection.loanSchedules.find(s=>s.loanId===loan.id&&s.year===controller.getState().savedPlan.startYear);
-  if(future){
-    const basic=group(root,`Mortgage — ${String(loan.name??loan.id)}`);basic.dataset.fieldGroup=path.join('.');
-    field(basic,context,[...path,'originalPrincipalCents'],'Mortgage amount',{kind:'money',refresh:true});field(basic,context,[...path,'aprBps'],'Mortgage APR (%)',{kind:'rate',refresh:true});field(basic,context,[...path,'termMonths'],'Mortgage term (months)',{kind:'integer',refresh:true});field(basic,context,[...path,'firstPaymentDate'],'First payment date',{kind:'date'});
-    const parsed=fromDraftValue({originalPrincipalCents:loan.originalPrincipalCents,aprBps:loan.aprBps,termMonths:loan.termMonths},String(loan.id));
-    if(!parsed.issues.length)try{basic.append(element('p',`Estimated monthly principal & interest: ${formatCents(scheduledPayment(Number(parsed.value.originalPrincipalCents),Number(parsed.value.aprBps),Number(parsed.value.termMonths)))}. Property tax and insurance are separate expenses.`));}catch{/* Invalid terms retain their entered text until Save. */}
-  }
-  const status=loanStatus(context,controller,path);const disclosure=details(root,`${future?'Advanced mortgage details':'Loan'} — ${String(loan.name??loan.id)}`,{key:`${String(loan.id)}:loan`,initialOpen:!future&&!controller.getState().savedPlan.properties.some(p=>p.loans.some(l=>l.id===loan.id)),status});disclosure.dataset.fieldGroup=future?`${path.join('.')}.advanced`:path.join('.');registerFormSummary(disclosure,()=>loanStatus(context,controller,path));const node=group(disclosure,'Loan terms');
-  field(node,context,[...path,'name'],'Loan name');if(!future){field(node,context,[...path,'originalPrincipalCents'],'Original principal',{kind:'money'});field(node,context,[...path,'aprBps'],'Nominal APR (%)',{kind:'rate'});}
-  for(const [key,label]of [['originationDate','Origination date'],['acquisitionDate','Acquisition date'],...(!future?[['firstPaymentDate','First payment date']]:[])] as const)field(node,context,[...path,key!],label!,{kind:'date'});
-  if(!future)field(node,context,[...path,'termMonths'],'Term (months)',{kind:'integer'});field(node,context,[...path,'collateralPropertyId'],'Collateral property',{kind:'select',options:propertyOptions(controller,context)});
-  moneyHistory(node,context,[...path,'openingBalance'],'Opening mortgage balance',true);moneyHistory(node,context,[...path,'openingPayment'],'Opening principal-and-interest payment',true);
-  node.append(element('p','Exclude property tax and insurance from loan payments.'));
-  if(saved?.schedule.status==='available')node.append(element('p',`Saved opening balance: ${saved.schedule.value.openingProvenance}; saved payment: ${saved.schedule.value.paymentProvenance}. Exclude property tax and insurance.`));
-  field(node,context,[...path,'proceedsQualification','kind'],'Proceeds type',{kind:'select',options:[{value:'acquisition',label:'Purchase/acquisition'},{value:'refinance',label:'Refinance'},{value:'cash-out',label:'Cash-out'},{value:'mixed',label:'Mixed proceeds'},{value:'grandfathered',label:'Grandfathered debt'},{value:'unknown',label:'Unknown'}],refresh:true});
-  if(at(context,[...path,'proceedsQualification','kind'])==='acquisition')node.append(button('Calculate purchase loan',()=>{
-    const current=at(context,path) as RawObject,result=purchaseTerms(context,current);
-    if(result.status!=='available'){const form=node.closest<HTMLElement>('form')!;setFormTaskIssues(form,result.issues.map(issue=>({...issue,recordId:String(current.id),...(issue.field==='purchasePriceCents'||issue.field==='downPaymentCents'?{recordId:context.draft.recordId,field:'property.'+issue.field}:{})})),context.ui?.editorView);if(context.ui)syncFormFeedback(ownerFor(root),controller,context.ui);return;}
-    setFormTaskIssues(node.closest<HTMLElement>('form')!,[],context.ui?.editorView);
-    context.onChange(path,loanWithTerms(current,result.value));context.refresh();
-  }));
-  const estimate=at(context,[...path,'__draft','paymentEstimate']);if(estimate!==undefined)node.append(element('p',`Estimated monthly principal & interest: $${String(estimate)} per month.`));
-  booleanHistory(node,context,[...path,'proceedsQualification','qualifiedAcquisitionDebt'],'Qualified acquisition debt');moneyHistory(node,context,[...path,'proceedsQualification','qualifiedPrincipalCents'],'Qualified acquisition principal');booleanHistory(node,context,[...path,'proceedsQualification','historyComplete'],'Complete proceeds history');booleanHistory(node,context,[...path,'financingAtRiskQualification'],'Financing qualifies for at-risk rules');
-  rows(node,context,[...path,'proceedsAllocations'],'Loan proceeds allocation','Add loan proceeds allocation','Remove loan proceeds allocation',()=>({propertyId:context.draft.recordId,use:'personal',share:{numerator:'',denominator:''}}),(row,p)=>{
-    field(row,context,[...p,'propertyId'],'Proceeds property',{kind:'select',options:propertyOptions(controller,context),refresh:true});field(row,context,[...p,'use'],'Proceeds use',{kind:'select',options:['personal','rental'],refresh:true});
-    if(at(context,[...p,'use'])==='rental')field(row,context,[...p,'rentalId'],'Proceeds rental unit',{kind:'select',options:rentalOptions(controller,context,String(at(context,[...p,'propertyId'])??''))});
-    allocationFields(row,context,[...p,'share']);
-  });
-}
-function renderRental(root:HTMLElement,controller:WorkspaceController,context:FieldContext,path:FieldPath):void {
-  const unit=at(context,path) as RawObject,future=isFuturePropertyPurchase(at(context,['property']),controller.getState().savedPlan.startYear),unitLabel=rentalOptions(controller,context,context.draft.recordId).find(option=>option.value===unit.id)?.label.split(' — ')[0]??'Rental unit',disclosure=future?root:details(root,`Rental unit — ${unitLabel}`,{key:`${String(unit.id)}:rental`,initialOpen:!controller.getState().savedPlan.rentals.some(r=>r.id===unit.id),status:`${unknownCount(unit)} unknown facts`});let node:HTMLElement=group(disclosure,'Rental details');disclosure.dataset.fieldGroup=path.join('.');if(disclosure instanceof HTMLDetailsElement)registerFormSummary(disclosure,()=>`${unknownCount(at(context,path))} unknown facts`);
-  const project=at(context,['property','aduProject']) as RawObject|undefined,isProject=project?.rentalId===unit.id;
-  if(!isProject)field(node,context,[...path,'monthlyRentCents'],'Monthly rent receipts',{kind:'money'});field(node,context,[...path,'rentGrowthBps'],'Effective annual rent growth (%)',{kind:'rate'});field(node,context,[...path,'rentStartDate'],'Lease income start date',{kind:'date'});field(node,context,[...path,'rentEndDate'],'Lease income end date (optional)',{kind:'date',optional:true});field(node,context,[...path,'availableDate'],'Available for rent date',{kind:'date'});
-  node.append(element('p',isProject?'Rental readiness starts depreciation; lease income can begin later. New-rental prior history starts at zero.':future?'Rental income and depreciation begin after purchase when the rental is ready. Building basis excludes land.':'Available by forecast start; rent may begin later. Building basis excludes land and differs from market value.'));
-  if(isProject){field(node,context,[...path,'vacancyBps'],'Vacancy allowance (%)',{kind:'rate',optional:true,refresh:true});const parsed=fromDraftValue({monthlyRentCents:at(context,[...path,'monthlyRentCents']),vacancyBps:at(context,[...path,'vacancyBps'])??'0.00'},context.draft.recordId);let collected='Needs valid rent and vacancy';if(!parsed.issues.length)try{collected=formatCents(settleCents(new Decimal(parsed.value.monthlyRentCents as number).mul(new Decimal(10000).minus(parsed.value.vacancyBps as number)).div(10000)));}catch{}const preview=element('p',`Expected collected rent: ${collected} per full leased month`);preview.dataset.testid='adu-draft-collected-rent';node.append(preview);}
-  if(future)node=details(node,'Advanced rental tax details',{key:`${String(unit.id)}:rental-tax`});
-  booleanHistory(node,context,[...path,'activeParticipation'],'Active participation');
-  for(const [key,label]of [['longTermFairMarketLease','Long-term fair-market lease'],['noPersonalUse','Rental has no personal use'],['noSubstantialTenantServices','No substantial tenant services'],['ordinaryResidential','Ordinary residential rental'],['advancedBasisAdjustments','Advanced basis adjustments apply'],['californiaSmallBusinessQualification','California AMT small-business qualification']] as const)booleanHistory(node,context,[...path,'qualifications',key],label);
-  if(!isProject){field(node,displayed(context,[...path,'sharedAllocation'],at(context,[...path,'sharedAllocation'])?'explicit':'default',value=>{context.onChange([...path,'sharedAllocation'],value==='explicit'?{numerator:'',denominator:''}:undefined);context.refresh();}),[...path,'sharedAllocation'],'Shared-cost allocation',{kind:'select',options:[{value:'default',label:'Default property / area allocation'},{value:'explicit',label:'Explicit share'}]});
-  if(at(context,[...path,'sharedAllocation']))allocationFields(node,context,[...path,'sharedAllocation']);
-  const converted=displayed(context,[...path,'convertedFromPersonalUse'],String(at(context,[...path,'convertedFromPersonalUse'])??false),value=>{context.onChange([...path,'convertedFromPersonalUse'],value==='true');context.refresh();});
-  field(node,converted,[...path,'convertedFromPersonalUse'],'Converted from personal use',{kind:'select',options:[{value:'false',label:'No'},{value:'true',label:'Yes'}]});
-  if(at(context,[...path,'convertedFromPersonalUse']))moneyHistory(node,context,[...path,'conversionBuildingFmv'],'Building fair market value at conversion');
-  const allocations=at(context,[...path,'loanAllocations']) as readonly RawObject[];
-  for(const [index,allocation]of allocations.entries()){
-    const p=[...path,'loanAllocations',index],choices=loanOptions(controller,context),loanName=propertyRecords(controller,context).flatMap(property=>property.loans).find(loan=>loan.id===allocation.loanId)?.name??'Removed loan reference',section=group(node,`Rental interest allocation — ${loanName}`);
-    field(section,context,[...p,'loanId'],'Allocated loan',{kind:'select',options:choices});allocationFields(section,context,[...p,'share']);booleanHistory(section,context,[...p,'qualification'],'Rental proceeds and interest qualified');
-    section.append(button('Remove rental interest allocation',()=>{context.onChange([...path,'loanAllocations'],(at(context,[...path,'loanAllocations']) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));
-  }
-  node.append(button('Add rental interest allocation',()=>{const loans=at(context,['property','loans']) as readonly RawObject[];context.onChange([...path,'loanAllocations'],[...(at(context,[...path,'loanAllocations']) as readonly RawObject[]),{loanId:String(loans[0]?.id??''),share:{numerator:'',denominator:''},qualification:unknown()}]);context.refresh();}));
-  for(const [book,label]of books)historyBook(node,context,[...path,'taxHistory',book],label);
-  }
-  const qbiDisclosure=details(node,'QBI history',{key:`${String(unit.id)}:qbi`,status:`${unknownCount(unit.qbi)} unknown facts`});qbiDisclosure.dataset.fieldGroup=[...path,'qbi'].join('.');registerFormSummary(qbiDisclosure,()=>`${unknownCount(at(context,[...path,'qbi']))} unknown facts`);const qbi=group(qbiDisclosure,'Qualified business income');booleanHistory(qbi,context,[...path,'qbi','qualification'],'QBI qualification');moneyHistory(qbi,context,[...path,'qbi','wagesCents'],'QBI wages');moneyHistory(qbi,context,[...path,'qbi','ubiaCents'],'Unadjusted qualified property basis (UBIA)');
-  if(!isProject){const lossPath=[...path,'qbi','openingLossVintages'],losses=at(context,lossPath) as {known?:boolean;value?:readonly RawObject[]}|undefined;
-  field(qbi,displayed(context,lossPath,losses?.known?'known':'unknown',value=>{context.onChange(lossPath,value==='known'?{known:true,value:[]}:unknown());context.refresh();}),lossPath,'QBI loss history',{kind:'select',options:[{value:'unknown',label:'Unknown'},{value:'known',label:'Enter losses'}]});
-  if(losses?.known)qbi.append(element('small','No rows means confirmed no prior losses.'));
-  if(losses?.known)rows(qbi,context,[...lossPath,'value'],'QBI loss vintage','Add QBI loss vintage','Remove QBI loss vintage',()=>({year:'',amountCents:''}),(row,p)=>{field(row,context,[...p,'year'],'Loss year',{kind:'integer'});field(row,context,[...p,'amountCents'],'Loss amount',{kind:'money'});});
-  }else qbi.append(element('small','New-rental prior QBI losses start at confirmed zero; forecast losses carry forward automatically.'));
-}
-function renderExpense(root:HTMLElement,controller:WorkspaceController,context:FieldContext,path:FieldPath):void {
-  const expense=at(context,path) as RawObject,node=group(root,`Property expense — ${String(expense.name??expense.id)}`);
-  field(node,context,[...path,'name'],'Property expense name');field(node,context,[...path,'amountCents'],'Property expense amount',{kind:'money'});field(node,context,[...path,'frequency'],'Property expense frequency',{kind:'select',options:['monthly','annual'],hint:'Annual amounts are divided by 12 and budgeted monthly.'});field(node,context,[...path,'startDate'],'Property expense start date',{kind:'date',hint:'Monthly budgets begin on this date; no daily proration. Shorter months use their last day.'});field(node,context,[...path,'endDate'],'Property expense end date (optional)',{kind:'date',optional:true});field(node,context,[...path,'annualGrowthBps'],'Property expense annual growth (%)',{kind:'rate'});
-  field(node,context,[...path,'taxCategory'],'Property expense category',{kind:'select',options:taxCategoryOptions,refresh:true});
-  field(node,context,[...path,'use'],'Property expense use',{kind:'select',options:['personal','rental','shared'],refresh:true});
-  if(at(context,[...path,'use'])==='rental')field(node,context,[...path,'rentalId'],'Direct expense rental unit',{kind:'select',options:rentalOptions(controller,context,context.draft.recordId)});
-  if(at(context,[...path,'use'])==='shared'){
-    const override=[...path,'allocationOverride'];field(node,displayed(context,override,at(context,override)?'explicit':'default',value=>{context.onChange(override,value==='explicit'?{numerator:'',denominator:''}:undefined);context.refresh();}),override,'Expense shared allocation',{kind:'select',options:[{value:'default',label:'Default rental allocation'},{value:'explicit',label:'Explicit expense share'}]});
-    if(at(context,override))allocationFields(node,context,override);
-  }
-  if(at(context,[...path,'taxCategory'])==='mortgage-insurance')booleanHistory(node,context,[...path,'mortgageInsuranceQualification'],'Personal mortgage insurance qualified');
-}
-function purchaseFundingFields(root:HTMLElement,controller:WorkspaceController,context:FieldContext):void {
-  const path=['property','purchaseFunding'],funding=at(context,path),source=funding?.kind==='taxable-brokerage'?String(funding.accountId):'household-cash';
-  const brokerages=controller.getState().savedPlan.accounts.filter(account=>account.type==='taxable-brokerage'),selected=brokerages.find(account=>account.id===source);
-  const adapted=displayed(context,path,source,value=>context.onChange(path,value==='household-cash'?{kind:'household-cash'}:{kind:'taxable-brokerage',accountId:String(value)}));
-  field(root,adapted,path,'Pay down payment from',{kind:'select',options:[{value:'household-cash',label:'Household cash'},...brokerages.map(account=>({value:account.id,label:account.name})),...(source!=='household-cash'&&!selected?[{value:source,label:`Unavailable account (${source})`}]:[])],refresh:true,hint:'Paid in the purchase month. Brokerage sales also cover the estimated capital gains tax; mortgage payments and operating expenses use household cash.'});
-  if(source!=='household-cash'){
-    if(selected){
-      root.append(element('p',`Opening account balance: ${formatCents(selected.openingBalanceCents)}`));
-      root.append(element('p',selected.openingTaxableBasis?.known?`Investment cost basis: ${formatCents(selected.openingTaxableBasis.value)}`:'Investment cost basis: Unknown. Funding estimates use a zero-basis planning assumption until you enter the amount paid for investments still owned.'));
-      root.append(element('small','Planning assumes proportional sales of long-term holdings. Realized losses receive no modeled tax benefit.'));
-      if(context.ui)root.append(button('Edit account cost basis',()=>context.ui!.review({section:'Investments',recordId:selected.id,field:'openingTaxableBasis.known',label:'Edit account cost basis'})));
-      else root.append(element('small','Edit this account’s investment cost basis in Investments.'));
-    }else root.append(element('p','Choose a saved taxable brokerage account or household cash. The selected account is unavailable.'));
-  }
-  const estimationPath=['property','purchaseTaxEstimation'],estimation=at(context,estimationPath),mode=estimation?.mode??'simple';
-  const modeContext=displayed(context,[...estimationPath,'mode'],mode,value=>context.onChange(estimationPath,value==='simple'?{mode:'simple',buildingShareBps:estimation?.buildingShareBps??'80.00'}:{mode:'detailed'}));
-  field(root,modeContext,[...estimationPath,'mode'],'Purchase tax calculation',{kind:'select',options:[{value:'simple',label:'Planning estimates'},{value:'detailed',label:'Detailed tax inputs'}],refresh:true});
-  if(mode==='simple'){
-    if(at(context,['property','role'])!=='primary')field(root,context,[...estimationPath,'buildingShareBps'],'Estimated building share (%)',{kind:'rate',hint:'The rest of the purchase price is land. Only the building share depreciates.'});
-    root.append(element('small','Planning estimates use ordinary acquisition financing and residential rental tax assumptions. Confirmed tax inputs override estimates; detailed inputs are available below.'));
-  }
-}
 function propertyFields(host:HTMLElement,controller:WorkspaceController,context:FieldContext):void {
-  const path=['property'],property=at(context,path) as RawObject,future=isFuturePropertyPurchase(property,controller.getState().savedPlan.startYear);
-  const advanced=property.aduProject?renderAduProjectFields(host,controller,context):undefined;
-  const root=advanced?details(host,'Existing home details',{key:`${context.draft.recordId}:home`}):host;
-  const related=advanced??root;
-  field(root,context,[...path,'name'],'Property name');field(root,context,[...path,'role'],'Property role',{kind:'select',options:[{value:'primary',label:'Primary home'},{value:'rental',label:'Whole-property rental'},{value:'primary-with-adu',label:'Primary home with ADU'}],refresh:true});if(property.aduProject){const role=root.querySelector<HTMLSelectElement>('[name="property.role"]');if(role)role.disabled=true;}
-  field(root,context,[...path,'purchaseDate'],'Purchase date',{kind:'date',refresh:true,hint:future?'The property and mortgage enter the forecast in the purchase month.':'Use the original purchase date, or enter a future closing date to plan a purchase.'});
-  field(root,context,[...path,'purchasePriceCents'],'Purchase price',{kind:'money',refresh:future});field(root,context,[...path,'downPaymentCents'],'Down payment',{kind:'money',refresh:future});
-  field(root,context,[...path,'openingValueCents'],future?'Property market value at purchase':property.aduProject?'Original home market value at forecast start':property.role==='primary-with-adu'?'Combined home and ADU market value at forecast start':'Property market value at forecast start',{kind:'money',hint:future?`As of ${String(property.purchaseDate)}. Defaults to the purchase price; enter a different estimate if needed.`:`As of Jan 1, ${controller.getState().savedPlan.startYear}.${property.aduProject?' Includes the existing home and land; added ADU value posts at completion.':property.role==='primary-with-adu'?' Includes the home and ADU together.':''}`});field(root,context,[...path,'appreciationBps'],'Effective annual appreciation (%)',{kind:'rate'});
-  if(future&&!property.aduProject)purchaseFundingFields(root,controller,context);
-  if(property.role==='primary-with-adu'&&!property.aduProject) {
-    field(root,context,[...path,'primaryArea'],'Primary home living area',{kind:'text',hint:'Use the same area units for home and ADU; fractions are allowed.'});field(root,context,[...path,'aduArea'],'ADU living area',{kind:'text'});
-    const decoded=fromDraftValue(context.draft.value,context.draft.recordId);
-    if(decoded.issues.length===0){
-      const defaultUnits=(decoded.value.rentals as readonly RentalUnit[]).map(({sharedAllocation:_override,...unit})=>unit);
-      const allocation=defaultRentalAllocation(decoded.value.property as unknown as Property,defaultUnits);
-      root.append(element('p',allocation.status==='available'?`Default ADU shared allocation: ${Object.values(allocation.value).join(', ')||'add a rental unit'}. Explicit expense and loan allocations remain independent.`:`Default ADU shared allocation unavailable: ${allocation.issues.map(i=>i.explanation).join(' ')}`));
-    }else root.append(element('p','Default ADU shared allocation requires valid entered areas and amounts.'));
+ const property=at(context,['property']) as RawObject,future=isFuturePropertyPurchase(property,controller.getState().savedPlan.startYear),memory=fieldMemory(context);
+ const projectActions=(root:HTMLElement)=>{
+  if(property.aduProject)root.append(button('Remove ADU project',()=>{if(context.ui&&!root.isConnected)return;memory.step='property';context.onChange([],removeAduProjectDraft(context.draft.value as unknown as PropertyDraftBundle));context.refresh();}));
+  else if(property.role==='primary'&&!future)root.append(button('Build an ADU',()=>{if(context.ui&&!root.isConnected)return;memory.step='adu';context.onChange([],addAduProjectDraft(context.draft.value as unknown as PropertyDraftBundle,controller.getState().savedPlan.startYear,kind=>idFor(controller,context,kind)));context.refresh();}));
+ };
+ if(!context.memory){
+  const advanced=property.aduProject?renderAduProjectFields(host,controller,context):undefined,main=advanced?details(host,'Existing home details',{key:`${context.draft.recordId}:home`}):host;
+  renderPropertyBasics(main,controller,context);renderPropertyFinancing(main,controller,context);projectActions(main);const related=advanced??main;renderPropertyRentals(related,controller,context);renderPropertyHistory(related,controller,context);renderPropertyCosts(related,controller,context);return;
+ }
+ const steps=[['property','Property'],['financing','Financing'],['rent-costs','Rent & costs'],...(property.aduProject?[['adu','ADU setup']]:[])];if(!steps.some(([key])=>key===memory.step))memory.step=property.aduProject?'adu':'property';
+ const nav=element('nav');nav.setAttribute('aria-label','Property groups');host.append(nav);
+ const panels:HTMLElement[]=[],stepActions=element('div');
+ const select=(step:string)=>{memory.step=step;for(const panel of panels)panel.hidden=panel.dataset.editorStep!==step;for(const action of nav.querySelectorAll<HTMLButtonElement>('[data-select-editor-step]'))action.setAttribute('aria-pressed',String(action.dataset.selectEditorStep===step));renderStepActions();};
+ for(const [key,title] of steps){const action=button(title!,()=>select(key!));action.dataset.selectEditorStep=key;action.setAttribute('aria-pressed',String(memory.step===key));nav.append(action);}
+ for(const [key,title] of steps){const panel=element('section');panel.dataset.editorStep=key;panel.hidden=memory.step!==key;panel.append(element('h3',title));host.append(panel);panels.push(panel);
+  if(key==='property'){renderPropertyBasics(panel,controller,context);projectActions(panel);}
+  else if(key==='financing')renderPropertyFinancing(panel,controller,context);
+  else if(key==='rent-costs'){renderPropertyRentals(panel,controller,context);renderPropertyHistory(panel,controller,context);renderPropertyCosts(panel,controller,context);}
+  else renderAduProjectFields(panel,controller,context);
+ }
+ host.append(stepActions);
+ function renderStepActions():void {stepActions.replaceChildren();
+ const index=steps.findIndex(([key])=>key===memory.step),next=steps[index+1];
+ if(index>0)stepActions.append(button(`Back to ${steps[index-1]![1]}`,()=>select(steps[index-1]![0]!)));
+ if(next)stepActions.append(button(`Continue to ${next[1]}`,()=>{
+  const prepared=prepareEdit(controller,{kind:'record',section:'properties',recordId:context.draft.recordId});
+  if(prepared.status==='invalid'&&!controller.getState().savedPlan.properties.some(row=>row.id===context.draft.recordId)){
+   const issues=prepared.issues.filter(issue=>memory.step==='property'?!/loans|rentals|expenses|aduProject|purchaseFunding/.test(issue.field??''):memory.step==='financing'?/loans|purchaseFunding/.test(issue.field??''):true);
+   if(issues.length){memory.attempted=true;const form=host.closest<HTMLElement>('form');if(form)setFormTaskIssues(form,issues,context.ui?.editorView);if(context.ui)syncFormFeedback(host,controller,context.ui);return;}
   }
-  rows(details(root,'Yearly appreciation overrides',{key:`${context.draft.recordId}:appreciation`,status:`${(at(context,[...path,'appreciationOverrides']) as readonly unknown[]).length} overrides`}),context,[...path,'appreciationOverrides'],'Appreciation override','Add appreciation override','Remove appreciation override',()=>({year:'',rateBps:''}),(row,p)=>{field(row,context,[...p,'year'],'Appreciation year',{kind:'integer'});field(row,context,[...p,'rateBps'],'Appreciation rate (%)',{kind:'rate'});});
-  const loans=at(context,[...path,'loans']) as readonly RawObject[],loanGroup=element('section');loanGroup.dataset.fieldGroup='property.loans';loanGroup.dataset.groupLabel='Property mortgages';root.append(loanGroup);
-  for(const [index]of loans.entries()){const section=element('section');disclosureRoots.set(section,ownerFor(root));renderLoan(section,controller,context,[...path,'loans',index]);section.append(button('Remove loan',()=>{context.onChange([...path,'loans'],(at(context,[...path,'loans']) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));loanGroup.append(section);}
-  loanGroup.append(button('Add loan',()=>{
-    const date=`${controller.getState().savedPlan.startYear}-01-01`,purchaseDate=at(context,['property','purchaseDate']),loan:RawObject={id:idFor(controller,context,'loan'),name:'Purchase loan',originalPrincipalCents:'',aprBps:'0.00',originationDate:purchaseDate,acquisitionDate:purchaseDate,termMonths:'360',firstPaymentDate:future?purchaseFirstPaymentDate(purchaseDate)??purchaseDate:`${date.slice(0,7)}-31`,openingBalance:unknown(),openingPayment:unknown(),collateralPropertyId:context.draft.recordId,proceedsQualification:{kind:'acquisition',qualifiedAcquisitionDebt:unknown(),qualifiedPrincipalCents:unknown(),historyComplete:unknown()},proceedsAllocations:[],financingAtRiskQualification:unknown()},initialized=purchaseTerms(context,loan);
-    context.onChange([...path,'loans'],[...(at(context,[...path,'loans']) as readonly RawObject[]),initialized.status==='available'?loanWithTerms(loan,initialized.value):loan]);context.refresh();
-  }));
-  if(property.aduProject){host.append(button('Remove ADU project',()=>{if(context.ui&&!host.isConnected)return;context.onChange([],removeAduProjectDraft(context.draft.value as unknown as PropertyDraftBundle));context.refresh();}));}
-  else if(property.role==='primary'&&!future)root.append(button('Build an ADU',()=>{if(context.ui&&!root.isConnected)return;context.onChange([],addAduProjectDraft(context.draft.value as unknown as PropertyDraftBundle,controller.getState().savedPlan.startYear,kind=>idFor(controller,context,kind)));context.refresh();}));
-  const rentals=at(context,['rentals']) as readonly RawObject[];
-  for(const [index,unit]of rentals.entries()){const section=element('section');disclosureRoots.set(section,ownerFor(root));renderRental(section,controller,context,['rentals',index]);if(!property.aduProject)section.append(button('Remove rental unit',()=>{context.onChange(['rentals'],(at(context,['rentals']) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));related.append(section);}
-  if(property.role!=='primary'&&!property.aduProject)root.append(button('Add rental unit',()=>{const date=future?String(at(context,['property','purchaseDate'])):`${controller.getState().savedPlan.startYear}-01-01`;context.onChange(['rentals'],[...(at(context,['rentals']) as readonly RawObject[]),createPropertyRentalDraft(at(context,['property']),date,idFor(controller,context,'rental'))]);context.refresh();}));
-  for(const [index]of (at(context,['expenses']) as readonly RawObject[]).entries()){const section=element('section');disclosureRoots.set(section,ownerFor(root));renderExpense(section,controller,context,['expenses',index]);section.append(button('Remove property expense',()=>{context.onChange(['expenses'],(at(context,['expenses']) as readonly RawObject[]).filter((_,i)=>i!==index));context.refresh();}));related.append(section);}
-  related.append(button('Add property expense',()=>{context.onChange(['expenses'],[...(at(context,['expenses']) as readonly RawObject[]),{id:idFor(controller,context,'expense'),name:'Property expense',amountCents:'0.00',frequency:'monthly',startDate:future?at(context,['property','purchaseDate']):`${controller.getState().savedPlan.startYear}-01-01`,annualGrowthBps:'0.00',propertyId:context.draft.recordId,use:future&&property.role==='rental'?'rental':'personal',...(future&&property.role==='rental'?(at(context,['rentals']) as readonly RawObject[])[0]?{rentalId:(at(context,['rentals']) as readonly RawObject[])[0]!.id}:{}:{}),taxCategory:'personal'}]);context.refresh();}));
+  select(next[0]!);
+ }));
+ }
+ renderStepActions();
 }
 /** Related property, loan, rental and expense rows remain one revisioned draft. */
-export function renderPropertiesForm(root:HTMLElement,controller:WorkspaceController,ui?:IssueViewContext):void {
+export function renderPropertiesForm(root:HTMLElement,controller:WorkspaceController,ui?:IssueViewContext,options?:FormRenderOptions):void {
   if(ui?.editorView)disclosureStates.set(root,ui.editorView.propertyDisclosures);
-  captureDisclosures(root);disclosureRoots.set(root,root);ui?.disclosures.closeWithin(root,false);root.replaceChildren();root.append(element('h2','Properties'),element('p','Add homes you own or plan a future purchase. Select a down-payment funding source for purchases during the forecast. Existing primary homes can also plan an ADU build.'));
+  captureDisclosures(root);disclosureRoots.set(root,root);ui?.disclosures.closeWithin(root,false);root.replaceChildren();if(!options)root.append(element('h2','Properties'),element('p','Add homes you own or plan a future purchase. Select a down-payment funding source for purchases during the forecast. Existing primary homes can also plan an ADU build.'));
   const state=controller.getState(),ids=[...new Set([...state.savedPlan.properties.map(p=>p.id),...Object.values(state.drafts).filter(d=>d.section==='properties').map(d=>d.recordId)])];
-  for(const id of ids){
+  for(const id of options?ids.filter(id=>id===options.recordId):ids){
     const card=element('form');card.dataset.recordId=id;card.dataset.editableSection='properties';const body=element('div');disclosureRoots.set(body,root);card.append(element('h3',String(controller.getDraft('properties',id).value.property&& (controller.getDraft('properties',id).value.property as RawObject).name||'Property')),body);
-    const context:FieldContext={...(ui?{ui}:{}),get draft(){return controller.getDraft('properties',id);},get issues(){return controller.getState().issues;},onChange(path,value){if(ui&&!root.isConnected)return;setFormTaskIssues(card,[],ui?.editorView);const draft=controller.getDraft('properties',id);controller.editDraft(id,{...draft,value:updatePropertyPurchaseDraft(draft.value,path,value,controller.getState().savedPlan.startYear,()=>idFor(controller,context,'rental'),!controller.getState().savedPlan.properties.some(property=>property.id===id))});},refresh(){captureDisclosures(body);ui?.disclosures.closeWithin(body,false);refreshFields(body,()=>propertyFields(body,controller,context));if(ui)syncFormFeedback(root,controller,ui);}};
-    context.refresh();const save=element('button','Save property');save.type='submit';card.append(save,button('Remove property',()=>controller.removeRecord('properties',id)));card.addEventListener('submit',event=>{event.preventDefault();controller.saveProperty(id);});
+    if(options){card.dataset.focusedForm='';registerFocusedForm(card,options.memory);card.addEventListener('focusout',event=>{const field=(event.target as HTMLElement).dataset.field;if(field){options.memory.touched.add(field);if(ui)syncFormFeedback(root,controller,ui);}});}
+    const context:FieldContext={...(ui?{ui}:{}),...(options?{memory:options.memory,...(options.requestPrerequisite?{requestPrerequisite:options.requestPrerequisite}:{})}:{}),get draft(){return controller.getDraft('properties',id);},get issues(){return controller.getState().issues;},onChange(path,value){if(ui&&!root.isConnected)return;setFormTaskIssues(card,[],ui?.editorView);const draft=controller.getDraft('properties',id);controller.editDraft(id,{...draft,value:updatePropertyPurchaseDraft(draft.value,path,value,controller.getState().savedPlan.startYear,()=>idFor(controller,context,'rental'),!controller.getState().savedPlan.properties.some(property=>property.id===id))});},refresh(){captureDisclosures(body);ui?.disclosures.closeWithin(body,false);refreshFields(body,()=>propertyFields(body,controller,context));if(ui)syncFormFeedback(root,controller,ui);}};
+    context.refresh();if(options){card.addEventListener('submit',event=>{event.preventDefault();options.memory.attempted=true;options.onSubmit();});root.append(card);continue;}const save=element('button','Save property');save.type='submit';card.append(save,button('Remove property',()=>controller.removeRecord('properties',id)));card.addEventListener('submit',event=>{event.preventDefault();controller.saveProperty(id);});
     card.append(element('small','Discards this draft and reloads applied inputs.'),button('Discard edits',()=>{setFormTaskIssues(card,[],ui?.editorView);controller.discardDraft(id);renderPropertiesForm(root,controller,ui);}));
     root.append(card);
   }
   if(ui)syncFormFeedback(root,controller,ui);
-  root.append(button('Add property',()=>controller.beginAdd('properties')));
+  if(!options)root.append(button('Add property',()=>controller.beginAdd('properties')));
 }

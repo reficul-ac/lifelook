@@ -161,7 +161,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
     }
   }
   function renderPreview(){
-    status.textContent=preview.status==='inactive'?'No allocation policy applied.':preview.status==='valid'?(controller.getState().allocationDraft?'Allocation preview · edits not applied':'Applied allocation'):preview.status==='pending'?(preview.lastValid?'Stale preview · updating allocation preview.':'Updating allocation preview.'):preview.status==='invalid'?(preview.lastValid?'Invalid allocation edits · Stale preview shows the last valid allocation.':'Invalid allocation edits · no valid preview available.'):(preview.lastValid?'Allocation preview failed · Stale preview shows the last valid allocation.':'Allocation preview failed · no valid preview available.');
+    status.textContent=preview.status==='inactive'?'No allocation policy applied.':preview.status==='valid'?((external?external.getState().status!=='inactive':!!controller.getState().allocationDraft)?'Allocation preview · edits not applied':'Applied allocation'):preview.status==='pending'?(preview.lastValid?'Stale preview · updating allocation preview.':'Updating allocation preview.'):preview.status==='invalid'?(preview.lastValid?'Invalid allocation edits · Stale preview shows the last valid allocation.':'Invalid allocation edits · no valid preview available.'):(preview.lastValid?'Allocation preview failed · Stale preview shows the last valid allocation.':'Allocation preview failed · no valid preview available.');
     const report=preview.lastValid?.projection.years.find(year=>year.year===view.selections.allocationYear)?.cashFlowAllocation;
     if(report&&preview.lastValid)renderAllocationPie(chart,report,preview.lastValid.plan,context);else{context.disclosures.closeWithin(chart,false);chart.replaceChildren();}
     budget.textContent=report?.status==='available'?`Cash available for allocation: ${formatCents(report.value.originalCashFlowCents)} · ${view.selections.allocationYear}`:'Cash available for allocation: needs data';
@@ -183,7 +183,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
   },editorOptions?.ownership);
   function syncExternal(){
     if(!external||disposed)return;const current=external.getState();
-    preview.status=current.status==='stale'?'invalid':current.status;preview.issues=current.issues;
+    preview.status=current.status==='inactive'&&controller.getState().savedPlan.cashFlowAllocation?'valid':current.status==='stale'?'invalid':current.status;preview.issues=current.issues;
     const report=current.current?{plan:current.current.prepared.plan,projection:current.current.projection,basePlan:current.current.prepared.basePlan}:current.lastValid;
     if(report)preview.lastValid={plan:report.plan,projection:report.projection,...(report.basePlan?{basePlan:report.basePlan}:{})};
     else if(current.status==='inactive'){const applied=controller.getState();if(applied.savedPlan.cashFlowAllocation)preview.lastValid={plan:applied.savedPlan,projection:applied.projection};else delete preview.lastValid;}

@@ -91,11 +91,11 @@ function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort
     const capture=issued.get(prepared);return !!capture&&capture.base===savedPlan&&capture.base===prepared.basePlan&&capture.epoch===controllerEpoch&&capture.epoch===prepared.controllerEpoch&&capture.generation===(draftGenerations.get(capture.key)??0)&&capture.generation===prepared.draftGeneration&&capture.token===prepared.token&&capture.plan===prepared.plan&&prepared.ruleSet===ruleSet&&capture.fingerprint===JSON.stringify(prepared.plan)&&capture.rulesFingerprint===JSON.stringify(ruleSet);
   };
   const complete=(prepared:ReadyEdit,calculated:ProjectionResult):CalculatedEdit|null=>{
-    if(!fresh(prepared)||calculated.inputRevision!==prepared.plan.revision)return null;
+    if(!fresh(prepared)||calculated.planId!==prepared.plan.id||calculated.inputRevision!==prepared.plan.revision)return null;
     const receipt=Object.freeze({prepared,projection:calculated});receipts.add(receipt);return receipt;
   };
   const commitCalculated=(calculated:CalculatedEdit):SaveRecordResult=>{
-    if(!receipts.has(calculated)||consumed.has(calculated)||!fresh(calculated.prepared)||calculated.projection.inputRevision!==calculated.prepared.plan.revision){issues=[{code:'stale-edit-preview',field:'plan',severity:'error',explanation:'This preview no longer matches the current draft and applied inputs.',resolution:'Wait for a current preview before applying.'}];notify();return result(false);}
+    if(!receipts.has(calculated)||consumed.has(calculated)||!fresh(calculated.prepared)||calculated.projection.planId!==calculated.prepared.plan.id||calculated.projection.inputRevision!==calculated.prepared.plan.revision){issues=[{code:'stale-edit-preview',field:'plan',severity:'error',explanation:'This preview no longer matches the current draft and applied inputs.',resolution:'Wait for a current preview before applying.'}];notify();return result(false);}
     const target=calculated.prepared.target,outcome=commitProjection(calculated.prepared.plan,calculated.projection,target.kind==='record'?[target.recordId]:[],target.kind==='allocation');if(outcome.accepted)consumed.add(calculated);return outcome;
   };
   const householdValue=()=>({household:savedPlan.household,taxPolicy:savedPlan.taxPolicy,startYear:savedPlan.startYear,horizonYears:savedPlan.horizonYears,openingCashCents:savedPlan.openingCashCents});

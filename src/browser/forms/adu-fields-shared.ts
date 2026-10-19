@@ -4,6 +4,7 @@ import { aduAreaRatios,calculateAduValueAdded } from '../../engine/property/adu-
 import type { PropertyDraftBundle } from '../adu-project-draft';
 import { button,element,renderField,renderHistory,setAt,valueAt,type FieldContext,type FieldOptions,type FieldPath } from '../fields';
 import { idFor } from '../record-ids';
+import {fieldMemory,fieldModeKey,swapMode} from '../record-ui-state';
 import { fromDraftValue,type RawObject,type WorkspaceController } from '../state';
 import { formatCents } from '../views/issues';
 export const books:readonly [TaxBook,string][]=[['federal','Federal'],['california','California'],['federal-amt','Federal AMT'],['california-amt','California AMT']];
@@ -26,7 +27,7 @@ export function createAduEnvironment(root:HTMLElement,controller:WorkspaceContro
  };
  const treatments=(node:HTMLElement,p:FieldPath)=>{
   for(const [book,label] of books){const bookPath=[...p,book],answer=get(bookPath),section=group(node,`${label} paid-amount treatment`,true);
-   const adapted:FieldContext={...context,get draft(){return{...context.draft,value:setAt(context.draft.value,bookPath,answer?.known?'known':'unknown')};},onChange(_p,v){change(bookPath,v==='known'?{known:true,value:zeroSplit()}:unknown());}};
+   const adapted:FieldContext={...context,get draft(){return{...context.draft,value:setAt(context.draft.value,bookPath,answer?.known?'known':'unknown')};},onChange(_p,v){const current=get(bookPath) as RawObject|undefined;change(bookPath,swapMode(fieldMemory(context),`adu-treatment:${fieldModeKey(context,bookPath)}`,current?.known?'known':'unknown',String(v),current??unknown(),v==='known'?{known:true,value:zeroSplit()}:unknown()));}};
    renderField(section,adapted,bookPath,`${label} treatment status`,{kind:'select',options:[{value:'unknown',label:'Unknown'},{value:'known',label:'Enter confirmed split'}]});
    if(answer?.known)for(const [key,name] of [['buildingBasisCents','Building basis'],['currentDeductionCents','Current deduction'],['nondepreciableBasisCents','Nondepreciable basis'],['nondeductibleExpenseCents','Nondeductible expense']] as const)field(section,[...bookPath,'value',key],`${label} ${name}`,{kind:'money'});
    section.append(element('small','Confirm the supported treatment independently for this book. The split must equal the paid amount; a building category does not confirm tax eligibility.'));

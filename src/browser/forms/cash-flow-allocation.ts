@@ -64,6 +64,8 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
     const row=element('fieldset'),legend=element('legend');row.append(legend);
     const dest=field(row,'Allocation destination','','select',value=>{
       const i=index(id);if(i<0)return;const current=draft(),raw=object(entries(current.value)[i]?.destination),next=setAt(current.value,['entries',i,'destination'],swapMode(memory,`allocation-destination:${id}`,destinationValue(raw),String(value),raw,destination(String(value)))),account=controller.getState().savedPlan.accounts.find(a=>a.id===destination(String(value)).accountId);
+      const amount=object(entries(current.value)[i]?.amount);
+      entries(next)[i]!.amount=swapMode(memory,`allocation-destination-amount:${JSON.stringify(id)}`,destinationValue(raw),String(value),amount,amount);
       if(object(entries(next)[i]?.amount).kind==='max-annual'&&!retirement(account?.type))entries(next)[i]!.amount={kind:'percent',percentBps:'0.00'};
       controller.editAllocationDraft({...current,value:next});
     });
@@ -84,7 +86,10 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
     if(!current){
       const toggle=field(host,'Use backdoor Roth',`${prefix}.backdoorRoth`,'checkbox',checked=>{
         const activePath=getPath(),value=activePath.reduce<unknown>((node,key)=>object(node)[key],draft().value),latest=object(value),owner=controller.getState().savedPlan.accounts.find(a=>a.id===latest.accountId)?.ownerId;
-        if(checked){const selected=controller.getState().savedPlan.accounts.filter(a=>a.type==='traditional-ira'&&a.ownerId===owner);edit([...activePath,'backdoorRoth'],{traditionalIraAccountId:selected.length===1?selected[0]!.id:'',cleanIraHistory:{known:false}});}
+        const entryId=activePath[0]==='entries'?entries(draft().value)[Number(activePath[1])]?.id:null;
+        const selected=controller.getState().savedPlan.accounts.filter(a=>a.type==='traditional-ira'&&a.ownerId===owner);
+        const restored=swapMode(memory,`allocation-backdoor:${JSON.stringify([activePath[0],entryId,latest.accountId])}`,latest.backdoorRoth?'enabled':'disabled',checked?'enabled':'disabled',object(latest.backdoorRoth),{traditionalIraAccountId:selected.length===1?selected[0]!.id:'',cleanIraHistory:{known:false}});
+        if(checked)edit([...activePath,'backdoorRoth'],restored);
         else{const {backdoorRoth:_,...direct}=latest;edit(activePath,direct);}
       });
       const details=element('div');host.append(details);current={toggle,details};

@@ -26,7 +26,7 @@ export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSum
   const section=element('section');section.className='forecast-plots';
   if(!rows.length){section.append(element('p','No forecast years to plot.'));root.append(section);return;}
   const controls=element('div');controls.className='forecast-plot-controls';
-  const label=element('label','Plot year'),select=element('select');select.setAttribute('aria-label','Plot year');
+  const label=element('label','Plot year'),select=element('select');select.setAttribute('aria-label','Plot year');select.dataset.reportControl='plot-year';
   for(const row of rows){const option=element('option',String(row.year));option.value=String(row.year);select.append(option);}
   label.append(select);controls.append(label);
   const help=element('small','Hover over a year, select it above, or focus a plot and use the arrow keys.');help.id='forecast-plot-help';controls.append(help);section.append(controls);
@@ -42,14 +42,14 @@ export function renderForecastPlots(root:HTMLElement,rows:readonly ProjectionSum
     if(id==='cash-flow'){
       const legend=element('div');legend.className='forecast-plot-legend';legend.setAttribute('aria-label','Plot series');
       for(const line of series){
-        const button=element('button');button.type='button';button.setAttribute('aria-pressed',String(!hiddenSeries.has(line.key)));button.style.setProperty('--series-color',line.color);
+        const button=element('button');button.type='button';button.dataset.reportControl=`plot-series:${line.key}`;button.setAttribute('aria-pressed',String(!hiddenSeries.has(line.key)));button.style.setProperty('--series-color',line.color);
         const swatch=element('span');swatch.className='forecast-plot-swatch';swatch.setAttribute('aria-hidden','true');button.append(swatch,document.createTextNode(line.label));
         button.addEventListener('click',()=>{if(hiddenSeries.has(line.key))hiddenSeries.delete(line.key);else hiddenSeries.add(line.key);button.setAttribute('aria-pressed',String(!hiddenSeries.has(line.key)));paint();});
         legend.append(button);
       }
       figure.append(legend);
     }
-    const svg=svgElement('svg',{viewBox:`0 0 ${width} ${height}`,role:'img','aria-label':title,'aria-describedby':help.id,tabindex:0});
+    const svg=svgElement('svg',{viewBox:`0 0 ${width} ${height}`,role:'img','aria-label':title,'aria-describedby':help.id,tabindex:0,'data-report-control':`plot:${id}`});
     svg.classList.add('forecast-chart');
     svg.addEventListener('keydown',event=>{
       const moves:Record<string,number>={ArrowLeft:selected-1,ArrowRight:selected+1,Home:0,End:rows.length-1};

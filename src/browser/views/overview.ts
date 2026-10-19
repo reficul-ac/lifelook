@@ -7,7 +7,7 @@ import {renderForecastSummary} from './forecast-summary';
 import {renderForecastPlots} from './forecast-plots';
 import {appendAmount,element,formatCents} from './issues';
 import {renderProjection} from './projection';
-import {createReportDisclosureScope,normalizeReportYears,reconcileReportRegion} from './report-state';
+import {createReportDisclosureScope,normalizeReportYears,preserveReportFocus,reconcileReportRegion} from './report-state';
 
 const columns:readonly {key:Exclude<OverviewMetric,'cashFlowCents'>;label:string;slug:string}[]=[
  {key:'reserveCents',label:'Cash balance',slug:'reserve'},
@@ -62,6 +62,7 @@ export function mountOverview(root:HTMLElement,initial:ReportSnapshot,context:Is
   if(disposed)return;snapshot=next;normalizeReportYears(view,next.plan);
   if(status.textContent!==next.label)status.textContent=next.label;
   if(!forceDiagnostics&&painted&&painted.plan===next.plan&&painted.projection===next.projection&&painted.comparison?.plan===next.comparison?.plan&&painted.comparison?.projection===next.comparison?.projection&&painted.allowDeltas===next.allowDeltas&&paintedYear===view.selections.forecastYear)return;
+  const restoreFocus=preserveReportFocus(root);
   saveScroll();disclosureScope.begin();const generation=++reportGeneration;
   const reportContext=withProducingPlan({...reportBase,review:target=>{if(!disposed&&generation===reportGeneration)context.review(target);}},next.plan),rows=buildOverviewRows(next),years=new Set(rows.map(row=>row.balance.year));
   for(const key of view.reportState.expanded){const match=/^year:(\d+):/.exec(key);if(match&&!years.has(Number(match[1])))view.reportState.expanded.delete(key);}
@@ -74,6 +75,7 @@ export function mountOverview(root:HTMLElement,initial:ReportSnapshot,context:Is
   if(forceDiagnostics||diagnostics.open){const nextDetails=element('div');renderProjection(nextDetails,next.projection,reportContext,view,{compact:true});reconcileReportRegion(details,nextDetails,view.reportState,'details');diagnosticPlan=next.plan;diagnosticProjection=next.projection;}
   if(disclosureScope.finish())issueStatus.textContent='The selected report issue has been resolved.';
   painted=next;paintedYear=view.selections.forecastYear;
+  restoreFocus();
  }
  update(initial);
  return {update,dispose(){if(disposed)return;saveScroll();disposed=true;disclosureScope.dispose();context.disclosures.closeWithin(root,false);yearSelect.onchange=null;tableSelect.onchange=null;plots.ontoggle=null;diagnostics.ontoggle=null;diagnosticToggle.onclick=null;}};

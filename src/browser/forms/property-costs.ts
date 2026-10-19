@@ -1,6 +1,7 @@
 import { button,element,taxCategoryOptions,type FieldContext,type FieldPath } from '../fields';
 import { isFuturePropertyPurchase } from '../purchase-property-setup';
 import { idFor } from '../record-ids';
+import {fieldMemory,fieldModeKey,swapMode} from '../record-ui-state';
 import { type RawObject,type WorkspaceController } from '../state';
 import { allocationFields,at,booleanHistory,disclosureRoots,displayed,field,group,ownerFor,rentalOptions } from './property-fields-shared';
 function renderExpense(root:HTMLElement,controller:WorkspaceController,context:FieldContext,path:FieldPath):void {
@@ -10,7 +11,7 @@ function renderExpense(root:HTMLElement,controller:WorkspaceController,context:F
   field(node,context,[...path,'use'],'Property expense use',{kind:'select',options:['personal','rental','shared'],refresh:true});
   if(at(context,[...path,'use'])==='rental')field(node,context,[...path,'rentalId'],'Direct expense rental unit',{kind:'select',options:rentalOptions(controller,context,context.draft.recordId)});
   if(at(context,[...path,'use'])==='shared'){
-    const override=[...path,'allocationOverride'];field(node,displayed(context,override,at(context,override)?'explicit':'default',value=>{context.onChange(override,value==='explicit'?{numerator:'',denominator:''}:undefined);context.refresh();}),override,'Expense shared allocation',{kind:'select',options:[{value:'default',label:'Default rental allocation'},{value:'explicit',label:'Explicit expense share'}]});
+    const override=[...path,'allocationOverride'];field(node,displayed(context,override,at(context,override)?'explicit':'default',value=>{const current=at(context,override) as RawObject|undefined,restored=swapMode(fieldMemory(context),`share:${fieldModeKey(context,override)}`,current?'explicit':'default',String(value),current??{},{numerator:'',denominator:''});context.onChange(override,value==='explicit'?restored:undefined);context.refresh();}),override,'Expense shared allocation',{kind:'select',options:[{value:'default',label:'Default rental allocation'},{value:'explicit',label:'Explicit expense share'}]});
     if(at(context,override))allocationFields(node,context,override);
   }
   if(at(context,[...path,'taxCategory'])==='mortgage-insurance')booleanHistory(node,context,[...path,'mortgageInsuranceQualification'],'Personal mortgage insurance qualified');

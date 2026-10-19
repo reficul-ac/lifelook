@@ -3,6 +3,7 @@ import {fireEvent, waitFor, within} from '@testing-library/dom';
 import {mountWorkspace, setField} from '../helpers/dom';
 import {makeAllocationPlan} from '../helpers/allocations';
 import {openRecord} from '../helpers/workspace-ui';
+import {prepareEdit} from '../../src/browser/state';
 
 describe('account entry', () => {
   it('associates a blurred rate error with both exact input and supplemental slider', async () => {
@@ -16,6 +17,17 @@ describe('account entry', () => {
     const slider = within(editor).getByRole('slider');
     expect(slider).toHaveAttribute('aria-invalid', 'true');
     expect(slider).toHaveAccessibleDescription(/up to 2 decimal places/);
+  });
+  it.each(['0.00','123.45','','1.234'])('restores current basis text %j after reversing Unknown',raw=>{
+    const base=makeAllocationPlan(),source={...base,accounts:base.accounts.map(account=>account.id==='brokerage'?{...account,openingTaxableBasis:{known:true as const,value:0}}:account)};
+    const {root,controller}=mountWorkspace(source),editor=openRecord(root,{kind:'record',section:'accounts',recordId:'brokerage'});
+    const history='Investment cost basis at forecast start ($) history',value='Investment cost basis at forecast start ($) value';
+    setField(editor,value,raw);setField(editor,history,'unknown');
+    const candidate=prepareEdit(controller,{kind:'record',section:'accounts',recordId:'brokerage'});
+    expect(candidate.status).toBe('ready');if(candidate.status!=='ready')throw Error('Unknown candidate required');
+    expect(candidate.plan.accounts.find(account=>account.id==='brokerage')!.openingTaxableBasis).toEqual({known:false});
+    setField(editor,history,'known');expect(within(editor).getByLabelText(value)).toHaveValue(raw);
+    expect(controller.getState().savedPlan.revision).toBe(0);
   });
   it('starts contributions for an applied account as a separate unapplied record', () => {
     const {root, controller} = mountWorkspace(makeAllocationPlan());

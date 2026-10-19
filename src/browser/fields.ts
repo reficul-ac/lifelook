@@ -1,6 +1,6 @@
 import {mountNumericControl} from './ui/numeric-control';
 import {renderRecordForm, type FormRenderOptions} from './record-form';
-import type {RecordEditorMemory} from './record-ui-state';
+import {fieldMemory,fieldModeKey,swapMode,type RecordEditorMemory} from './record-ui-state';
 import type {PrerequisiteRequest} from './prerequisite-flow';
 import type {IssueViewContext} from './issue-presentation';
 import {syncFormFeedback} from './form-feedback';
@@ -67,7 +67,7 @@ export function renderHistory(root:HTMLElement,context:FieldContext,path:FieldPa
   if(options.kind==='checkbox'||options.kind==='select'){renderBooleanHistory(root,context,path,label,options);return;}
   const group=element('fieldset');group.dataset.fieldGroup=path.join('.');group.dataset.groupLabel=label;group.append(element('legend',options.visibleLabel??shortLabel(label)));
   const history=valueAt(context.draft.value,path) as {known?:boolean;value?:unknown}|undefined;
-  const statusContext:FieldContext={...context,get draft(){return {...context.draft,value:setAt(context.draft.value,[...path,'known'],history?.known?'known':'unknown')};},onChange(_path,value){context.onChange(path,value==='unknown'?{known:false}:{known:true,value:''});}};
+  const statusContext:FieldContext={...context,get draft(){return {...context.draft,value:setAt(context.draft.value,[...path,'known'],history?.known?'known':'unknown')};},onChange(_path,value){const current=valueAt(context.draft.value,path) as RawObject|undefined;context.onChange(path,swapMode(fieldMemory(context),`history:${fieldModeKey(context,path)}`,current?.known?'known':'unknown',String(value),current??{known:false},value==='unknown'?{known:false}:{known:true,value:''}));}};
   renderField(group,statusContext,[...path,'known'],`${label} history`,{kind:'select',visibleLabel:'history',...(options.hint?{hint:options.hint}:{}),options:[{value:'unknown',label:'Unknown'},{value:'known',label:'Enter value'}],refresh:true});
   if(history?.known){const {hint,...entryOptions}=options;renderField(group,context,[...path,'value'],`${label} value`,{...entryOptions,visibleLabel:'value'});}
 

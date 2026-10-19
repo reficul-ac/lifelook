@@ -13,6 +13,19 @@ export function normalizeReportYears(view:EditorViewSession,plan:PlanDocument):v
  for(const key of ['forecastYear','allocationYear'] as const){const year=view.selections[key];if(!Number.isInteger(year)||year<plan.startYear||year>=plan.startYear+plan.horizonYears)view.selections[key]=plan.startYear;}
 }
 
+/** Restore report focus after retained nodes move or chart controls are rebuilt. */
+export function preserveReportFocus(root:HTMLElement):()=>void {
+ const focused=document.activeElement;
+ if(!(focused instanceof HTMLElement||focused instanceof SVGElement)||!root.contains(focused))return ()=>{};
+ const key=focused.getAttribute('data-report-control');
+ return ()=>{
+  const active=document.activeElement;
+  if(active&&active!==document.body&&!root.contains(active))return;
+  const target=root.contains(focused)?focused:key?[...root.querySelectorAll('[data-report-control]')].find(node=>node.getAttribute('data-report-control')===key):undefined;
+  if((target instanceof HTMLElement||target instanceof SVGElement)&&target!==active)target.focus({preventScroll:true});
+ };
+}
+
 /** Stable triggers keep the shared overlay attached to the current report cause. */
 export function createReportDisclosureScope(disclosures:DisclosureController):{controller:DisclosureController;begin():void;finish():boolean;dispose():void} {
  interface Entry {trigger:HTMLButtonElement;options:DisclosureOptions;forwarded:DisclosureOptions;detailRoot?:HTMLElement}
@@ -39,6 +52,7 @@ export function createReportDisclosureScope(disclosures:DisclosureController):{c
 
 /** Reconcile inert report structure while installing freshly rendered actions. */
 export function reconcileReportRegion(root:HTMLElement,next:HTMLElement,state:ReportViewState,key:string):void {
+ const restoreFocus=preserveReportFocus(root);
  const keyed=(node:Element):string|null=>{
   if(node instanceof HTMLElement&&node.dataset.reportKey)return node.dataset.reportKey;
   if(node instanceof HTMLButtonElement&&node.hasAttribute('aria-controls')&&!node.classList.contains('disclosure-trigger'))return `toggle:${node.getAttribute('aria-controls')}`;
@@ -71,4 +85,5 @@ export function reconcileReportRegion(root:HTMLElement,next:HTMLElement,state:Re
   if(parent!==incoming)parent.replaceChildren(...incoming.childNodes);
  }
  reconcile(root,next);
+ restoreFocus();
 }

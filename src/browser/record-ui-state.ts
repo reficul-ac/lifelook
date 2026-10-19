@@ -1,5 +1,5 @@
 import type {EditTarget} from './edit-types';
-import type {FieldContext} from './fields';
+import type {FieldContext,FieldPath} from './fields';
 import type {RawObject} from './state';
 
 export interface RecordEditorMemory {
@@ -27,4 +27,14 @@ export function fieldMemory(context: FieldContext): RecordEditorMemory {
   let memory = memories.get(context);
   if (!memory) {memory = createRecordEditorMemory(); memories.set(context, memory);}
   return memory;
+}
+
+/** Array-backed editor facts belong to their row ID, including after removal/reordering. */
+export function fieldModeKey(context:FieldContext,path:FieldPath):string {
+  let value:unknown=context.draft.value;
+  return JSON.stringify(path.map(part=>{
+    const next=value&&typeof value==='object'?(value as Record<string|number,unknown>)[part]:undefined;
+    value=next;
+    return typeof part==='number'&&next&&typeof next==='object'&&'id' in next&&typeof next.id==='string'?{id:next.id}:part;
+  }));
 }

@@ -31,6 +31,14 @@ describe('ADU groups within the property transaction',()=>{
   const base=makeAduPlan(),source=makeAduPlan({}, {taxEstimation:{mode:'simple',propertyTaxRateBps:137},propertyTax:{...base.properties[0]!.aduProject!.propertyTax,marginalRateBps:{known:false}}}),{root,controller}=mount(source);
   setField(root,'ADU tax calculation','detailed');setField(root,'ADU tax calculation','simple');expect(within(root).getByLabelText('Estimated ADU property-tax rate (%)')).toHaveValue('1.37');fireEvent.click(within(root).getByRole('button',{name:'Rent & costs'}));setField(root,'Available for rent date','2027-09-01');setField(root,'Lease income start date','2027-11-01');fireEvent.click(within(root).getByRole('button',{name:'ADU setup'}));setField(root,'Construction completion date','2027-08-31');setField(root,'Construction completion date','2027-09-30');expect(controller.getDraft('properties','home').value).toMatchObject({rentals:[expect.objectContaining({availableDate:'2027-09-01',rentStartDate:'2027-11-01'})]});
  });
+ it('retains the current confirmed ADU tax split when Unknown is reversed',()=>{
+  const {root,controller}=mount();
+  setField(root,'Federal Building basis ($)','299000.00');setField(root,'Federal Current deduction ($)','1000.00');setField(root,'Federal treatment status','unknown');
+  expect((controller.getDraft('properties','home').value.property as any).aduProject.costs[0].treatments.federal).toEqual({known:false});
+  setField(root,'Federal treatment status','known');
+  expect((controller.getDraft('properties','home').value.property as any).aduProject.costs[0].treatments.federal).toEqual({known:true,value:{buildingBasisCents:'299000.00',currentDeductionCents:'1000.00',nondepreciableBasisCents:'0.00',nondeductibleExpenseCents:'0.00'}});
+  expect(controller.getState().savedPlan.revision).toBe(0);
+ });
  it('does not apply any property inputs when a confirmed treatment conflicts with the changed staged cost',()=>{
   const {root,controller}=mount(),saved=controller.getState().savedPlan;setField(root,'Total ADU build cost ($)','310000.00');setField(root,'ADU project name','Unapplied project');expect(controller.saveProperty('home').accepted).toBe(false);expect(controller.getState().savedPlan).toBe(saved);expect((controller.getDraft('properties','home').value.property as any).aduProject.name).toBe('Unapplied project');
  });

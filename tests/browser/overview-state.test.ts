@@ -14,6 +14,22 @@ function snapshot(document:PlanDocument,base?:PlanDocument):ReportSnapshot{retur
 const cleanups:(()=>void)[]=[];afterEach(()=>{cleanups.splice(0).forEach(dispose=>dispose());document.body.replaceChildren();});
 
 describe('mounted producing-plan overview',()=>{
+ it.each(['Show months for 2026','Tax explanation for 2026'])('retains keyboard focus on %s through a completed preview',label=>{
+  const applied=plan(),{root,context}=mountPresentation(applied),view=createEditorViewSession(applied),binding=mountOverview(root,snapshot(applied),context,view);cleanups.push(binding.dispose,()=>context.disclosures.dispose());
+  fireEvent.click(within(root).getByText('Forecast details',{selector:'summary'}));const control=within(root).getByRole('button',{name:label});control.focus();
+  binding.update(snapshot({...plan('Updated candidate'),revision:1},applied));
+  expect(control.isConnected).toBe(true);expect(control).toHaveFocus();fireEvent.click(control);expect(control).toHaveAttribute('aria-expanded','true');
+ });
+ it.each(['year','series','chart'])('retains the focused plot %s control and fresh handlers through a completed preview',kind=>{
+  const applied=plan(),{root,context}=mountPresentation(applied),view=createEditorViewSession(applied),binding=mountOverview(root,snapshot(applied),context,view);cleanups.push(binding.dispose,()=>context.disclosures.dispose());
+  fireEvent.click(within(root).getByText('Forecast charts',{selector:'summary'}));
+  const control=()=>kind==='year'?within(root).getByLabelText('Plot year'):kind==='series'?within(root).getByRole('button',{name:'Expenses'}):within(root).getByRole('img',{name:'Net worth over time'});
+  control().focus();const candidate={...plan('Updated candidate'),revision:1,accounts:applied.accounts.map(account=>({...account,openingBalanceCents:20000}))};binding.update(snapshot(candidate,applied));
+  expect(control()).toHaveFocus();
+  if(kind==='series'){fireEvent.click(control());expect(control()).toHaveAttribute('aria-pressed','false');}
+  else {if(kind==='chart')fireEvent.keyDown(control(),{key:'ArrowRight'});else fireEvent.change(control(),{target:{value:'2027'}});expect(within(root).getByLabelText('Forecast year')).toHaveValue('2027');expect(within(root).getByTestId('plot-net-worth-readout')).toHaveTextContent('$200.00');expect(control()).toHaveFocus();}
+ });
+
  it('updates selected-year totals from chart keyboard input without replacing the focused chart',()=>{
   const applied=plan(),{root,context}=mountPresentation(applied),view=createEditorViewSession(applied),binding=mountOverview(root,snapshot(applied),context,view);cleanups.push(binding.dispose,()=>context.disclosures.dispose());
   fireEvent.click(within(root).getByText('Forecast charts',{selector:'summary'}));

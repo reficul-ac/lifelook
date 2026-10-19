@@ -3,6 +3,7 @@ import { button,element,type FieldContext,type FieldPath } from '../fields';
 import { registerFormSummary } from '../form-feedback';
 import { createPropertyRentalDraft,isFuturePropertyPurchase } from '../purchase-property-setup';
 import { idFor } from '../record-ids';
+import {fieldMemory,fieldModeKey,swapMode} from '../record-ui-state';
 import { fromDraftValue,type RawObject,type WorkspaceController } from '../state';
 import { formatCents } from '../views/issues';
 import { allocationFields,at,booleanHistory,details,disclosureRoots,displayed,field,group,loanOptions,moneyHistory,ownerFor,propertyRecords,rentalOptions,unknown,unknownCount } from './property-fields-shared';
@@ -15,7 +16,7 @@ function renderRental(root:HTMLElement,controller:WorkspaceController,context:Fi
   if(future)node=details(node,'Advanced rental tax details',{key:`${String(unit.id)}:rental-tax`});
   booleanHistory(node,context,[...path,'activeParticipation'],'Active participation');
   for(const [key,label]of [['longTermFairMarketLease','Long-term fair-market lease'],['noPersonalUse','Rental has no personal use'],['noSubstantialTenantServices','No substantial tenant services'],['ordinaryResidential','Ordinary residential rental'],['advancedBasisAdjustments','Advanced basis adjustments apply'],['californiaSmallBusinessQualification','California AMT small-business qualification']] as const)booleanHistory(node,context,[...path,'qualifications',key],label);
-  if(!isProject){field(node,displayed(context,[...path,'sharedAllocation'],at(context,[...path,'sharedAllocation'])?'explicit':'default',value=>{context.onChange([...path,'sharedAllocation'],value==='explicit'?{numerator:'',denominator:''}:undefined);context.refresh();}),[...path,'sharedAllocation'],'Shared-cost allocation',{kind:'select',options:[{value:'default',label:'Default property / area allocation'},{value:'explicit',label:'Explicit share'}]});
+  if(!isProject){field(node,displayed(context,[...path,'sharedAllocation'],at(context,[...path,'sharedAllocation'])?'explicit':'default',value=>{const sharePath=[...path,'sharedAllocation'],current=at(context,sharePath) as RawObject|undefined;const restored=swapMode(fieldMemory(context),`share:${fieldModeKey(context,sharePath)}`,current?'explicit':'default',String(value),current??{},{numerator:'',denominator:''});context.onChange(sharePath,value==='explicit'?restored:undefined);context.refresh();}),[...path,'sharedAllocation'],'Shared-cost allocation',{kind:'select',options:[{value:'default',label:'Default property / area allocation'},{value:'explicit',label:'Explicit share'}]});
   if(at(context,[...path,'sharedAllocation']))allocationFields(node,context,[...path,'sharedAllocation']);
   const converted=displayed(context,[...path,'convertedFromPersonalUse'],String(at(context,[...path,'convertedFromPersonalUse'])??false),value=>{context.onChange([...path,'convertedFromPersonalUse'],value==='true');context.refresh();});
   field(node,converted,[...path,'convertedFromPersonalUse'],'Converted from personal use',{kind:'select',options:[{value:'false',label:'No'},{value:'true',label:'Yes'}]});

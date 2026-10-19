@@ -47,10 +47,15 @@ describe('draft-relative feedback',()=>{
     controller.beginAdd('salaries');const refreshed=within(root).getByLabelText('Filer 1 name') as HTMLInputElement;
     expect(refreshed).toHaveFocus();expect(refreshed).toHaveValue('Draft filer name');expect([refreshed.selectionStart,refreshed.selectionEnd]).toEqual([2,6]);
   });
-  it('creates an empty known date value and retains text selection during row refresh',async()=>{
-    const {root,controller}=mountWorkspace(makePlan());openRecord(root,{kind:'record',section:'household',recordId:'household'});setField(root,'Filer 1 birth date history','unknown');setField(root,'Filer 1 birth date history','known');
+  it('starts a newly confirmed date empty and restores entered dates after reversing Unknown',async()=>{
+    const base=makePlan(),source=makePlan({household:{...base.household,filers:[{...base.household.filers[0]!,birthDate:{known:false}},base.household.filers[1]!]}});
+    const {root,controller}=mountWorkspace(source);openRecord(root,{kind:'record',section:'household',recordId:'household'});setField(root,'Filer 1 birth date history','known');
     expect((controller.getDraft('household','household').value.household as any).filers[0].birthDate).toEqual({known:true,value:''});
     expect(within(root).getByLabelText('Filer 1 birth date value')).toHaveValue('');
+    setField(root,'Filer 1 birth date value','1985-03-14');setField(root,'Filer 1 birth date history','unknown');
+    expect((controller.getDraft('household','household').value.household as any).filers[0].birthDate).toEqual({known:false});
+    setField(root,'Filer 1 birth date history','known');expect(within(root).getByLabelText('Filer 1 birth date value')).toHaveValue('1985-03-14');
+    expect(controller.getState().savedPlan.revision).toBe(0);
   });
   it('keeps help outside the label while preserving a contextual accessible name and selection',async()=>{
     const {root,context:ui}=mountPresentation();let draft:RecordDraft={recordId:'debt',section:'debts',value:{name:'abc'}};

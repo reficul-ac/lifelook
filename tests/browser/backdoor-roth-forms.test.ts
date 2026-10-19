@@ -10,9 +10,9 @@ let frames:Map<number,FrameRequestCallback>,sequence:number;
 beforeEach(()=>{frames=new Map();sequence=0;vi.stubGlobal('requestAnimationFrame',(cb:FrameRequestCallback)=>{frames.set(++sequence,cb);return sequence;});vi.stubGlobal('cancelAnimationFrame',(id:number)=>frames.delete(id));vi.stubGlobal('Worker',undefined);});
 afterEach(()=>vi.unstubAllGlobals());
 const flush=()=>{const queued=[...frames.values()];frames.clear();queued.forEach(cb=>cb(0));};
-function setup(withTraditional=true){
+function setup(withTraditional=true,secondSource=false){
   const base=makeAllocationPlan();
-  const plan=makeAllocationPlan({horizonYears:2,salaries:[{...base.salaries[0]!,annualGrossCents:25200000}],accounts:[...base.accounts.filter(a=>withTraditional||a.type!=='traditional-ira'),{...base.accounts[1]!,id:'other-ira',name:'Other owner IRA',ownerId:'owner-b'},{...base.accounts[1]!,id:'roth',name:'Roth IRA',type:'roth-ira'}]});
+  const plan=makeAllocationPlan({horizonYears:2,salaries:[{...base.salaries[0]!,annualGrossCents:25200000}],accounts:[...base.accounts.filter(a=>withTraditional||a.type!=='traditional-ira'),...(secondSource?[{...base.accounts[1]!,id:'second-source',name:'Second source IRA'}]:[]),{...base.accounts[1]!,id:'other-ira',name:'Other owner IRA',ownerId:'owner-b'},{...base.accounts[1]!,id:'roth',name:'Roth IRA',type:'roth-ira'}]});
   const store=memoryWorkspaceStorage(),result=mountWorkspace(plan,store.port);openRecord(result.root,{kind:'allocation'});
   const editor=within(result.root).getByRole('form',{name:'Cash flow allocation'});
   fireEvent.click(within(editor).getByRole('button',{name:'Add allocation'}));
@@ -21,6 +21,14 @@ function setup(withTraditional=true){
   return {...result,store,editor,row};
 }
 describe('backdoor Roth allocation controls',()=>{
+  it('restores the selected IRA and explicit confirmation when an existing backdoor route is toggled',()=>{
+    const {controller,row}=setup(true,true),saved=controller.getState().savedPlan;
+    fireEvent.click(within(row).getByLabelText('Use backdoor Roth'));setField(row,'Traditional IRA for conversion','second-source');fireEvent.click(within(row).getByLabelText('Confirm clean IRA history'));
+    fireEvent.click(within(row).getByLabelText('Use backdoor Roth'));expect((controller.getAllocationDraft().value.entries as any[])[0].destination).not.toHaveProperty('backdoorRoth');
+    fireEvent.click(within(row).getByLabelText('Use backdoor Roth'));expect(within(row).getByLabelText('Traditional IRA for conversion')).toHaveValue('second-source');expect(within(row).getByLabelText('Confirm clean IRA history')).toBeChecked();
+    expect(controller.getState().savedPlan).toBe(saved);
+  });
+
   it('requires two explicit applies for a source IRA and allocation',()=>{
     const {controller,root,row,store}=setup(false),openingCount=controller.getState().savedPlan.accounts.length,originalPolicy=controller.getState().savedPlan.cashFlowAllocation;
     fireEvent.click(within(row).getByLabelText('Use backdoor Roth'));

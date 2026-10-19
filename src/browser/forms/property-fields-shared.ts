@@ -1,6 +1,6 @@
 import { type TaxBook } from '../../engine';
 import { button,element,renderBooleanHistory,renderField,setAt,valueAt,type FieldContext,type FieldOptions,type FieldPath } from '../fields';
-import { fieldMemory,swapMode } from '../record-ui-state';
+import { fieldMemory,fieldModeKey,swapMode } from '../record-ui-state';
 import { type RawObject,type WorkspaceController } from '../state';
 export const books:readonly [TaxBook,string][]=[['federal','Federal rental tax history'],['california','California rental tax history'],['federal-amt','Federal AMT rental tax history'],['california-amt','California AMT rental tax history']];
 export const bookAmounts:readonly [string,string][]=[['recoveryBasisCents','Original building recovery basis (excludes land)'],['adjustedBuildingBasisCents','Adjusted building basis'],['cumulativeDepreciationCents','Prior depreciation'],['atRiskCents','Opening amount at risk'],['atRiskSuspendedCents','Suspended at-risk losses'],['passiveSuspendedCents','Suspended passive losses']];
@@ -29,7 +29,7 @@ export function booleanHistory(root:HTMLElement,context:FieldContext,path:FieldP
 }
 export function moneyHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,estimate=false):void {
   const history=at(context,path) as {known?:boolean;value?:string}|undefined;
-  field(root,displayed(context,path,history?.known?'known':'unknown',value=>{const current=at(context,path) as RawObject|undefined,from=current?.known?'known':'unknown',to=String(value),fallback=to==='known'?{known:true,value:''}:unknown();context.onChange(path,context.memory?swapMode(fieldMemory(context),`history:${path.join('.')}`,from,to,current??unknown(),fallback):fallback);context.refresh();}),path,`${label} history`,{kind:'select',options:[{value:'unknown',label:estimate?'Use schedule estimate':'Unknown'},{value:'known',label:estimate?'Enter known value':'Enter value'}]});
+  field(root,displayed(context,path,history?.known?'known':'unknown',value=>{const current=at(context,path) as RawObject|undefined,from=current?.known?'known':'unknown',to=String(value),fallback=to==='known'?{known:true,value:''}:unknown();context.onChange(path,context.memory?swapMode(fieldMemory(context),`history:${fieldModeKey(context,path)}`,from,to,current??unknown(),fallback):fallback);context.refresh();}),path,`${label} history`,{kind:'select',options:[{value:'unknown',label:estimate?'Use schedule estimate':'Unknown'},{value:'known',label:estimate?'Enter known value':'Enter value'}]});
   if(history?.known)field(root,context,[...path,'value'],label,{kind:'money'});
 }
 export function rows(root:HTMLElement,context:FieldContext,path:FieldPath,legend:string,addLabel:string,removeLabel:string,create:()=>RawObject,render:(root:HTMLElement,path:FieldPath,index:number)=>void):void {

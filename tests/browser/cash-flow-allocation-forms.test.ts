@@ -20,6 +20,14 @@ const row=(editor:HTMLElement,index=1)=>within(editor).getByRole('group',{name:`
 const click=(root:HTMLElement,name:string)=>{const active=root.closest<HTMLElement>('[data-active-editor]');if(active&&(name==='Apply allocation'||name==='Discard allocation edits')){flush();fireEvent.click(within(active).getByRole('button',{name:name==='Discard allocation edits'?'Discard edits':/^Apply allocation$|^Review inputs$/}));}else fireEvent.click(within(root).getByRole('button',{name}));};
 
 describe('native allocation policy editor',()=>{
+ it('restores an IRA maximum after a temporary cash destination',()=>{
+  const {root,controller,editor}=setup();click(editor,'Add allocation');const host=row(editor);
+  setField(host,'Allocation destination','account:ira');fireEvent.click(within(host).getByLabelText('Max out for the year'));
+  setField(host,'Allocation destination','cash:');expect((controller.getAllocationDraft().value.entries as any[])[0].amount).toEqual({kind:'percent',percentBps:'0.00'});
+  setField(host,'Allocation destination','account:ira');expect(within(host).getByLabelText('Max out for the year')).toBeChecked();expect((controller.getAllocationDraft().value.entries as any[])[0].amount).toEqual({kind:'max-annual'});
+  expect(controller.getState().savedPlan.revision).toBe(0);
+ });
+
  it.each(['primary','excess'])('selects an account named cash in the %s destination without selecting savings',kind=>{
   const base=makeAllocationPlan(),{controller,editor}=setup(makeAllocationPlan({accounts:[...base.accounts,{...base.accounts[0]!,id:'cash',name:'Named cash brokerage'}]}));
   click(editor,'Add allocation');const host=kind==='primary'?row(editor):editor,label=kind==='primary'?'Allocation destination':'Excess allocation account';

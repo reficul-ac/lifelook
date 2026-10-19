@@ -5,30 +5,31 @@ import { getRecordLabel, resolveIssueTargets } from '../../src/browser/issue-pre
 import {type StoragePort} from '../../src/browser/storage';
 import { mountWorkspace, setField } from '../helpers/dom';
 import { makePlan,mustValidate } from '../helpers/plans';
+import {openCollection,openRecord,applyEdit} from '../helpers/workspace-ui';
+import {prepareEdit} from '../../src/browser/state';
 
 function expenses(plan = makePlan(), storage?: StoragePort) {
   const mounted = mountWorkspace(plan, storage);
-  fireEvent.click(within(mounted.root.querySelector('nav')!).getByRole('button', { name: 'Expenses and debts' }));
+  openCollection(mounted.root,'spending');
   return mounted;
 }
 function childForms(root: HTMLElement): HTMLFormElement[] {
   return [...root.querySelectorAll<HTMLFormElement>('form[data-editable-section="children"]')];
 }
 function addChild(root: HTMLElement, name: string, birthMonth: string): HTMLFormElement {
-  fireEvent.click(within(root).getByRole('button', { name: 'Add child' }));
+  const collection=openCollection(root,'spending');
+  fireEvent.click(within(collection).getByRole('button', { name: 'Add child' }));
   const form = childForms(root).at(-1)!;
   setField(form, 'Child name', name);
   setField(form, 'Child birth month', birthMonth);
   return form;
 }
-function saveChild(form: HTMLElement): void {
-  fireEvent.click(within(form).getByRole('button', { name: 'Save child' }));
-}
+async function saveChild(form: HTMLElement): Promise<void> {await applyEdit(form);}
 
 describe('child planning records', () => {
   // Missing month-based controls, a shared child date, publishing drafts early,
   // or dropping child inputs from backups would break this user workflow.
-  it('saves independently dated children and reloads their monthly expense budgets', () => {
+  it('saves independently dated children and reloads their monthly expense budgets', async () => {
     const values = new Map<string, string>();
     const storage: StoragePort = { getItem: key => values.get(key) ?? null, setItem: (key, value) => { values.set(key, value); } };
     let mounted = expenses(makePlan(), storage);
@@ -36,9 +37,9 @@ describe('child planning records', () => {
     expect(within(form).getByLabelText('Child birth month')).toHaveAttribute('type', 'month');
     expect(mounted.controller.getState().savedPlan.children).toBeUndefined();
     expect(mounted.controller.getState().savedPlan.revision).toBe(0);
-    saveChild(form);
+    await saveChild(form);
     form = addChild(mounted.root, 'Second child', '2026-09');
-    saveChild(form);
+    await saveChild(form);
     const state = mounted.controller.getState();
     expect(state.savedPlan.children).toEqual([
       expect.objectContaining({ name: 'First child', birthMonth: '2026-05', includeAge18: false }),
@@ -57,9 +58,10 @@ describe('child planning records', () => {
     expect(loaded.status).toBe('loaded');
     if (loaded.status !== 'loaded') throw new Error('Saved child inputs did not reload');
     mounted = expenses(loaded.document.scenarios.find(s=>s.id===loaded.document.activeScenarioId)!.plan, storage);
-    expect(childForms(mounted.root).map(child => within(child).getByLabelText('Child birth month'))).toEqual([
-      expect.objectContaining({ value: '2026-05' }), expect.objectContaining({ value: '2026-09' }),
-    ]);
+    for(const [index,month] of ['2026-05','2026-09'].entries()){
+      const editor=openRecord(mounted.root,{kind:'record',section:'children',recordId:state.savedPlan.children![index]!.id});
+      expect(within(editor).getByLabelText('Child birth month')).toHaveValue(month);
+    }
     const restored = mounted.manager.replaceScenario(mounted.manager.captureTarget(mounted.manager.getState().document.activeScenarioId)!,mustValidate(JSON.parse(backup)));
     expect(restored.accepted).toBe(true);
     expect(mounted.manager.getActiveSession().controller.getState().savedPlan.children).toEqual(state.savedPlan.children);
@@ -67,40 +69,44 @@ describe('child planning records', () => {
 
   // A checkbox wired only to presentation or a calendar-year cutoff would lose
   // the selected complete age-18 year and its actual expense effect.
-  it('opts into the full age-18 year and supports discard and remove', () => {
+  it('opts into the full age-18 year and supports discard and remove', async () => {
     const { root, controller } = expenses(makePlan({ children: [{ id: 'child', name: 'Older child', birthMonth: '2008-06', includeAge18: false }] }));
+    openRecord(root,{kind:'record',section:'children',recordId:'child'});
     let form = childForms(root)[0]!;
     expect(controller.getState().projection.months[5]?.expensesCents).toEqual({ status: 'available', value: 0 });
     fireEvent.click(within(form).getByRole('checkbox', { name: 'Include full year at age 18' }));
-    saveChild(form);
+    await saveChild(form);
     expect(controller.getState().savedPlan.children?.[0]?.includeAge18).toBe(true);
     expect(controller.getState().projection.years[0]?.expensesCents).toEqual({ status: 'available', value: 1600000 });
     form = childForms(root)[0]!;
     setField(form, 'Child birth month', '2008-10');
-    fireEvent.click(within(form).getByRole('button', { name: 'Discard edits' }));
+    fireEvent.click(within(root.querySelector<HTMLElement>('[data-active-editor]')!).getByRole('button', { name: 'Discard edits' }));
     form = childForms(root)[0]!;
     expect(within(form).getByLabelText('Child birth month')).toHaveValue('2008-06');
     expect(within(form).getByRole('checkbox', { name: 'Include full year at age 18' })).toBeChecked();
-    fireEvent.click(within(form).getByRole('button', { name: 'Remove Older child' }));
+    fireEvent.click(within(root.querySelector<HTMLElement>('[data-active-editor]')!).getByRole('button', { name: 'Remove record' }));
     expect(controller.getState().savedPlan.children).toEqual([]);
     expect(controller.getState().projection.years[0]?.expensesCents).toEqual({ status: 'available', value: 0 });
   });
 
   // An invalid birth month must remain a reviewable draft without publishing a
   // new plan revision or replacing the last valid projection.
-  it('retains an incomplete child draft and focuses its birth-month error', () => {
+  it('retains an incomplete child draft and focuses its birth-month error', async () => {
     const { root, controller } = expenses(makePlan({ children: [{ id: 'child', name: 'Child', birthMonth: '2026-05', includeAge18: false }] }));
+    openRecord(root,{kind:'record',section:'children',recordId:'child'});
     const form = childForms(root)[0]!, input = within(form).getByLabelText('Child birth month');
     const { savedPlan, projection } = controller.getState();
     setField(form, 'Child birth month', '');
-    saveChild(form);
+    await saveChild(form);
     expect(controller.getState().savedPlan).toBe(savedPlan);
     expect(controller.getState().projection).toBe(projection);
     expect(input).toHaveValue('');
     expect(input).toHaveAttribute('aria-invalid', 'true');
     fireEvent.click(within(form).getByRole('button', { name: 'Review Child birth month' }));
     expect(input).toHaveFocus();
-    const issue = controller.getState().issues.find(issue => issue.recordId === 'child' && issue.field === 'birthMonth')!;
+    const prepared=prepareEdit(controller,{kind:'record',section:'children',recordId:'child'});
+    if(prepared.status!=='invalid')throw Error('Expected invalid child candidate');
+    const issue=prepared.issues.find(issue=>issue.recordId==='child'&&issue.field==='birthMonth')!;
     expect(resolveIssueTargets(issue, controller.getState())).toEqual([
       expect.objectContaining({ section: 'Expenses and debts', recordId: 'child', field: 'birthMonth', label: 'Review Child' }),
     ]);
@@ -109,22 +115,23 @@ describe('child planning records', () => {
 
   // Missing optional-collection guards can crash adding the first child to an
   // older plan; saving another record must not publish that unfinished child.
-  it('keeps a new child draft independent of an ordinary expense save', () => {
+  it('keeps a new child draft independent of an ordinary expense save', async () => {
     const { root, controller } = expenses();
-    addChild(root, 'Future child', '2027-02');
-    fireEvent.click(within(root).getByRole('button', { name: 'Add expense' }));
+    const child=addChild(root, 'Future child', '2027-02'),childId=child.dataset.recordId!;
+    fireEvent.click(within(openCollection(root,'spending')).getByRole('button', { name: 'Add expense' }));
     const expense = root.querySelector<HTMLFormElement>('form[data-editable-section="expenses"]')!;
     setField(expense, 'Expense amount ($)', '100');
-    fireEvent.click(within(expense).getByRole('button', { name: 'Save expense' }));
+    await applyEdit(expense);
     expect(controller.getState().savedPlan.children).toBeUndefined();
-    expect(childForms(root)).toHaveLength(1);
-    expect(within(childForms(root)[0]!).getByLabelText('Child birth month')).toHaveValue('2027-02');
+    const childEditor=openRecord(root,{kind:'record',section:'children',recordId:childId});
+    expect(within(childEditor).getByLabelText('Child birth month')).toHaveValue('2027-02');
     expect(controller.getState().projection.years[0]?.expensesCents).toEqual({ status: 'available', value: 120000 });
   });
 
   it('makes age budgets and the planning limits available beside the child controls', () => {
     const { root } = expenses();
-    const planning = within(root).getByRole('heading', { name: 'Child planning' }).parentElement!;
+    addChild(root,'Budget example','2026-01');
+    const planning=root.querySelector<HTMLElement>('[data-active-editor]')!;
     expect(planning).toHaveTextContent(/today.s dollars/i);
     expect(planning).toHaveTextContent('$194,000');
     expect(planning).toHaveTextContent('$210,000');

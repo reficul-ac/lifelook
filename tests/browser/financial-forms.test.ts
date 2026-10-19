@@ -206,7 +206,8 @@ it('keeps qualified schedule-estimated mortgages usable for taxes, ratios and ca
     fireEvent.click(sources);
     expect(within(sources.parentElement!).getByText(/Mortgage interest.*forecast estimates.*loan schedule/, { selector: 'li' })).toBeVisible();
   }
-  openRecord(root,{kind:'record',section:'properties',recordId:makeEstimatedMortgagePlan().properties[0]!.id});
+  const propertyEditor=openRecord(root,{kind:'record',section:'properties',recordId:makeEstimatedMortgagePlan().properties[0]!.id});
+  fireEvent.click(within(propertyEditor).getByRole('button',{name:'Financing'}));
   const summary = queries.getByText(/^Loan — Synthetic fixed mortgage/, { selector: 'summary' });
   expect(summary).toHaveTextContent('Opening balance estimated');
   fireEvent.click(summary);

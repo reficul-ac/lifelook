@@ -11,7 +11,7 @@ test('saves independently dated children, reloads budgets, and restores a child 
     const form = forms.last();
     await form.getByLabel('Child name', { exact: true }).fill(child.name);
     await form.getByLabel('Child birth month', { exact: true }).fill(child.birthMonth);
-    await expect(form.getByRole('checkbox', { name: 'Include full year at age 18' })).not.toBeChecked();
+    await expect(form.getByRole('switch', { name: 'Include full year at age 18' })).not.toBeChecked();
     await applyEdit(page);
   }
   await expect(page.getByTestId('summary-2026-expenses')).toHaveText('$9,000.00');
@@ -46,7 +46,7 @@ test('includes the complete age-18 year only when selected and stops at age 19',
   await expect(page.getByTestId('monthly-2026-06-expenses')).toHaveText('$0.00');
   await openCollection(page,'spending');
   await openRecord(page,{kind:'record',section:'children',recordId:'child'});const form = page.locator('form[data-editable-section="children"]');
-  await form.getByRole('checkbox', { name: 'Include full year at age 18' }).check();
+  await form.getByRole('switch', { name: 'Include full year at age 18' }).check();
   await applyEdit(page);
   await expect(page.getByTestId('summary-2026-expenses')).toHaveText('$16,000.00');
   await showMonths(page,2026);

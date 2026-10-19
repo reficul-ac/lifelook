@@ -26,7 +26,7 @@ New and reloaded tabs start at **Overview**. Use the six destinations below. Fin
 
 | Destination | What to enter or inspect |
 | --- | --- |
-| Overview | Annual balance sheet, selected-year totals, financial overview and forecast details. |
+| Overview | Net-worth trajectory, growth assumptions, selected-year totals, annual tables and forecast details. |
 | Income | Salaries, annual raises, dated pay changes and other income. |
 | Accounts | Investment accounts, contributions, employer RSUs and cash flow allocation. |
 | Properties | Owned homes, planned purchases, mortgages, rentals, linked costs and ADU projects. |
@@ -43,7 +43,7 @@ When a current preview is ready, use its named **Apply** action to publish that 
 
 The **Scenario** selector starts with an editable **Master** baseline. **Fork scenario** creates a named, independent copy of the active scenario's applied inputs, including its financial record IDs and input revision. Later changes stay in the scenario where you Apply them. **Manage scenarios** renames scenarios and deletes experiments; the baseline can be renamed and edited but cannot be deleted. Names accept 1–80 Unicode code points and must be unique without regard to capitalization.
 
-Switch scenarios without an Apply/Discard prompt. Switching closes the transient editor and shows the selected scenario's applied results. Each scenario retains raw text, unapplied records, allocation drafts, validation feedback, field/disclosure state and selected years/plots while the tab stays open. Reopen a record with a **Draft** badge to resume and recalculate its preview. A fork starts without drafts or an open editor and inherits applicable view selections. Unapplied work lasts only for this tab: Apply it before reload. Exports and forks contain applied inputs only.
+Switch scenarios without an Apply/Discard prompt. Switching closes the transient editor and shows the selected scenario's applied results. Each scenario retains raw text, unapplied records, growth/allocation drafts, validation feedback, field/disclosure state and selected years/plots while the tab stays open. Reopen a record with a **Draft** badge, or choose **Edit growth assumptions**, to resume its preview. A fork starts without drafts or an open editor and inherits applicable chart/view selections. Unapplied work lasts only for this tab: Apply it before reload. Exports and forks contain applied inputs only.
 
 Editors start with relevant basics and summarize active advanced assumptions in collapsed groups. Opening or closing a group changes visibility only; hidden values still affect the calculation. Feature and mode controls retain reversible raw values during editing, while inactive caches stay outside the active candidate and backups. Boolean histories use **Unknown / Yes / No**. Other histories retain an explicit Unknown choice; required numeric blanks are errors. Confirmed zero and unknown remain distinct. Mortgage opening balances can use a labeled schedule estimate or an entered known value.
 
@@ -94,7 +94,11 @@ Storage read/write and quota failures are visible. A failed write leaves the val
 
 ## Read the projection
 
-Overview starts with the **Balance sheet**: year-end cash balance, investments, property value, total debt and net worth. **Table view → Financial overview** shows the income, expense and cash-flow definitions below. The selected **Forecast year** drives the summary amounts. **Forecast charts** and **Forecast details** are optional disclosures; open the latter for monthly, asset, tax and source detail. Preview deltas compare the active candidate with the same scenario's current applied results, only when both amounts are available. New forecast years without an applied counterpart are labeled **No applied comparison**.
+Overview opens with **Net worth over time** and the **Growth assumptions** panel. A fresh session selects the final forecast year. Hover, drag, tap, use Arrow/Home/End keys on the chart, or choose **Chart year** to inspect exact annual year-end results; the totals, annual table selection and mobile impact agree on the same year. **5Y**, **10Y**, **15Y** and **All** show distinct forecast windows beginning at the start year. Five years means five year-end points. These view preferences stay outside financial backups.
+
+A current preview uses a solid line and an optional dashed applied-plan line on the same zero-inclusive value scale. **Show applied plan** hides that line without rescaling the preview. Missing results leave gaps; negative values and actual zero remain visible. Exact values update with a completed calculation, while Updating/Paused labels identify retained results and suppress stale numeric comparisons. A year without an applied counterpart says **No applied comparison**. Reduced motion makes chart transitions immediate.
+
+The **Balance sheet** below shows year-end cash balance, investments, property value, total debt and net worth. **Table view → Financial overview** shows the income, expense and cash-flow definitions below. **Forecast charts** contains the optional income/expense/cash-flow plot; **Forecast details** contains monthly, asset, tax and source detail. Preview deltas compare the active candidate with the same scenario's current applied results, only when both amounts are available.
 
 Annual rows sum flows and use December balances. **Show months** expands individual settled movements; account, property and loan detail shows opening amounts, deposits/payments, growth and closing amounts. Tax explanation shows legal federal/California deduction comparisons, actual selected methods, assessed versus paid California tax, separate AMT/NIIT/surtax components, contribution limits, rental allocations and carried loss state.
 
@@ -106,7 +110,19 @@ Rule provenance and household coverage are separate. Verified, provisional and p
 
 For a qualified acquisition mortgage with complete proceeds history, scheduled opening balances and payments can support forecast mortgage deductions, taxes and cash flow. The loan editor and tax explanations retain the estimate notice; entering confirmed opening amounts refines the forecast. Missing qualification history or annual balance evidence still blocks the affected deductions.
 
-The annual financial overview shows year-end net worth, total income including RSU compensation, cash income excluding retained stock, post-tax cash income, expenses and cash flow before investment contributions. Post-tax income credits RSU withholding against modeled taxes, and expenses include full mortgage and debt payments. Interactive plots show net worth and the income/expense comparison, with a year picker, keyboard navigation and series toggles. Missing amounts remain unavailable in the table and leave gaps in plots.
+The annual financial overview shows year-end net worth, total income including RSU compensation, cash income excluding retained stock, post-tax cash income, expenses and cash flow before investment contributions. Post-tax income credits RSU withholding against modeled taxes, and expenses include full mortgage and debt payments. The primary chart and optional income/expense plot share the selected year; the latter also offers series toggles. Missing amounts remain unavailable in the table and leave gaps in plots.
+
+## Growth assumptions
+
+Choose **Set default** for Stock accounts or Properties, then **Choose assets using defaults** to review membership. Existing assets keep their Custom rates until explicitly selected. Stock setup proposes **7.70%** for review; it is an editable example, not a recommended return. Property setup starts blank. Selecting or clearing category membership retains each asset's stored custom rate. A default with no members affects no assets.
+
+Use a slider for convenient changes or enter an exact percentage with two decimals. Exact values from **−99.99% through 1000.00%** remain valid even outside the slider's range. Editing previews the complete category values and membership together. **Apply growth changes** publishes the exact completed preview once; **Discard edits** clears only that growth transaction. Viewing defaults or opening membership review does not save or opt in any assets.
+
+Account/property editors offer **Category default** and **Custom**. Custom reveals the asset's retained individual rate; returning to the default preserves that rate for later use. A matching property calendar-year override takes precedence over its base rate. Employer RSUs remain independent: dated targets are **Scheduled**, with the account's own rate after its final target; an RSU without targets is **Custom**. ADU assessment growth also remains independent. New ordinary accounts/properties initially use a configured category default, visibly; new RSUs use their own assumptions.
+
+Only the active growth or record transaction owns the report. Opening a record retains the growth draft, and **Edit growth assumptions** retains the record draft. Applying either transaction leaves the other draft intact; a conflicting older draft must reload its applied inputs. Scenario switches retain drafts in this tab but return to applied results until resumed. Applied defaults and explicit inheritance markers travel in the existing schema-version-1 scenario/workspace JSON; drafts, chart preferences and previews do not. Development and preview retain separate origin-specific browser storage.
+
+Date and month fields keep native calendar/direct entry and ISO **YYYY-MM-DD**/**YYYY-MM** values, without timezone conversion. A required blank or invalid date pauses its preview and leaves the applied date unchanged. Purchase, loan, construction, readiness and rent dates remain distinct inputs. Boolean switches keep native keyboard Space activation; history questions retain **Unknown / Yes / No**.
 
 ## Cash flow allocation
 
@@ -196,12 +212,12 @@ See the [ADU design](docs/superpowers/specs/2026-10-13-lifelook-adu-build-design
 npm run typecheck
 npm run test:engine
 npm run test:browser
-npm exec playwright -- install chromium
+npm exec playwright -- install chromium webkit
 npm run test:e2e
 npm run check
 ```
 
-Playwright starts the built localhost preview on 4174 and uses fresh browser contexts. Its [web-server configuration](https://playwright.dev/docs/test-webserver) builds before standalone acceptance runs. Linux CI installs Chromium system dependencies with `playwright install --with-deps chromium`. If a custom browser cache is used, set `PLAYWRIGHT_BROWSERS_PATH` consistently for installation and execution.
+Playwright starts the built localhost preview on 4174 and uses fresh browser contexts. Its [web-server configuration](https://playwright.dev/docs/test-webserver) builds before standalone acceptance runs. Chromium runs the complete acceptance suite. The `webkit-controls` project runs only `date-controls.spec.ts` for native date/month entry, keyboard switches and focused-input retention; isolate it with `npm run test:e2e -- tests/e2e/date-controls.spec.ts --project=webkit-controls`. Linux CI installs both browsers and their system dependencies with `playwright install --with-deps chromium webkit`. If a custom browser cache is used, set `PLAYWRIGHT_BROWSERS_PATH` consistently for installation and execution.
 
 Engine reference fixtures use synthetic inputs and independent primary-source worksheets. The full engine suite is checked in UTC and America/Los_Angeles. The [CI workflow](.github/workflows/ci.yml) runs the locked application's typecheck, engine/browser tests, build and Playwright flows in both timezones.
 
@@ -209,4 +225,4 @@ The lockfile uses the compatible security patch releases [Vite 6.4.4](https://gi
 
 ## Design records
 
-The [foundation design](docs/superpowers/specs/2026-10-11-lifelook-foundation-rebuild-design.md) and [implementation plan](docs/superpowers/plans/2026-10-11-lifelook-foundation-rebuild.md) are retained as historical records of the rebuild. Their `foundation/` package paths and separate legacy integration boundary describe the implementation phase before this application was promoted to the repository root. The [interface design](docs/superpowers/specs/2026-10-18-lifelook-ui-revamp-design.md) and [UI implementation plan](docs/superpowers/plans/2026-10-18-lifelook-ui-revamp.md) describe the focused workspace and live previews. Use the commands and paths in this README for the current application. The interface changes preserve the engine, financial plan schema and backup formats.
+The [foundation design](docs/superpowers/specs/2026-10-11-lifelook-foundation-rebuild-design.md) and [implementation plan](docs/superpowers/plans/2026-10-11-lifelook-foundation-rebuild.md) are retained as historical records of the rebuild. Their `foundation/` package paths and separate legacy integration boundary describe the implementation phase before this application was promoted to the repository root. The [interface design](docs/superpowers/specs/2026-10-18-lifelook-ui-revamp-design.md) and [UI implementation plan](docs/superpowers/plans/2026-10-18-lifelook-ui-revamp.md) describe the focused workspace and live previews. The [growth workspace design](docs/superpowers/specs/2026-10-18-lifelook-growth-workspace-design.md) and [verification record](docs/superpowers/reviews/2026-10-18-lifelook-growth-workspace-verification.md) cover category inheritance and chart-led previews. Use the commands and paths in this README for the current application. The interface changes preserve the engine, financial plan schema and backup formats.

@@ -12,7 +12,8 @@ it('starts the applied comparison when the first ADU is applied and follows the 
  expect(controller.saveProperty('home')).toMatchObject({accepted:true});
  const comparison=root.querySelector<HTMLElement>('.applied-project-comparison')!;
  await waitFor(()=>expect(comparison.querySelector('[data-testid="adu-owner-commitment"]')).not.toBeNull());
- expect(comparison).toHaveTextContent('ADU build versus no build · 2026');
+ expect(within(root).getByLabelText('Forecast year')).toHaveValue('2028');
+ expect(comparison).toHaveTextContent('ADU build versus no build · 2028');
  fireEvent.change(within(root).getByLabelText('Forecast year'),{target:{value:'2027'}});
  expect(comparison).toHaveTextContent('ADU build versus no build · 2027');
 });

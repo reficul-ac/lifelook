@@ -11,7 +11,10 @@ export default defineConfig({
   reporter:'list',
   outputDir:'test-results',
   use:{baseURL:'http://127.0.0.1:4174',trace:'retain-on-failure'},
-  projects:[{name:'chromium',use:{...devices['Desktop Chrome']}}],
+  projects:[
+    {name:'chromium',use:{...devices['Desktop Chrome']}},
+    {name:'webkit-controls',testMatch:'date-controls.spec.ts',use:{...devices['Desktop Safari']}},
+  ],
   webServer:{
     command:'npm run build && npm exec vite -- preview --host 127.0.0.1 --port 4174 --strictPort',
     url:'http://127.0.0.1:4174',

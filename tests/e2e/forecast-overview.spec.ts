@@ -38,10 +38,11 @@ async function preload(page: Page): Promise<void> {
 }
 async function expectPlotYear(page: Page, year: number, cashMetric: 'cash-flow' | 'cash-income' = 'cash-flow'): Promise<void> {
   await expect(page.getByRole('combobox', { name: 'Plot year', exact: true })).toHaveValue(String(year));
+  await expect(page.getByRole('combobox', { name: 'Chart year', exact: true })).toHaveValue(String(year));
   const netWorth = await page.getByTestId(`summary-${year}-net-worth`).textContent();
   const cashAmount = await page.getByTestId(`summary-${year}-${cashMetric}`).textContent();
-  await expect(page.getByTestId('plot-net-worth-readout')).toContainText(String(year));
-  await expect(page.getByTestId('plot-net-worth-readout')).toContainText(netWorth!);
+  await expect(page.locator('.growth-chart-readout')).toContainText(String(year));
+  await expect(page.locator('.growth-chart-readout')).toContainText(netWorth!);
   await expect(page.getByTestId('plot-cash-flow-readout')).toContainText(String(year));
   await expect(page.getByTestId('plot-cash-flow-readout')).toContainText(cashAmount!);
 }
@@ -90,13 +91,13 @@ test('keeps two accessible plots in sync through the native year picker and keyb
   await expect(cash).toBeVisible();
   expect(await netWorth.evaluate(node => node.tagName.toLowerCase())).toBe('svg');
   expect(await cash.evaluate(node => node.tagName.toLowerCase())).toBe('svg');
-  await expect(page.locator('figure').filter({ has: netWorth })).toHaveCount(1);
+  await expect(page.locator('.growth-chart').filter({ has: netWorth })).toHaveCount(1);
   await expect(page.locator('figure').filter({ has: cash })).toHaveCount(1);
-  await expect(page.locator('figure').filter({ has: page.getByRole('img', { name: /^(Net worth over time|Income, expenses and cash flow)$/ }) })).toHaveCount(2);
+  await expect(page.getByRole('img', { name: /^(Net worth over time|Income, expenses and cash flow)$/ })).toHaveCount(2);
   const picker = page.getByRole('combobox', { name: 'Plot year', exact: true });
   expect(await picker.evaluate(node => node.tagName.toLowerCase())).toBe('select');
   await expect(picker.locator('option')).toHaveText(Array.from({ length: 30 }, (_, index) => String(2026 + index)));
-  await expectPlotYear(page, 2026);
+  await expectPlotYear(page, 2055);
   await picker.selectOption('2028');
   await expectPlotYear(page, 2028);
 

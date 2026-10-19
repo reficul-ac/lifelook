@@ -1,4 +1,4 @@
-import {openRecord} from '../helpers/workspace-ui';
+import {openForecastDetails,openRecord} from '../helpers/workspace-ui';
 import {memoryWorkspaceStorage} from '../helpers/scenarios';
 import {mustValidate} from '../helpers/plans';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
@@ -91,6 +91,7 @@ describe('backdoor Roth allocation controls',()=>{
     fireEvent.click(within(row).getByLabelText('Max out for the year'));
     apply(root,'Apply allocation');
     expect(controller.getState().savedPlan.revision).toBe(1);
+    openForecastDetails(root);
     const closing=within(root).getByTestId('annual-2026-account-roth-closing');
     fireEvent.click(closing.closest('details')!.querySelector('summary')!);
     const table=closing.closest('table')!;

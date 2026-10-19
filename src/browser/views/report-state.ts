@@ -59,8 +59,9 @@ export function reconcileReportRegion(root:HTMLElement,next:HTMLElement,state:Re
   for(const child of children){
    const id=scopedKey(child),existing=id?retained.get(id):undefined;
    if(existing instanceof HTMLElement&&child instanceof HTMLElement){
+    const buttonText=child instanceof HTMLButtonElement?child.textContent:null;
     reconcile(existing,child);
-    if(existing instanceof HTMLButtonElement&&child instanceof HTMLButtonElement){existing.onclick=child.onclick;existing.textContent=child.textContent;existing.setAttribute('aria-expanded',child.getAttribute('aria-expanded')??'false');}
+    if(existing instanceof HTMLButtonElement&&child instanceof HTMLButtonElement){existing.onclick=child.onclick;existing.textContent=buttonText;existing.setAttribute('aria-expanded',child.getAttribute('aria-expanded')??'false');}
     if(existing.id&&/^(months|tax-explanation)-/.test(existing.id))existing.hidden=child.hidden;
     child.replaceWith(existing);
     if(existing instanceof HTMLDetailsElement)existing.open=state.expanded.has(`${key}:${id}`);

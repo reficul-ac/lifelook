@@ -40,8 +40,10 @@ describe('mounted producing-plan overview',()=>{
   const assets=within(root).getByText('Asset and loan balances · 2026',{selector:'summary'}).parentElement as HTMLDetailsElement;assets.open=true;
   fireEvent.change(within(root).getByLabelText('Forecast year'),{target:{value:'2027'}});activeInput.focus();
   binding.update(snapshot({...plan('Renamed candidate account'),revision:1},applied));
-  expect(root).toHaveTextContent('Renamed candidate account');expect(root).not.toHaveTextContent('Applied account');expect(monthToggle.isConnected).toBe(true);expect(monthToggle).toHaveAttribute('aria-expanded','true');expect(assets.isConnected).toBe(true);expect(assets.open).toBe(true);expect(tableScroll.scrollLeft).toBe(160);expect(activeInput).toHaveFocus();expect(within(root).getByLabelText('Forecast year')).toHaveValue('2027');
+  expect(root).toHaveTextContent('Renamed candidate account');expect(root).not.toHaveTextContent('Applied account');expect(monthToggle.isConnected).toBe(true);expect(monthToggle).toHaveAttribute('aria-expanded','true');expect(monthToggle).toHaveTextContent('Hide months for 2026');expect(assets.isConnected).toBe(true);expect(assets.open).toBe(true);expect(tableScroll.scrollLeft).toBe(160);expect(activeInput).toHaveFocus();expect(within(root).getByLabelText('Forecast year')).toHaveValue('2027');
   expect(within(root).getByRole('table',{name:'Annual balance sheet'}).querySelectorAll('thead th')).toHaveLength(6);
+  fireEvent.click(monthToggle);expect(monthToggle).toHaveTextContent('Show months for 2026');expect(root.querySelector('#months-2026')).not.toBeVisible();
+  fireEvent.click(monthToggle);expect(monthToggle).toHaveTextContent('Hide months for 2026');expect(root.querySelector('#months-2026')).toBeVisible();
  });
  it('switches to financial definitions and closes details removed by changed forecast bounds',()=>{
   const applied=plan(),{root,context}=mountPresentation(applied),view=createEditorViewSession(applied),binding=mountOverview(root,snapshot(applied),context,view);cleanups.push(binding.dispose,()=>context.disclosures.dispose());

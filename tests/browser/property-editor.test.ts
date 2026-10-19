@@ -12,6 +12,7 @@ import {makeEstimatedMortgagePlan} from '../helpers/estimated-mortgage';
 import {memoryWorkspaceStorage} from '../helpers/scenarios';
 import {mountPresentation} from '../helpers/presentation';
 import {setField} from '../helpers/dom';
+import {makeGrowthPlan} from '../helpers/growth';
 import type {PlanDocument} from '../../src/engine';
 
 const cleanups:(()=>void)[]=[];afterEach(()=>{cleanups.splice(0).reverse().forEach(fn=>fn());document.body.replaceChildren();});
@@ -21,6 +22,27 @@ function mount(plan:PlanDocument=makeFuturePurchasePlan()){
  return {root,context,controller,id,memory,store};
 }
 describe('focused property groups',()=>{
+ it('retains custom appreciation and year overrides while changing the source without writes',()=>{
+  const base=makeGrowthPlan({horizonYears:2,growthAssumptions:{propertyBps:400}}),plan={...base,properties:base.properties.map(p=>({...p,appreciationSource:'property-default' as const,appreciationOverrides:[{year:2027,rateBps:-100}]}))};
+  const {root,controller,id,store,context}=mount(plan),view=createEditorViewSession(plan);view.selections.forecastYear=2027;
+  renderPropertiesForm(root,controller,{...context,editorView:view},{section:'properties',recordId:id,memory:createRecordEditorMemory(),onSubmit(){controller.saveProperty(id);}});
+  expect(within(root).getByLabelText('Property growth source')).toHaveValue('property-default');expect(root).toHaveTextContent('4.00% annual appreciation');expect(root).toHaveTextContent('2027: -1.00% · Year override');
+  const summary=within(root).getByText(/2027: -1.00% · Year override/);view.selections.forecastYear=2026;summary.dispatchEvent(new Event('forecast-year-selected'));expect(summary).toHaveTextContent('2026: 4.00% · Property category default');view.selections.forecastYear=2027;summary.dispatchEvent(new Event('forecast-year-selected'));
+  expect(within(root).queryByLabelText('Effective annual appreciation (%)')).toBeNull();
+  setField(root,'Property growth source','custom');expect(within(root).getByLabelText('Effective annual appreciation (%)')).toHaveValue('3.00');
+  setField(root,'Property growth source','property-default');setField(root,'Property growth source','custom');
+  expect(within(root).getByLabelText('Effective annual appreciation (%)')).toHaveValue('3.00');expect(root).toHaveTextContent('2027: -1.00% · Year override');
+  expect(store.writes()).toBe(0);expect(controller.getState().savedPlan.revision).toBe(0);
+  fireEvent.submit(root.querySelector('form')!);const saved=controller.getState().savedPlan;
+  expect(saved.properties[0]!.appreciationBps).toBe(300);expect(saved.properties[0]!.appreciationSource).toBeUndefined();expect(saved.properties[0]!.appreciationOverrides).toEqual([{year:2027,rateBps:-100}]);
+ });
+ it('initializes new properties from the applied category and leaves an unconfigured category custom',()=>{
+  const store=memoryWorkspaceStorage(),controller=createWorkspace(makeGrowthPlan({growthAssumptions:{propertyBps:400}}),store.port),draft=controller.getGrowthDraft();
+  controller.editGrowthDraft({...draft,value:{...draft.value,defaults:{propertyBps:'9.00'}}});
+  const id=controller.beginAdd('properties');expect(controller.getDraft('properties',id).value.property).toMatchObject({appreciationSource:'property-default',appreciationBps:'0.00'});
+  expect(controller.getState().savedPlan.properties[0]!.appreciationSource).toBeUndefined();
+  const custom=createWorkspace(makeGrowthPlan(),memoryWorkspaceStorage().port),proposal=custom.getGrowthDraft();custom.editGrowthDraft({...proposal,value:{...proposal.value,defaults:{propertyBps:'9.00'}}});const customId=custom.beginAdd('properties');expect((custom.getDraft('properties',customId).value.property as RawObject).appreciationSource).toBeUndefined();expect(store.writes()).toBe(0);
+ });
  it('moves through Property, Financing and Rent & costs without applying or creating a revision',()=>{
   const {root,controller,store}=mount();const name=within(root).getByLabelText('Property name');expect(name).toBeVisible();
   fireEvent.click(within(root).getByRole('button',{name:'Financing'}));expect(within(root).getByLabelText('Mortgage APR (%)')).toBeVisible();expect(within(root).getByLabelText('Property name')).not.toBeVisible();

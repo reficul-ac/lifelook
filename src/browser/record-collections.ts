@@ -1,4 +1,5 @@
 import {button, element} from './fields';
+import {accountGrowthRate,propertyRate} from '../engine';
 import {formatCents} from './views/issues';
 import {editTargetKey} from './record-ui-state';
 import type {EditTarget} from './edit-types';
@@ -49,9 +50,10 @@ function appliedFacts(plan: PlanDocument, section: EditableSection, id: string):
         const grants = account.rsu.grants;
         const heldShares = new Intl.NumberFormat('en-US', {maximumFractionDigits: 6}).format(grants.reduce((sum, grant) => sum + grant.openingHeldShares, 0));
         facts.push(`${grants.length} grant${grants.length === 1 ? '' : 's'} · ${heldShares} held shares`, `Employer ${account.rsu.employerId}`);
+        facts.push(account.rsu.priceTargets?.length?`Scheduled · ${account.annualGrowthBps/100}% after final target`:`Custom · ${account.annualGrowthBps/100}% annual share price growth`);
         if (grants.some(grant => grant.taxTreatment === 'deferred')) facts.push('Deferred settlement');
       } else {
-        facts.push(`${formatCents(account.openingBalanceCents)} at ${balanceDate}`, `${account.annualGrowthBps / 100}% annual return`);
+        facts.push(`${formatCents(account.openingBalanceCents)} at ${balanceDate}`, `${accountGrowthRate(account,plan.growthAssumptions) / 100}% annual return`,account.growthSource==='stocks-default'?'Default':'Custom');
         const basis = account.type === 'taxable-brokerage' ? account.openingTaxableBasis : account.type === 'traditional-ira' ? account.openingIraBasis : undefined;
         if (account.type === 'taxable-brokerage' || account.type === 'traditional-ira') {
           const label = account.type === 'taxable-brokerage' ? 'Tax basis' : 'IRA basis';
@@ -73,7 +75,9 @@ function appliedFacts(plan: PlanDocument, section: EditableSection, id: string):
       const future = property.purchaseDate > `${plan.startYear}-01-01`;
       const facts = [{primary: 'Primary home', rental: 'Rental property', 'primary-with-adu': 'Primary home + ADU'}[property.role],
         future ? `Purchase ${formatCents(property.purchasePriceCents)}` : `${formatCents(property.openingValueCents)} at ${balanceDate}`,
-        `${future ? 'Purchase' : 'Purchased'} ${property.purchaseDate}`, `${property.appreciationBps / 100}% annual appreciation`];
+        `${future ? 'Purchase' : 'Purchased'} ${property.purchaseDate}`, `${propertyRate(property,plan.startYear,plan.growthAssumptions) / 100}% annual appreciation`,property.appreciationSource==='property-default'?'Default':'Custom'];
+      if(property.appreciationOverrides.length)facts.push(`${property.appreciationOverrides.length} year override${property.appreciationOverrides.length===1?'':'s'}`);
+      if(property.appreciationOverrides.some(row=>row.year===plan.startYear))facts.push(`${plan.startYear} year override`);
       if (property.loans.length) facts.push(`${property.loans.length} loan${property.loans.length === 1 ? '' : 's'}`);
       const rentals = plan.rentals.filter(rental => rental.propertyId === id).length;
       if (rentals) facts.push(`${rentals} rental unit${rentals === 1 ? '' : 's'}`);

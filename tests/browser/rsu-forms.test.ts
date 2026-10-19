@@ -9,6 +9,8 @@ import {type StoragePort} from '../../src/browser/storage';
 import {mountWorkspace,setField} from '../helpers/dom';
 import {mountPresentation} from '../helpers/presentation';
 import {makePlan,mustValidate} from '../helpers/plans';
+import {prepareEdit} from '../../src/browser/state';
+import {memoryWorkspaceStorage} from '../helpers/scenarios';
 
 let frames:FrameRequestCallback[]=[];beforeEach(()=>{frames=[];vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{frames.push(callback);return frames.length;});vi.stubGlobal('cancelAnimationFrame',()=>{});vi.stubGlobal('Worker',undefined);});afterEach(()=>vi.unstubAllGlobals());
 function applyAccount(root:HTMLElement){const active=root.querySelector<HTMLElement>('[data-active-editor]')!;active.querySelector('form')!.dispatchEvent(new CustomEvent('financial-input-commit',{bubbles:true}));const pending=frames;frames=[];pending.forEach(callback=>callback(0));fireEvent.click(within(active).getByRole('button',{name:/^Apply account$|^Review inputs$/}));}
@@ -26,6 +28,19 @@ function enterGrant(root:HTMLElement,index:number,values:Record<string,string>):
 const initialFields={'Grant name':'Initial award','Grant value ($)':'48000.00','Grant share price ($)':'100.00','Vesting start date':'2026-01-01','Vesting term (months)':'48','Shares sold for withholding (%)':'25.00'};
 
 describe('RSU account entry and review',()=>{
+  it('retains reversible growth modes across RSU conversion',()=>{
+    const store=memoryWorkspaceStorage(),inherited={...broker,annualGrowthBps:500,growthSource:'stocks-default' as const},mounted=investments(makePlan({growthAssumptions:{stocksBps:770},accounts:[inherited]}),store.port);
+    const before=structuredClone(mounted.controller.getDraft('accounts','equity').value);
+    setField(accountForm(mounted.root),'Account type','rsu');let form=accountForm(mounted.root);
+    expect(mounted.controller.getDraft('accounts','equity').value.growthSource).toBeUndefined();expect(within(form).queryByLabelText('Account growth source')).toBeNull();
+    setField(form,'RSU employer ID','employer-equity');setField(form,'Current share price ($)','100.00');setField(form,'Effective annual share price growth (%)','2.00');enterGrant(form,1,{'Grant value ($)':'100.00','Grant share price ($)':'100.00'});
+    fireEvent.click(within(form).getByRole('button',{name:'Add Share price target'}));form=accountForm(mounted.root);const target=within(form).getByRole('group',{name:'Share price target 1'});setField(target,'Target date','2027-01-01');setField(target,'Target share price ($)','200.00');
+    const candidate=prepareEdit(mounted.controller,{kind:'record',section:'accounts',recordId:'equity'});expect(candidate.status).toBe('ready');if(candidate.status!=='ready')throw Error('RSU candidate required');
+    expect(candidate.plan.accounts[0]!.growthSource).toBeUndefined();expect(candidate.plan.accounts[0]!.annualGrowthBps).toBe(200);expect(candidate.plan.accounts[0]!.rsu!.priceTargets).toEqual([{date:'2027-01-01',sharePriceCents:20000}]);
+    const equity=structuredClone(mounted.controller.getDraft('accounts','equity').value);setField(form,'Account type','taxable-brokerage');expect(mounted.controller.getDraft('accounts','equity').value).toEqual(before);
+    setField(accountForm(mounted.root),'Account type','rsu');expect(mounted.controller.getDraft('accounts','equity').value).toEqual(equity);expect(mounted.controller.getState().savedPlan.revision).toBe(0);
+    expect(accountForm(mounted.root)).toHaveTextContent('Scheduled');expect(store.writes()).toBe(0);
+  });
   it('initializes RSU fields and hides generic opening balance on account type change',()=>{
     const {root,controller,manager}=investments();setField(accountForm(root),'Account type','rsu');
     const form=accountForm(root);expect(within(form).getByLabelText('Current share price ($)')).toHaveValue('0.00');

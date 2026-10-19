@@ -1,5 +1,5 @@
-import { defaultRentalAllocation,type Property,type RentalUnit } from '../../engine';
-import { element,type FieldContext } from '../fields';
+import { defaultRentalAllocation,propertyRate,type Property,type RentalUnit } from '../../engine';
+import { element,setAt,type FieldContext } from '../fields';
 import { isFuturePropertyPurchase } from '../purchase-property-setup';
 import { fromDraftValue,type RawObject,type WorkspaceController } from '../state';
 import { at,details,field,rows } from './property-fields-shared';
@@ -9,7 +9,21 @@ export function renderPropertyBasics(root:HTMLElement,controller:WorkspaceContro
   field(root,context,[...path,'name'],'Property name');field(root,context,[...path,'role'],'Property role',{kind:'select',options:[{value:'primary',label:'Primary home'},{value:'rental',label:'Whole-property rental'},{value:'primary-with-adu',label:'Primary home with ADU'}],refresh:true});if(property.aduProject){const role=root.querySelector<HTMLSelectElement>('[name="property.role"]');if(role)role.disabled=true;}
   field(root,context,[...path,'purchaseDate'],context.memory?'Property purchase date':'Purchase date',{kind:'date',refresh:true,hint:future?'The property and mortgage enter the forecast in the purchase month.':'Use the original purchase date, or enter a future closing date to plan a purchase.'});
   field(root,context,[...path,'purchasePriceCents'],'Purchase price',{kind:'money',refresh:future});field(root,context,[...path,'downPaymentCents'],'Down payment',{kind:'money',refresh:future});
-  field(root,context,[...path,'openingValueCents'],future?'Property market value at purchase':property.aduProject?'Original home market value at forecast start':property.role==='primary-with-adu'?'Combined home and ADU market value at forecast start':'Property market value at forecast start',{kind:'money',hint:future?`As of ${String(property.purchaseDate)}. Defaults to the purchase price; enter a different estimate if needed.`:`As of Jan 1, ${controller.getState().savedPlan.startYear}.${property.aduProject?' Includes the existing home and land; added ADU value posts at completion.':property.role==='primary-with-adu'?' Includes the home and ADU together.':''}`});field(root,context,[...path,'appreciationBps'],'Effective annual appreciation (%)',{kind:'rate'});
+  field(root,context,[...path,'openingValueCents'],future?'Property market value at purchase':property.aduProject?'Original home market value at forecast start':property.role==='primary-with-adu'?'Combined home and ADU market value at forecast start':'Property market value at forecast start',{kind:'money',hint:future?`As of ${String(property.purchaseDate)}. Defaults to the purchase price; enter a different estimate if needed.`:`As of Jan 1, ${controller.getState().savedPlan.startYear}.${property.aduProject?' Includes the existing home and land; added ADU value posts at completion.':property.role==='primary-with-adu'?' Includes the home and ADU together.':''}`});
+  const plan=controller.getState().savedPlan,inherited=property.appreciationSource==='property-default',configured=plan.growthAssumptions?.propertyBps!==undefined;
+  const sourcePath=[...path,'appreciationSource'],sourceContext:FieldContext={...context,get draft(){return {...context.draft,value:setAt(context.draft.value,sourcePath,at(context,sourcePath)??'custom')};},onChange(p,value){context.onChange(p,value==='custom'?undefined:value);}};
+  field(root,sourceContext,sourcePath,'Property growth source',{kind:'select',options:[{value:'property-default',label:'Category default'},{value:'custom',label:'Custom'}],refresh:true,...(!configured?{hint:'Set a property category default in Overview to use it here.'}:{})});
+  root.querySelector<HTMLOptionElement>('select[name="property.appreciationSource"] option[value="property-default"]')!.disabled=!configured;
+  if(inherited)root.append(element('p',configured?`${(plan.growthAssumptions!.propertyBps!/100).toFixed(2)}% annual appreciation · Property category default`:'Property category default is not configured.'));
+  else field(root,context,[...path,'appreciationBps'],'Effective annual appreciation (%)',{kind:'rate'});
+  const summary=element('p');summary.dataset.propertyGrowthSummary='';root.append(summary);
+  const updateSummary=()=>{
+    const current=at(context,path) as RawObject,decoded=fromDraftValue({appreciationBps:current.appreciationBps,appreciationOverrides:current.appreciationOverrides},context.draft.recordId),year=context.ui?.editorView?.selections.forecastYear??plan.startYear;
+    if(decoded.issues.length){summary.textContent=`${year}: appreciation unavailable until the entered rates and years are valid.`;return;}
+    const effective={...current,...decoded.value} as unknown as Property,override=effective.appreciationOverrides.some(row=>row.year===year),rate=propertyRate(effective,year,plan.growthAssumptions);
+    summary.textContent=`${year}: ${(rate/100).toFixed(2)}% · ${override?'Year override':current.appreciationSource==='property-default'?'Property category default':'Custom'} · ${effective.appreciationOverrides.length} year override${effective.appreciationOverrides.length===1?'':'s'}`;
+  };
+  root.addEventListener('input',updateSummary);root.addEventListener('change',updateSummary);summary.addEventListener('forecast-year-selected',updateSummary);updateSummary();
   if(property.role==='primary-with-adu'&&!property.aduProject) {
     field(root,context,[...path,'primaryArea'],'Primary home living area',{kind:'text',hint:'Use the same area units for home and ADU; fractions are allowed.'});field(root,context,[...path,'aduArea'],'ADU living area',{kind:'text'});
     const decoded=fromDraftValue(context.draft.value,context.draft.recordId);

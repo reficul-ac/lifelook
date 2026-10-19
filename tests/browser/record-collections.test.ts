@@ -4,6 +4,7 @@ import {collectRecords, renderRecordCollection} from '../../src/browser/record-c
 import {createWorkspace} from '../../src/browser/state';
 import {makeAllocationPlan} from '../helpers/allocations';
 import type {PlanDocument} from '../../src/engine/model/plan';
+import {makeScheduledGrowthPlan} from '../helpers/growth';
 
 function collectionPlan(): PlanDocument {
   const base = makeAllocationPlan();
@@ -32,6 +33,14 @@ function collectionPlan(): PlanDocument {
 }
 
 describe('compact record facts', () => {
+  it('shows effective default and custom sources while scheduled RSUs keep their own trailing rate',()=>{
+    const base=makeScheduledGrowthPlan(),plan={...base,growthAssumptions:{stocksBps:770,propertyBps:400},accounts:base.accounts.map(a=>a.id==='stock'?{...a,growthSource:'stocks-default' as const}:a),properties:base.properties.map(p=>({...p,appreciationSource:'property-default' as const,appreciationOverrides:[{year:2026,rateBps:-100}]}))};
+    const controller=createWorkspace(plan,localStorage),accounts=collectRecords(controller.getState(),'accounts');
+    const stock=accounts.find(r=>r.name==='Stock account')!.facts.join(' · '),custom=accounts.find(r=>r.name==='Custom Roth')!.facts.join(' · '),scheduled=accounts.find(r=>r.name==='Scheduled RSUs')!.facts.join(' · '),home=collectRecords(controller.getState(),'properties')[0]!.facts.join(' · ');
+    expect(stock).toContain('7.7% annual return');expect(stock).toContain('Default');expect(stock).not.toContain('5% annual return');expect(custom).toContain('6.5% annual return');expect(custom).toContain('Custom');
+    expect(scheduled).toContain('Scheduled');expect(scheduled).toContain('2% after final target');expect(home).toContain('-1% annual appreciation');expect(home).toContain('2026 year override');expect(home).toContain('Default');expect(home).toContain('1 year override');
+    const legacy=collectRecords(createWorkspace(collectionPlan(),localStorage).getState(),'accounts').find(r=>r.name==='Stocks')!;expect(legacy.facts.join(' · ')).toContain('5.25% annual return');expect(legacy.facts).toContain('Custom');
+  });
   it('shows applied salary growth and identity while retaining an independent draft badge', () => {
     const controller = createWorkspace(collectionPlan(), localStorage);
     const draft = controller.getDraft('salaries', 'salary-a');
@@ -117,6 +126,7 @@ describe('compact record facts', () => {
     expect(facts).toContain('Employer RSUs');
     expect(facts).toContain('2 grants');
     expect(facts).toContain('12.5 held shares');
+    expect(facts).toContain('Custom');expect(facts).toContain('4% annual share price growth');
     expect(facts).toContain('Deferred settlement');
     expect(facts).not.toContain('$0.00 at January 1');
   });

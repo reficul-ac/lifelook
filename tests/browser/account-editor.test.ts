@@ -2,10 +2,52 @@ import {describe, expect, it} from 'vitest';
 import {fireEvent, waitFor, within} from '@testing-library/dom';
 import {mountWorkspace, setField} from '../helpers/dom';
 import {makeAllocationPlan} from '../helpers/allocations';
-import {openRecord} from '../helpers/workspace-ui';
-import {prepareEdit} from '../../src/browser/state';
+import {applyEdit,openRecord} from '../helpers/workspace-ui';
+import {createWorkspace,prepareEdit} from '../../src/browser/state';
+import {accountGrowthRate} from '../../src/engine';
+import {makeGrowthPlan} from '../helpers/growth';
+import {memoryWorkspaceStorage} from '../helpers/scenarios';
 
 describe('account entry', () => {
+  it('applies a custom exception while retaining the inherited account custom rate and unknown basis', async () => {
+    const base=makeGrowthPlan({growthAssumptions:{stocksBps:770}}),plan={...base,accounts:base.accounts.map(a=>a.id==='stock'?{...a,growthSource:'stocks-default' as const,openingTaxableBasis:{known:false as const}}:a)};
+    const store=memoryWorkspaceStorage(),{root,controller}=mountWorkspace(plan,store.port),editor=openRecord(root,{kind:'record',section:'accounts',recordId:'stock'});
+    expect(within(editor).getByLabelText('Account growth source')).toHaveValue('stocks-default');
+    expect(within(editor).getByRole('option',{name:'Category default'})).toBeDefined();
+    expect(editor).toHaveTextContent('7.70% annual return');
+    expect(within(editor).queryByLabelText('Effective annual account return (%)')).toBeNull();
+    setField(editor,'Account growth source','custom');
+    expect(within(editor).getByLabelText('Effective annual account return (%)')).toHaveValue('5.00');
+    setField(editor,'Account growth source','stocks-default');setField(editor,'Account growth source','custom');
+    expect(within(editor).getByLabelText('Effective annual account return (%)')).toHaveValue('5.00');
+    expect(store.writes()).toBe(0);expect(controller.getState().savedPlan.revision).toBe(0);
+    await applyEdit(root);const saved=controller.getState().savedPlan;
+    expect(saved.accounts[0]!.annualGrowthBps).toBe(500);expect(saved.accounts[0]!.growthSource).toBeUndefined();
+    expect(saved.accounts[0]!.openingTaxableBasis).toEqual({known:false});expect(accountGrowthRate(saved.accounts[0]!,saved.growthAssumptions)).toBe(500);expect(saved.revision).toBe(1);
+  });
+  it('previews and applies explicit inheritance without replacing a custom return', async () => {
+    const store=memoryWorkspaceStorage(),{root,controller}=mountWorkspace(makeGrowthPlan({growthAssumptions:{stocksBps:770}}),store.port),editor=openRecord(root,{kind:'record',section:'accounts',recordId:'stock'});
+    expect(within(editor).getByLabelText('Account growth source')).toHaveValue('custom');
+    setField(editor,'Account growth source','stocks-default');
+    const candidate=prepareEdit(controller,{kind:'record',section:'accounts',recordId:'stock'});expect(candidate.status).toBe('ready');
+    if(candidate.status!=='ready')throw Error('candidate required');expect(accountGrowthRate(candidate.plan.accounts[0]!,candidate.plan.growthAssumptions)).toBe(770);
+    expect(store.writes()).toBe(0);await applyEdit(root);const saved=controller.getState().savedPlan;
+    expect(saved.accounts[0]!.annualGrowthBps).toBe(500);expect(saved.accounts[0]!.growthSource).toBe('stocks-default');
+  });
+  it('retains explicit stock inheritance when changing an ordinary account tax wrapper',()=>{
+    const base=makeGrowthPlan({growthAssumptions:{stocksBps:770}}),plan={...base,accounts:base.accounts.map(a=>a.id==='stock'?{...a,growthSource:'stocks-default' as const}:a)};
+    const {root,controller}=mountWorkspace(plan),editor=openRecord(root,{kind:'record',section:'accounts',recordId:'stock'});setField(editor,'Account type','roth-ira');
+    expect(within(editor).getByLabelText('Account growth source')).toHaveValue('stocks-default');expect(controller.getDraft('accounts','stock').value.annualGrowthBps).toBe('5.00');
+  });
+  it('initializes new ordinary accounts from applied defaults while legacy accounts stay custom', () => {
+    const store=memoryWorkspaceStorage(),controller=createWorkspace(makeGrowthPlan({growthAssumptions:{stocksBps:0}}),store.port),growth=controller.getGrowthDraft();
+    controller.editGrowthDraft({...growth,value:{...growth.value,defaults:{stocksBps:'15.00'}}});
+    const id=controller.beginAdd('accounts');expect(controller.getDraft('accounts',id).value).toMatchObject({growthSource:'stocks-default',annualGrowthBps:'0.00'});
+    expect(controller.getState().savedPlan.accounts[0]!.growthSource).toBeUndefined();
+    const legacy=createWorkspace(makeGrowthPlan(),memoryWorkspaceStorage().port),proposal=legacy.getGrowthDraft();legacy.editGrowthDraft({...proposal,value:{...proposal.value,defaults:{stocksBps:'15.00'}}});const legacyId=legacy.beginAdd('accounts');
+    expect(legacy.getDraft('accounts',legacyId).value.growthSource).toBeUndefined();expect(legacy.getDraft('accounts',legacyId).value.annualGrowthBps).toBe('0.00');
+    expect(store.writes()).toBe(0);
+  });
   it('associates a blurred rate error with both exact input and supplemental slider', async () => {
     const {root} = mountWorkspace(makeAllocationPlan());
     const editor = openRecord(root, {kind: 'record', section: 'accounts', recordId: 'brokerage'});

@@ -18,11 +18,13 @@ export function newRsuGrant(controller:WorkspaceController,context:FieldContext)
 export function changeAccountType(controller:WorkspaceController,context:FieldContext,type:unknown):void {
   const current=context.draft.value,from=String(current.type),to=String(type);
   if(from===to)return;
-  const owned=['openingBalanceCents','annualGrowthBps','openingIraBasis','openingTaxableBasis','rsu'];
+  const owned=['openingBalanceCents','annualGrowthBps','growthSource','openingIraBasis','openingTaxableBasis','rsu'];
   const subtree=Object.fromEntries(owned.filter(key=>Object.hasOwn(current,key)).map(key=>[key,current[key]]));
   const fallback:RawObject={openingBalanceCents:from==='rsu'?'0.00':current.openingBalanceCents??'0.00',annualGrowthBps:current.annualGrowthBps??'0.00',openingIraBasis:{known:false}};
+  if(from!=='rsu'&&to!=='rsu'&&current.growthSource!==undefined)fallback.growthSource=current.growthSource;
   if(to==='rsu'){fallback.openingBalanceCents='0.00';fallback.rsu={employerId:'',currentSharePriceCents:'0.00',grants:[newRsuGrant(controller,context)]};}
   const restored=swapMode(fieldMemory(context),'account-type',from,to,subtree,fallback);
+  if(to==='rsu')delete restored.growthSource;
   const value:RawObject={...current,type};for(const key of owned)delete value[key];
   context.onChange([],{...value,...restored});
 }
@@ -51,6 +53,8 @@ function newRsuPriceTarget(context:FieldContext,startYear:number):RawObject {
 }
 export function renderRsuFields(root:HTMLElement,controller:WorkspaceController,context:FieldContext):void {
   const startYear=controller.getState().savedPlan.startYear;
+  const targets=valueAt(context.draft.value,['rsu','priceTargets']) as readonly unknown[]|undefined;
+  root.append(element('p',targets?.length?'Scheduled · Own annual growth applies after the final share price target.':'Custom · Own annual growth applies throughout the forecast.'));
   renderField(root,context,['rsu','employerId'],'RSU employer ID',{hint:'Use the same employer ID as this owner’s salary when both come from the same employer.'});
   if(context.requestPrerequisite)root.append(button('Add employer salary',()=>context.requestPrerequisite!({section:'salaries',defaults:{ownerId:context.draft.value.ownerId},link(origin,salary){return {...origin,rsu:{...origin.rsu as RawObject,employerId:salary.employerId}};}})));
   else if(!controller.getState().savedPlan.salaries.length)root.append(element('p','Apply the employer’s salary in Income, then use its employer identity here.'));

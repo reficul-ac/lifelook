@@ -109,6 +109,21 @@ describe('focused salary and other income entry', () => {
     expect(calculateProjection(prepared.plan, prepared.ruleSet).years[0]?.grossIncomeCents).toEqual({status: 'available', value: 10000});
   });
 
+  it('retains ISO salary dates and clamps February 31 anniversaries under the existing engine rules', () => {
+    const salary=makeAllocationPlan().salaries[0]!;
+    const {editor,controller,target}=mountIncome('salaries',makePlan({salaries:[{...salary,annualGrossCents:120000,annualRaiseBps:10000,raiseMonth:2,raiseDay:31}]}));
+    const input=within(editor).getByLabelText('Salary start date') as HTMLInputElement;input.focus();
+    fireEvent.input(input,{target:{value:'2026-01-02'}});fireEvent.change(input);
+    expect(within(editor).getByLabelText('Salary start date')).toBe(input);expect(input).toHaveFocus();expect(input.value).toBe('2026-01-02');
+    const prepared=prepareEdit(controller,target);if(prepared.status!=='ready')throw Error('Expected ISO salary candidate');
+    const projection=calculateProjection(prepared.plan,prepared.ruleSet);
+    // Cumulative cent settlement carries January's fractional cent into February.
+    // Jan 30/31 * 10,000 + Feb (27 * 10,000 + 20,000)/28 rounds to 20,035.
+    expect(projection.months[1]?.grossIncomeCents).toEqual({status:'available',value:10358});
+    expect(projection.months[2]?.grossIncomeCents).toEqual({status:'available',value:20000});
+    expect(controller.getState().savedPlan.salaries[0]!.startDate).toBe('2026-01-01');
+  });
+
   it('reverses wage classifications with employer, owner, NIIT and invalid raw amount intact', () => {
     const plan = makePlan({otherIncome: [{id: 'bonus', name: 'Bonus', amountCents: 12345, frequency: 'annual', startDate: '2026-01-01', annualGrowthBps: 0, classification: 'wage', ownerId: 'owner-b', employerId: 'linked-employer'}]});
     const {editor, controller, store, target} = mountIncome('otherIncome', plan);

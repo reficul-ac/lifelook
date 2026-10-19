@@ -16,6 +16,19 @@ function basicInputs(root:HTMLElement,completion='2027-06-15'){
  for(const [label,value] of [['ADU living area (sq ft)','800'],['Total ADU build cost ($)','300000.00'],['Construction completion date',completion],['Monthly rent receipts ($)','3000.00'],['Assumed completion value added ($)','220000.00']])setField(root,label!,value!);
 }
 describe('native ADU project forms',()=>{
+ it('preserves date-only edits and manual linked dates for leap-day and month-end ADU completion',()=>{
+  const plan=makeAduPlan({}, {financing:{id:'dedicated-loan',name:'Dedicated loan',aprBps:600,termMonths:360,firstAmortizingPaymentMonth:'2027-08',collateralPropertyId:'home',draws:[{id:'first-draw',month:'2027-07',amountCents:20_000_000,costAllocations:[{costId:'building-stage',amountCents:20_000_000}]}],interestTaxRows:[],proceedsHistoryComplete:{known:false},rentalInterestQualified:{known:false},financingAtRiskQualification:{known:false}}});
+  const {root,controller}=mountWorkspace(plan);openRecord(root,{kind:'record',section:'properties',recordId:'home'});expand(root);
+  setField(root,'Available for rent date','2029-02-28');setField(root,'Lease income start date','2029-03-31');setField(root,'First amortizing payment month','2029-01');setField(root,'Stage payment date','2028-01-31');
+  const saved=controller.getState().savedPlan,input=getByLabelText(root,'Construction completion date') as HTMLInputElement;input.focus();
+  for(const date of ['2028-02-29','2028-03-31']){
+   fireEvent.input(input,{target:{value:date}});fireEvent.change(input);
+   expect(getByLabelText(root,'Construction completion date')).toBe(input);expect(input).toHaveFocus();expect(input.value).toBe(date);
+   const draft=controller.getDraft('properties','home').value as any;
+   expect(draft.property.aduProject).toMatchObject({completionDate:date,costs:[{paymentDate:'2028-01-31'}],financing:{firstAmortizingPaymentMonth:'2029-01'}});expect(draft.rentals[0]).toMatchObject({availableDate:'2029-02-28',rentStartDate:'2029-03-31'});
+  }
+  expect(controller.getState().savedPlan).toBe(saved);
+ },15_000);
  it('starts a new ADU with six visible setup inputs and collapsed detailed controls',async()=>{
   const {root}=mountWorkspace(home());openRecord(root,{kind:'record',section:'properties',recordId:'home'});fireEvent.click(getByRole(root,'button',{name:'Build an ADU'}));
   const setup=getByRole(root,'group',{name:'ADU setup'});

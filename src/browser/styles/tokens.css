@@ -1,19 +1,19 @@
 :root,
 [data-theme="dark"] {
   color-scheme: dark;
-  --surface-page: #111315;
-  --surface-panel: #191c20;
-  --surface-raised: #22262b;
-  --surface-subtle: #202429;
-  --surface-hover: #2a3037;
-  --text-primary: #f3f5f7;
-  --text-muted: #afb8c3;
-  --border: #414a55;
-  --border-strong: #6b7684;
-  --accent: #80b7ff;
-  --accent-hover: #a9ceff;
-  --accent-on: #08192e;
-  --focus: #b9d6ff;
+  --surface-page: #0b0e0d;
+  --surface-panel: #131916;
+  --surface-raised: #1b231e;
+  --surface-subtle: #18201b;
+  --surface-hover: #26322b;
+  --text-primary: #eff2f1;
+  --text-muted: #aab5ae;
+  --border: #344039;
+  --border-strong: #687c6f;
+  --accent: #b7efdc;
+  --accent-hover: #d0f6e8;
+  --accent-on: #10251c;
+  --focus: #b7efdc;
   --success: #86d8b0;
   --success-surface: #183529;
   --warning: #ffdb8c;
@@ -24,7 +24,7 @@
   --info: #a9ceff;
   --shadow: 0 8px 32px #0006;
   --backdrop: #0009;
-  --chart-1: #80b7ff;
+  --chart-1: #b7efdc;
   --chart-2: #e8bd70;
   --chart-3: #ac9dff;
   --chart-4: #85d3c8;
@@ -41,24 +41,27 @@
   --font-body: Inter, ui-sans-serif, system-ui, sans-serif;
   --font-small: .85rem;
   --motion-duration: 200ms;
+  --motion-panel-duration: 200ms;
+  --motion-chart-duration: 180ms;
+  --motion-switch-duration: 180ms;
   --motion-easing: cubic-bezier(.2, .8, .2, 1);
 }
 
 [data-theme="light"] {
   color-scheme: light;
-  --surface-page: #f2f4f7;
+  --surface-page: #f7f8f7;
   --surface-panel: #ffffff;
   --surface-raised: #ffffff;
-  --surface-subtle: #eaf0f6;
-  --surface-hover: #e0e9f3;
-  --text-primary: #17212e;
-  --text-muted: #526171;
-  --border: #b1bdca;
-  --border-strong: #788797;
-  --accent: #175fbb;
-  --accent-hover: #0c4999;
+  --surface-subtle: #eef2ef;
+  --surface-hover: #e4ece6;
+  --text-primary: #17211b;
+  --text-muted: #53635a;
+  --border: #a7b4aa;
+  --border-strong: #708578;
+  --accent: #236c52;
+  --accent-hover: #19513d;
   --accent-on: #ffffff;
-  --focus: #185eae;
+  --focus: #236c52;
   --success: #14623f;
   --success-surface: #e3f3e9;
   --warning: #714b05;
@@ -69,7 +72,7 @@
   --info: #175fbb;
   --shadow: 0 8px 32px #17212e26;
   --backdrop: #17212e80;
-  --chart-1: #175fbb;
+  --chart-1: #236c52;
   --chart-2: #8b5a09;
   --chart-3: #7044b2;
   --chart-4: #006d68;
@@ -87,5 +90,8 @@
   :root,
   [data-theme] {
     --motion-duration: 0ms;
+    --motion-panel-duration: 0ms;
+    --motion-chart-duration: 0ms;
+    --motion-switch-duration: 0ms;
   }
 }

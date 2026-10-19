@@ -74,7 +74,7 @@ describe('child planning records', () => {
     openRecord(root,{kind:'record',section:'children',recordId:'child'});
     let form = childForms(root)[0]!;
     expect(controller.getState().projection.months[5]?.expensesCents).toEqual({ status: 'available', value: 0 });
-    fireEvent.click(within(form).getByRole('checkbox', { name: 'Include full year at age 18' }));
+    fireEvent.click(within(form).getByRole('switch', { name: 'Include full year at age 18' }));
     await saveChild(form);
     expect(controller.getState().savedPlan.children?.[0]?.includeAge18).toBe(true);
     expect(controller.getState().projection.years[0]?.expensesCents).toEqual({ status: 'available', value: 1600000 });
@@ -83,7 +83,7 @@ describe('child planning records', () => {
     fireEvent.click(within(root.querySelector<HTMLElement>('[data-active-editor]')!).getByRole('button', { name: 'Discard edits' }));
     form = childForms(root)[0]!;
     expect(within(form).getByLabelText('Child birth month')).toHaveValue('2008-06');
-    expect(within(form).getByRole('checkbox', { name: 'Include full year at age 18' })).toBeChecked();
+    expect(within(form).getByRole('switch', { name: 'Include full year at age 18' })).toBeChecked();
     fireEvent.click(within(root.querySelector<HTMLElement>('[data-active-editor]')!).getByRole('button', { name: 'Remove record' }));
     expect(controller.getState().savedPlan.children).toEqual([]);
     expect(controller.getState().projection.years[0]?.expensesCents).toEqual({ status: 'available', value: 0 });

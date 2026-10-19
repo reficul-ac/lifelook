@@ -1,7 +1,8 @@
 import {setField,getByRole} from '../helpers/property-editor';
 import {applyEdit,openRecord,revealControl} from '../helpers/workspace-ui';
 import {afterEach,describe,expect,it} from 'vitest';
-import {fireEvent,getByLabelText,within} from '@testing-library/dom';
+import {fireEvent,getByLabelText,within,waitFor} from '@testing-library/dom';
+import {prepareEdit} from '../../src/browser/state';
 import {unmountApp} from '../../src/browser/main';
 import {resolveIssueTargets} from '../../src/browser/issue-presentation';
 import {mountWorkspace} from '../helpers/dom';
@@ -9,8 +10,8 @@ import {makePlan} from '../helpers/plans';
 
 
 
-function open(){
- const mounted=mountWorkspace(makePlan({startYear:2027,horizonYears:4,openingCashCents:50_000_000,accounts:[{id:'broker',name:'Standard brokerage',ownerId:'owner-a',type:'taxable-brokerage',openingBalanceCents:50_000_000,annualGrowthBps:0,openingIraBasis:{known:false},openingTaxableBasis:{known:true,value:30_000_000}},{id:'ira',name:'Retirement savings',ownerId:'owner-a',type:'traditional-ira',openingBalanceCents:0,annualGrowthBps:0,openingIraBasis:{known:true,value:0}}]}));
+function open(startYear=2027){
+ const mounted=mountWorkspace(makePlan({startYear,horizonYears:4,openingCashCents:50_000_000,accounts:[{id:'broker',name:'Standard brokerage',ownerId:'owner-a',type:'taxable-brokerage',openingBalanceCents:50_000_000,annualGrowthBps:0,openingIraBasis:{known:false},openingTaxableBasis:{known:true,value:30_000_000}},{id:'ira',name:'Retirement savings',ownerId:'owner-a',type:'traditional-ira',openingBalanceCents:0,annualGrowthBps:0,openingIraBasis:{known:true,value:0}}]}));
  fireEvent.click(getByRole(mounted.root,'button',{name:'Properties'}));fireEvent.click(getByRole(mounted.root,'button',{name:'Add property'}));
  const id=Object.values(mounted.controller.getState().drafts).find(draft=>draft.section==='properties')!.recordId;
  const form=()=>mounted.root.querySelector<HTMLElement>(`form[data-record-id="${id}"]`)!;
@@ -20,6 +21,21 @@ function future(){const mounted=open();setField(mounted.form(),'Property purchas
 afterEach(()=>{for(const root of document.querySelectorAll<HTMLElement>('.workspace'))unmountApp(root);document.body.replaceChildren();});
 
 describe('future property purchase setup',()=>{
+ it('preserves date-only edits and manual linked dates across the purchase boundary',async()=>{
+  const {root,form,controller,id}=open(2026);setField(form(),'Property purchase date','2026-01-02');setField(form(),'Purchase price ($)','800000.00');setField(form(),'Down payment ($)','160000.00');setField(form(),'Property role','rental');fireEvent.click(getByRole(form(),'button',{name:'Add loan'}));
+  setField(form(),'First payment date','2030-01-31');setField(form(),'Available for rent date','2030-02-01');setField(form(),'Lease income start date','2030-03-31');
+  const saved=controller.getState().savedPlan,input=getByLabelText(form(),'Property purchase date') as HTMLInputElement;input.focus();
+  for(const date of ['2026-01-01','2026-01-02','2028-02-29','2028-03-31']){
+   fireEvent.input(input,{target:{value:date}});fireEvent.change(input);
+   expect(getByLabelText(form(),'Property purchase date')).toBe(input);expect(input).toHaveFocus();expect(input.value).toBe(date);
+   const draft=controller.getState().drafts[id]!.value as any;
+   expect(draft.property.purchaseDate).toBe(date);expect(draft.property.loans[0].firstPaymentDate).toBe('2030-01-31');expect(draft.rentals[0]).toMatchObject({availableDate:'2030-02-01',rentStartDate:'2030-03-31'});
+  }
+  fireEvent.input(input,{target:{value:''}});fireEvent.change(input);
+  expect(prepareEdit(controller,{kind:'record',section:'properties',recordId:id}).status).toBe('invalid');
+  await waitFor(()=>expect(root.querySelector('[data-preview-status]')).toHaveAttribute('data-preview-status','invalid'));
+  expect(input).toHaveFocus();expect(input.value).toBe('');expect(controller.getState().savedPlan).toBe(saved);
+ },15_000);
  it('defaults purchase-date market value to price and preserves an entered valuation',async()=>{
   const {form,controller,id}=future();
   expect(getByLabelText(form(),'Property market value at purchase ($)')).toHaveValue('800000.00');

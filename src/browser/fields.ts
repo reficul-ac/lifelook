@@ -1,4 +1,6 @@
 import {mountNumericControl} from './ui/numeric-control';
+import {mountDateControl} from './ui/date-control';
+import {mountSwitchControl} from './ui/switch-control';
 import {renderRecordForm, type FormRenderOptions} from './record-form';
 import {fieldMemory,fieldModeKey,swapMode,type RecordEditorMemory} from './record-ui-state';
 import type {PrerequisiteRequest} from './prerequisite-flow';
@@ -9,7 +11,7 @@ import type { EditableSection,RawObject,RecordDraft,WorkspaceController } from '
 
 export type FieldPath=readonly (string|number)[];
 export interface FieldContext {readonly ui?:IssueViewContext;readonly memory?:RecordEditorMemory;requestPrerequisite?(request:PrerequisiteRequest):void;readonly draft:RecordDraft;readonly issues:readonly Issue[];onChange(path:FieldPath,value:unknown):void;refresh():void}
-export interface FieldOptions {readonly slider?:{minUnits:number;maxUnits:number;stepUnits:number};readonly visibleLabel?:string;readonly help?:string;readonly kind?:'money'|'rate'|'integer'|'text'|'date'|'month'|'select'|'checkbox';readonly options?:readonly (string|Readonly<{value:string;label:string}>)[];readonly hint?:string;readonly optional?:boolean;readonly refresh?:boolean}
+export interface FieldOptions {readonly slider?:{minUnits:number;maxUnits:number;stepUnits:number};readonly visibleLabel?:string;readonly help?:string;readonly kind?:'money'|'rate'|'integer'|'text'|'date'|'month'|'select'|'checkbox'|'switch';readonly options?:readonly (string|Readonly<{value:string;label:string}>)[];readonly hint?:string;readonly optional?:boolean;readonly refresh?:boolean}
 export {parseMoneyInput,parseRateInput} from './input-parsers';
 export function valueAt(value:unknown,path:FieldPath):unknown{return path.reduce<unknown>((current,key)=>current&&typeof current==='object'?(current as Record<string|number,unknown>)[key]:undefined,value);}
 export function setAt(value:RawObject,path:FieldPath,entry:unknown):RawObject {
@@ -37,19 +39,38 @@ export function renderField(root:HTMLElement,context:FieldContext,path:FieldPath
   if(options.kind==='money'&&!label.includes('$'))label+=' ($)';
   const wrapper=element('div');wrapper.className='field-wrapper';wrapper.dataset.fieldWrapper='';
   const kind=options.kind??'text',value=valueAt(context.draft.value,path),key=path.join('.');
-  const change=(raw:unknown)=>{context.onChange(path,options.optional&&raw===''?undefined:raw);if(options.refresh)context.refresh();};
   let control:HTMLInputElement|HTMLSelectElement;
+  let pendingDateRefresh=false;
+  const change=(raw:unknown)=>{
+    context.onChange(path,options.optional&&raw===''?undefined:raw);
+    if(!options.refresh||kind==='checkbox'||kind==='switch')return;
+    // Rebuilding a focused native date loses browser-owned unfinished segments.
+    // Its draft and preview update immediately; refresh dependent fields after blur.
+    if((kind==='date'||kind==='month')&&document.activeElement===control)pendingDateRefresh=true;
+    else context.refresh();
+  };
   if(kind==='money'||kind==='rate') {
     control=mountNumericControl(wrapper,{label,field:key,kind,raw:value===undefined?'':String(value),...(options.slider?{slider:options.slider}:{}),onInput:change,onCommit:()=>{}}).input;
     const caption=wrapper.querySelector('label');if(caption)caption.textContent=options.visibleLabel??shortLabel(label);
+  } else if(kind==='date'||kind==='month') {
+    control=mountDateControl(wrapper,{label,field:key,kind,raw:value===undefined?'':String(value),onInput:change,onCommit:()=>{}}).input;
+    const caption=wrapper.querySelector('label');if(caption)caption.textContent=options.visibleLabel??shortLabel(label);
+    const dateInput=control;
+    dateInput.addEventListener('blur',()=>queueMicrotask(()=>{
+      if(pendingDateRefresh&&dateInput.isConnected&&document.activeElement!==dateInput){pendingDateRefresh=false;context.refresh();}
+    }));
+  } else if(kind==='checkbox'||kind==='switch') {
+    control=mountSwitchControl(wrapper,{label,field:key,checked:value===true,onChange:change}).input;
+    const caption=wrapper.querySelector('label > span');if(caption)caption.textContent=options.visibleLabel??shortLabel(label);
+    if(options.refresh)control.addEventListener('change',()=>context.refresh());
   } else {
     const caption=element('label',options.visibleLabel??shortLabel(label));wrapper.append(caption);
     control=kind==='select'?element('select'):element('input');control.id=`field-${++fieldSequence}`;caption.htmlFor=control.id;
     if(control instanceof HTMLSelectElement){for(const option of options.options??[]){const entry=element('option',typeof option==='string'?option:option.label);entry.value=typeof option==='string'?option:option.value;control.append(entry);}}
-    else {control.type=kind==='checkbox'?'checkbox':kind==='date'?'date':kind==='month'?'month':'text';if(kind==='integer')control.inputMode='numeric';if(['primaryArea','aduArea'].includes(String(path.at(-1))))control.inputMode='decimal';}
-    if(control instanceof HTMLInputElement&&kind==='checkbox')control.checked=value===true;else control.value=value===undefined?'':String(value);
-    control.addEventListener(kind==='select'||kind==='checkbox'?'change':'input',()=>change(control instanceof HTMLInputElement&&kind==='checkbox'?control.checked:control.value));
-    if(kind==='date'||kind==='month'||kind==='select'||kind==='checkbox')control.addEventListener('change',()=>control.dispatchEvent(new CustomEvent('financial-input-commit',{bubbles:true})));
+    else {control.type='text';if(kind==='integer')control.inputMode='numeric';if(['primaryArea','aduArea'].includes(String(path.at(-1))))control.inputMode='decimal';}
+    control.value=value===undefined?'':String(value);
+    control.addEventListener(kind==='select'?'change':'input',()=>change(control.value));
+    if(kind==='select')control.addEventListener('change',()=>control.dispatchEvent(new CustomEvent('financial-input-commit',{bubbles:true})));
     wrapper.append(control);
   }
   control.dataset.fieldLabel=label;control.dataset.fieldKind=kind;control.name=key;control.dataset.field=key;control.setAttribute('aria-label',label);
@@ -64,7 +85,7 @@ export function renderBooleanHistory(root:HTMLElement,context:FieldContext,path:
   return renderField(root,choice,path,label,{...options,kind:'select',options:[{value:'unknown',label:'Unknown'},{value:'true',label:'Yes'},{value:'false',label:'No'}]}) as HTMLSelectElement;
 }
 export function renderHistory(root:HTMLElement,context:FieldContext,path:FieldPath,label:string,options:FieldOptions={}):void {
-  if(options.kind==='checkbox'||options.kind==='select'){renderBooleanHistory(root,context,path,label,options);return;}
+  if(options.kind==='checkbox'||options.kind==='select'||options.kind==='switch'){renderBooleanHistory(root,context,path,label,options);return;}
   const group=element('fieldset');group.dataset.fieldGroup=path.join('.');group.dataset.groupLabel=label;group.append(element('legend',options.visibleLabel??shortLabel(label)));
   const history=valueAt(context.draft.value,path) as {known?:boolean;value?:unknown}|undefined;
   const statusContext:FieldContext={...context,get draft(){return {...context.draft,value:setAt(context.draft.value,[...path,'known'],history?.known?'known':'unknown')};},onChange(_path,value){const current=valueAt(context.draft.value,path) as RawObject|undefined;context.onChange(path,swapMode(fieldMemory(context),`history:${fieldModeKey(context,path)}`,current?.known?'known':'unknown',String(value),current??{known:false},value==='unknown'?{known:false}:{known:true,value:''}));}};

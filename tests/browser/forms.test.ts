@@ -4,7 +4,7 @@ import {loadReferences} from '../helpers/references';
 import type {PlanDocument,ProjectionResult} from '../../src/engine';
 import { describe,expect,it,vi } from 'vitest';
 import { fireEvent,within,waitFor } from '@testing-library/dom';
-import { parseMoneyInput,parseRateInput } from '../../src/browser/fields';
+import { parseMoneyInput,parseRateInput,renderField,renderHistory,setAt,type FieldContext } from '../../src/browser/fields';
 import { createWorkspace,toDraftValue } from '../../src/browser/state';
 import { mountWorkspace,setField } from '../helpers/dom';
 import { makePlan,mustValidate } from '../helpers/plans';
@@ -14,6 +14,32 @@ import {openRecord,applyEdit,openSettings} from '../helpers/workspace-ui';
 
 function storage(fail=false){const values=new Map<string,string>();return {getItem:(key:string)=>values.get(key)??null,setItem:(key:string,value:string)=>{if(fail)throw new Error('quota');values.set(key,value);}};}
 describe('native workspace drafts and explicit record saves',()=>{
+  it.each(['checkbox','select','switch'] as const)('preserves Unknown / Yes / No histories with a %s presentation hint',kind=>{
+    const root=document.createElement('section');document.body.append(root);
+    let draft={recordId:'history',section:'household' as const,value:{qualified:{known:false}}};
+    const context:FieldContext={get draft(){return draft;},issues:[],onChange(path,value){draft={...draft,value:setAt(draft.value,path,value) as typeof draft.value};},refresh(){}};
+    renderHistory(root,context,['qualified'],'Qualified history',{kind});
+    const control=within(root).getByRole('combobox',{name:'Qualified history'});
+    expect(within(control).getAllByRole('option').map(option=>option.textContent)).toEqual(['Unknown','Yes','No']);
+    expect(control).toHaveValue('unknown');
+    fireEvent.change(control,{target:{value:'true'}});expect(draft.value.qualified).toEqual({known:true,value:true});
+    fireEvent.change(control,{target:{value:'false'}});expect(draft.value.qualified).toEqual({known:true,value:false});
+    fireEvent.change(control,{target:{value:'unknown'}});expect(draft.value.qualified).toEqual({known:false});
+  });
+  it.each(['checkbox','switch'] as const)('routes binary %s fields through native switch semantics without changing field identity',kind=>{
+    const root=document.createElement('section');document.body.append(root);let checked=false;
+    const context:FieldContext={draft:{recordId:'binary',section:'household',value:{enabled:false}},issues:[],onChange(_path,value){checked=value===true;},refresh(){}};
+    const input=renderField(root,context,['enabled'],'Enabled',{kind});
+    expect(within(root).getByRole('switch',{name:'Enabled'})).toBe(input);expect(input).toHaveAttribute('data-field','enabled');
+    fireEvent.click(input);expect(checked).toBe(true);
+  });
+  it('commits binary changes before dependent fields refresh',()=>{
+    const root=document.createElement('section');document.body.append(root);const events:string[]=[];
+    root.addEventListener('financial-input-commit',()=>events.push('commit'));
+    const context:FieldContext={draft:{recordId:'binary',section:'household',value:{enabled:false}},issues:[],onChange(){events.push('input');},refresh(){events.push('refresh');root.replaceChildren();}};
+    const input=renderField(root,context,['enabled'],'Enabled',{kind:'switch',refresh:true});
+    fireEvent.click(input);expect(events).toEqual(['input','commit','refresh']);
+  });
   it('keeps keyboard focus on a history selector when its dependent field changes',async()=>{
     const {root}=mountWorkspace(makePlan());openRecord(root,{kind:'record',section:'household',recordId:'household'});const selector=within(root).getByLabelText('Filer 1 birth date history') as HTMLSelectElement;
     selector.focus();fireEvent.change(selector,{target:{value:'unknown'}});

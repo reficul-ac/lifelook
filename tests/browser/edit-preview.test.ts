@@ -42,3 +42,11 @@ it('keeps legacy retained allocation pairs without a base out of comparisons',()
  const plan=makeAllocationPlan(),session:AllocationPreviewSession={status:'invalid',issues:[],entryIdSequence:0,lastValid:{plan,projection:engine.calculateProjection(mustValidate(plan),engine.loadRuleSet())}},{controller}=setup(session);setDraftField(controller,{kind:'allocation'},['entries'],[{id:'bad',priority:'1',amount:{kind:'percent',percentBps:'-'},destination:{kind:'cash'}}]);coordinator.select({kind:'allocation'});clock.flush(100);expect(coordinator.getState()).toMatchObject({status:'invalid',current:null,lastValid:{basePlan:null}});
 });
 import {mustValidate} from '../helpers/plans';
+
+it('keeps detached allocation actions from applying another current editor',()=>{
+ const {controller}=setup(),root=document.createElement('div');document.body.append(root);const view=createEditorViewSession(controller.getState().savedPlan),disclosures=createDisclosureController(root);coordinator.select({kind:'allocation'});const mounted=mountCashFlowAllocationEditor(root,controller,{disclosures,readState:controller.getState,review(){}},{view,preview:coordinator}),oldApply=within(root).getByRole('button',{name:'Apply allocation'});mounted.dispose();coordinator.select(target);setDraftField(controller,target,['annualGrossCents'],'125000.00');clock.flush(100);clock.workers[0]!.reply();fireEvent.click(oldApply);expect(controller.getState().savedPlan.revision).toBe(0);disclosures.dispose();root.remove();
+});
+
+it('keeps a current completion when an unchanged input commits before Apply',()=>{
+ const {controller}=setup();coordinator.select(target);setDraftField(controller,target,['annualGrossCents'],'125000.00');clock.flush(100);clock.workers[0]!.reply();const receipt=coordinator.getState().current;coordinator.request(true);expect(coordinator.getState().current).toBe(receipt);expect(coordinator.apply().accepted).toBe(true);expect(controller.getState().savedPlan.revision).toBe(1);
+});

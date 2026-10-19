@@ -6,7 +6,7 @@ import type {AllocationPreviewSession} from './scenario-session';
 export function createEditPreviewCoordinator(controller:WorkspaceController,ownership:{owner:EditPreviewOwner;isCurrent():boolean},options:{quietMs?:number;maxWaitMs?:number;allocationSession?:AllocationPreviewSession}={}):EditPreviewCoordinator {
   const owner=Object.freeze({...ownership.owner}),quietMs=options.quietMs??100,maxWaitMs=options.maxWaitMs??300,listeners=new Set<(state:EditPreviewState)=>void>();
   let state:EditPreviewState={status:'inactive',target:null,current:null,lastValid:null,issues:[]},disposed=false,jobId=0,worker:Worker|undefined,timer:ReturnType<typeof setTimeout>|undefined,frame:number|undefined,firstRequest:number|undefined;
-  let previous=controller.getState();
+  let previous=controller.getState(),completedInputs:ReturnType<WorkspaceController['getState']>|undefined;
   const sameOwner=(reply:EditPreviewOwner)=>reply&&reply.scenarioId===owner.scenarioId&&reply.sessionGeneration===owner.sessionGeneration&&reply.activationGeneration===owner.activationGeneration&&reply.workspaceGeneration===owner.workspaceGeneration;
   const active=()=>!disposed&&ownership.isCurrent();
   const emit=(next:EditPreviewState)=>{
@@ -35,7 +35,7 @@ export function createEditPreviewCoordinator(controller:WorkspaceController,owne
       const receipt=completePreparedEdit(controller,prepared,reply.result.projection);
       if(!receipt)return;
       const report:PreviewReport={plan:prepared.plan,projection:receipt.projection,basePlan:prepared.basePlan};
-      emit({status:'valid',target,current:receipt,lastValid:report,issues:[]});
+      completedInputs=controller.getState();emit({status:'valid',target,current:receipt,lastValid:report,issues:[]});
     };
     const request:EditPreviewWorkerRequest={jobId:capturedJob,owner,token:prepared.token,plan:prepared.plan,ruleSet:prepared.ruleSet};
     if(typeof Worker==='undefined'){accept(calculateEditPreview(request));return;}
@@ -51,6 +51,8 @@ export function createEditPreviewCoordinator(controller:WorkspaceController,owne
   };
   const request=(flush=false)=>{
     if(!active()||!state.target)return;
+    const inputs=controller.getState(),target=state.target;
+    if(state.current&&completedInputs&&inputs.savedPlan===completedInputs.savedPlan&&(target.kind==='allocation'?inputs.allocationDraft===completedInputs.allocationDraft:inputs.drafts[target.recordId]===completedInputs.drafts[target.recordId]))return;
     cancel();const now=Date.now();firstRequest??=now;
     const base=controller.getState().savedPlan,lastValid=state.lastValid&&state.lastValid.basePlan!==base?{...state.lastValid,basePlan:null}:state.lastValid;
     emit({...state,status:'pending',current:null,lastValid,issues:[]});

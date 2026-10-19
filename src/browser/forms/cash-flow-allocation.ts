@@ -24,26 +24,27 @@ export interface AllocationEditorOptions {view:EditorViewSession;ownership?:Allo
 
 /** A separate policy transaction. Controls survive preview and unrelated record updates. */
 export function mountCashFlowAllocationEditor(root:HTMLElement,controller:WorkspaceController,context:IssueViewContext,editorOptions?:AllocationEditorOptions):{dispose():void}{
-  const external=editorOptions?.preview;
+  const external=editorOptions?.preview;let disposed=false;
+  const action=(label:string,run:()=>void)=>{const node=button(label,()=>{if(!disposed&&node.isConnected)run();});return node;};
   root.replaceChildren();root.classList.add('allocation-editor');
   const form=element('form');form.setAttribute('aria-label','Cash flow allocation');form.append(element('h2','Cash flow allocation'));
   const intro=element('p','Choose where available cash goes. Existing deposits count toward each account target.');form.append(intro);
   const timing=element('details');timing.append(element('summary','How allocation works'),element('p','Annual account targets are divided into monthly installments, with cent rounding. A $7,500 annual IRA target contributes $625 at each month end and grows from the next month. Excess funding adapts to available monthly cash while preserving feasible target installments. Cash availability, payroll timing and contribution limits can change the monthly schedule. Traditional 401(k) funding reduces modeled income tax; the allocation budget includes that tax saving.'));form.append(timing);
   const yearHost=element('div'),rowHost=element('div'),overflowHost=element('div'),feedback=element('div'),status=element('p'),budget=element('p'),remaining=element('p'),chart=element('div');status.setAttribute('role','status');status.dataset.allocationStatus='';feedback.dataset.allocationFeedback='';budget.dataset.allocationBudget='';remaining.dataset.allocationRemaining='';chart.dataset.allocationPreview='';
-  form.append(yearHost,budget,rowHost,button('Add allocation',add),overflowHost,button('Apply allocation',()=>{if(external)external.apply();else controller.applyAllocation();}),button('Discard allocation edits',()=>{if(external)external.discard();else controller.discardAllocationDraft();}),feedback,status,remaining,chart);root.append(form);form.addEventListener('submit',event=>{event.preventDefault();if(external)external.apply();else controller.applyAllocation();});
-  let disposed=false;const view=editorOptions?.view??createEditorViewSession(controller.getState().savedPlan),preview=view.allocationPreview;
+  form.append(yearHost,budget,rowHost,action('Add allocation',add),overflowHost,action('Apply allocation',()=>{if(external)external.apply();else controller.applyAllocation();}),action('Discard allocation edits',()=>{if(external)external.discard();else controller.discardAllocationDraft();}),feedback,status,remaining,chart);root.append(form);form.addEventListener('submit',event=>{event.preventDefault();if(disposed||!form.isConnected)return;if(external)external.apply();else controller.applyAllocation();});
+  const view=editorOptions?.view??createEditorViewSession(controller.getState().savedPlan),preview=view.allocationPreview;
   const memory=view.editorMemory.get('allocation')??createRecordEditorMemory();view.editorMemory.set('allocation',memory);
   let savedIdentity=controller.getState().savedPlan,draftIdentity=controller.getState().allocationDraft;
   const rows=new Map<string,Row>();let initialized=false;
   const draft=()=>controller.getAllocationDraft();
-  const edit=(path:FieldPath,value:unknown)=>{const current=draft();controller.editAllocationDraft({...current,value:setAt(current.value,path,value)});};
+  const edit=(path:FieldPath,value:unknown)=>{if(disposed||!root.isConnected)return;const current=draft();controller.editAllocationDraft({...current,value:setAt(current.value,path,value)});};
   const index=(id:string)=>entries(draft().value).findIndex(row=>row.id===id);
   function field(host:HTMLElement,label:string,path:string,kind:'text'|'select'|'checkbox'|'range',write:(value:string|boolean)=>void):Control{
     const wrapper=element('div');wrapper.className='field-wrapper';const caption=element('label',label),node=kind==='select'?element('select'):element('input'),error=element('small');node.id=`allocation-field-${++controlSequence}`;caption.htmlFor=node.id;node.setAttribute('aria-label',label);node.dataset.fieldLabel=label;
     if(node instanceof HTMLInputElement){node.type=kind==='checkbox'?'checkbox':kind==='range'?'range':'text';if(kind==='range'){node.min='0';node.max='100';node.step='0.01';}else node.inputMode='decimal';}
     error.id=`${node.id}-error`;error.className='field-error';error.dataset.allocationFieldError='';wrapper.append(caption,node,error);host.append(wrapper);
     const control:Control={node,error,path,setPath(next){this.path=next;node.dataset.field=next;node.name=next;}};control.setPath(path);
-    node.addEventListener(kind==='select'||kind==='checkbox'?'change':'input',()=>write(node instanceof HTMLInputElement&&node.type==='checkbox'?node.checked:node.value));return control;
+    node.addEventListener(kind==='select'||kind==='checkbox'?'change':'input',()=>{if(disposed||!node.isConnected)return;write(node instanceof HTMLInputElement&&node.type==='checkbox'?node.checked:node.value);});return control;
   }
   const year=field(yearHost,'Allocation year','','select',value=>{view.selections.allocationYear=Number(value);renderPreview();});delete year.node.dataset.field;
   const overflow=field(overflowHost,'Excess allocation account','overflow.destination.accountId','select',value=>{const raw=object(object(draft().value.overflow).destination);edit(['overflow','destination'],swapMode(memory,'allocation-overflow',destinationValue(raw),String(value),raw,destination(String(value))));});
@@ -67,7 +68,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
       controller.editAllocationDraft({...current,value:next});
     });
     const priority=field(row,'Allocation priority','','text',value=>edit(['entries',index(id),'priority'],value));priority.node.inputMode='numeric';
-    const sponsorHost=element('div'),backdoorHost=element('div'),amountHost=element('div'),readout=element('p');readout.dataset.allocationReadout=id;const funding=element('details');funding.append(element('summary','Funding details'),readout);row.append(sponsorHost,backdoorHost,amountHost,funding,button('Remove allocation',()=>edit(['entries'],entries(draft().value).filter(entry=>entry.id!==id))));
+    const sponsorHost=element('div'),backdoorHost=element('div'),amountHost=element('div'),readout=element('p');readout.dataset.allocationReadout=id;const funding=element('details');funding.append(element('summary','Funding details'),readout);row.append(sponsorHost,backdoorHost,amountHost,funding,action('Remove allocation',()=>edit(['entries'],entries(draft().value).filter(entry=>entry.id!==id))));
     return {root:row,legend,destination:dest,priority,sponsorHost,backdoorHost,amountHost,readout,mode:''};
   }
   function syncSponsor(host:HTMLElement,current:Control|undefined,dest:RawObject,path:string,label:string,write:(value:string|boolean)=>void):Control|undefined{
@@ -94,7 +95,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
       current.details.append(element('p','Model new nondeductible IRA deposits followed immediately by Roth conversions. The IRA contribution limit is used once; the conversion is an account transfer.'));
       current.source=field(current.details,'Traditional IRA for conversion',`${prefix}.backdoorRoth.traditionalIraAccountId`,'select',value=>edit([...getPath(),'backdoorRoth','traditionalIraAccountId'],value));
       const sourceTools=element('div');current.sourceTools=sourceTools;
-      if(editorOptions?.requestPrerequisite)sourceTools.append(button('Add source IRA',()=>{
+      if(editorOptions?.requestPrerequisite)sourceTools.append(action('Add source IRA',()=>{
         const sourcePath=[...getPath()],raw=draft().value,latest=object(sourcePath.reduce<unknown>((node,key)=>object(node)[key],raw)),owner=controller.getState().savedPlan.accounts.find(a=>a.id===latest.accountId)?.ownerId;
         if(!owner)return;const entryId=sourcePath[0]==='entries'?entries(raw)[Number(sourcePath[1])]?.id:undefined;
         editorOptions.requestPrerequisite!({section:'accounts',defaults:{name:'Backdoor IRA',ownerId:owner,type:'traditional-ira',openingBalanceCents:'0.00',annualGrowthBps:'0.00',openingIraBasis:{known:true,value:'0.00'}},link(origin,applied){
@@ -156,7 +157,7 @@ export function mountCashFlowAllocationEditor(root:HTMLElement,controller:Worksp
       const control=[...form.querySelectorAll<HTMLElement>('[data-field]')].find(node=>node.dataset.field===path)||[...form.querySelectorAll<HTMLElement>('[data-field]')].find(node=>node.dataset.field?.startsWith(path+'.'));
       const message=path.endsWith('percentBps')&&issue.code==='invalid-input'?(issue.explanation.startsWith('An integer from ')?'Enter a percentage from 0% to 100%.':issue.explanation.includes('ordinary decimal')?'Use a percentage with up to 2 decimal places, without commas.':issue.explanation):issue.explanation;
       const label=control?.dataset.fieldLabel??'Cash flow allocation',line=element('p',message+' ');
-      if(control){const error=control.parentElement?.querySelector<HTMLElement>('[data-allocation-field-error]');if(error){error.textContent=message;if(issue.severity==='error'){control.setAttribute('aria-invalid','true');control.setAttribute('aria-describedby',error.id);}}line.append(button(`Review ${label}`,()=>{context.disclosures.closeWithin(root,false);revealField(form,control.dataset.field!.split('.'));}));revealField(form,control.dataset.field!.split('.'),false);}
+      if(control){const error=control.parentElement?.querySelector<HTMLElement>('[data-allocation-field-error]');if(error){error.textContent=message;if(issue.severity==='error'){control.setAttribute('aria-invalid','true');control.setAttribute('aria-describedby',error.id);}}line.append(action(`Review ${label}`,()=>{context.disclosures.closeWithin(root,false);revealField(form,control.dataset.field!.split('.'));}));revealField(form,control.dataset.field!.split('.'),false);}
       line.append(context.disclosures.createTrigger({label:'Details',accessibleLabel:`Details: ${label} allocation input`,title:`${label} · allocation input`,preview:message,renderDetails:node=>node.append(element('p',issue.explanation),element('p',issue.resolution))}));feedback.append(line);
     }
   }

@@ -102,6 +102,7 @@ async function preload(page: Page, plan: PlanDocument) {
   await preloadWorkspace(page,plan);
   await openRecord(page,{kind:'allocation'});
   await openForecastDetails(page);
+  const edit=page.getByRole('button',{name:'Edit',exact:true});if(await edit.isVisible())await edit.click();
   await expect(editor(page).locator('[data-allocation-status]')).toHaveText('Applied allocation');
 }
 const editor = (page: Page) => page.getByRole('form', { name: 'Cash flow allocation', exact: true });

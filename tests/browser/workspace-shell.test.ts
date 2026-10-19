@@ -103,3 +103,15 @@ it('selects the destination of a reviewed property while retaining its return de
  fireEvent.click(within(root).getByRole('button',{name:'Close editor'}));
  expect(root.querySelector('button[data-destination="income"]')).toHaveAttribute('aria-pressed','true');
 });
+
+it('focuses the specific history control when its disclosure shares the review path',async()=>{
+ const {loadReferences}=await import('../helpers/references');
+ const {reviewTarget}=await import('../../src/browser/navigation');
+ const source=loadReferences<import('../../src/engine').PlanDocument,unknown>('projection').find(reference=>reference.id==='two-salaries-home-adu')!.input;
+ const {root}=mountWorkspace(source);
+ reviewTarget(root,{section:'Properties',recordId:'home',field:'rentals.0.taxHistory.federal-amt',label:'Review rental history'});
+ const control=root.querySelector('[data-field="rentals.0.taxHistory.federal-amt"]')!;
+ expect(control).toBeVisible();expect(control).toHaveFocus();
+ expect(root.querySelector('[data-select-editor-step="rent-costs"]')).toHaveAttribute('aria-pressed','true');
+ expect(within(root).getByRole('button',{name:'Back to Financing'})).toBeVisible();
+});

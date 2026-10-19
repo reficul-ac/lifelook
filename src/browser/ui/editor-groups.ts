@@ -15,8 +15,11 @@ export function renderEditorGroup(root: HTMLElement, options: {id: string; label
 }
 export function revealEditorField(root: HTMLElement, path: FieldPath, memory: RecordEditorMemory): boolean {
   const key = path.join('.');
-  const target = [...root.querySelectorAll<HTMLElement>('[data-field],[data-field-group]')].find(node => node.dataset.field === key || node.dataset.fieldGroup === key || node.dataset.field === `${key}.known` || node.dataset.field === `${key}.value`);
+  const fields=[...root.querySelectorAll<HTMLElement>('[data-field]')];
+  const target=fields.find(node=>node.dataset.field===key)??fields.find(node=>node.dataset.field===`${key}.known`||node.dataset.field===`${key}.value`)??[...root.querySelectorAll<HTMLElement>('[data-field-group]')].find(node=>node.dataset.fieldGroup===key);
   if (!target) return false;
+  const selectedStep=target.closest<HTMLElement>('[data-editor-step]')?.dataset.editorStep;
+  if(selectedStep)[...root.querySelectorAll<HTMLButtonElement>('[data-select-editor-step]')].find(action=>action.dataset.selectEditorStep===selectedStep)?.click();
   for (let node: HTMLElement | null = target; node && root.contains(node); node = node.parentElement) {
     if (node.dataset.editorStep) memory.step = node.dataset.editorStep;
     if (node instanceof HTMLDetailsElement) {node.open = true; if (node.dataset.editorGroup) memory.openGroups.add(node.dataset.editorGroup);}

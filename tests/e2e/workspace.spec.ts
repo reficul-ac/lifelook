@@ -152,10 +152,10 @@ test('saves two salaries, accounts and an ADU; reloads and restores', async ({ p
   test.setTimeout(180000);
   const annual = fixture.expected.years[0]!.netWorthCents, january = fixture.expected.months[0]!.netWorthCents;
   if (annual.status !== 'available' || january.status !== 'available') throw new Error('Acceptance oracle must be complete');
-  await page.goto('/'); await enterAcceptancePlan(page, fixture.input);await openCollection(page,'overview');await openForecastDetails(page);
+  await page.goto('/'); await enterAcceptancePlan(page, fixture.input);await page.getByRole('button',{name:'Overview',exact:true}).click();await openForecastDetails(page);
   await expect(page.getByRole('table', { name: 'Annual balance sheet', exact: true })).toBeVisible();
   await expect(page.getByTestId('annual-2026-net-worth')).toHaveText(formatExpectedCents(annual.value));
-  await page.getByRole('button', { name: 'Show months for 2026', exact: true }).focus(); await page.keyboard.press('Enter');
+  const monthsButton=page.getByRole('button',{name:'Show months for 2026',exact:true,includeHidden:true});await revealLocator(monthsButton);await monthsButton.focus();await page.keyboard.press('Enter');
   await expect(page.getByTestId('monthly-2026-01-net-worth')).toHaveText(formatExpectedCents(january.value));
   await page.getByRole('button', { name: 'Tax explanation for 2026', exact: true }).click();
   await openDetails(page.getByRole('region',{name:'Financial forecast'}),'How calculated');

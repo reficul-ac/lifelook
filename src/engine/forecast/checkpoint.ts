@@ -1,4 +1,4 @@
-import {validatePlan} from '../validation';
+import {validateDerivedRetirementInventory} from '../validation';
 import {Decimal} from '../money';
 import {initialTaxState} from '../model/tax-state';
 import {projectRsuAccounts,rsuPriceAt} from '../equity/rsu';
@@ -33,7 +33,7 @@ export function restoreForecastCheckpoint(context:ForecastContext,json:string):A
   const ownerIds=new Set(context.plan.household.filers.map(o=>o.id));
   const cents=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v);
   if(c.retirementInventory||c.retirementAccounts){
-   const {retirementAnalysis:_,...base}=context.plan;const active=validatePlan({...base,...c.retirementInventory,...(c.retirementAccounts?{accounts:c.retirementAccounts}:{})});if(!active.ok)return failed();
+   const {retirementAnalysis:_,...base}=context.plan;const active=validateDerivedRetirementInventory(context.source,{...base,...c.retirementInventory,...(c.retirementAccounts?{accounts:c.retirementAccounts}:{})},c.appliedTransitionIds);if(!active.ok)return failed();
    if(c.retirementAccounts&&context.plan.accounts.some(a=>!c.retirementAccounts?.some(v=>v.id===a.id&&v.ownerId===a.ownerId&&v.type===a.type)))return failed();
   }
   const expectedAccounts=[...new Set([...Object.keys(initial.accountExact),...(c.retirementAccounts??[]).map(a=>a.id)])],expectedProperties=[...new Set([...Object.keys(initial.propertyExact),...(c.retirementInventory?.properties??[]).map(p=>p.id)])];

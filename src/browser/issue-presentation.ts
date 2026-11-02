@@ -80,6 +80,7 @@ export function getRecordLabel(plan:PlanDocument,id:string):string{
 }
 export function resolveIssueTargets(issue:Issue,state:IssueViewState,sourcePlan:PlanDocument=state.savedPlan):readonly ReviewTarget[]{
   const plan=sourcePlan,id=issue.recordId,field=normalizeFieldPath(issue.field??'');
+  if(field==='retirementAnalysis'||field.startsWith('retirementAnalysis.'))return [{section:'Properties',recordId:id??'retirementAnalysis',field,label:'Review retirement inputs'}];
   if(field==='growthAssumptions'||field.startsWith('growthAssumptions.')||field==='inheritAccountIds'||field==='inheritPropertyIds')return [{section:'Household',recordId:plan.id,field,label:'Review Growth assumptions'}];
   const policy=sourcePlan.cashFlowAllocation;
   if(policy&&(id===policy.id||policy.entries.some(entry=>entry.id===id)||id===policy.overflow.id)){

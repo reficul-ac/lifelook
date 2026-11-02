@@ -79,7 +79,14 @@ function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort
   const operate=(kind:'save'|'remove',recordId:string,action:()=>SaveRecordResult):SaveRecordResult=>{operationDepth++;let outcome:SaveRecordResult;try{outcome=action();}finally{operationDepth--;}if(operationDepth===0)notify({kind,recordId,result:outcome});return outcome;};
   const persistence=():WorkspaceInitialization=>port?.readPersistence()??{persisted,persistenceIssues};
   const result=(accepted:boolean):SaveRecordResult=>({accepted,...persistence(),issues});
+  const retirementDependencies=(candidate:PlanDocument):readonly Issue[]=>{
+    const raw=retirement.readDraft();if(!raw)return [];
+    const ids=(value:unknown,set=new Set<string>()):Set<string>=>{if(value&&typeof value==='object')for(const [key,child]of Object.entries(value)){if(key==='id'&&typeof child==='string')set.add(child);else ids(child,set);}return set;},before=ids(savedPlan),after=ids(candidate),refs:{id:string;field:string}[]=[];
+    const visit=(value:unknown,path:string)=>{if(!value||typeof value!=='object')return;for(const [key,child]of Object.entries(value)){const field=path+'.'+key;if(['accountId','propertyId','ownerId','recordId'].includes(key)&&typeof child==='string')refs.push({id:child,field});else if(key==='payoffLoanIds'&&Array.isArray(child))child.forEach((id,i)=>{if(typeof id==='string')refs.push({id,field:field+'.'+i});});else visit(child,field);}};visit(raw.value,'retirementAnalysis');
+    return refs.filter(ref=>before.has(ref.id)&&!after.has(ref.id)).map(ref=>({code:'retirement-draft-dependency',recordId:ref.id,field:ref.field,severity:'error',explanation:'An unfinished retirement draft still references this source record.',resolution:'Remove its retirement-only choice or assumption, or discard the retirement draft before removing the source.'}));
+  };
   const commitProjection=(candidate:ValidatedPlan,candidateProjection:ProjectionResult,clear:readonly string[],clearAllocation=false,clearGrowth=false,afterCommit?:()=>void):SaveRecordResult=>{
+    const dependencies=retirementDependencies(candidate);if(dependencies.length){issues=dependencies;notify();return result(false);}
     const commit=()=>{savedPlan=candidate;projection=candidateProjection;issues=[];retirement.sourceChanged();afterCommit?.();
       drafts=Object.fromEntries(Object.entries(drafts).filter(([id])=>!clear.includes(id)));clear.forEach(id=>bases.delete(id));
       if(clearGrowth){growthDraft=undefined;growthBase=undefined;}
@@ -90,6 +97,7 @@ function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort
     notify();return result(true);
   };
   const publish=(candidate:PlanDocument,clear:readonly string[],clearAllocation=false):SaveRecordResult=>{
+    const dependencies=retirementDependencies(candidate);if(dependencies.length){issues=dependencies;notify();return result(false);}
     const validation=validatePlan(candidate);if(!validation.ok){issues=validation.issues;notify();return result(false);}
     let candidateProjection:ProjectionResult;
     try {candidateProjection=calculateProjection(validation.plan,ruleSet);}
@@ -135,6 +143,7 @@ function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort
   const getGrowthDraft=():GrowthAssumptionsDraft=>growthDraft??createGrowthDraft(savedPlan);
   const registerCandidate=(target:EditTarget,candidate:PlanDocument):PreparedEdit=>{
     if(equalActiveEdit(candidate,savedPlan))return {status:'unchanged'};
+    const dependencies=retirementDependencies(candidate);if(dependencies.length)return {status:'invalid',issues:dependencies};
     const validated=validatePlan(candidate);if(!validated.ok)return {status:'invalid',issues:validated.issues};
     const prepared:ReadyEdit=Object.freeze({status:'ready',target:Object.freeze({...target}),plan:validated.plan,basePlan:savedPlan,ruleSet,controllerEpoch,draftGeneration:draftGenerations.get(editKey(target))??0,token:++preparationToken});
     issued.set(prepared,{key:editKey(target),generation:prepared.draftGeneration,epoch:controllerEpoch,token:prepared.token,base:savedPlan,plan:prepared.plan,fingerprint:JSON.stringify(prepared.plan),rulesFingerprint:JSON.stringify(ruleSet)});return prepared;

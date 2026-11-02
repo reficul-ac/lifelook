@@ -42,8 +42,14 @@ export function initialTaxState(plan: ValidatedPlan): HouseholdTaxState {
     const history: History<Cents> = histories.some(h => !h.known) ? { known: false } : { known: true, value: settleCents(histories.reduce((sum, h) => sum.plus(h.known ? h.value : 0), new Decimal(0))) };
     return [filer.id, history];
   }));
+  const estimated=Object.fromEntries(plan.household.filers.flatMap(filer=>{
+    if(iraBasisByOwner[filer.id]?.known)return [];
+    const subtotal=settleCents(plan.accounts.filter(a=>a.ownerId===filer.id&&a.type==='traditional-ira').reduce((n,a)=>n.plus(a.openingIraBasis.known?a.openingIraBasis.value:0),new Decimal(0)));
+    return subtotal>0?[[filer.id,{federal:{known:false as const},california:{known:false as const},estimatedFederalCents:subtotal,estimatedCaliforniaCents:subtotal}]]:[];
+  }));
   return {
     year: plan.startYear - 1, rentals, qbiLossVintages, iraBasisByOwner,
+    ...(Object.keys(estimated).length?{retirementAccountState:{iraBasisByOwner:estimated,rothByAccount:{}}}:{}),
     ...(plan.properties.some(p=>p.aduProject)?{aduProjects:Object.fromEntries(plan.properties.flatMap(p=>p.aduProject?[[p.aduProject.id,Object.fromEntries(books.map(book=>[book,{status:'available' as const,value:{capitalizedBuildingCents:0,nondepreciableBasisCents:0,recoveryActivated:false}}]))]]:[])) as NonNullable<HouseholdTaxState['aduProjects']>}:{}),
     minimumTaxCreditCoverage: { federal: plan.household.coverageAnswers.priorFederalMinimumTaxCredits, california: plan.household.coverageAnswers.priorCaliforniaMinimumTaxCredits },
   };

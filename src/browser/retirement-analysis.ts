@@ -78,7 +78,7 @@ export function createRetirementAnalysisScheduler(controller:WorkspaceController
    if(reply.kind==='candidate'){const year=reply.candidate.retirementYear;if(year<prepared.plan.startYear||year>=prepared.plan.startYear+prepared.plan.horizonYears||year>2100||reply.candidate.firstYear.year!==year)return;candidates.set(year,reply.candidate);emit({...state,status:'pending',candidates:[...candidates.values()].sort((a,b)=>a.retirementYear-b.retirementYear),progress:{completed:candidates.size,total:state.progress!.total}});return;}
    if(reply.kind==='progress')return;
    if(reply.kind==='complete'&&acceptComparison(reply.comparison,reply.projection,reply.issues,owner,prepared,source))finish();
-  };running.postMessage(message);}catch{failed();}
+  };running.postMessage(message);if(selected!==undefined)selectYear(selected);}catch{failed();}
  };
  const unsubscribe=controller.subscribe(()=>{const next=controller.getState(),changed=next.savedPlan!==previous.savedPlan||next.retirementDraft!==previous.retirementDraft;previous=next;if(changed&&live())request();});
  return {request,selectYear,invalidate(){cancel();active=undefined;activeOwner=undefined;caches.delete(controller);if(live())empty('stale');},dispose(){if(disposed)return;disposed=true;cancel();unsubscribe();}};

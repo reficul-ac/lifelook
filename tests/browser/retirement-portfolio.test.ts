@@ -54,3 +54,9 @@ it('edits keep/convert/sell and each source loan while showing pending ownership
 it('retains focused card actions when a completed report refreshes',()=>{
  const h=setup(),button=within(h.root).getByRole('button',{name:'Edit Rental B'});button.focus();h.updateYear(2099);expect(within(h.root).getByRole('button',{name:'Edit Rental B'})).toBe(button);expect(button).toHaveFocus();
 });
+it('lets users clear retirement-only account and owner overrides without deleting source records',()=>{
+ const h=setup();h.actions.edit(['assumptions','accounts'],[{accountId:'stocks',californiaBasisCents:{known:true,value:'2.'}}]);h.actions.edit(['assumptions','owners'],[{ownerId:'owner-a',federalIraBasisCents:{known:true,value:'3.'}}]);fireEvent.click(within(h.root).getByRole('button',{name:'Tax and planning assumptions'}));fireEvent.click(within(h.root).getByRole('button',{name:'Use source defaults for Synthetic stocks'}));expect((h.values().assumptions as any).accounts).toEqual([]);fireEvent.click(within(h.root).getByRole('button',{name:'Use source defaults for Filer A'}));expect((h.values().assumptions as any).owners).toEqual([]);expect(h.controller.getState().savedPlan.accounts).toHaveLength(1);
+});
+it('identifies a completed sold source card without an endless allocation-updating amount',()=>{
+ const h=setup({properties:[{id:'sale',name:'Sold home',role:'primary',purchaseDate:'2090-01-01',purchasePriceCents:1000000,downPaymentCents:1000000,openingValueCents:1000000,appreciationBps:0,appreciationOverrides:[],loans:[]}]});h.actions.edit(['existingProperties'],[{propertyId:'sale',action:'sell',payoffLoanIds:[]}]);h.completePreview();const card=h.root.querySelector('[data-retirement-property="sale"]');expect(card).toHaveTextContent('Sold at retirement');expect(card).not.toHaveTextContent('updating');
+},15000);

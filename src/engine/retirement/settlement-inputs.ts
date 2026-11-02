@@ -12,10 +12,10 @@ import type {YearRules} from '../rules/types';
 const av=<T>(value:T):Available<T>=>({status:'available',value});
 const books:readonly TaxBook[]=['federal','california','federal-amt','california-amt'];
 export function retirementAccountInventory(snapshot:RetirementSnapshot,opening:ForecastCheckpoint,plan:ValidatedPlan):readonly Account[] {
- const base=opening.retirementAccounts??plan.accounts,common=snapshot.definition.stockGrowthBps;
+ const base=opening.retirementAccounts??plan.accounts,common=snapshot.definition.mode==='reallocate'?snapshot.definition.stockGrowthBps:undefined;
  const accounts=base.map(a=>{if(common===undefined||a.type==='rsu')return a;const {growthSource:_,...value}=a;return {...value,annualGrowthBps:common};});
  if(accounts.some(a=>a.type==='taxable-brokerage'))return accounts;
- let id='retirement:taxable',suffix=1;const ids=new Set([...plan.accounts.map(a=>a.id),...plan.properties.map(p=>p.id),...snapshot.definition.newProperties.map(p=>p.id)]);while(ids.has(id))id=`retirement:taxable:${suffix++}`;
+ let id='retirement:taxable',suffix=1;const ids=new Set<string>();const collect=(value:unknown)=>{if(value&&typeof value==='object')for(const [key,child]of Object.entries(value)){if(key==='id'&&typeof child==='string')ids.add(child);else collect(child);}};collect(snapshot.context.source);collect(plan);collect(opening.retirementInventory);collect(snapshot.definition.newProperties);while(ids.has(id))id=`retirement:taxable:${suffix++}`;
  return [...accounts,{id,name:'Retirement taxable stocks',ownerId:plan.household.filers[0].id,type:'taxable-brokerage',openingBalanceCents:0,openingIraBasis:{known:true,value:0},openingTaxableBasis:{known:true,value:0},annualGrowthBps:common??plan.growthAssumptions?.stocksBps??0}];
 }
 export function retirementOpeningAccounts(snapshot:RetirementSnapshot,opening:ForecastCheckpoint,accounts:readonly Account[]):Available<readonly DistributionAccountState[]> {

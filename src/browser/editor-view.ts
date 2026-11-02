@@ -41,6 +41,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   let route:WorkspaceRoute={destination:session.view.selections.destination??'overview',editor:null,surface:'edit'};
   const context:IssueViewContext={editorView:session.view,disclosures,readState:controller.getState,review:target=>{
     if(!isCurrent())return;
+    if(target.field?.startsWith('retirementAnalysis')){navigate('retirement');shell.retirement.querySelector('[data-retirement-workspace]')?.dispatchEvent(new CustomEvent('retirement-review-input',{bubbles:true,detail:target.field}));return;}
     const snapshot=selectReportSnapshot(controller.getState(),coordinator.getState());
     const edit=targetForReview(target,controller.getState(),snapshot.plan);
     if(!edit)return;
@@ -145,7 +146,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!document.querySelector('[data-disclosure-panel]:not([hidden]),[data-disclosure-preview]:not([hidden])')){event.preventDefault();close();}};
   const discarded=()=>{const target=route.editor?.target;if(target?.kind==='record'&&target.section!=='household'&&!(controller.getState().savedPlan[target.section]??[]).some(record=>record.id===target.recordId)){close();return;}if(target){const origin=route.editor?.origin??null;open(target,origin);}};
   const removed=()=>close();
-  const review=(event:Event)=>{const request=(event as CustomEvent<{target:import('./issue-presentation').ReviewTarget;handled:boolean}>).detail;if(!isCurrent()||!targetForReview(request.target,controller.getState(),shownReport.plan))return;request.handled=true;context.review(request.target);};
+  const review=(event:Event)=>{const request=(event as CustomEvent<{target:import('./issue-presentation').ReviewTarget;handled:boolean}>).detail;if(!isCurrent()||!request.target.field?.startsWith('retirementAnalysis')&&!targetForReview(request.target,controller.getState(),shownReport.plan))return;request.handled=true;context.review(request.target);};
   const retirementReview=(event:Event)=>{if(isCurrent())context.review((event as CustomEvent<import('./issue-presentation').ReviewTarget>).detail);};
   root.addEventListener('retirement-review-source',retirementReview);
   const addContribution=(event:Event)=>{const recordId=controller.beginAdd('contributions'),draft=controller.getDraft('contributions',recordId);controller.editDraft(recordId,{...draft,value:{...draft.value,accountId:(event as CustomEvent<string>).detail}});open({kind:'record',section:'contributions',recordId},null);};

@@ -65,3 +65,6 @@ it('uses the applied scope for unchanged raw drafts and handles worker construct
 it('streams a fully solved selected candidate from detail while the overall comparison remains pending',()=>{
  vi.useFakeTimers();const h=setup();h.scheduler.selectYear(2100);vi.advanceTimersByTime(150);const request=h.requests.at(-1)!;h.run(request);expect(h.publications.at(-1)?.status).toBe('pending');expect(h.publications.at(-1)?.candidates.map(c=>c.retirementYear)).toContain(2100);expect(h.publications.at(-1)?.detail?.path.retirementYear).toBe(2100);expect(h.publications.at(-1)?.comparison).toBeUndefined();expect(h.publications.at(-1)?.receipt).toBeUndefined();
 });
+it('refreshes the selected detail alongside a replacement comparison after input changes',()=>{
+ vi.useFakeTimers();const h=setup();h.scheduler.selectYear(2100);vi.advanceTimersByTime(150);h.scheduler.request('draft');const before=h.requests.filter(r=>r.kind==='detail').length;const draft=h.controller.getRetirementDraft();h.controller.editRetirementDraft({...draft,value:{...draft.value,withdrawalBps:'4'}});vi.advanceTimersByTime(150);expect(h.requests.filter(r=>r.kind==='detail')).toHaveLength(before+1);expect(h.requests.at(-1)?.owner.definitionGeneration).toBe(h.controller.getRetirementDraft().generation);
+});

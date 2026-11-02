@@ -22,11 +22,12 @@ Open the production preview at `http://127.0.0.1:4174`. The repository contains 
 
 ## Scenarios, editing and recovery
 
-New and reloaded tabs start at **Overview**. Use the six destinations below. Financial records appear in compact collections; choose **Add** or a record's **Edit** action to open one focused editor.
+New and reloaded tabs start at **Overview**. Use the seven destinations below. Financial records appear in compact collections; choose **Add** or a record's **Edit** action to open one focused editor.
 
 | Destination | What to enter or inspect |
 | --- | --- |
 | Overview | Net-worth trajectory, growth assumptions, selected-year totals, annual tables and forecast details. |
+| Retirement | Compare January retirement dates, inspect the calendar path through2100, and edit a retirement-only portfolio. |
 | Income | Salaries, annual raises, dated pay changes and other income. |
 | Accounts | Investment accounts, contributions, employer RSUs and cash flow allocation. |
 | Properties | Owned homes, planned purchases, mortgages, rentals, linked costs and ADU projects. |
@@ -91,6 +92,22 @@ An external workspace change detected through a storage event or pre-write check
 The former desktop application's SQLite profiles and `.lifelook` backups are not imported by this JSON format. Removing its source code does not delete existing device data or backups. Keep those files separately; enter a new plan or restore a compatible browser JSON backup.
 
 Storage read/write and quota failures are visible. A failed write leaves the valid in-memory plan labeled **Applied · Not saved locally** and exportable; downloading its backup does not require a successful local-storage write. A valid restore that cannot persist likewise retains an exportable in-memory plan. Recovery warnings and export actions stay visible through edits, adds, discards, navigation, appearance changes and rejected Apply actions until a successful storage write resolves them. Ordinary editing does not announce a save; operation outcomes have a separate status announcement.
+
+## Retirement planning
+
+Open **Retirement** to inspect the applied scenario without writing defaults or changing the ordinary forecast. The main graph compares the **first full retirement year's annual after-tax recurring income** for each January retirement date within the original forecast. **Retirement year** selects that candidate. Expand **Income after retiring in YEAR, through2100** to inspect subsequent **calendar years**, monthly amounts, stocks and net worth. The original forecast dates stay fixed; retirement paths end at2100 inclusive.
+
+**Keep projected portfolio** retains source assets and their growth. **Reallocate retirement portfolio** adds independent property cards and a shared retirement stock-growth assumption. Existing properties can be kept, converted to rentals, sold, or have selected loans paid off. Scheduled source purchases/projects can continue or be excluded before they start. New targets use a fixed entered purchase price for every candidate, with cash financing or a **percentage** down payment;20 means20%, not20 dollars. Inspect the derived down-payment dollars, mortgage principal/payment, buying costs and actual cash required. Gross property value, debt, equity and cash needed are different amounts. Property costs and transition taxes sit outside gross allocation shares; negative cash is an explicit funding gap.
+
+The withdrawal rate applies to gross stocks remaining after the retirement transition; its annual target is divided into twelve monthly gross draws. Required distributions use prior-December balances and account-specific access rules. Only after-tax mandatory excess is reinvested, with matching taxable basis. Employment and voluntary working contributions stop at retirement; source dated income, spending, debts, property schedules and committed projects retain their dates.
+
+For each candidate, four policies—taxable-first, traditional-first, Roth-first and annual-tax-aware—run through2100. Selection maximizes cumulative recurring after-tax income, then ending net assets, then minimizes additional distribution taxes, with a stable policy-ID tie break. The annual-tax-aware policy searches a bounded set of feasible account mixes; it does not claim a global optimum. Transition proceeds, financing and funding draws are not recurring income.
+
+Unanswered histories remain unanswered in saved inputs. Editable retirement-only assumptions and conservative estimates are visible with provenance. Confirmed basis survives alongside unknown history; unsupported tax books or missing data leave affected values unavailable while independent amounts remain readable. An incomplete or funding-dependent path is unranked or conditional, never presented as proven funded. Updating/paused reports retain their producing owner and cannot supply a current Apply.
+
+Raw retirement drafts, selected cards, chart selections and report disclosures stay in the current scenario's tab session. Switching scenarios preserves independent record, allocation, growth and retirement drafts. **Apply retirement changes** saves one validated definition and its matching ordinary revision; ordinary financial amounts do not change. **Discard retirement changes** resets only that draft. Reload, plain scenario JSON, workspace backups and forks retain applied inputs only. Source removal is blocked while an applied definition or unfinished retirement draft references it; use the retirement source-default/reset controls or discard the draft first. Browsers without worker support show an explicit retry/unavailable state.
+
+The [design](docs/superpowers/specs/2026-11-01-lifelook-retirement-design.md), [implementation plan](docs/superpowers/plans/2026-11-01-lifelook-retirement.md), [verification record](docs/superpowers/reviews/2026-11-01-lifelook-retirement-verification.md) and [source register](sources/register.md) describe scope, evidence and tax boundaries.
 
 ## Read the projection
 

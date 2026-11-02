@@ -348,7 +348,16 @@ function validateAduProjects(v:Validator, properties:readonly Obj[], rentals:rea
   return projectsByRental;
 }
 
-export function validatePlan(raw: unknown): ValidationResult {
+export function validatePlan(raw:unknown):ValidationResult{return validateDocument(raw,new Set());}
+/** Internal runtime inventory: a posted personal-to-rental conversion keeps its actual later date. */
+export function validateDerivedRetirementInventory(source:PlanDocument,raw:PlanDocument,transitionIds:readonly string[]=[]):ValidationResult {
+  const posted=new Set(Array.isArray(transitionIds)?transitionIds:[]),converted=new Set<string>();
+  if(Array.isArray(raw.rentals))for(const unit of raw.rentals){if(!isObject(unit)||typeof unit.id!=='string'||typeof unit.propertyId!=='string'||typeof unit.availableDate!=='string')continue;
+    if(unit.convertedFromPersonalUse===true&&unit.availableDate.endsWith('-01-01')&&source.properties.some(p=>p.id===unit.propertyId&&p.role==='primary')&&!source.rentals.some(r=>r.id===unit.id||r.propertyId===unit.propertyId)&&posted.has(`retirement:${unit.availableDate}:${unit.propertyId}:conversion`))converted.add(unit.id);
+  }
+  return validateDocument(raw,converted);
+}
+function validateDocument(raw: unknown,postedConversionIds:ReadonlySet<string>): ValidationResult {
   const v = new Validator(isObject(raw) && typeof raw.id === 'string' ? raw.id : undefined);
   const root = v.object(raw, 'document', v.planId);
   if (!root) return { ok: false, issues: v.issues };
@@ -680,7 +689,7 @@ export function validatePlan(raw: unknown): ValidationResult {
     const property = typeof o.propertyId === 'string' ? propertyById.get(o.propertyId) : undefined;
     const future=property&&isValidISODate(property.purchaseDate)&&forecastStart&&property.purchaseDate>forecastStart;
     if (v.date(o.availableDate, 'availableDate', id)) {
-      if (!projectsByRental.has(id) && !future && forecastStart && o.availableDate > forecastStart) v.issue('availableDate', id, 'Included rental units must already be available at the forecast start.');
+      if (!projectsByRental.has(id) && !postedConversionIds.has(id??'') && !future && forecastStart && o.availableDate > forecastStart) v.issue('availableDate', id, 'Included rental units must already be available at the forecast start.');
       if (isValidISODate(o.rentStartDate) && o.rentStartDate < o.availableDate) v.issue('rentStartDate', id, 'Rent cannot begin before the rental unit is available.');
     }
     if (property?.role === 'primary') v.issue('propertyId', id, 'Rental units require a rental property or a primary home with an ADU.');

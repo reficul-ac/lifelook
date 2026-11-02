@@ -12,7 +12,8 @@ export function openRecord(root: HTMLElement, target: FocusedEditTarget): HTMLEl
   if (!action) throw Error(`Missing record ${editTargetKey(target)}`); fireEvent.click(action); return root.querySelector<HTMLElement>('[data-active-editor]')!;
 }
 export async function waitForPreview(root: HTMLElement): Promise<void> {await waitFor(() => {if (root.querySelector('[data-preview-status]')?.getAttribute('data-preview-status') !== 'valid') throw Error('Preview not ready');}, {timeout: 10000});}
-export async function switchScenario(root: HTMLElement, id: string): Promise<void> {fireEvent.change(within(root).getByLabelText('Scenario'), {target: {value: id}}); await waitFor(() => {if(root.querySelector('[data-active-editor]'))throw Error('Editor is still open');});}
+export function beginScenarioSwitch(root: HTMLElement, id: string): void {fireEvent.click(within(root).getByLabelText('Scenario')); const action=[...within(root).getByRole('menu',{name:'Scenarios'}).querySelectorAll<HTMLButtonElement>('[data-scenario-action="switch"]')].find(node=>node.dataset.scenarioId===id);if(!action)throw Error(`Missing scenario ${id}`);fireEvent.click(action);}
+export async function switchScenario(root: HTMLElement, id: string): Promise<void> {beginScenarioSwitch(root,id); await waitFor(() => {if((within(root).getByLabelText('Scenario') as HTMLButtonElement).value!==id||root.getAttribute('aria-busy')==='true')throw Error('Scenario is still switching');if(root.querySelector('[data-active-editor]'))throw Error('Editor is still open');});}
 export async function applyEdit(root: HTMLElement): Promise<void> {
   const editor=root.closest<HTMLElement>('[data-active-editor]')??root.querySelector<HTMLElement>('[data-active-editor]');
   if(!editor)throw Error('Open an editor before applying');

@@ -3,7 +3,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 import type {PlanDocument} from '../../src/engine';
 import {makePlan,mustValidate} from '../helpers/plans';
 import {makeAduPlan} from '../helpers/adu';
-import {openForecastDetails,openRecord,openSettings,preloadWorkspace,readActivePlan,readWorkspace,replaceScenarioFromJson} from './helpers/workspace';
+import {openForecastDetails,openRecord,openSettings,preloadWorkspace,readActivePlan,readWorkspace,replaceScenarioFromJson,switchScenario} from './helpers/workspace';
 
 test.use({hasTouch:true});
 function growthPlan(horizonYears=3):PlanDocument {
@@ -101,12 +101,12 @@ test('previews without persistence and applies one exact category revision while
 test('retains separate record and growth drafts while scenario switches and replacement cancel obsolete ownership',async({page})=>{
  const original=growthPlan();await preloadWorkspace(page,original);const baseline=(await readWorkspace(page)).baselineScenarioId;
  await page.getByRole('button',{name:'Fork scenario',exact:true}).click();const dialog=page.getByRole('dialog');await dialog.getByLabel('Scenario name',{exact:true}).fill('Growth experiment');await dialog.getByRole('button',{name:'Create scenario',exact:true}).click();await expect(dialog).not.toBeVisible();
- const experiment=await page.getByLabel('Scenario',{exact:true}).inputValue();await configure(page);
+ const experiment=(await readWorkspace(page)).activeScenarioId;await configure(page);
  await openRecord(page,{kind:'record',section:'accounts',recordId:'custom'});const amount=page.getByLabel('Account opening balance ($)',{exact:true});await amount.fill('6000.00');
  await rail(page).getByRole('button',{name:'Edit growth assumptions',exact:true}).click();await expect(page.locator('[data-active-editor]')).toHaveCount(0);await ready(page);
  const input=rail(page).getByLabel('Stock account growth (%)',{exact:true});await input.fill('9.00');
- await page.getByLabel('Scenario',{exact:true}).selectOption(baseline);await expect(page.locator('.overview-source')).toContainText('Applied');expect(await readActivePlan(page)).toEqual(original);
- await page.getByLabel('Scenario',{exact:true}).selectOption(experiment);await expect(page.locator('.overview-source')).toContainText('Applied');await expect(input).toHaveValue('9.00');
+ await switchScenario(page,baseline);await expect(page.locator('.overview-source')).toContainText('Applied');expect(await readActivePlan(page)).toEqual(original);
+ await switchScenario(page,experiment);await expect(page.locator('.overview-source')).toContainText('Applied');await expect(input).toHaveValue('9.00');
  await rail(page).getByRole('button',{name:'Edit growth assumptions',exact:true}).click();await ready(page);
  await openRecord(page,{kind:'record',section:'accounts',recordId:'custom'});await expect(amount).toHaveValue('6000.00');
  await rail(page).getByRole('button',{name:'Edit growth assumptions',exact:true}).click();await input.fill('11.00');

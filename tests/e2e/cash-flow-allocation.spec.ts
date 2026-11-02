@@ -281,6 +281,8 @@ for (const monthly of [200000, 205000]) test(`retains refused workplace excess w
     const outside = page.getByLabel('Scenario', { exact: true });
     await outside.click();
     await expect(panel).toBeHidden();
+    await expect(page.getByRole('menu', { name: 'Scenarios' }).getByRole('menuitemradio', { checked: true })).toBeFocused();
+    await page.keyboard.press('Escape');
     await expect(outside).toBeFocused();
   }
 });

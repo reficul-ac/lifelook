@@ -84,7 +84,7 @@ it.each([
  vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{frames.set(++frameId,callback);return frameId;});
  vi.stubGlobal('cancelAnimationFrame',(id:number)=>frames.delete(id));
  if(kind==='fork')click(root,'Fork scenario');
- else{fireEvent.click(within(root).getByText('Manage scenarios',{selector:'summary'}));click(root,'Delete Experiment');}
+ else{fireEvent.click(within(root).getByLabelText('Scenario'));fireEvent.click(within(root).getByRole('menuitem',{name:'Delete Experiment'}));click(within(root).getByRole('dialog'),'Continue');}
  const dialog=within(root).getByRole('dialog'),before=manager.getState().document,writes=store.writes();
  click(dialog,kind==='fork'?'Create scenario':'Delete scenario');
  if(stage==='timer'){const pending=[...frames.values()];frames.clear();pending.forEach(callback=>callback(0));}
@@ -97,7 +97,7 @@ it.each([
  expect(manager.getActiveSession()).toBe(source);expect(source.controller.getState().drafts.household?.value.openingCashCents).toBe('1.234');
  expect(within(root).queryByRole('dialog')).toBeNull();expect(root).not.toHaveAttribute('aria-busy','true');
  expect(within(root).getByRole('button',{name:'Fork scenario'})).toBeEnabled();
- expect(kind==='fork'?within(root).getByRole('button',{name:'Fork scenario'}):within(root).getByRole('button',{name:'Delete Experiment'})).toHaveFocus();
+ expect(kind==='fork'?within(root).getByRole('button',{name:'Fork scenario'}):within(root).getByLabelText('Scenario')).toHaveFocus();
 });
 
 it('keeps pending recovery retry available after read failure without losing current drafts',()=>{

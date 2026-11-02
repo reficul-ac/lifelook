@@ -1,0 +1,103 @@
+.scenario-picker {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  max-width: 28rem;
+}
+
+.scenario-picker > span {
+  display: block;
+  margin-bottom: .25rem;
+}
+
+.scenario-picker .scenario-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  width: 100%;
+  min-height: 2.75rem;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  text-align: left;
+}
+
+.scenario-picker-trigger > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scenario-menu {
+  position: absolute;
+  z-index: 100;
+  top: calc(100% + .35rem);
+  left: 0;
+  width: 100%;
+  min-width: 0;
+  max-height: min(26rem,60dvh);
+  overflow: auto;
+  padding: .35rem;
+  border: 1px solid var(--border-strong);
+  border-radius: .5rem;
+  background: var(--surface-panel);
+  box-shadow: var(--shadow);
+}
+
+.scenario-menu-row {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+}
+
+.scenario-menu button {
+  min-width: 0;
+  min-height: 2.75rem;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.scenario-menu [role=menuitemradio] {
+  flex: 1;
+}
+
+.scenario-menu [aria-checked=true] {
+  background: var(--surface-raised);
+  font-weight: 650;
+}
+
+.scenario-menu button:hover,
+.scenario-menu button:focus-visible {
+  background: var(--surface-hover);
+}
+
+.scenario-menu .scenario-delete {
+  flex: 0 0 2.75rem;
+  display: grid;
+  place-items: center;
+  padding: .6rem;
+  color: var(--danger);
+}
+
+.scenario-delete svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.scenario-menu .scenario-add {
+  width: 100%;
+  margin-top: .35rem;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--accent);
+}
+
+.scenario-dialog .scenario-confirm-delete {
+  background: var(--danger);
+  color: var(--surface-panel);
+}

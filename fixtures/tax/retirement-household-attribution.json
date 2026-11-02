@@ -1,0 +1,36 @@
+{
+  "cases": [
+    {
+      "id": "mfj-fixed-ira-and-brokerage-schedule",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf",
+        "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
+        "https://www.ftb.ca.gov/about-ftb/newsroom/tax-news/"
+      ],
+      "input": {
+        "recurringIraCents": 8000000,
+        "mandatoryExcessIraCents": 2000000,
+        "transitionGainCents": 10000000
+      },
+      "worksheetSteps": [
+        "A: federal ordinary taxable47800 uses IRS midpoint47825:2480+2763=5243. CA68200 gives1413 less316=1097. Total6340.",
+        "B: federal ordinary taxable67800 uses midpoint67825:2480+5163=7643. CA88200 gives2262 less316=1946. Total9589.",
+        "C: federal standard32200:ordinary67800,100000gain;0%capacity31100,15%gain68900 ->10335 +7643=17978. CA188200 yields10138 less316=9822. AMT andNIIT0. Total27800.",
+        "All four deduction pairs compared. A=634000; B-A=324900; C-B=1821100; C=2780000 cents."
+      ],
+      "expected": {
+        "recurringCents": 634000,
+        "mandatoryExcessCents": 324900,
+        "transitionCents": 1821100,
+        "totalCents": 2780000
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "federal-2026.3",
+        "california-2026.2",
+        "us-ca-2026.9"
+      ]
+    }
+  ]
+}

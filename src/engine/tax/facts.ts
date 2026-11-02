@@ -1,4 +1,4 @@
-import type { Cents, Filer, History } from '../model/plan';
+import type { Cents, Filer, History, TaxBook } from '../model/plan';
 import type { Available, Issue } from '../model/results';
 import type { RentalYearFacts } from '../property/facts';
 import type { RentalLossYear } from './rental-losses';
@@ -42,6 +42,11 @@ export interface PreIraFacts {
   /** Non-rental AGI before the current IRA resolution, retaining any declared preview deduction. */
   readonly nonRentalFederalAgiCents: Available<Cents>;
   readonly nonRentalCaliforniaAgiCents: Available<Cents>;
+  readonly retirementQbiOrdinaryByRental?:Readonly<Record<string,Available<Cents>>>;
+  readonly passiveDispositionIncomeByBook?:Readonly<Record<TaxBook,Available<Cents>>>;
+  readonly passiveAllowanceMagiByBook?:Readonly<Record<TaxBook,Available<Cents>>>;
+  readonly nonRentalFederalAmtIncomeCents?: Available<Cents>;
+  readonly nonRentalCaliforniaAmtIncomeCents?: Available<Cents>;
   readonly rentalFacts: readonly RentalYearFacts[];
   readonly adjustments: IncomeAdjustments;
   readonly issues: readonly Issue[];
@@ -77,6 +82,9 @@ export interface ResolvedTaxFacts {
   readonly year: number;
   readonly filers: readonly Filer[];
   readonly longTermCapitalGainCents?: Cents;
+  readonly unrecaptured1250GainCents?: Cents;
+  readonly federalAmtLongTermCapitalGainCents?: Cents;
+  readonly federalAmtUnrecaptured1250GainCents?: Cents;
   readonly federalAgiCents: Available<Cents>;
   readonly californiaAgiCents: Available<Cents>;
   readonly federalAmtIncomeCents: Available<Cents>;
@@ -102,8 +110,8 @@ export function buildResolvedTaxFacts(preIra: PreIraFacts, rental: RentalLossYea
   const californiaRentalCents = rentalAmount(rental.california);
   const federalAgiCents = combineAvailableCents([preIra.nonRentalFederalAgiCents, federalRentalCents, ira.federalDeductibleCents], values => sumCents([values[0]!, preIra.adjustments.traditionalIraDeductionCents, values[1]!, -values[2]!]));
   const californiaAgiCents = combineAvailableCents([preIra.nonRentalCaliforniaAgiCents, californiaRentalCents, ira.californiaDeductibleCents], values => sumCents([values[0]!, preIra.adjustments.traditionalIraDeductionCents, values[1]!, -values[2]!]));
-  const federalAmtIncomeCents = combineAvailableCents([preIra.nonRentalFederalAgiCents, rentalAmount(rental.federalAmt), ira.federalDeductibleCents], values => sumCents([values[0]!, preIra.adjustments.traditionalIraDeductionCents, values[1]!, -values[2]!]));
-  const californiaAmtIncomeCents = combineAvailableCents([preIra.nonRentalCaliforniaAgiCents, rentalAmount(rental.californiaAmt), ira.californiaDeductibleCents], values => sumCents([values[0]!, preIra.adjustments.traditionalIraDeductionCents, values[1]!, -values[2]!]));
-  const passiveAllowanceMagiCents = mapAvailableCents(preIra.nonRentalFederalAgiCents, value => sumCents([value, preIra.adjustments.traditionalIraDeductionCents, preIra.adjustments.passiveMagiAddbacksCents]));
+  const federalAmtIncomeCents = combineAvailableCents([preIra.nonRentalFederalAmtIncomeCents??preIra.nonRentalFederalAgiCents, rentalAmount(rental.federalAmt), ira.federalDeductibleCents], values => sumCents([values[0]!, preIra.adjustments.traditionalIraDeductionCents, values[1]!, -values[2]!]));
+  const californiaAmtIncomeCents = combineAvailableCents([preIra.nonRentalCaliforniaAmtIncomeCents??preIra.nonRentalCaliforniaAgiCents, rentalAmount(rental.californiaAmt), ira.californiaDeductibleCents], values => sumCents([values[0]!, preIra.adjustments.traditionalIraDeductionCents, values[1]!, -values[2]!]));
+  const passiveAllowanceMagiCents = preIra.passiveAllowanceMagiByBook?.federal??mapAvailableCents(preIra.nonRentalFederalAgiCents, value => sumCents([value, preIra.adjustments.traditionalIraDeductionCents, preIra.adjustments.passiveMagiAddbacksCents]));
   return { year: preIra.year, filers: preIra.filers, ...(preIra.longTermCapitalGainCents ? { longTermCapitalGainCents: preIra.longTermCapitalGainCents } : {}), federalAgiCents, californiaAgiCents, federalAmtIncomeCents, californiaAmtIncomeCents, federalRentalCents, californiaRentalCents, saltMagiCents: federalAgiCents, niitMagiCents: federalAgiCents, niitOtherIncomeCents: preIra.niitOtherIncomeCents, traditionalIraMagiCents: ira.traditionalMagiCents, rothIraMagiCents: ira.rothMagiCents, passiveAllowanceMagiCents, rental, ira, workplace, preIra, issues: [...preIra.issues, ...rental.issues, ...ira.issues] };
 }

@@ -1,0 +1,65 @@
+{
+  "cases": [
+    {
+      "id": "gain-below-25-percent",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
+        "https://www.irs.gov/pub/irs-prior/f6251--2025.pdf",
+        "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf"
+      ],
+      "input": {
+        "taxableCents": 20000000,
+        "preferredGainCents": 2000000,
+        "unrecaptured1250Cents": 4000000,
+        "amtBaseCents": 12000000,
+        "amtPreferredGainCents": 2000000,
+        "amtUnrecaptured1250Cents": 4000000
+      },
+      "worksheetSteps": [
+        "T=200000, preferred=20000,1250=40000; x=180000,K=180000; ordinary tax=2480+9120+17424=29024;15% of20000=3000; total32024.",
+        "AMT base120000 minus20000 preferred minus40000 1250=60000;26%=15600 plus3000 plus10000=28600."
+      ],
+      "expected": {
+        "regularTaxCents": 3202400,
+        "amtTaxCents": 2860000
+      },
+      "toleranceCents": 50,
+      "ruleVersions": [
+        "federal-2026.3",
+        "us-ca-2026.9"
+      ]
+    },
+    {
+      "id": "gain-spans-24-25-and-20-percent",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
+        "https://www.irs.gov/pub/irs-prior/f6251--2025.pdf",
+        "https://www.irs.gov/pub/irs-drop/rp-25-32.pdf"
+      ],
+      "input": {
+        "taxableCents": 68000000,
+        "preferredGainCents": 25000000,
+        "unrecaptured1250Cents": 5000000,
+        "amtBaseCents": 50000000,
+        "amtPreferredGainCents": 25000000,
+        "amtUnrecaptured1250Cents": 5000000
+      },
+      "worksheetSteps": [
+        "T=680000,P=250000,U=50000;x=430000,K=403550;ordinary tax K=2480+9120+24332+46116=82048.",
+        "p15=210150,p20=39850,u25=26450;total82048+31522.5+7970+6612.5=128153.",
+        "AMT ordinary200000*.26=52000; preferred210150*.15+39850*.20=39492.5; 1250=12500; total103992.5."
+      ],
+      "expected": {
+        "regularTaxCents": 12815300,
+        "amtTaxCents": 10399250
+      },
+      "toleranceCents": 50,
+      "ruleVersions": [
+        "federal-2026.3",
+        "us-ca-2026.9"
+      ]
+    }
+  ]
+}

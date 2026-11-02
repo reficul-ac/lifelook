@@ -38,10 +38,10 @@ export function validateRetirementAnalysis(raw:unknown,source:PlanDocument):{ok:
  function budget(o:Obj,p:string,rental:boolean){integer(o.annualOperatingCostsCents,`${p}.annualOperatingCostsCents`);if(rental||o.monthlyRentCents!==undefined)integer(o.monthlyRentCents,`${p}.monthlyRentCents`);if(rental||o.vacancyBps!==undefined)percent(o.vacancyBps,`${p}.vacancyBps`);if(rental||o.rentGrowthBps!==undefined)growth(o.rentGrowthBps,`${p}.rentGrowthBps`);}
  unique(arr(root.newProperties,'newProperties'),'newProperties','id',(o,p)=>{
   text(o.id,`${p}.id`);if(typeof o.id==='string'){if(allIds.has(o.id))issue(`${p}.id`,'Target IDs must be distinct from source IDs.','duplicate-id');allIds.add(o.id);}
-  text(o.name,`${p}.name`);choice(o.use,`${p}.use`,['personal','rental']);integer(o.purchasePriceCents,`${p}.purchasePriceCents`,1);growth(o.appreciationBps,`${p}.appreciationBps`);budget(o,p,o.use==='rental');if(o.buyingCostBps!==undefined)percent(o.buyingCostBps,`${p}.buyingCostBps`);
+  text(o.name,`${p}.name`);choice(o.use,`${p}.use`,['personal','rental']);integer(o.purchasePriceCents,`${p}.purchasePriceCents`,1);growth(o.appreciationBps,`${p}.appreciationBps`);budget(o,p,o.use==='rental');for(const k of ['buyingCostBps','capitalizedBuyingCostBps'])if(o[k]!==undefined)percent(o[k],`${p}.${k}`);
   const f=obj(o.financing,`${p}.financing`,['kind','downPaymentBps','aprBps','termMonths']);choice(f.kind,`${p}.financing.kind`,['cash','mortgage']);
   if(f.kind==='mortgage'){percent(f.downPaymentBps,`${p}.financing.downPaymentBps`);integer(f.aprBps,`${p}.financing.aprBps`,0,100000);integer(f.termMonths,`${p}.financing.termMonths`,1,1200);}else if(Object.keys(f).some(k=>k!=='kind'))issue(`${p}.financing`,'Cash financing does not carry mortgage terms.');
- },['id','name','use','purchasePriceCents','appreciationBps','buyingCostBps','annualOperatingCostsCents','monthlyRentCents','vacancyBps','rentGrowthBps','financing']);
+ },['id','name','use','purchasePriceCents','appreciationBps','buyingCostBps','capitalizedBuyingCostBps','annualOperatingCostsCents','monthlyRentCents','vacancyBps','rentGrowthBps','financing']);
  const assumptions=obj(root.assumptions,'assumptions',['properties','accounts','owners','sellingCostBps','buyingCostBps','buildingShareBps','noFederalSaltBenefitForCaliforniaAdditionalTax']);
  for(const k of ['sellingCostBps','buyingCostBps','buildingShareBps'])percent(assumptions[k],`assumptions.${k}`);
  bool(assumptions.noFederalSaltBenefitForCaliforniaAdditionalTax,'assumptions.noFederalSaltBenefitForCaliforniaAdditionalTax');

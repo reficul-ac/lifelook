@@ -13,7 +13,7 @@ export function rsuDeferredTaxIssues(plan:ValidatedPlan,year:number):readonly Is
 }
 
 /** Scenario coverage is independent of whether the selected rule constants are verified. */
-export function checkCoverage(plan: ValidatedPlan, year: number): Coverage {
+export function checkCoverage(plan: ValidatedPlan, year: number, generated?:Readonly<{rmdSatisfiedOwnerIds:readonly string[]}>): Coverage {
   const issues: Issue[] = [];
   let completeForModeledScope = true;
   let completeHouseholdLiability = true;
@@ -34,7 +34,7 @@ export function checkCoverage(plan: ValidatedPlan, year: number): Coverage {
       const age = year - birthYear;
       const distributionAge = birthYear >= 1960 ? 75 : birthYear >= 1951 ? 73 : 72;
       const hasDeferredAccount = plan.accounts.some(a => a.ownerId === filer.id && (a.type === 'traditional-ira' || a.type === 'traditional-401k') && a.openingBalanceCents > 0);
-      if (hasDeferredAccount && age >= distributionAge) add('omitted-distributions', filer.id, 'birthDate', 'This year can depend on retirement distributions that this contribution-and-growth scenario omits.', 'Interpret total household liability as incomplete and model distribution planning separately.', false);
+      if (hasDeferredAccount && age >= distributionAge && !generated?.rmdSatisfiedOwnerIds.includes(filer.id)) add('omitted-distributions', filer.id, 'birthDate', 'This year can depend on retirement distributions that this contribution-and-growth scenario omits.', 'Interpret total household liability as incomplete and model distribution planning separately.', false);
       if (age >= 50) {
         const sponsors = new Set(plan.contributions.flatMap(rule => rule.sponsoringSalaryId ? [rule.sponsoringSalaryId] : []));
         plan.salaries.filter(salary => salary.ownerId === filer.id && sponsors.has(salary.id)).forEach(salary => {

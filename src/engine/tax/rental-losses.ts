@@ -65,7 +65,7 @@ function consume(pool: readonly RentalLossVintage[], amount: Cents, eligible: (v
 function mergeVintages(vintages: readonly RentalLossVintage[]): readonly RentalLossVintage[] {
   const result = new Map<string, RentalLossVintage>();
   for (const vintage of [...vintages].sort(order)) {
-    const key = JSON.stringify([vintage.year, vintage.source, vintage.activeParticipation, vintage.qbiQualification]);
+    const key = JSON.stringify([vintage.year, vintage.source, vintage.activeParticipation, vintage.qbiQualification, vintage.incomeCharacter]);
     const previous = result.get(key);
     result.set(key, previous ? { ...vintage, amountCents: sumCents([previous.amountCents, vintage.amountCents]) } : vintage);
   }
@@ -75,7 +75,7 @@ function issue(rentalId: string, year: number, book: TaxBook, code: string, expl
   return { code, recordId: rentalId, year, field: `taxHistory.${book}`, severity: 'warning', explanation, resolution: 'Supply the qualified financing, participation-at-origin and carried loss history before claiming dependent tax totals.' };
 }
 function resolveBook(facts: PreIraFacts, opening: HouseholdTaxState, rules: YearRules, book: TaxBook): Available<RentalJurisdictionYear> {
-  const magi = passiveAllowanceMagi(facts, rules);
+  const magi = facts.passiveAllowanceMagiByBook?.[book]??passiveAllowanceMagi(facts, rules);
   if (magi.status !== 'available') return magi;
   const jurisdiction = book.startsWith('california') ? 'california' : 'federal';
   const allowance = rules[jurisdiction].passive;
@@ -136,7 +136,9 @@ function resolveBook(facts: PreIraFacts, opening: HouseholdTaxState, rules: Year
     const ownRelease = Math.min(Math.max(0, p.facts.taxableProfitCents), sumCents(p.pool.map(v => v.amountCents)));
     const own = consume(p.pool, ownRelease); p.pool = own.remaining; p.released = [...p.released, ...own.released];
   });
-  const passiveIncome = sumCents(pools.map(p => Math.max(0, p.facts.taxableProfitCents - sumCents(p.released.map(v => v.amountCents)))));
+  const dispositionIncome=facts.passiveDispositionIncomeByBook?.[book];
+  if(dispositionIncome&&dispositionIncome.status!=='available')return dispositionIncome;
+  const passiveIncome = sumCents([dispositionIncome?.value??0,...pools.map(p => Math.max(0, p.facts.taxableProfitCents - sumCents(p.released.map(v => v.amountCents))))]);
   const passiveLosses = pools.map(p => sumCents(p.pool.map(v => v.amountCents)));
   const totalLoss = sumCents(passiveLosses);
   const againstIncome = Math.min(passiveIncome, totalLoss);

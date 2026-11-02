@@ -105,7 +105,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "california": {
@@ -122,7 +123,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "federal-amt": {
@@ -139,7 +141,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "california-amt": {
@@ -156,18 +159,27 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               }
             },
             "releasesEntireActivity": {
               "status": "available",
               "value": false
-            }
+            },
+            "use": "personal",
+            "holdingPeriod": "long-term",
+            "lookback1231LossCents": {
+              "known": true,
+              "value": 0
+            },
+            "amountRealizedCents": 75200000
           },
           "provenance": {
-            "ruleVersion": "retirement-property-disposition.1",
+            "ruleVersion": "retirement-property-disposition.2",
             "sources": [
+              "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
               "https://www.irs.gov/publications/p523",
               "https://www.irs.gov/publications/p544",
               "https://www.irs.gov/publications/p925",
@@ -197,7 +209,8 @@
         "retirement-property-disposition.1",
         "IRS-P523-2025",
         "IRS-P544-2025",
-        "IRS-P925-2025"
+        "IRS-P925-2025",
+        "retirement-property-disposition.2"
       ]
     },
     {
@@ -305,7 +318,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 30200000,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "california": {
@@ -322,7 +336,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 30200000,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "federal-amt": {
@@ -339,7 +354,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 30200000,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "california-amt": {
@@ -356,18 +372,27 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 30200000,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               }
             },
             "releasesEntireActivity": {
               "status": "available",
               "value": false
-            }
+            },
+            "use": "personal",
+            "holdingPeriod": "long-term",
+            "lookback1231LossCents": {
+              "known": true,
+              "value": 0
+            },
+            "amountRealizedCents": 75200000
           },
           "provenance": {
-            "ruleVersion": "retirement-property-disposition.1",
+            "ruleVersion": "retirement-property-disposition.2",
             "sources": [
+              "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
               "https://www.irs.gov/publications/p523",
               "https://www.irs.gov/publications/p544",
               "https://www.irs.gov/publications/p925",
@@ -395,7 +420,8 @@
         "retirement-property-disposition.1",
         "IRS-P523-2025",
         "IRS-P544-2025",
-        "IRS-P925-2025"
+        "IRS-P925-2025",
+        "retirement-property-disposition.2"
       ]
     },
     {
@@ -504,7 +530,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 25200000,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               },
               "california": {
@@ -521,7 +548,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 25200000,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               },
               "federal-amt": {
@@ -538,7 +566,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 25200000,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               },
               "california-amt": {
@@ -555,24 +584,35 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 25200000,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               }
             },
             "releasesEntireActivity": {
               "status": "available",
               "value": false
-            }
+            },
+            "use": "personal",
+            "holdingPeriod": "long-term",
+            "lookback1231LossCents": {
+              "known": true,
+              "value": 0
+            },
+            "amountRealizedCents": 75200000
           },
           "provenance": {
-            "ruleVersion": "retirement-property-disposition.1",
+            "ruleVersion": "retirement-property-disposition.2",
             "sources": [
+              "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
               "https://www.irs.gov/publications/p523",
               "https://www.irs.gov/publications/p544",
               "https://www.irs.gov/publications/p925",
               "https://www.irs.gov/publications/p527"
             ],
-            "assumptions": [],
+            "assumptions": [
+              "No separate building-gain allocation entered; total gain is a conservative unrecaptured1250 ceiling."
+            ],
             "ownershipUseOrigin": "entered-history",
             "basisOriginByBook": {
               "federal": "entered-history",
@@ -594,7 +634,8 @@
         "retirement-property-disposition.1",
         "IRS-P523-2025",
         "IRS-P544-2025",
-        "IRS-P925-2025"
+        "IRS-P925-2025",
+        "retirement-property-disposition.2"
       ]
     },
     {
@@ -713,7 +754,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30200000
+                  "passiveDispositionIncomeCents": 30200000,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               },
               "california": {
@@ -730,7 +772,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30200000
+                  "passiveDispositionIncomeCents": 30200000,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               },
               "federal-amt": {
@@ -747,7 +790,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30200000
+                  "passiveDispositionIncomeCents": 30200000,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               },
               "california-amt": {
@@ -764,24 +808,35 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30200000
+                  "passiveDispositionIncomeCents": 30200000,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               }
             },
             "releasesEntireActivity": {
               "status": "available",
               "value": true
-            }
+            },
+            "use": "rental",
+            "holdingPeriod": "long-term",
+            "lookback1231LossCents": {
+              "known": true,
+              "value": 0
+            },
+            "amountRealizedCents": 75200000
           },
           "provenance": {
-            "ruleVersion": "retirement-property-disposition.1",
+            "ruleVersion": "retirement-property-disposition.2",
             "sources": [
+              "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
               "https://www.irs.gov/publications/p523",
               "https://www.irs.gov/publications/p544",
               "https://www.irs.gov/publications/p925",
               "https://www.irs.gov/publications/p527"
             ],
-            "assumptions": [],
+            "assumptions": [
+              "No separate building-gain allocation entered; total gain is a conservative unrecaptured1250 ceiling."
+            ],
             "ownershipUseOrigin": "entered-history",
             "basisOriginByBook": {
               "federal": "entered-history",
@@ -803,7 +858,8 @@
         "retirement-property-disposition.1",
         "IRS-P523-2025",
         "IRS-P544-2025",
-        "IRS-P925-2025"
+        "IRS-P925-2025",
+        "retirement-property-disposition.2"
       ]
     },
     {
@@ -922,7 +978,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30250000
+                  "passiveDispositionIncomeCents": 30250000,
+                  "unrecaptured1250BeforeLookbackCents": 5050000
                 }
               },
               "california": {
@@ -939,7 +996,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30250000
+                  "passiveDispositionIncomeCents": 30250000,
+                  "unrecaptured1250BeforeLookbackCents": 5050000
                 }
               },
               "federal-amt": {
@@ -956,7 +1014,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30250000
+                  "passiveDispositionIncomeCents": 30250000,
+                  "unrecaptured1250BeforeLookbackCents": 5050000
                 }
               },
               "california-amt": {
@@ -973,24 +1032,35 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30250000
+                  "passiveDispositionIncomeCents": 30250000,
+                  "unrecaptured1250BeforeLookbackCents": 5050000
                 }
               }
             },
             "releasesEntireActivity": {
               "status": "available",
               "value": true
-            }
+            },
+            "use": "rental",
+            "holdingPeriod": "long-term",
+            "lookback1231LossCents": {
+              "known": true,
+              "value": 0
+            },
+            "amountRealizedCents": 75200000
           },
           "provenance": {
-            "ruleVersion": "retirement-property-disposition.1",
+            "ruleVersion": "retirement-property-disposition.2",
             "sources": [
+              "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
               "https://www.irs.gov/publications/p523",
               "https://www.irs.gov/publications/p544",
               "https://www.irs.gov/publications/p925",
               "https://www.irs.gov/publications/p527"
             ],
-            "assumptions": [],
+            "assumptions": [
+              "No separate building-gain allocation entered; total gain is a conservative unrecaptured1250 ceiling."
+            ],
             "ownershipUseOrigin": "entered-history",
             "basisOriginByBook": {
               "federal": "entered-history",
@@ -1012,7 +1082,8 @@
         "retirement-property-disposition.1",
         "IRS-P523-2025",
         "IRS-P544-2025",
-        "IRS-P925-2025"
+        "IRS-P925-2025",
+        "retirement-property-disposition.2"
       ]
     },
     {
@@ -1022,7 +1093,8 @@
         "https://www.irs.gov/publications/p523",
         "https://www.irs.gov/publications/p544",
         "https://www.irs.gov/publications/p925",
-        "https://www.irs.gov/publications/p527"
+        "https://www.irs.gov/publications/p527",
+        "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf"
       ],
       "input": {
         "eventId": "sale-event",
@@ -1097,7 +1169,7 @@
       },
       "worksheetSteps": [
         "$302,000 net1231 gain less $280,000 five-year ordinary recharacterization = $22,000 capital gain.",
-        "Unrecaptured1250 gain cannot exceed the remaining $22,000."
+        "ScheduleD Unrecaptured1250 Worksheet lines7\u20139: max(min($50,000,$302,000)\u2212$280,000,0)=$0; the remaining $22,000 is preferred long-term gain."
       ],
       "expected": {
         "status": "available",
@@ -1126,12 +1198,13 @@
                   "ordinaryRecaptureCents": 0,
                   "ordinary1231Cents": 28000000,
                   "shortTermGainCents": 0,
-                  "unrecaptured1250GainCents": 2200000,
-                  "longTerm1231GainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 2200000,
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30200000
+                  "passiveDispositionIncomeCents": 30200000,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               },
               "california": {
@@ -1143,12 +1216,13 @@
                   "ordinaryRecaptureCents": 0,
                   "ordinary1231Cents": 28000000,
                   "shortTermGainCents": 0,
-                  "unrecaptured1250GainCents": 2200000,
-                  "longTerm1231GainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 2200000,
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30200000
+                  "passiveDispositionIncomeCents": 30200000,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               },
               "federal-amt": {
@@ -1160,12 +1234,13 @@
                   "ordinaryRecaptureCents": 0,
                   "ordinary1231Cents": 28000000,
                   "shortTermGainCents": 0,
-                  "unrecaptured1250GainCents": 2200000,
-                  "longTerm1231GainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 2200000,
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30200000
+                  "passiveDispositionIncomeCents": 30200000,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               },
               "california-amt": {
@@ -1177,29 +1252,40 @@
                   "ordinaryRecaptureCents": 0,
                   "ordinary1231Cents": 28000000,
                   "shortTermGainCents": 0,
-                  "unrecaptured1250GainCents": 2200000,
-                  "longTerm1231GainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 2200000,
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 30200000
+                  "passiveDispositionIncomeCents": 30200000,
+                  "unrecaptured1250BeforeLookbackCents": 5000000
                 }
               }
             },
             "releasesEntireActivity": {
               "status": "available",
               "value": true
-            }
+            },
+            "use": "rental",
+            "holdingPeriod": "long-term",
+            "lookback1231LossCents": {
+              "known": true,
+              "value": 28000000
+            },
+            "amountRealizedCents": 75200000
           },
           "provenance": {
-            "ruleVersion": "retirement-property-disposition.1",
+            "ruleVersion": "retirement-property-disposition.2",
             "sources": [
+              "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
               "https://www.irs.gov/publications/p523",
               "https://www.irs.gov/publications/p544",
               "https://www.irs.gov/publications/p925",
               "https://www.irs.gov/publications/p527"
             ],
-            "assumptions": [],
+            "assumptions": [
+              "No separate building-gain allocation entered; total gain is a conservative unrecaptured1250 ceiling."
+            ],
             "ownershipUseOrigin": "entered-history",
             "basisOriginByBook": {
               "federal": "entered-history",
@@ -1221,7 +1307,8 @@
         "retirement-property-disposition.1",
         "IRS-P523-2025",
         "IRS-P544-2025",
-        "IRS-P925-2025"
+        "IRS-P925-2025",
+        "retirement-property-disposition.2"
       ]
     },
     {
@@ -1344,7 +1431,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "california": {
@@ -1361,7 +1449,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "federal-amt": {
@@ -1378,7 +1467,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "california-amt": {
@@ -1395,18 +1485,27 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               }
             },
             "releasesEntireActivity": {
               "status": "available",
               "value": true
-            }
+            },
+            "use": "rental",
+            "holdingPeriod": "long-term",
+            "lookback1231LossCents": {
+              "known": true,
+              "value": 0
+            },
+            "amountRealizedCents": 45000000
           },
           "provenance": {
-            "ruleVersion": "retirement-property-disposition.1",
+            "ruleVersion": "retirement-property-disposition.2",
             "sources": [
+              "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
               "https://www.irs.gov/publications/p523",
               "https://www.irs.gov/publications/p544",
               "https://www.irs.gov/publications/p925",
@@ -1434,7 +1533,8 @@
         "retirement-property-disposition.1",
         "IRS-P523-2025",
         "IRS-P544-2025",
-        "IRS-P925-2025"
+        "IRS-P925-2025",
+        "retirement-property-disposition.2"
       ]
     },
     {
@@ -1542,7 +1642,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 10000000,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "california": {
@@ -1559,7 +1660,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 10000000,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "federal-amt": {
@@ -1576,7 +1678,8 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 10000000,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "california-amt": {
@@ -1593,18 +1696,27 @@
                   "recognizedLossCents": 0,
                   "nonDeductiblePersonalLossCents": 10000000,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               }
             },
             "releasesEntireActivity": {
               "status": "available",
               "value": false
-            }
+            },
+            "use": "personal",
+            "holdingPeriod": "long-term",
+            "lookback1231LossCents": {
+              "known": true,
+              "value": 0
+            },
+            "amountRealizedCents": 35000000
           },
           "provenance": {
-            "ruleVersion": "retirement-property-disposition.1",
+            "ruleVersion": "retirement-property-disposition.2",
             "sources": [
+              "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
               "https://www.irs.gov/publications/p523",
               "https://www.irs.gov/publications/p544",
               "https://www.irs.gov/publications/p925",
@@ -1632,7 +1744,8 @@
         "retirement-property-disposition.1",
         "IRS-P523-2025",
         "IRS-P544-2025",
-        "IRS-P925-2025"
+        "IRS-P925-2025",
+        "retirement-property-disposition.2"
       ]
     },
     {
@@ -1750,7 +1863,8 @@
                   "recognizedLossCents": 10000000,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "california": {
@@ -1767,7 +1881,8 @@
                   "recognizedLossCents": 10000000,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "federal-amt": {
@@ -1784,7 +1899,8 @@
                   "recognizedLossCents": 10000000,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               },
               "california-amt": {
@@ -1801,18 +1917,27 @@
                   "recognizedLossCents": 10000000,
                   "nonDeductiblePersonalLossCents": 0,
                   "excluded121GainCents": 0,
-                  "passiveDispositionIncomeCents": 0
+                  "passiveDispositionIncomeCents": 0,
+                  "unrecaptured1250BeforeLookbackCents": 0
                 }
               }
             },
             "releasesEntireActivity": {
               "status": "available",
               "value": true
-            }
+            },
+            "use": "rental",
+            "holdingPeriod": "long-term",
+            "lookback1231LossCents": {
+              "known": true,
+              "value": 0
+            },
+            "amountRealizedCents": 35000000
           },
           "provenance": {
-            "ruleVersion": "retirement-property-disposition.1",
+            "ruleVersion": "retirement-property-disposition.2",
             "sources": [
+              "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
               "https://www.irs.gov/publications/p523",
               "https://www.irs.gov/publications/p544",
               "https://www.irs.gov/publications/p925",
@@ -1840,7 +1965,8 @@
         "retirement-property-disposition.1",
         "IRS-P523-2025",
         "IRS-P544-2025",
-        "IRS-P925-2025"
+        "IRS-P925-2025",
+        "retirement-property-disposition.2"
       ]
     }
   ]

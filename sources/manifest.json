@@ -761,6 +761,46 @@
       "retrievedOn": "2026-11-01",
       "sha256": "12a85bbbf3b87f1d61b76512c033af30801f0ca9bb1e5008e67d4b900feadce3",
       "bytes": 647466
+    },
+    {
+      "id": "irs-i1040sd-2025",
+      "url": "https://www.irs.gov/pub/irs-prior/i1040sd--2025.pdf",
+      "snapshot": "2025-reference/irs-i1040sd-2025.pdf",
+      "publicationYear": 2025,
+      "publicationDate": "2025-12-11",
+      "retrievedOn": "2026-11-01",
+      "sha256": "650643a686378b7573e4f4476ee4e7c9f9bab1384314dca32dc336f7b2276002",
+      "bytes": 298718
+    },
+    {
+      "id": "irs-f6251-2025",
+      "url": "https://www.irs.gov/pub/irs-prior/f6251--2025.pdf",
+      "snapshot": "2025-reference/irs-f6251-2025.pdf",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-11-01",
+      "sha256": "6995bfd29c6fe1b80fdc396c9c4796c7cef58a966070db0346721eae815fea3f",
+      "bytes": 104434
+    },
+    {
+      "id": "irs-i1040sca-2025",
+      "url": "https://www.irs.gov/instructions/i1040sca",
+      "snapshot": "2025-reference/irs-i1040sca-2025.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-11-01",
+      "sha256": "a32ce343fb2863ee45fe702d9e0d5a2d158b3c9026c7a29f8e6d3537df8dc068",
+      "bytes": 563621
+    },
+    {
+      "id": "irs-td9847-irb2019-09",
+      "url": "https://www.irs.gov/irb/2019-09_IRB",
+      "snapshot": "2026/irs-irb-2019-09-qbi.html",
+      "publicationYear": 2019,
+      "publicationDate": "2019-02-25",
+      "retrievedOn": "2026-11-02",
+      "bytes": 1553110,
+      "sha256": "0ebb4e674edcea3164e87a7596923d9c424b85eaf37f1e76330065be30d7b61b"
     }
   ]
 }

@@ -230,6 +230,7 @@ export interface Property {
 export interface RentalLossVintage {
   readonly year: number;
   readonly source: 'at-risk' | 'passive';
+  readonly incomeCharacter?:'section1231'|'short-term';
   readonly amountCents: Cents;
   readonly activeParticipation?: History<boolean>;
   readonly qbiQualification?: History<boolean>;

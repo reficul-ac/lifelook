@@ -35,7 +35,7 @@ export function buildPreIraFacts(cash: CashYear, workplace: WorkplaceYear, prope
 }
 /** Form8582 and FTB3801 line6 exclude passive income/loss and restore IRA deductions. */
 export function passiveAllowanceMagi(facts: PreIraFacts, _rules: YearRules): Available<Cents> {
-  return mapAvailableCents(facts.nonRentalFederalAgiCents, value => sumCents([value, facts.adjustments.traditionalIraDeductionCents, facts.adjustments.passiveMagiAddbacksCents]));
+  return facts.passiveAllowanceMagiByBook?.federal??mapAvailableCents(facts.nonRentalFederalAgiCents, value => sumCents([value, facts.adjustments.traditionalIraDeductionCents, facts.adjustments.passiveMagiAddbacksCents]));
 }
 /** Pub590-A: deductible-IRA MAGI retains allowed rental results and restores IRA deduction. */
 export function traditionalIraMagi(facts: PreIraFacts, rental: RentalLossYear, _rules: YearRules): Available<Cents> {

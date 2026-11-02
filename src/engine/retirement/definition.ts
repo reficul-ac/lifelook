@@ -3,7 +3,7 @@ export const RETIREMENT_PLANNING_VERSION='retirement-planning-v1';
 export const retirementPresets={sellingCostBps:600,buyingCostBps:200,buildingShareBps:8000,downPaymentBps:2000,termMonths:360} as const;
 export interface RetirementRentalBudget {readonly monthlyRentCents?:Cents;readonly vacancyBps?:BasisPoints;readonly rentGrowthBps?:BasisPoints;readonly annualOperatingCostsCents:Cents}
 export interface NewRetirementProperty extends RetirementRentalBudget {
- readonly id:string;readonly name:string;readonly use:'personal'|'rental';readonly purchasePriceCents:Cents;readonly appreciationBps:BasisPoints;readonly buyingCostBps?:BasisPoints;
+ readonly id:string;readonly name:string;readonly use:'personal'|'rental';readonly purchasePriceCents:Cents;readonly appreciationBps:BasisPoints;readonly buyingCostBps?:BasisPoints;readonly capitalizedBuyingCostBps?:BasisPoints;
  readonly financing:Readonly<{kind:'cash'}>|Readonly<{kind:'mortgage';downPaymentBps:BasisPoints;aprBps:BasisPoints;termMonths:number}>;
 }
 export interface ExistingRetirementProperty {

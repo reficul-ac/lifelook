@@ -9,6 +9,7 @@ import type { PropertyYearFacts } from '../property/facts';
 import {finishAduTaxYear} from '../property/adu-tax';
 import {aduEstimateProvenance} from '../property/adu-planning-estimates';
 import type { LoanSchedule } from '../property/loans';
+import {aggregateRuleProvenance} from '../rules/projection';
 import type { YearRules } from '../rules/types';
 import { calculateCaliforniaTax, type CaliforniaTaxResult } from './california';
 import { calculateFederalTax, resolveRentalQbi, type FederalTaxResult } from './federal';
@@ -37,6 +38,8 @@ export interface HouseholdTaxResult {
   readonly federal:FederalTaxResult;
   readonly california:CaliforniaTaxResult;
   readonly combinedIncomeTaxCents:Cents;
+  readonly federalAdditionalTaxCents?:Cents;
+  readonly californiaAdditionalTaxCents?:Cents;
   readonly selectedMethods:Readonly<{federal:DeductionMethod;california:DeductionMethod}>;
   readonly statePaid:StateTaxPaid;
   readonly deductions:Readonly<{federal:DeductionChoice;california:DeductionChoice}>;
@@ -92,23 +95,53 @@ export function resolveHouseholdYear(plan:ValidatedPlan,cash:CashYear,requests:r
   const rental=resolveRentalLosses(preIra,opening,rules);
   const ira=resolveIraContributions(plan,preIra,rental,requests,workplace,rules);
   const facts=buildResolvedTaxFacts(preIra,rental,ira,workplace);
+  const fixed=evaluateFixedHouseholdTaxYear({plan,facts,property,loans,opening,rules,payroll});
+  const {tax,candidates}=fixed;
+  const priorities=new Map(plan.contributions.map(r=>[r.id,r.priority]));
+  const contributions=[...workplace.records,...ira.records].sort((a,b)=>a.month-b.month||(priorities.get(a.ruleId)??0)-(priorities.get(b.ruleId)??0)||(a.ruleId<b.ruleId?-1:a.ruleId>b.ruleId?1:0));
+  const closingTaxState=fixed.closingTaxState;
+  const baseCoverage=fixed.coverage;
+  const issueList=[...workplace.issues,...rental.issues,...ira.issues,...facts.issues,...baseCoverage.issues,...(tax.status==='available'?[...tax.value.federal.issues,...tax.value.california.issues]:tax.issues)];
+  if(tax.status==='available'&&tax.value.provenance.status!=='verified')issueList.push({code:tax.value.provenance.status==='provisional'?'provisional-rules':'projected-rules',year:cash.year,severity:tax.value.provenance.status==='provisional'?'warning':'info',explanation:`This numerical tax scenario uses ${tax.value.provenance.status} sourced rules and explicit assumptions.`,resolution:'Inspect the tax explanation and source register; rerun fixtures when final applicable publications are available.'});
+  const issues=[...new Map(issueList.map(i=>[JSON.stringify(i),i])).values()];
+  const coverage:Coverage={completeForModeledScope:baseCoverage.completeForModeledScope&&tax.status==='available',completeHouseholdLiability:baseCoverage.completeHouseholdLiability&&tax.status==='available',issues:issues.filter(i=>i.code!=='provisional-rules'&&i.code!=='projected-rules')};
+  return {year:cash.year,contributions,payroll,tax,candidates,facts,rental,ira,closingTaxState,coverage,issues};
+}
+
+export interface FixedHouseholdTaxYearInput {
+ readonly plan:ValidatedPlan;readonly facts:ResolvedTaxFacts;readonly property:PropertyYearFacts;readonly loans:readonly LoanSchedule[];
+ readonly opening:HouseholdTaxState;readonly rules:YearRules;readonly payroll:PayrollYear;
+ readonly additionalFederalTaxCents?:Available<Cents>;readonly additionalCaliforniaTaxCents?:Available<Cents>;
+ readonly noFederalSaltBenefitForCaliforniaAdditionalTax?:boolean;
+ readonly generatedRetirementCoverage?:Readonly<{rmdSatisfiedOwnerIds:readonly string[]}>;
+}
+export interface FixedHouseholdTaxYearResult {readonly tax:Available<HouseholdTaxResult>;readonly candidates:readonly TaxCandidate[];readonly closingTaxState:HouseholdTaxState;readonly coverage:Coverage}
+/** Explicit planning classification; actual paid-tax overrides are selected before this estimate. */
+export function prospectiveCaliforniaStatePaid(ordinaryCents:Cents,additional:Available<Cents>,noBenefit=true):Cents {
+ return sumMoney([ordinaryCents,...(!noBenefit&&additional.status==='available'?[additional.value]:[])]);
+}
+const sumMoney=(values:readonly Cents[]):Cents=>settleCents(values.reduce((n,v)=>n.plus(v),new Decimal(0)));
+/** Evaluate legal deduction choices against already accepted gross, basis and income facts. */
+export function evaluateFixedHouseholdTaxYear(input:FixedHouseholdTaxYearInput):FixedHouseholdTaxYearResult {
+ const {plan,facts,property,loans,opening,rules,payroll}=input,{rental,ira}=facts;
+ const {additionalFederalTaxCents=available(0),additionalCaliforniaTaxCents=available(0),noFederalSaltBenefitForCaliforniaAdditionalTax=true}=input;
   const mortgages={federal:calculateMortgageDeduction(property,loans,'federal',rules),california:calculateMortgageDeduction(property,loans,'california',rules)};
-  const federalStandard=standardDeduction(plan.household.filers,cash.year,'federal',rules);
-  const californiaStandard=standardDeduction(plan.household.filers,cash.year,'california',rules);
-  const override=plan.taxPolicy.actualStateTaxPaidByYear.find(o=>o.year===cash.year);
-  const unavailableStatePaid:Available<StateTaxPaid>={status:'needs-data',issues:[{code:'candidate-state-payment-pending',year:cash.year,field:'statePaid',severity:'info',explanation:'Prospective paid California tax depends on the California candidate.',resolution:'Resolve the California candidate before computing federal paid-tax deductions.'}]};
+  const federalStandard=standardDeduction(plan.household.filers,facts.year,'federal',rules);
+  const californiaStandard=standardDeduction(plan.household.filers,facts.year,'california',rules);
+  const override=plan.taxPolicy.actualStateTaxPaidByYear.find(o=>o.year===facts.year);
+  const unavailableStatePaid:Available<StateTaxPaid>={status:'needs-data',issues:[{code:'candidate-state-payment-pending',year:facts.year,field:'statePaid',severity:'info',explanation:'Prospective paid California tax depends on the California candidate.',resolution:'Resolve the California candidate before computing federal paid-tax deductions.'}]};
   const caItemized=buildItemizedCandidate(facts,property,mortgages,unavailableStatePaid,rules).california;
   const candidates:TaxCandidate[]=[];
   for(const caMethod of ['standard','itemized'] as const) {
     const caChoice=deductionChoice(caMethod,californiaStandard,caItemized);
     const caTax:Available<CaliforniaTaxResult>=caChoice.status==='available'?calculateCaliforniaTax(facts,caChoice.value,opening,rules):caChoice;
-    const statePaid:Available<StateTaxPaid>=override?available({californiaIncomeTaxPaidCents:override.californiaIncomeTaxPaidCents,sdiPaidCents:override.sdiPaidCents,source:'actual-override' as const}):caTax.status==='available'?available({californiaIncomeTaxPaidCents:caTax.value.totalCents,sdiPaidCents:payroll.annual.sdiCents,source:'prospective-assumption' as const,provenance:combineProvenance(rules,[caTax.value.provenance,...payroll.provenance])}):caTax;
+    const statePaid:Available<StateTaxPaid>=override?available({californiaIncomeTaxPaidCents:override.californiaIncomeTaxPaidCents,sdiPaidCents:override.sdiPaidCents,source:'actual-override' as const}):!noFederalSaltBenefitForCaliforniaAdditionalTax&&additionalCaliforniaTaxCents.status!=='available'?additionalCaliforniaTaxCents:caTax.status==='available'?available({californiaIncomeTaxPaidCents:prospectiveCaliforniaStatePaid(caTax.value.totalCents,additionalCaliforniaTaxCents,noFederalSaltBenefitForCaliforniaAdditionalTax),sdiPaidCents:payroll.annual.sdiCents,source:'prospective-assumption' as const,provenance:combineProvenance(rules,[caTax.value.provenance,...payroll.provenance])}):caTax;
     const fedItemized=buildItemizedCandidate(facts,property,mortgages,statePaid,rules).federal;
     for(const fedMethod of ['standard','itemized'] as const) {
       const fedChoice=deductionChoice(fedMethod,federalStandard,fedItemized);
       const fedTax:Available<FederalTaxResult>=fedChoice.status==='available'?calculateFederalTax(facts,fedChoice.value,opening,rules):fedChoice;
-      const unavailable=missingFrom<Cents>([fedTax,caTax]);
-      const combinedIncomeTaxCents:Available<Cents>=unavailable??(fedTax.status==='available'&&caTax.status==='available'?available(settleCents(new Decimal(fedTax.value.totalCents).plus(caTax.value.totalCents))):{status:'needs-data',issues:[]});
+      const unavailable=missingFrom<Cents>([fedTax,caTax,additionalFederalTaxCents,additionalCaliforniaTaxCents]);
+      const combinedIncomeTaxCents:Available<Cents>=unavailable??(fedTax.status==='available'&&caTax.status==='available'?available(settleCents(new Decimal(fedTax.value.totalCents).plus(caTax.value.totalCents).plus(additionalFederalTaxCents.status==='available'?additionalFederalTaxCents.value:0).plus(additionalCaliforniaTaxCents.status==='available'?additionalCaliforniaTaxCents.value:0))):{status:'needs-data',issues:[]});
       candidates.push({id:`${fedMethod}-${caMethod}`,federalMethod:fedMethod,californiaMethod:caMethod,federal:fedTax,california:caTax,statePaid,combinedIncomeTaxCents,deductions:{federal:fedChoice,california:caChoice}});
     }
   }
@@ -118,15 +151,13 @@ export function resolveHouseholdYear(plan:ValidatedPlan,cash:CashYear,requests:r
     const count=(c:TaxCandidate)=>(c.federalMethod==='standard'?1:0)+(c.californiaMethod==='standard'?1:0);
     return delta||count(b)-count(a)||(a.federalMethod==='standard'?-1:1)-(b.federalMethod==='standard'?-1:1);
   });
-  const blocked=unsupportedCoverage(plan,cash.year)??missingFrom<HouseholdTaxResult>(candidates.map(c=>c.combinedIncomeTaxCents));
+  const blocked=unsupportedCoverage(plan,facts.year)??missingFrom<HouseholdTaxResult>(candidates.map(c=>c.combinedIncomeTaxCents));
   const selected=blocked?undefined:candidates[0];
   let tax:Available<HouseholdTaxResult>;
   if(blocked)tax=blocked;
   else if(selected?.federal.status==='available'&&selected.california.status==='available'&&selected.statePaid.status==='available'&&selected.combinedIncomeTaxCents.status==='available'&&selected.deductions.federal.status==='available'&&selected.deductions.california.status==='available') {
-    tax=available({year:cash.year,federal:selected.federal.value,california:selected.california.value,combinedIncomeTaxCents:selected.combinedIncomeTaxCents.value,selectedMethods:{federal:selected.federalMethod,california:selected.californiaMethod},statePaid:selected.statePaid.value,deductions:{federal:selected.deductions.federal.value,california:selected.deductions.california.value},provenance:combineProvenance(rules,[selected.federal.value.provenance,selected.california.value.provenance,...(plan.properties.some(p=>p.aduProject?.taxEstimation?.mode==='simple')?[aduEstimateProvenance(cash.year)]:[])])});
-  } else tax={status:'needs-data',issues:[{code:'unavailable-tax-choice',year:cash.year,severity:'warning',explanation:'No complete legal tax candidate is available.',resolution:'Resolve the located tax and deduction inputs.'}]};
-  const priorities=new Map(plan.contributions.map(r=>[r.id,r.priority]));
-  const contributions=[...workplace.records,...ira.records].sort((a,b)=>a.month-b.month||(priorities.get(a.ruleId)??0)-(priorities.get(b.ruleId)??0)||(a.ruleId<b.ruleId?-1:a.ruleId>b.ruleId?1:0));
+    tax=available({year:facts.year,federal:selected.federal.value,california:selected.california.value,combinedIncomeTaxCents:selected.combinedIncomeTaxCents.value,...(input.additionalFederalTaxCents&&additionalFederalTaxCents.status==='available'?{federalAdditionalTaxCents:additionalFederalTaxCents.value}:{}),...(input.additionalCaliforniaTaxCents&&additionalCaliforniaTaxCents.status==='available'?{californiaAdditionalTaxCents:additionalCaliforniaTaxCents.value}:{}),selectedMethods:{federal:selected.federalMethod,california:selected.californiaMethod},statePaid:selected.statePaid.value,deductions:{federal:selected.deductions.federal.value,california:selected.deductions.california.value},provenance:combineProvenance(rules,[selected.federal.value.provenance,selected.california.value.provenance,...(input.additionalFederalTaxCents||input.additionalCaliforniaTaxCents?[aggregateRuleProvenance(rules,['retirement.distributions.earlyFederalRateBps','retirement.distributions.earlyCaliforniaRateBps'])]:[]),...(plan.properties.some(p=>p.aduProject?.taxEstimation?.mode==='simple')?[aduEstimateProvenance(facts.year)]:[])])});
+  } else tax={status:'needs-data',issues:[{code:'unavailable-tax-choice',year:facts.year,severity:'warning',explanation:'No complete legal tax candidate is available.',resolution:'Resolve the located tax and deduction inputs.'}]};
   const credit=(jurisdiction:'federal'|'california'):History<boolean>=>{
     if(tax.status==='available')return tax.value[jurisdiction].closingState.minimumTaxCreditCoverage[jurisdiction];
     const prior=opening.minimumTaxCreditCoverage[jurisdiction];
@@ -142,12 +173,8 @@ export function resolveHouseholdYear(plan:ValidatedPlan,cash:CashYear,requests:r
     for(const book of ['california','california-amt'] as const){const state=tax.value.california.closingState.rentals[id]?.[book];if(state)closingRentals[id]![book]=state;}
   }
   const qbi=resolveRentalQbi(facts,opening,rules);
-  const carriedTaxState:HouseholdTaxState={...rental.closing,year:cash.year,rentals:closingRentals,iraBasisByOwner:ira.closingIraBasisByOwner,qbiLossVintages:qbi.status==='available'?qbi.value.closingLossVintagesByRental:Object.fromEntries(Object.keys(rental.closing.qbiLossVintages).map(id=>[id,{known:false} as const])),minimumTaxCreditCoverage:{federal:credit('federal'),california:credit('california')}};
+  const carriedTaxState:HouseholdTaxState={...rental.closing,year:facts.year,rentals:closingRentals,iraBasisByOwner:ira.closingIraBasisByOwner,qbiLossVintages:qbi.status==='available'?qbi.value.closingLossVintagesByRental:Object.fromEntries(Object.keys(rental.closing.qbiLossVintages).map(id=>[id,{known:false} as const])),minimumTaxCreditCoverage:{federal:credit('federal'),california:credit('california')}};
   const closingTaxState=property.adu?finishAduTaxYear(property.adu,carriedTaxState):carriedTaxState;
-  const baseCoverage=checkCoverage(plan,cash.year);
-  const issueList=[...workplace.issues,...rental.issues,...ira.issues,...facts.issues,...baseCoverage.issues,...(tax.status==='available'?[...tax.value.federal.issues,...tax.value.california.issues]:tax.issues)];
-  if(tax.status==='available'&&tax.value.provenance.status!=='verified')issueList.push({code:tax.value.provenance.status==='provisional'?'provisional-rules':'projected-rules',year:cash.year,severity:tax.value.provenance.status==='provisional'?'warning':'info',explanation:`This numerical tax scenario uses ${tax.value.provenance.status} sourced rules and explicit assumptions.`,resolution:'Inspect the tax explanation and source register; rerun fixtures when final applicable publications are available.'});
-  const issues=[...new Map(issueList.map(i=>[JSON.stringify(i),i])).values()];
-  const coverage:Coverage={completeForModeledScope:baseCoverage.completeForModeledScope&&tax.status==='available',completeHouseholdLiability:baseCoverage.completeHouseholdLiability&&tax.status==='available',issues:issues.filter(i=>i.code!=='provisional-rules'&&i.code!=='projected-rules')};
-  return {year:cash.year,contributions,payroll,tax,candidates,facts,rental,ira,closingTaxState,coverage,issues};
+  const coverage=checkCoverage(plan,facts.year,input.generatedRetirementCoverage);
+  return {tax,candidates,closingTaxState,coverage:{...coverage,completeForModeledScope:coverage.completeForModeledScope&&tax.status==='available',completeHouseholdLiability:coverage.completeHouseholdLiability&&tax.status==='available'}};
 }

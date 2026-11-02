@@ -66,7 +66,7 @@ it('charges a property payoff fee once across all selected loans',()=>{
  expect(applyPropertyTransition(snapshot.opening,compilePropertyTransition(snapshot).events).opening.reserve).toEqual({status:'available',value:9_999_000});
 });
 it('locates an overflowing purchase basis without discarding the independent asset value',()=>{
- const source=makeRetirementPlan(),base=makeRetirementDefinition({},source),definition=makeRetirementDefinition({mode:'reallocate',stockGrowthBps:0,assumptions:{...base.assumptions,buildingShareBps:10000},newProperties:[makeRetirementTarget({id:'large',purchasePriceCents:99_999_999_999_999})]},source),snapshot=makeRetirementSnapshot(source,definition);
+ const source=makeRetirementPlan(),base=makeRetirementDefinition({},source),definition=makeRetirementDefinition({mode:'reallocate',stockGrowthBps:0,assumptions:{...base.assumptions,buildingShareBps:10000},newProperties:[makeRetirementTarget({id:'large',capitalizedBuyingCostBps:10000,purchasePriceCents:99_999_999_999_999})]},source),snapshot=makeRetirementSnapshot(source,definition);
  const purchase=compilePropertyTransition(snapshot).events.find(e=>e.kind==='purchase')!;
  expect(purchase.assetCents).toEqual({status:'available',value:99_999_999_999_999});
  expect(purchase.basisByBook?.federal.status).toBe('unsupported-case');
@@ -76,4 +76,20 @@ it('isolates an unreportable mortgage payment while retaining its property value
  const applied=applyPropertyTransition(snapshot.opening,compilePropertyTransition(snapshot).events),step=stepForecastYear(snapshot.context,applied.opening,compileRetirementYearPolicy(snapshot,2026));
  expect(step.projection.months[0]!.properties[0]!.closingValueCents).toEqual({status:'available',value:60_000_000_000_000});
  expect(step.projection.months[0]!.loans[0]!.paymentCents.status).toBe('unsupported-case');
+});
+it('includes land and confirmed capitalized acquisition costs in initial rental risk',()=>{
+ const source=makeRetirementPlan(),definition=makeRetirementDefinition({mode:'reallocate',stockGrowthBps:0,newProperties:[makeRetirementTarget({id:'capitalized',capitalizedBuyingCostBps:10000})]},source),snapshot=makeRetirementSnapshot(source,definition),applied=applyPropertyTransition(snapshot.opening,compilePropertyTransition(snapshot).events);
+ expect(Object.values(applied.opening.taxState.rentals)[0]!.federal).toMatchObject({status:'available',value:{recoveryBasisCents:48_960_000,atRiskCents:61_200_000}});
+});
+it('does not invent capitalized buying-cost basis when classification is unanswered',()=>{
+ const source=makeRetirementPlan(),definition=makeRetirementDefinition({mode:'reallocate',stockGrowthBps:0,newProperties:[makeRetirementTarget({id:'cash-cost'})]},source),snapshot=makeRetirementSnapshot(source,definition),applied=applyPropertyTransition(snapshot.opening,compilePropertyTransition(snapshot).events);
+ expect(Object.values(applied.opening.taxState.rentals)[0]!.federal).toMatchObject({status:'available',value:{recoveryBasisCents:48_000_000,atRiskCents:60_000_000}});
+});
+it('uses total conversion loss basis including land for initial risk',()=>{
+ const source=makeRetirementPlan({properties:[{...home,loans:[]}]}),definition=makeRetirementDefinition({mode:'reallocate',stockGrowthBps:0,existingProperties:[{propertyId:'home',action:'convert-to-rental',payoffLoanIds:[],conversion:{monthlyRentCents:280000,annualOperatingCostsCents:720000,vacancyBps:0,rentGrowthBps:0}}]},source),snapshot=makeRetirementSnapshot(source,definition),applied=applyPropertyTransition(snapshot.opening,compilePropertyTransition(snapshot).events);
+ expect(Object.values(applied.opening.taxState.rentals)[0]!.federal).toMatchObject({status:'available',value:{recoveryBasisCents:32_000_000,atRiskCents:40_000_000}});
+});
+it('retains entered prior depreciation as a recovery dependency instead of resetting it to zero',()=>{
+ const source=makeRetirementPlan({properties:[{...home,loans:[]}]}),base=makeRetirementDefinition({},source),definition=makeRetirementDefinition({mode:'reallocate',stockGrowthBps:0,existingProperties:[{propertyId:'home',action:'convert-to-rental',payoffLoanIds:[],conversion:{monthlyRentCents:280000,annualOperatingCostsCents:720000,vacancyBps:0,rentGrowthBps:0}}],assumptions:{...base.assumptions,properties:[{propertyId:'home',priorDepreciationByBook:{federal:{known:true,value:3000000}}}]}},source),snapshot=makeRetirementSnapshot(source,definition),event=compilePropertyTransition(snapshot).events[0]!;
+ expect(event.basisByBook!.federal).toMatchObject({status:'needs-data'});expect(definition.assumptions.properties[0]!.priorDepreciationByBook!.federal).toEqual({known:true,value:3000000});
 });

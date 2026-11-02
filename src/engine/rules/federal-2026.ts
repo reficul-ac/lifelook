@@ -11,8 +11,8 @@ thresholds.forEach((upper, i) => {
 const saltGrowth = { kind: 'statutory-growth', growthBps: 100, incrementCents: 1, rounding: 'nearest' } as const;
 Object.assign(values, {
   'propertyDisposition.homeExclusionMaximumCents': {...rule(50000000, s.propertySales), reviewDate:'2026-11-01'},
-  'capitalGains.unrecaptured1250MaximumRateBps': {...rule(2500, s.propertyDispositions), reviewDate:'2026-11-01'},
-  'capitalGains.method': rule('ordinary-long-term-gain-worksheet', [s.capitalGains, s.amtMethod]),
+  'capitalGains.unrecaptured1250MaximumRateBps': {...rule(2500, [s.propertyDispositions,s.scheduleD,s.amtGainWorksheet]), reviewDate:'2026-11-01'},
+  'capitalGains.method': {...rule('schedule-d-special-gain-worksheet', [s.capitalGains,s.scheduleD,s.amtGainWorksheet,s.amtMethod]),reviewDate:'2026-11-01'},
   'capitalGains.zeroRateMaximumCents': rule(9890000, [s.federal, s.federalIndex], indexed(5000)),
   'capitalGains.fifteenRateMaximumCents': rule(61370000, [s.federal, s.federalIndex], indexed(5000)),
   'capitalGains.middleRateBps': rule(1500, [s.federalIndex, s.capitalGains]),
@@ -60,7 +60,7 @@ Object.assign(values, {
   'passive.reductionBps': rule(5000, s.passive),
   'niit.thresholdCents': rule(25000000, s.niit),
   'niit.rateBps': rule(380, s.niit),
-  'qbi.deductionBps': rule(2000, s.qbi),
+  'qbi.deductionBps': {...rule(2000, [s.qbi,s.qbiDisposition]),reviewDate:'2026-11-02'},
   'qbi.phaseoutStartCents': rule(40350000, [s.federal, s.law], indexed(5000)),
   // The $150,000 MFJ phase-in RANGE remains fixed; projection rebuilds its upper bound.
   'qbi.phaseoutEndCents': rule(55350000, [s.federal, s.law], { ...indexed(5000), anchorPath: 'qbi.phaseoutStartCents', fixedOffsetCents: 15000000 }),
@@ -75,4 +75,4 @@ Object.assign(values, {
   'rental.amtSameRecoveryFromDate': rule('1999-01-01', s.amtMethod),
   'rental.ordinaryMacrsFromDate': rule('1987-01-01', s.rental),
 });
-export const federal2026: RulePack = { jurisdiction: 'federal', version: 'federal-2026.2', baselineYear: 2026, values };
+export const federal2026: RulePack = { jurisdiction: 'federal', version: 'federal-2026.3', baselineYear: 2026, values };

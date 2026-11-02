@@ -30,7 +30,12 @@ export interface RsuGrantMonth {
   readonly basis: History<Cents>;
 }
 
+export interface RsuExactState {
+ readonly accountId:string;readonly grantId:string;readonly eventIndex:number;readonly serviceVested:string;readonly held:string;readonly basisExact?:string;readonly vestedValueExact:string;readonly withholdingExact:string;readonly priorVestedValueRounded:string;readonly priorWithholdingRounded:string;
+}
+export interface RsuRuntimeOptions {readonly startYear:number;readonly endYear:number;readonly openingState?:readonly RsuExactState[]}
 export interface RsuProjection {
+  readonly closingState?:readonly RsuExactState[];
   readonly months: readonly RsuGrantMonth[];
   readonly issues: readonly Issue[];
 }
@@ -77,7 +82,9 @@ export function rsuVestingEvents(grant: RsuGrant): readonly RsuVestingEvent[] {
 }
 
 /** Independent service vesting and held assets; deferred tax timing stays explicit. */
-export function projectRsuAccounts(plan: PlanDocument): RsuProjection {
+export function projectRsuAccounts(plan: PlanDocument, options?:RsuRuntimeOptions): RsuProjection {
+  const startYear=options?.startYear??plan.startYear,endYear=options?.endYear??plan.startYear+plan.horizonYears-1;
+  const closingState:RsuExactState[]=[];
   const months: RsuGrantMonth[] = [], issues: Issue[] = [];
   const paperOverflowIssues = new Map<string, Issue>();
   const forecastStart = calendarDate(plan.startYear, 1, 1);
@@ -119,7 +126,7 @@ export function projectRsuAccounts(plan: PlanDocument): RsuProjection {
       const deferred = grant.taxTreatment === 'deferred';
       const total = awardedShares(grant), events = exactVestingEvents(grant);
       if (deferred) {
-        for (let year = plan.startYear; year < plan.startYear + plan.horizonYears; year++) {
+        for (let year = startYear; year <= endYear; year++) {
           if (events[0] && events[0].date <= calendarDate(year, 12, 31)) issues.push({
             code: 'unsupported-rsu-deferred-settlement', recordId: account.id, year,
             field: `rsu.grants.${grantIndex}.taxTreatment`, severity: 'warning',
@@ -140,8 +147,10 @@ export function projectRsuAccounts(plan: PlanDocument): RsuProjection {
       let priorVestedValueRounded = new Decimal(0), priorWithholdingRounded = new Decimal(0);
       const withholdingFraction = new Decimal(grant.withholdingBps).div(10000);
 
-      for (let offset = 0; offset < plan.horizonYears * 12; offset++) {
-        const year = plan.startYear + Math.floor(offset / 12), month = offset % 12 + 1;
+      const carried=options?.openingState?.find(s=>s.accountId===account.id&&s.grantId===grant.id);
+      if(carried){eventIndex=carried.eventIndex;serviceVested=new Decimal(carried.serviceVested);held=new Decimal(carried.held);basisExact=carried.basisExact===undefined?undefined:new Decimal(carried.basisExact);vestedValueExact=new Decimal(carried.vestedValueExact);withholdingExact=new Decimal(carried.withholdingExact);priorVestedValueRounded=new Decimal(carried.priorVestedValueRounded);priorWithholdingRounded=new Decimal(carried.priorWithholdingRounded);}
+      for (let offset = 0; offset < (endYear-startYear+1) * 12; offset++) {
+        const year = startYear + Math.floor(offset / 12), month = offset % 12 + 1;
         const monthEnd = calendarDate(year, month, daysInMonth(year, month));
         const openingValueCents = settleCents(held.mul(priceAt(year, month)));
         let vested = new Decimal(0), withheld = new Decimal(0);
@@ -207,7 +216,8 @@ export function projectRsuAccounts(plan: PlanDocument): RsuProjection {
           basis: basisExact === undefined ? { known: false } : { known: true, value: settleCents(basisExact) },
         });
       }
+      closingState.push({accountId:account.id,grantId:grant.id,eventIndex,serviceVested:serviceVested.toString(),held:held.toString(),...(basisExact===undefined?{}:{basisExact:basisExact.toString()}),vestedValueExact:vestedValueExact.toString(),withholdingExact:withholdingExact.toString(),priorVestedValueRounded:priorVestedValueRounded.toString(),priorWithholdingRounded:priorWithholdingRounded.toString()});
     }
   }
-  return { months, issues };
+  return { months, issues,...(options?{closingState}:{}) };
 }

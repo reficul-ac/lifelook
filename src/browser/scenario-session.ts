@@ -18,9 +18,9 @@ export function createEditorViewSession(plan:PlanDocument,selections?:ScenarioVi
   const selected=plan.properties.find(p=>p.aduProject)?.aduProject?.id;
   const view:EditorViewSession={retirement:{analysis:{status:'inactive',candidates:[],detailStatus:'inactive',issues:[]},selection:{candidateYear:null,calendarYear:null,candidateHorizon:'all',showProjectedComparison:true,pathMetric:'after-tax-income'},expanded:new Map(),scroll:new Map()},editorMemory:new Map(),reportState:{tableView:'balance-sheet',expanded:new Set(),scroll:new Map()},growthChart:growthChart?{...growthChart}:{horizon:'all',showComparison:true},...(selected?{selectedAduProjectId:selected}:{}),aduComparison:{status:'inactive',issues:[]},selections:selections?{...selections,destination:'overview',hiddenPlotSeries:new Set(selections.hiddenPlotSeries)}:{destination:'overview',inputSection:'Household',forecastYear:plan.startYear+plan.horizonYears-1,allocationYear:plan.startYear,hiddenPlotSeries:new Set()},allocationPreview:{status:'inactive',issues:[],entryIdSequence:0},taskIssues:new Map(),removeIssues:new Map(),propertyDisclosures:new Map()};normalizeViewYears(view,plan);return view;
 }
-export function normalizeViewYears(view:EditorViewSession,plan:PlanDocument):void {
+export function normalizeViewYears(view:EditorViewSession,plan:PlanDocument,draftPropertyIds:readonly string[]=view.retirement.draftPropertyIds??[]):void {
   const selection=view.retirement.selection,end=Math.min(2100,plan.startYear+plan.horizonYears-1);if(plan.startYear>2100){selection.candidateYear=null;selection.calendarYear=null;}else {if(selection.candidateYear===null||selection.candidateYear<plan.startYear||selection.candidateYear>end)selection.candidateYear=view.selections.forecastYear>=plan.startYear&&view.selections.forecastYear<=end?view.selections.forecastYear:end;if(selection.calendarYear===null||selection.calendarYear<selection.candidateYear||selection.calendarYear>2100)selection.calendarYear=selection.candidateYear;}
-  if(selection.selectedPropertyId&&!plan.properties.some(p=>p.id===selection.selectedPropertyId)&&!plan.retirementAnalysis?.newProperties.some(p=>p.id===selection.selectedPropertyId))delete selection.selectedPropertyId;
+  if(selection.selectedPropertyId&&!plan.properties.some(p=>p.id===selection.selectedPropertyId)&&!plan.retirementAnalysis?.newProperties.some(p=>p.id===selection.selectedPropertyId)&&!draftPropertyIds.includes(selection.selectedPropertyId))delete selection.selectedPropertyId;
   if(view.selectedAduProjectId&&!plan.properties.some(p=>p.aduProject?.id===view.selectedAduProjectId)){delete view.selectedAduProjectId;view.aduComparison={status:'inactive',issues:[]};}
   for(const key of ['forecastYear','allocationYear'] as const){const year=view.selections[key];if(!Number.isInteger(year)||year<plan.startYear||year>=plan.startYear+plan.horizonYears)view.selections[key]=plan.startYear;}
 }
@@ -36,7 +36,7 @@ export function retainEditorView(controller:WorkspaceController,view:EditorViewS
   };
   if(!previous.allocationDraft)appliedPreview(previous);
   return controller.subscribe(operation=>{
-    const state=controller.getState();normalizeViewYears(view,state.savedPlan);
+    const state=controller.getState(),raw=state.retirementDraft?.value,cached=(raw?.__draft as {reallocate?:{newProperties?:unknown}}|undefined)?.reallocate?.newProperties,targets=[...(Array.isArray(raw?.newProperties)?raw.newProperties:[]),...(Array.isArray(cached)?cached:[])],draftIds=targets.flatMap(p=>p&&typeof p==='object'&&typeof (p as {id?:unknown}).id==='string'?[(p as {id:string}).id]:[]);view.retirement.draftPropertyIds=draftIds;normalizeViewYears(view,state.savedPlan,draftIds);
     for(const map of [view.taskIssues,view.removeIssues])for(const id of map.keys())if(state.drafts[id]!==previous.drafts[id])map.delete(id);
     if(operation&&operation.kind!=='restore'){
       if(operation.result.accepted){view.taskIssues.delete(operation.recordId);view.removeIssues.delete(operation.recordId);}

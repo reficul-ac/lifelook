@@ -14,3 +14,18 @@
 .retirement-report .projection-table-wrap{max-width:100%;overflow:auto}
 .retirement-report [data-selected="true"]{background:var(--surface-raised,var(--surface))}
 .retirement-report summary{cursor:pointer;min-height:44px;align-content:center}
+.retirement-portfolio{min-width:0;display:grid;gap:1.25rem}
+.retirement-controls{display:grid;gap:1rem;min-width:0}
+.retirement-portfolio-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr));gap:1rem}
+.retirement-portfolio-cards>article{min-width:0;padding:1rem;border:1px solid var(--border);border-radius:.75rem}
+.retirement-portfolio-cards button{margin:.25rem .5rem .25rem 0;min-height:44px}
+.retirement-selected-editor{min-width:0;padding:clamp(1rem,3vw,2rem);border:1px solid var(--border);border-radius:1rem}
+.retirement-selected-editor:empty{display:none}
+.retirement-property-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.retirement-property-fields>details,.retirement-property-fields>fieldset,.retirement-property-fields>p{grid-column:1/-1;min-width:0}
+.retirement-property-fields details .field-wrapper{margin:.75rem 0}
+.retirement-property-fields input,.retirement-property-fields select{max-width:100%;min-height:44px}
+.retirement-portfolio-summary{min-width:0}
+.retirement-portfolio [data-retirement-purchase-summary] dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.5rem 1rem}
+.retirement-portfolio [data-retirement-purchase-summary] dd{margin:0;font-variant-numeric:tabular-nums}
+@media(max-width:640px){.retirement-property-fields{grid-template-columns:minmax(0,1fr)}.retirement-property-fields>*{min-width:0}.retirement-portfolio [data-retirement-purchase-summary] dl{grid-template-columns:minmax(0,1fr)}.retirement-controls{width:100%}}

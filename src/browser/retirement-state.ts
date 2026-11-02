@@ -8,7 +8,7 @@ export type PreparedRetirementWorkspace=Readonly<{status:'ready';plan:ValidatedP
 export interface RetirementCompletedCalculation {readonly projection:ProjectionResult;readonly comparison:RetirementComparison}
 export interface RetirementReceipt {readonly prepared:ReadyRetirementEdit;readonly result:RetirementCompletedCalculation}
 export interface RetirementViewSelection {candidateYear:number|null;calendarYear:number|null;candidateHorizon:5|10|15|'all';showProjectedComparison:boolean;selectedPropertyId?:string;pathMetric:'after-tax-income'|'stock-balance'|'net-worth'}
-export interface RetirementViewSession {analysis:import('./retirement-analysis').RetirementAnalysisViewState;selection:RetirementViewSelection;expanded:Map<string,boolean>;scroll:Map<string,number>}
+export interface RetirementViewSession {draftPropertyIds?:readonly string[];analysis:import('./retirement-analysis').RetirementAnalysisViewState;selection:RetirementViewSelection;expanded:Map<string,boolean>;scroll:Map<string,number>}
 interface RetirementPort {plan():ValidatedPlan;rules:RuleSet;epoch():number;notify():void;commit(plan:ValidatedPlan,projection:ProjectionResult,accepted:()=>void):SaveRecordResult;reject(issues:readonly Issue[]):SaveRecordResult}
 const problem=(code:string,text:string):readonly Issue[]=>[{code,field:'retirementAnalysis',severity:'error',explanation:text,resolution:'Review the current retirement inputs and request a new calculation.'}];
 export function createRetirementState(port:RetirementPort){

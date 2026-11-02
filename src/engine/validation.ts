@@ -1,3 +1,4 @@
+import {validateRetirementAnalysis} from './retirement/validation';
 import { isValidISODate, isValidYearMonth, parseISODate } from './dates';
 import { rsuVestingEvents } from './equity/rsu';
 import { Decimal, MAX_CENTS, settleCents } from './money';
@@ -772,6 +773,10 @@ export function validatePlan(raw: unknown): ValidationResult {
     if (accountTotal !== undefined && propertyTotal !== undefined) aggregate([accountTotal, propertyTotal, Number(root.openingCashCents)], 'openingAssetsCents');
     if (accountTotal !== undefined && propertyTotal !== undefined && debtTotal !== undefined) aggregate([accountTotal, propertyTotal, Number(root.openingCashCents), -debtTotal], 'openingNetWorthCents');
     for (const owner of owners) aggregate(accounts.filter(o => o.ownerId === owner && o.type === 'traditional-ira' && isObject(o.openingIraBasis) && o.openingIraBasis.known === true).map(o => Number((o.openingIraBasis as Obj).value)), `iraBasisByOwner.${owner}`);
+  }
+  if (v.issues.length === 0 && root.retirementAnalysis !== undefined) {
+    const retirement = validateRetirementAnalysis(root.retirementAnalysis, raw as PlanDocument);
+    if (!retirement.ok) v.issues.push(...retirement.issues);
   }
   if (v.issues.length) return { ok: false, issues: v.issues };
   validateJsonTree(v, raw);

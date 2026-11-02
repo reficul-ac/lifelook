@@ -40,3 +40,8 @@ export type {AduPeriodProjection,AduProjectPeriodProjection} from './property/ad
 
 export {createAduNoBuildPlan,calculateAduBuildComparison,calculateAduCashReturns} from './property/adu-comparison';
 export type {AduBuildComparison,AduComparisonPeriod} from './property/adu-comparison';
+
+export * from './retirement/definition';
+export {validateRetirementAnalysis} from './retirement/validation';
+export {resolveRetirementAssumptions} from './retirement/assumptions';
+export type * from './retirement/assumptions';

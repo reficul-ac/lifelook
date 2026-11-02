@@ -1,3 +1,4 @@
+import type {RetirementAnalysisDefinition} from '../retirement/definition';
 import type { AduProject } from './adu-project';
 export type * from './adu-project';
 /** Stored values are plain JSON; all monetary amounts are validated integer USD cents. */
@@ -285,6 +286,7 @@ export interface GrowthAssumptions {
   readonly propertyBps?: BasisPoints;
 }
 export interface PlanDocument {
+  readonly retirementAnalysis?: RetirementAnalysisDefinition;
   readonly schemaVersion: 1;
   readonly id: string;
   readonly revision: number;

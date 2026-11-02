@@ -107,7 +107,7 @@ export interface PayrollRules {
   readonly sdiWageBaseCents: number | null;
 }
 export interface RetirementRules {
-  readonly distributions:{readonly iraProRataMethod:string;readonly qualifiedPlanBasisMethod:string};
+  readonly distributions:{readonly iraProRataMethod:string;readonly qualifiedPlanBasisMethod:string;readonly earlyFederalRateBps:number;readonly earlyCaliforniaRateBps:number;readonly earlyAgeMonths:number;readonly separationCalendarAge:number;readonly rothQualificationYears:number;readonly conversionRecaptureYears:number;readonly rmdMethod:string};
   readonly electiveDeferralLimitCents: number;
   readonly regularCatchupCents: number;
   readonly enhancedCatchupCents: number;

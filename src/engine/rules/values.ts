@@ -4,6 +4,10 @@ export const fixed: IndexingPolicy = { kind: 'fixed' };
 export const indexed = (incrementCents: number, rounding: 'floor' | 'nearest' = 'floor', roundIncreaseOnly = false): IndexingPolicy => ({ kind: 'indexed', incrementCents, rounding, roundIncreaseOnly });
 const source = (id: string, url: string, snapshot: string, publicationYear: number, publicationDate: string | null = null): RuleSource => ({ id, url, snapshot, publicationYear, publicationDate });
 export const SOURCES = {
+  retirementDistributions: source('irs-p590b-2025', 'https://www.irs.gov/pub/irs-prior/p590b--2025.pdf', '2025-reference/irs-p590b.pdf', 2026, '2026-01-21'),
+  caEarlyDistributions: source('ftb-3805p-2025', 'https://www.ftb.ca.gov/forms/2025/2025-3805p-instructions.html', '2025-reference/ftb-3805p.html', 2025),
+  rmdRegulations: source('irs-rmd-final-2024', 'https://www.irs.gov/irb/2024-33_IRB', '2026/irs-rmd-final-2024.html', 2024, '2024-08-12'),
+  rmdTables: source('cfr-rmd-tables-2025', 'https://www.govinfo.gov/content/pkg/CFR-2025-title26-vol6/xml/CFR-2025-title26-vol6-sec1-401a9-9.xml', '2026/cfr-rmd-tables-2025.xml', 2025, '2025-04-01'),
   qualifiedPlanDistributions: source('irs-p575-2025', 'https://www.irs.gov/publications/p575', '2025-reference/irs-p575.html', 2025),
   iraBasis: source('irs-i8606-2025', 'https://www.irs.gov/instructions/i8606', '2025-reference/irs-i8606.html', 2025),
   caPropertySales: source('ftb-home-sale-2026', 'https://www.ftb.ca.gov/file/personal/income-types/income-from-the-sale-of-your-home.html', '2026/ftb-home-sale.html', 2026),

@@ -15,6 +15,8 @@ export function resolveRetirementAssumptions(source:ValidatedPlan,definition:Val
  }
  for(const owner of source.household.filers){
   const estimate=definition.assumptions.owners.find(o=>o.ownerId===owner.id)?.birthDate;
+  const rmdAge=definition.assumptions.owners.find(o=>o.ownerId===owner.id)?.rmdAgeAssumption,effectiveBirth=owner.birthDate.known?owner.birthDate.value:estimate?.known?estimate.value:undefined;
+  if(effectiveBirth?.startsWith('1959-')&&rmdAge?.known)facts.push({recordId:owner.id,field:'rmdAgeAssumption',value:rmdAge.value,origin:'estimate',explanation:'Birth1959 applicable-age assumption; final regulations reserve this cohort.'});
   if(owner.birthDate.known||estimate?.known)facts.push({recordId:owner.id,field:'birthDate',value:owner.birthDate.known?owner.birthDate.value:estimate!.known?estimate!.value:'',origin:owner.birthDate.known?'entered-history':'estimate',explanation:owner.birthDate.known?'Entered date of birth.':'Explicit retirement-only date assumption.'});
  }
  facts.push({recordId:source.id,field:'noFederalSaltBenefitForCaliforniaAdditionalTax',value:definition.assumptions.noFederalSaltBenefitForCaliforniaAdditionalTax,origin:'estimate',explanation:'No federal SALT benefit modeled for California early-distribution additional tax.'});

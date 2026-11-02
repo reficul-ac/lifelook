@@ -721,6 +721,46 @@
       "retrievedOn": "2026-11-01",
       "sha256": "1801056ef1943ee91b2033d5e57c946445a4d6b8425cdef5bf86747de9aef5f1",
       "bytes": 568047
+    },
+    {
+      "id": "irs-p590b-2025",
+      "url": "https://www.irs.gov/pub/irs-prior/p590b--2025.pdf",
+      "snapshot": "2025-reference/irs-p590b.pdf",
+      "publicationYear": 2026,
+      "publicationDate": "2026-01-21",
+      "retrievedOn": "2026-11-01",
+      "sha256": "d18a592e55ce56d43953dc338272ece3984565792d6dca06989a6ca8121f7360",
+      "bytes": 2097777
+    },
+    {
+      "id": "ftb-3805p-2025",
+      "url": "https://www.ftb.ca.gov/forms/2025/2025-3805p-instructions.html",
+      "snapshot": "2025-reference/ftb-3805p.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-11-01",
+      "sha256": "2316bdd4ec9cdbab63ff1c9e08be961016f0ebb6acb657ef05e935b092f065e8",
+      "bytes": 71862
+    },
+    {
+      "id": "irs-rmd-final-2024",
+      "url": "https://www.irs.gov/irb/2024-33_IRB",
+      "snapshot": "2026/irs-rmd-final-2024.html",
+      "publicationYear": 2024,
+      "publicationDate": "2024-08-12",
+      "retrievedOn": "2026-11-01",
+      "sha256": "8d25d250aabd94e7122b5e95f8bad1f986a0b64fdd8c8449aab173a972b56f7e",
+      "bytes": 1010282
+    },
+    {
+      "id": "cfr-rmd-tables-2025",
+      "url": "https://www.govinfo.gov/content/pkg/CFR-2025-title26-vol6/xml/CFR-2025-title26-vol6-sec1-401a9-9.xml",
+      "snapshot": "2026/cfr-rmd-tables-2025.xml",
+      "publicationYear": 2025,
+      "publicationDate": "2025-04-01",
+      "retrievedOn": "2026-11-01",
+      "sha256": "12a85bbbf3b87f1d61b76512c033af30801f0ca9bb1e5008e67d4b900feadce3",
+      "bytes": 647466
     }
   ]
 }

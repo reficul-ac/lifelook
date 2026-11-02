@@ -1,0 +1,351 @@
+{
+  "cases": [
+    {
+      "id": "rmd-born1960-no-age73",
+      "taxYear": 2033,
+      "sources": [
+        "https://www.irs.gov/irb/2024-33_IRB",
+        "https://www.govinfo.gov/content/pkg/CFR-2025-title26-vol6/xml/CFR-2025-title26-vol6-sec1-401a9-9.xml"
+      ],
+      "input": {
+        "year": 2033,
+        "owners": [
+          {
+            "ownerId": "owner-a",
+            "birthDate": {
+              "known": true,
+              "value": "1960-01-01"
+            },
+            "spouseBirthDate": {
+              "known": true,
+              "value": "1965-01-01"
+            }
+          }
+        ],
+        "accounts": [
+          {
+            "accountId": "ira",
+            "ownerId": "owner-a",
+            "type": "traditional-ira",
+            "priorDecemberBalanceCents": {
+              "status": "available",
+              "value": 24600000
+            },
+            "soleSpouseBeneficiary": {
+              "known": true,
+              "value": false
+            }
+          }
+        ]
+      },
+      "worksheetSteps": [
+        "Born1960 reaches73 in2033, but final regulations set applicable age75."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "year": 2033,
+          "accounts": [
+            {
+              "accountId": "ira",
+              "ownerId": "owner-a",
+              "aggregationGroupId": "owner-a:ira",
+              "requiredCents": {
+                "status": "available",
+                "value": 0
+              },
+              "divisorTenths": {
+                "status": "available",
+                "value": null
+              }
+            }
+          ],
+          "groups": [
+            {
+              "groupId": "owner-a:ira",
+              "accountIds": [
+                "ira"
+              ],
+              "requiredCents": {
+                "status": "available",
+                "value": 0
+              }
+            }
+          ],
+          "totalRequiredCents": {
+            "status": "available",
+            "value": 0
+          },
+          "issues": [],
+          "assumptions": []
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-distribution-rules.1",
+        "CFR-2025-1.401a9-9"
+      ]
+    },
+    {
+      "id": "rmd-born1960-age75",
+      "taxYear": 2035,
+      "sources": [
+        "https://www.irs.gov/irb/2024-33_IRB",
+        "https://www.govinfo.gov/content/pkg/CFR-2025-title26-vol6/xml/CFR-2025-title26-vol6-sec1-401a9-9.xml"
+      ],
+      "input": {
+        "year": 2035,
+        "owners": [
+          {
+            "ownerId": "owner-a",
+            "birthDate": {
+              "known": true,
+              "value": "1960-01-01"
+            },
+            "spouseBirthDate": {
+              "known": true,
+              "value": "1965-01-01"
+            }
+          }
+        ],
+        "accounts": [
+          {
+            "accountId": "ira",
+            "ownerId": "owner-a",
+            "type": "traditional-ira",
+            "priorDecemberBalanceCents": {
+              "status": "available",
+              "value": 24600000
+            },
+            "soleSpouseBeneficiary": {
+              "known": true,
+              "value": false
+            }
+          }
+        ]
+      },
+      "worksheetSteps": [
+        "First RMD calendar year2035.",
+        "$246,000 priorDecember value /24.6 = $10,000."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "year": 2035,
+          "accounts": [
+            {
+              "accountId": "ira",
+              "ownerId": "owner-a",
+              "aggregationGroupId": "owner-a:ira",
+              "requiredCents": {
+                "status": "available",
+                "value": 1000000
+              },
+              "divisorTenths": {
+                "status": "available",
+                "value": 246
+              }
+            }
+          ],
+          "groups": [
+            {
+              "groupId": "owner-a:ira",
+              "accountIds": [
+                "ira"
+              ],
+              "requiredCents": {
+                "status": "available",
+                "value": 1000000
+              }
+            }
+          ],
+          "totalRequiredCents": {
+            "status": "available",
+            "value": 1000000
+          },
+          "issues": [],
+          "assumptions": []
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-distribution-rules.1",
+        "CFR-2025-1.401a9-9"
+      ]
+    },
+    {
+      "id": "rmd-uniform-age120-endpoint",
+      "taxYear": 2085,
+      "sources": [
+        "https://www.irs.gov/irb/2024-33_IRB",
+        "https://www.govinfo.gov/content/pkg/CFR-2025-title26-vol6/xml/CFR-2025-title26-vol6-sec1-401a9-9.xml"
+      ],
+      "input": {
+        "year": 2085,
+        "owners": [
+          {
+            "ownerId": "owner-a",
+            "birthDate": {
+              "known": true,
+              "value": "1960-01-01"
+            },
+            "spouseBirthDate": {
+              "known": true,
+              "value": "1965-01-01"
+            }
+          }
+        ],
+        "accounts": [
+          {
+            "accountId": "ira",
+            "ownerId": "owner-a",
+            "type": "traditional-ira",
+            "priorDecemberBalanceCents": {
+              "status": "available",
+              "value": 24600000
+            },
+            "soleSpouseBeneficiary": {
+              "known": true,
+              "value": false
+            }
+          }
+        ]
+      },
+      "worksheetSteps": [
+        "Age125 uses the Uniform age120+ factor2.0.",
+        "$246,000 /2.0 = $123,000."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "year": 2085,
+          "accounts": [
+            {
+              "accountId": "ira",
+              "ownerId": "owner-a",
+              "aggregationGroupId": "owner-a:ira",
+              "requiredCents": {
+                "status": "available",
+                "value": 12300000
+              },
+              "divisorTenths": {
+                "status": "available",
+                "value": 20
+              }
+            }
+          ],
+          "groups": [
+            {
+              "groupId": "owner-a:ira",
+              "accountIds": [
+                "ira"
+              ],
+              "requiredCents": {
+                "status": "available",
+                "value": 12300000
+              }
+            }
+          ],
+          "totalRequiredCents": {
+            "status": "available",
+            "value": 12300000
+          },
+          "issues": [],
+          "assumptions": []
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-distribution-rules.1",
+        "CFR-2025-1.401a9-9"
+      ]
+    },
+    {
+      "id": "rmd-regulation-joint-factor-90-76",
+      "taxYear": 2050,
+      "sources": [
+        "https://www.irs.gov/irb/2024-33_IRB",
+        "https://www.govinfo.gov/content/pkg/CFR-2025-title26-vol6/xml/CFR-2025-title26-vol6-sec1-401a9-9.xml"
+      ],
+      "input": {
+        "year": 2050,
+        "owners": [
+          {
+            "ownerId": "owner-a",
+            "birthDate": {
+              "known": true,
+              "value": "1960-01-01"
+            },
+            "spouseBirthDate": {
+              "known": true,
+              "value": "1974-01-01"
+            }
+          }
+        ],
+        "accounts": [
+          {
+            "accountId": "ira",
+            "ownerId": "owner-a",
+            "type": "traditional-ira",
+            "priorDecemberBalanceCents": {
+              "status": "available",
+              "value": 1470000
+            },
+            "soleSpouseBeneficiary": {
+              "known": true,
+              "value": true
+            }
+          }
+        ]
+      },
+      "worksheetSteps": [
+        "CFR2025 Table3 row90/column76 specifies14.7; Publication590-B2025 prints14.8 at this cell.",
+        "Use the regulation factor: $14,700 /14.7 = $1,000."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "year": 2050,
+          "accounts": [
+            {
+              "accountId": "ira",
+              "ownerId": "owner-a",
+              "aggregationGroupId": "owner-a:ira",
+              "requiredCents": {
+                "status": "available",
+                "value": 100000
+              },
+              "divisorTenths": {
+                "status": "available",
+                "value": 147
+              }
+            }
+          ],
+          "groups": [
+            {
+              "groupId": "owner-a:ira",
+              "accountIds": [
+                "ira"
+              ],
+              "requiredCents": {
+                "status": "available",
+                "value": 100000
+              }
+            }
+          ],
+          "totalRequiredCents": {
+            "status": "available",
+            "value": 100000
+          },
+          "issues": [],
+          "assumptions": []
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-distribution-rules.1",
+        "CFR-2025-1.401a9-9"
+      ]
+    }
+  ]
+}

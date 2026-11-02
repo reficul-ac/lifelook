@@ -23,7 +23,7 @@ export interface RetirementAccountAssumption {
  readonly conversionLayers?:readonly Readonly<{year:number;taxableCents:Cents;nontaxableCents:Cents}>[];
  readonly separationDate?:History<ISODate>;
 }
-export interface RetirementOwnerAssumption {readonly ownerId:string;readonly birthDate?:History<ISODate>;readonly federalIraBasisCents?:History<Cents>;readonly californiaIraBasisCents?:History<Cents>;readonly californiaPre1987BasisCents?:History<Cents>}
+export interface RetirementOwnerAssumption {readonly ownerId:string;readonly birthDate?:History<ISODate>;readonly federalIraBasisCents?:History<Cents>;readonly californiaIraBasisCents?:History<Cents>;readonly californiaPre1987BasisCents?:History<Cents>;readonly rmdAgeAssumption?:History<73|75>}
 export interface RetirementAssumptions {
  readonly properties:readonly RetirementPropertyAssumption[];readonly accounts:readonly RetirementAccountAssumption[];readonly owners:readonly RetirementOwnerAssumption[];
  readonly sellingCostBps:BasisPoints;readonly buyingCostBps:BasisPoints;readonly buildingShareBps:BasisPoints;

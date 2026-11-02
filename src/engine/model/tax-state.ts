@@ -8,7 +8,7 @@ export interface AduCapitalBookState {
   readonly recoveryActivated:boolean;
 }
 export interface RetirementIraBasis {readonly federal:History<Cents>;readonly california:History<Cents>;readonly californiaPre1987Basis?:History<Cents>}
-export interface RetirementRothHistory {readonly contributionBasis:History<Cents>;readonly firstContributionYear:History<number>;readonly conversionLayers:readonly {readonly year:number;readonly taxableCents:Cents;readonly nontaxableCents:Cents}[]}
+export interface RetirementRothHistory {readonly contributionBasis:History<Cents>;readonly firstContributionYear:History<number>;readonly conversionLayers:readonly {readonly year:number;readonly taxableCents:Cents;readonly nontaxableCents:Cents;readonly californiaTaxableCents?:Cents}[]}
 export interface HouseholdTaxState {
   readonly retirementAccountState?:{readonly iraBasisByOwner:Readonly<Record<string,RetirementIraBasis>>;readonly rothByAccount:Readonly<Record<string,RetirementRothHistory>>};
   readonly retirementPropertyHistory?:{readonly gainBuildingBasisByRental:Readonly<Record<string,Readonly<Record<TaxBook,Available<Cents>>>>>;readonly disposedPropertyIds:readonly string[];readonly releasedActivitiesByBook?:Readonly<Partial<Record<TaxBook,readonly string[]>>>};

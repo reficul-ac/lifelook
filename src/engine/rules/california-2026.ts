@@ -11,6 +11,7 @@ thresholds.forEach((upper, i) => {
 });
 const proxy = (value: number, source: typeof s.caForm | typeof s.caAmt) => rule(value, source, indexed(100, 'nearest'), [`Explicit provisional proxy: retain the published 2025 amount (${value / 100} USD) for 2026. FTB says complete 2026 indexed amounts are pending late December; statutory endpoint could not be retrieved, so no verified 2026 value is claimed.`], 'provisional');
 Object.assign(values, {
+  'propertyDisposition.homeExclusionMaximumCents': {...rule(50000000, s.caPropertySales), reviewDate:'2026-11-01'},
   standardDeductionCents: rule(1180000, s.california, indexed(100, 'nearest')),
   'taxTable.method': rule('california-hundred-dollar-midpoint', s.caTaxTable, fixed, ['Explicit provisional method assumption: apply the complete official 2025 California tax-table bin method to the published 2026 marginal schedule until the 2026 official table is published.'], 'provisional'),
   'taxTable.maximumCents': rule(10000000, s.caTaxTable, fixed, ['Explicit provisional 2025 table boundary used for the 2026 scenario.'], 'provisional'),
@@ -44,4 +45,4 @@ Object.assign(values, {
   'rental.amtSameRecoveryFromDate': rule('1999-01-01', s.caAmt),
   'rental.ordinaryMacrsFromDate': rule('1987-01-01', s.rental),
 });
-export const california2026: RulePack = { jurisdiction: 'california', version: 'california-2026.1', baselineYear: 2026, values };
+export const california2026: RulePack = { jurisdiction: 'california', version: 'california-2026.2', baselineYear: 2026, values };

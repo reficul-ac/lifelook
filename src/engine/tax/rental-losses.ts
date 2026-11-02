@@ -166,3 +166,25 @@ export function resolveRentalLosses(facts: PreIraFacts, opening: HouseholdTaxSta
     ...(facts.rentalFacts.some(r => !r.aduRiskMovements && r.purchaseOwnerSupportCents===undefined && r.principalPaidCents > 0) ? ['Qualifying principal repayments reduce each book’s at-risk capacity under the no-owner-capital assumption; insufficient activity cash leaves repayment funding unknown.'] : []),
   ] };
 }
+
+/** Full disposition releases only the named activity's already at-risk-allowed passive vintages. */
+export function releaseDisposedPassiveLosses(opening:HouseholdTaxState,facts:import('../retirement/property-disposition').PropertyDispositionTaxFacts):{closing:HouseholdTaxState;releasedCents:Readonly<Record<TaxBook,Available<Cents>>>;releasedVintages:Readonly<Record<TaxBook,Readonly<Record<string,readonly RentalLossVintage[]>>>>}{
+ const rentals={...opening.rentals},releasedCents={} as Record<TaxBook,Available<Cents>>,releasedVintages={} as Record<TaxBook,Record<string,readonly RentalLossVintage[]>>;
+ const prior=opening.retirementPropertyHistory,releasedActivitiesByBook={...prior?.releasedActivitiesByBook};
+ const members=[...new Set(facts.activityMembers.map(m=>m.rentalId))];
+ const whole=facts.activityMembers.every(m=>facts.disposedPropertyIds.includes(m.propertyId));
+ for(const book of books){
+  releasedVintages[book]={};
+  const release=facts.releasesEntireActivity,sale=facts.books[book];
+  if(release.status!=='available'){releasedCents[book]=release;continue;}
+  if(!release.value||!whole||releasedActivitiesByBook[book]?.includes(facts.activityId)){releasedCents[book]={status:'available',value:0};continue;}
+  if(sale.status!=='available'){releasedCents[book]=sale;continue;}
+  const values=members.map(id=>opening.rentals[id]?.[book]??{status:'needs-data' as const,issues:[issue(id,opening.year+1,book,'required-history','The disposed activity member has no carried tax book.')]});
+  const missing=values.filter(v=>!v||v.status!=='available');
+  if(missing.length){releasedCents[book]={status:'needs-data',issues:missing.flatMap(v=>v.issues)};continue;}
+  let total=0;
+  for(const id of members){const state=opening.rentals[id]![book];if(state.status!=='available')throw Error('Expected resolved book');total=sumCents([total,state.value.passiveSuspendedCents]);releasedVintages[book][id]=state.value.lossVintages.filter(v=>v.source==='passive');rentals[id]={...rentals[id]!,[book]:{status:'available',value:{...state.value,passiveSuspendedCents:0,lossVintages:state.value.lossVintages.filter(v=>v.source!=='passive')}}};}
+  releasedCents[book]={status:'available',value:total};releasedActivitiesByBook[book]=[...(releasedActivitiesByBook[book]??[]),facts.activityId];
+ }
+ return {closing:{...opening,rentals,retirementPropertyHistory:{gainBuildingBasisByRental:prior?.gainBuildingBasisByRental??{},disposedPropertyIds:prior?.disposedPropertyIds??[],releasedActivitiesByBook}},releasedCents,releasedVintages};
+}

@@ -4,6 +4,9 @@ export const fixed: IndexingPolicy = { kind: 'fixed' };
 export const indexed = (incrementCents: number, rounding: 'floor' | 'nearest' = 'floor', roundIncreaseOnly = false): IndexingPolicy => ({ kind: 'indexed', incrementCents, rounding, roundIncreaseOnly });
 const source = (id: string, url: string, snapshot: string, publicationYear: number, publicationDate: string | null = null): RuleSource => ({ id, url, snapshot, publicationYear, publicationDate });
 export const SOURCES = {
+  caPropertySales: source('ftb-home-sale-2026', 'https://www.ftb.ca.gov/file/personal/income-types/income-from-the-sale-of-your-home.html', '2026/ftb-home-sale.html', 2026),
+  propertySales: source('irs-p523-2025', 'https://www.irs.gov/publications/p523', '2025-reference/irs-p523.html', 2025),
+  propertyDispositions: source('irs-p544-2025', 'https://www.irs.gov/publications/p544', '2025-reference/irs-p544.html', 2025),
   federal: source('irs-rp-2025-32', 'https://www.irs.gov/pub/irs-drop/rp-25-32.pdf', '2026/irs-rp-2025-32.pdf', 2025, '2025-10-09'),
   law: source('pl-119-21', 'https://www.congress.gov/119/plaws/publ21/PLAW-119publ21.pdf', '2026/pl-119-21.pdf', 2025, '2025-07-04'),
   planning: source('irs-p505-2026', 'https://www.irs.gov/publications/p505', '2026/irs-p505.html', 2026),

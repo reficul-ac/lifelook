@@ -68,7 +68,7 @@ describe('sourced rule packs', () => {
     for (const pack of [loadRuleSet().federal, loadRuleSet().california, loadRuleSet().payroll, loadRuleSet().retirement]) {
       for (const rule of Object.values(pack.values)) {
         expect(rule.sources.length).toBeGreaterThan(0);
-        expect(rule.reviewDate).toMatch(/^2026-10-12$/);
+        expect(rule.reviewDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
         expect(rule.applicableYear).toBe(2026);
         expect(rule.effectiveFrom).toMatch(/^\d{4}-\d{2}-\d{2}$/);
         expect(rule.indexing.kind).toBeDefined();

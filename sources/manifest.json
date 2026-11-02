@@ -681,6 +681,36 @@
       "retrievedOn": "2026-10-18",
       "sha256": "2697ef00c34f0b3f6c2bea1c111d589d9f3317a5bd49433dabbcb639c835360e",
       "bytes": 28072
+    },
+    {
+      "id": "irs-p523-2025",
+      "url": "https://www.irs.gov/publications/p523",
+      "snapshot": "2025-reference/irs-p523.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-11-01",
+      "sha256": "8f024862e37ed0efbc19bfbb5a1b80fd9a3af83a03ecf008223c61e2e1282210",
+      "bytes": 344684
+    },
+    {
+      "id": "irs-p544-2025",
+      "url": "https://www.irs.gov/publications/p544",
+      "snapshot": "2025-reference/irs-p544.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-11-01",
+      "sha256": "6f52d4de94052dbfc5d55f75314fd750e00f51dbbf0810fdeea84bb18c309653",
+      "bytes": 703330
+    },
+    {
+      "id": "ftb-home-sale-2026",
+      "url": "https://www.ftb.ca.gov/file/personal/income-types/income-from-the-sale-of-your-home.html",
+      "snapshot": "2026/ftb-home-sale.html",
+      "publicationYear": 2026,
+      "publicationDate": null,
+      "retrievedOn": "2026-11-01",
+      "sha256": "e259a34b35737f10649b944d88052c57e4a054690e4677340e4d08242eef1ace",
+      "bytes": 30524
     }
   ]
 }

@@ -23,7 +23,7 @@ function issue(unit: RentalUnit, year: number, book: TaxBook, code: string,
 
 export function calculateDepreciation(
   unit: RentalUnit, year: number, book: TaxBook,
-  opening: Available<RentalBookState>, rules: YearRules,
+  opening: Available<RentalBookState>, rules: YearRules, options?:Readonly<{disposalDate:string}>,
 ): Available<DepreciationYear> {
   if (opening.status !== 'available') return opening;
   const qualifications = (['ordinaryResidential', 'longTermFairMarketLease',
@@ -78,7 +78,9 @@ export function calculateDepreciation(
   const serviceStart = new Decimal(ready.year * 12 + ready.month - 1).plus('0.5');
   const serviceEnd = serviceStart.plus(recoveryPeriod);
   const yearStart = new Decimal(year * 12);
-  const months = Decimal.max(0, Decimal.min(serviceEnd, yearStart.plus(12))
+  const disposal=options?parseISODate(options.disposalDate):undefined;
+  const recoveryEnd=disposal?Decimal.min(yearStart.plus(12),new Decimal(disposal.year*12+disposal.month-1).plus('0.5')):yearStart.plus(12);
+  const months = Decimal.max(0, Decimal.min(serviceEnd, recoveryEnd)
     .minus(Decimal.max(serviceStart, yearStart)));
   const amount = Decimal.min(remaining, new Decimal(recovery)
     .div(recoveryPeriod).times(months));

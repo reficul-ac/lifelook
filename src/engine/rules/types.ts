@@ -62,6 +62,7 @@ export interface PassiveRules {
   readonly reductionBps: number;
 }
 export interface FederalRules {
+  readonly propertyDisposition:{readonly homeExclusionMaximumCents:number};
   readonly brackets: readonly TaxBracket[];
   readonly capitalGains: { readonly method: string; readonly zeroRateMaximumCents: number; readonly fifteenRateMaximumCents: number; readonly middleRateBps: number; readonly upperRateBps: number };
   readonly standardDeductionCents: number;

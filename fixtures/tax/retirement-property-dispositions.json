@@ -1,0 +1,1847 @@
+{
+  "cases": [
+    {
+      "id": "unknown-exclusion-no-benefit",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/publications/p523",
+        "https://www.irs.gov/publications/p544",
+        "https://www.irs.gov/publications/p925",
+        "https://www.irs.gov/publications/p527"
+      ],
+      "input": {
+        "eventId": "sale-event",
+        "propertyId": "sale-property",
+        "activityId": "sale-activity",
+        "date": "2026-01-01",
+        "use": "personal",
+        "dispositionType": "whole",
+        "holdingPeriod": "long-term",
+        "grossPriceCents": 80000000,
+        "sellingCostsCents": 4800000,
+        "settlementPrincipalCents": 20000000,
+        "homeExclusionEligible": {
+          "known": false
+        },
+        "unrelatedBuyer": {
+          "known": true,
+          "value": true
+        },
+        "lookback1231LossCents": {
+          "known": true,
+          "value": 0
+        },
+        "activityMembers": [],
+        "disposedPropertyIds": [
+          "sale-property"
+        ],
+        "books": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          }
+        }
+      },
+      "worksheetSteps": [
+        "$800,000 less $48,000 selling expenses less $450,000 adjusted basis = $302,000 gain.",
+        "Unknown eligibility establishes no section121 exclusion. Debt settlement does not reduce gain."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "taxFacts": {
+            "eventId": "sale-event",
+            "propertyId": "sale-property",
+            "activityId": "sale-activity",
+            "purpose": "transition",
+            "activityMembers": [],
+            "disposedPropertyIds": [
+              "sale-property"
+            ],
+            "books": {
+              "federal": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 30200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 30200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "federal-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 30200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 30200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              }
+            },
+            "releasesEntireActivity": {
+              "status": "available",
+              "value": false
+            }
+          },
+          "provenance": {
+            "ruleVersion": "retirement-property-disposition.1",
+            "sources": [
+              "https://www.irs.gov/publications/p523",
+              "https://www.irs.gov/publications/p544",
+              "https://www.irs.gov/publications/p925",
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": [
+              "No home-sale exclusion assumed because eligibility is unanswered."
+            ],
+            "ownershipUseOrigin": "entered-history",
+            "basisOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            },
+            "depreciationOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            }
+          }
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-property-disposition.1",
+        "IRS-P523-2025",
+        "IRS-P544-2025",
+        "IRS-P925-2025"
+      ]
+    },
+    {
+      "id": "qualified-full-home-exclusion",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/publications/p523",
+        "https://www.irs.gov/publications/p544",
+        "https://www.irs.gov/publications/p925",
+        "https://www.irs.gov/publications/p527"
+      ],
+      "input": {
+        "eventId": "sale-event",
+        "propertyId": "sale-property",
+        "activityId": "sale-activity",
+        "date": "2026-01-01",
+        "use": "personal",
+        "dispositionType": "whole",
+        "holdingPeriod": "long-term",
+        "grossPriceCents": 80000000,
+        "sellingCostsCents": 4800000,
+        "settlementPrincipalCents": 20000000,
+        "homeExclusionEligible": {
+          "known": true,
+          "value": true
+        },
+        "unrelatedBuyer": {
+          "known": true,
+          "value": true
+        },
+        "lookback1231LossCents": {
+          "known": true,
+          "value": 0
+        },
+        "activityMembers": [],
+        "disposedPropertyIds": [
+          "sale-property"
+        ],
+        "books": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          }
+        }
+      },
+      "worksheetSteps": [
+        "Eligible MFJ exclusion $500,000 exceeds $302,000 gain; no depreciation or nonqualified-use reduction."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "taxFacts": {
+            "eventId": "sale-event",
+            "propertyId": "sale-property",
+            "activityId": "sale-activity",
+            "purpose": "transition",
+            "activityMembers": [],
+            "disposedPropertyIds": [
+              "sale-property"
+            ],
+            "books": {
+              "federal": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 30200000,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 30200000,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "federal-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 30200000,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 30200000,
+                  "passiveDispositionIncomeCents": 0
+                }
+              }
+            },
+            "releasesEntireActivity": {
+              "status": "available",
+              "value": false
+            }
+          },
+          "provenance": {
+            "ruleVersion": "retirement-property-disposition.1",
+            "sources": [
+              "https://www.irs.gov/publications/p523",
+              "https://www.irs.gov/publications/p544",
+              "https://www.irs.gov/publications/p925",
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": [],
+            "ownershipUseOrigin": "entered-history",
+            "basisOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            },
+            "depreciationOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            }
+          }
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-property-disposition.1",
+        "IRS-P523-2025",
+        "IRS-P544-2025",
+        "IRS-P925-2025"
+      ]
+    },
+    {
+      "id": "home-depreciation-not-excluded",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/publications/p523",
+        "https://www.irs.gov/publications/p544",
+        "https://www.irs.gov/publications/p925",
+        "https://www.irs.gov/publications/p527"
+      ],
+      "input": {
+        "eventId": "sale-event",
+        "propertyId": "sale-property",
+        "activityId": "sale-activity",
+        "date": "2026-01-01",
+        "use": "personal",
+        "dispositionType": "whole",
+        "holdingPeriod": "long-term",
+        "grossPriceCents": 80000000,
+        "sellingCostsCents": 4800000,
+        "settlementPrincipalCents": 20000000,
+        "homeExclusionEligible": {
+          "known": true,
+          "value": true
+        },
+        "unrelatedBuyer": {
+          "known": true,
+          "value": true
+        },
+        "lookback1231LossCents": {
+          "known": true,
+          "value": 0
+        },
+        "activityMembers": [],
+        "disposedPropertyIds": [
+          "sale-property"
+        ],
+        "books": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          }
+        }
+      },
+      "worksheetSteps": [
+        "$302,000 gain includes $50,000 nonexcludable post1997 depreciation.",
+        "$252,000 excluded; $50,000 unrecaptured1250 gain retains a rate ceiling rather than a flat tax."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "taxFacts": {
+            "eventId": "sale-event",
+            "propertyId": "sale-property",
+            "activityId": "sale-activity",
+            "purpose": "transition",
+            "activityMembers": [],
+            "disposedPropertyIds": [
+              "sale-property"
+            ],
+            "books": {
+              "federal": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5000000,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 25200000,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5000000,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 25200000,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "federal-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5000000,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 25200000,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5000000,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 25200000,
+                  "passiveDispositionIncomeCents": 0
+                }
+              }
+            },
+            "releasesEntireActivity": {
+              "status": "available",
+              "value": false
+            }
+          },
+          "provenance": {
+            "ruleVersion": "retirement-property-disposition.1",
+            "sources": [
+              "https://www.irs.gov/publications/p523",
+              "https://www.irs.gov/publications/p544",
+              "https://www.irs.gov/publications/p925",
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": [],
+            "ownershipUseOrigin": "entered-history",
+            "basisOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            },
+            "depreciationOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            }
+          }
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-property-disposition.1",
+        "IRS-P523-2025",
+        "IRS-P544-2025",
+        "IRS-P925-2025"
+      ]
+    },
+    {
+      "id": "rental-sale-gain",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/publications/p523",
+        "https://www.irs.gov/publications/p544",
+        "https://www.irs.gov/publications/p925",
+        "https://www.irs.gov/publications/p527"
+      ],
+      "input": {
+        "eventId": "sale-event",
+        "propertyId": "sale-property",
+        "activityId": "sale-activity",
+        "date": "2026-01-01",
+        "use": "rental",
+        "dispositionType": "whole",
+        "holdingPeriod": "long-term",
+        "grossPriceCents": 80000000,
+        "sellingCostsCents": 4800000,
+        "settlementPrincipalCents": 20000000,
+        "homeExclusionEligible": {
+          "known": true,
+          "value": false
+        },
+        "unrelatedBuyer": {
+          "known": true,
+          "value": true
+        },
+        "lookback1231LossCents": {
+          "known": true,
+          "value": 0
+        },
+        "activityMembers": [
+          {
+            "rentalId": "sold",
+            "propertyId": "sale-property"
+          }
+        ],
+        "disposedPropertyIds": [
+          "sale-property"
+        ],
+        "books": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          }
+        }
+      },
+      "worksheetSteps": [
+        "$302,000 gain less $50,000 depreciation component = $252,000 remaining1231 gain.",
+        "Entire unrelated taxable activity disposal qualifies for activity-specific passive release."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "taxFacts": {
+            "eventId": "sale-event",
+            "propertyId": "sale-property",
+            "activityId": "sale-activity",
+            "purpose": "transition",
+            "activityMembers": [
+              {
+                "rentalId": "sold",
+                "propertyId": "sale-property"
+              }
+            ],
+            "disposedPropertyIds": [
+              "sale-property"
+            ],
+            "books": {
+              "federal": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5000000,
+                  "longTerm1231GainCents": 25200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30200000
+                }
+              },
+              "california": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5000000,
+                  "longTerm1231GainCents": 25200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30200000
+                }
+              },
+              "federal-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5000000,
+                  "longTerm1231GainCents": 25200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30200000
+                }
+              },
+              "california-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5000000,
+                  "longTerm1231GainCents": 25200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30200000
+                }
+              }
+            },
+            "releasesEntireActivity": {
+              "status": "available",
+              "value": true
+            }
+          },
+          "provenance": {
+            "ruleVersion": "retirement-property-disposition.1",
+            "sources": [
+              "https://www.irs.gov/publications/p523",
+              "https://www.irs.gov/publications/p544",
+              "https://www.irs.gov/publications/p925",
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": [],
+            "ownershipUseOrigin": "entered-history",
+            "basisOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            },
+            "depreciationOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            }
+          }
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-property-disposition.1",
+        "IRS-P523-2025",
+        "IRS-P544-2025",
+        "IRS-P925-2025"
+      ]
+    },
+    {
+      "id": "january-mid-month-disposal",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/publications/p523",
+        "https://www.irs.gov/publications/p544",
+        "https://www.irs.gov/publications/p925",
+        "https://www.irs.gov/publications/p527"
+      ],
+      "input": {
+        "eventId": "sale-event",
+        "propertyId": "sale-property",
+        "activityId": "sale-activity",
+        "date": "2026-01-01",
+        "use": "rental",
+        "dispositionType": "whole",
+        "holdingPeriod": "long-term",
+        "grossPriceCents": 80000000,
+        "sellingCostsCents": 4800000,
+        "settlementPrincipalCents": 20000000,
+        "homeExclusionEligible": {
+          "known": true,
+          "value": false
+        },
+        "unrelatedBuyer": {
+          "known": true,
+          "value": true
+        },
+        "lookback1231LossCents": {
+          "known": true,
+          "value": 0
+        },
+        "activityMembers": [
+          {
+            "rentalId": "sold",
+            "propertyId": "sale-property"
+          }
+        ],
+        "disposedPropertyIds": [
+          "sale-property"
+        ],
+        "books": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 50000
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 50000
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 50000
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 50000
+            }
+          }
+        }
+      },
+      "worksheetSteps": [
+        "$12,000 annual depreciation \u00d70.5/12 = $500.",
+        "$450,000 opening adjusted basis less $500 = $449,500; $752,000 net proceeds less basis = $302,500."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "taxFacts": {
+            "eventId": "sale-event",
+            "propertyId": "sale-property",
+            "activityId": "sale-activity",
+            "purpose": "transition",
+            "activityMembers": [
+              {
+                "rentalId": "sold",
+                "propertyId": "sale-property"
+              }
+            ],
+            "disposedPropertyIds": [
+              "sale-property"
+            ],
+            "books": {
+              "federal": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30250000,
+                  "adjustedBasisAtSaleCents": 44950000,
+                  "disposalDepreciationCents": 50000,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5050000,
+                  "longTerm1231GainCents": 25200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30250000
+                }
+              },
+              "california": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30250000,
+                  "adjustedBasisAtSaleCents": 44950000,
+                  "disposalDepreciationCents": 50000,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5050000,
+                  "longTerm1231GainCents": 25200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30250000
+                }
+              },
+              "federal-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30250000,
+                  "adjustedBasisAtSaleCents": 44950000,
+                  "disposalDepreciationCents": 50000,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5050000,
+                  "longTerm1231GainCents": 25200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30250000
+                }
+              },
+              "california-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30250000,
+                  "adjustedBasisAtSaleCents": 44950000,
+                  "disposalDepreciationCents": 50000,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 5050000,
+                  "longTerm1231GainCents": 25200000,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30250000
+                }
+              }
+            },
+            "releasesEntireActivity": {
+              "status": "available",
+              "value": true
+            }
+          },
+          "provenance": {
+            "ruleVersion": "retirement-property-disposition.1",
+            "sources": [
+              "https://www.irs.gov/publications/p523",
+              "https://www.irs.gov/publications/p544",
+              "https://www.irs.gov/publications/p925",
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": [],
+            "ownershipUseOrigin": "entered-history",
+            "basisOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            },
+            "depreciationOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            }
+          }
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-property-disposition.1",
+        "IRS-P523-2025",
+        "IRS-P544-2025",
+        "IRS-P925-2025"
+      ]
+    },
+    {
+      "id": "lookback-limits-unrecaptured-gain",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/publications/p523",
+        "https://www.irs.gov/publications/p544",
+        "https://www.irs.gov/publications/p925",
+        "https://www.irs.gov/publications/p527"
+      ],
+      "input": {
+        "eventId": "sale-event",
+        "propertyId": "sale-property",
+        "activityId": "sale-activity",
+        "date": "2026-01-01",
+        "use": "rental",
+        "dispositionType": "whole",
+        "holdingPeriod": "long-term",
+        "grossPriceCents": 80000000,
+        "sellingCostsCents": 4800000,
+        "settlementPrincipalCents": 20000000,
+        "homeExclusionEligible": {
+          "known": true,
+          "value": false
+        },
+        "unrelatedBuyer": {
+          "known": true,
+          "value": true
+        },
+        "lookback1231LossCents": {
+          "known": true,
+          "value": 28000000
+        },
+        "activityMembers": [
+          {
+            "rentalId": "sold",
+            "propertyId": "sale-property"
+          }
+        ],
+        "disposedPropertyIds": [
+          "sale-property"
+        ],
+        "books": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 5000000,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          }
+        }
+      },
+      "worksheetSteps": [
+        "$302,000 net1231 gain less $280,000 five-year ordinary recharacterization = $22,000 capital gain.",
+        "Unrecaptured1250 gain cannot exceed the remaining $22,000."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "taxFacts": {
+            "eventId": "sale-event",
+            "propertyId": "sale-property",
+            "activityId": "sale-activity",
+            "purpose": "transition",
+            "activityMembers": [
+              {
+                "rentalId": "sold",
+                "propertyId": "sale-property"
+              }
+            ],
+            "disposedPropertyIds": [
+              "sale-property"
+            ],
+            "books": {
+              "federal": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 28000000,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 2200000,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30200000
+                }
+              },
+              "california": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 28000000,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 2200000,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30200000
+                }
+              },
+              "federal-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 28000000,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 2200000,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30200000
+                }
+              },
+              "california-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 30200000,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 28000000,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 2200000,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 30200000
+                }
+              }
+            },
+            "releasesEntireActivity": {
+              "status": "available",
+              "value": true
+            }
+          },
+          "provenance": {
+            "ruleVersion": "retirement-property-disposition.1",
+            "sources": [
+              "https://www.irs.gov/publications/p523",
+              "https://www.irs.gov/publications/p544",
+              "https://www.irs.gov/publications/p925",
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": [],
+            "ownershipUseOrigin": "entered-history",
+            "basisOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            },
+            "depreciationOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            }
+          }
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-property-disposition.1",
+        "IRS-P523-2025",
+        "IRS-P544-2025",
+        "IRS-P925-2025"
+      ]
+    },
+    {
+      "id": "conversion-between-gain-loss-bases",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/publications/p523",
+        "https://www.irs.gov/publications/p544",
+        "https://www.irs.gov/publications/p925",
+        "https://www.irs.gov/publications/p527"
+      ],
+      "input": {
+        "eventId": "sale-event",
+        "propertyId": "sale-property",
+        "activityId": "sale-activity",
+        "date": "2026-01-01",
+        "use": "rental",
+        "dispositionType": "whole",
+        "holdingPeriod": "long-term",
+        "grossPriceCents": 45000000,
+        "sellingCostsCents": 0,
+        "settlementPrincipalCents": 20000000,
+        "homeExclusionEligible": {
+          "known": true,
+          "value": false
+        },
+        "unrelatedBuyer": {
+          "known": true,
+          "value": true
+        },
+        "lookback1231LossCents": {
+          "known": true,
+          "value": 0
+        },
+        "activityMembers": [
+          {
+            "rentalId": "sold",
+            "propertyId": "sale-property"
+          }
+        ],
+        "disposedPropertyIds": [
+          "sale-property"
+        ],
+        "books": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 50000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0,
+              "lossBasisCents": 40000000
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 50000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0,
+              "lossBasisCents": 40000000
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 50000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0,
+              "lossBasisCents": 40000000
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 50000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0,
+              "lossBasisCents": 40000000
+            }
+          }
+        }
+      },
+      "worksheetSteps": [
+        "$450,000 net proceeds lie between $500,000 gain basis and $400,000 conversion loss basis.",
+        "Neither taxable gain nor deductible loss arises."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "taxFacts": {
+            "eventId": "sale-event",
+            "propertyId": "sale-property",
+            "activityId": "sale-activity",
+            "purpose": "transition",
+            "activityMembers": [
+              {
+                "rentalId": "sold",
+                "propertyId": "sale-property"
+              }
+            ],
+            "disposedPropertyIds": [
+              "sale-property"
+            ],
+            "books": {
+              "federal": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 50000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 50000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "federal-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 50000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 50000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              }
+            },
+            "releasesEntireActivity": {
+              "status": "available",
+              "value": true
+            }
+          },
+          "provenance": {
+            "ruleVersion": "retirement-property-disposition.1",
+            "sources": [
+              "https://www.irs.gov/publications/p523",
+              "https://www.irs.gov/publications/p544",
+              "https://www.irs.gov/publications/p925",
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": [],
+            "ownershipUseOrigin": "entered-history",
+            "basisOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            },
+            "depreciationOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            }
+          }
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-property-disposition.1",
+        "IRS-P523-2025",
+        "IRS-P544-2025",
+        "IRS-P925-2025"
+      ]
+    },
+    {
+      "id": "personal-loss-nondeductible",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/publications/p523",
+        "https://www.irs.gov/publications/p544",
+        "https://www.irs.gov/publications/p925",
+        "https://www.irs.gov/publications/p527"
+      ],
+      "input": {
+        "eventId": "sale-event",
+        "propertyId": "sale-property",
+        "activityId": "sale-activity",
+        "date": "2026-01-01",
+        "use": "personal",
+        "dispositionType": "whole",
+        "holdingPeriod": "long-term",
+        "grossPriceCents": 35000000,
+        "sellingCostsCents": 0,
+        "settlementPrincipalCents": 20000000,
+        "homeExclusionEligible": {
+          "known": true,
+          "value": false
+        },
+        "unrelatedBuyer": {
+          "known": true,
+          "value": true
+        },
+        "lookback1231LossCents": {
+          "known": true,
+          "value": 0
+        },
+        "activityMembers": [],
+        "disposedPropertyIds": [
+          "sale-property"
+        ],
+        "books": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          }
+        }
+      },
+      "worksheetSteps": [
+        "$350,000 proceeds less $450,000 basis = $100,000 personal loss; no deduction assumed."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "taxFacts": {
+            "eventId": "sale-event",
+            "propertyId": "sale-property",
+            "activityId": "sale-activity",
+            "purpose": "transition",
+            "activityMembers": [],
+            "disposedPropertyIds": [
+              "sale-property"
+            ],
+            "books": {
+              "federal": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 10000000,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 10000000,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "federal-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 10000000,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 0,
+                  "nonDeductiblePersonalLossCents": 10000000,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              }
+            },
+            "releasesEntireActivity": {
+              "status": "available",
+              "value": false
+            }
+          },
+          "provenance": {
+            "ruleVersion": "retirement-property-disposition.1",
+            "sources": [
+              "https://www.irs.gov/publications/p523",
+              "https://www.irs.gov/publications/p544",
+              "https://www.irs.gov/publications/p925",
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": [],
+            "ownershipUseOrigin": "entered-history",
+            "basisOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            },
+            "depreciationOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            }
+          }
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-property-disposition.1",
+        "IRS-P523-2025",
+        "IRS-P544-2025",
+        "IRS-P925-2025"
+      ]
+    },
+    {
+      "id": "rental-loss-recognized",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/publications/p523",
+        "https://www.irs.gov/publications/p544",
+        "https://www.irs.gov/publications/p925",
+        "https://www.irs.gov/publications/p527"
+      ],
+      "input": {
+        "eventId": "sale-event",
+        "propertyId": "sale-property",
+        "activityId": "sale-activity",
+        "date": "2026-01-01",
+        "use": "rental",
+        "dispositionType": "whole",
+        "holdingPeriod": "long-term",
+        "grossPriceCents": 35000000,
+        "sellingCostsCents": 0,
+        "settlementPrincipalCents": 20000000,
+        "homeExclusionEligible": {
+          "known": true,
+          "value": false
+        },
+        "unrelatedBuyer": {
+          "known": true,
+          "value": true
+        },
+        "lookback1231LossCents": {
+          "known": true,
+          "value": 0
+        },
+        "activityMembers": [
+          {
+            "rentalId": "sold",
+            "propertyId": "sale-property"
+          }
+        ],
+        "disposedPropertyIds": [
+          "sale-property"
+        ],
+        "books": {
+          "federal": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "federal-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          },
+          "california-amt": {
+            "status": "available",
+            "value": {
+              "adjustedBasisCents": 45000000,
+              "depreciationCents": 0,
+              "additionalDepreciationCents": 0,
+              "disposalDepreciationCents": 0
+            }
+          }
+        }
+      },
+      "worksheetSteps": [
+        "$350,000 proceeds less $450,000 rental basis = $100,000 recognized1231 loss, subject to household netting."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "taxFacts": {
+            "eventId": "sale-event",
+            "propertyId": "sale-property",
+            "activityId": "sale-activity",
+            "purpose": "transition",
+            "activityMembers": [
+              {
+                "rentalId": "sold",
+                "propertyId": "sale-property"
+              }
+            ],
+            "disposedPropertyIds": [
+              "sale-property"
+            ],
+            "books": {
+              "federal": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 10000000,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 10000000,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "federal-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 10000000,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              },
+              "california-amt": {
+                "status": "available",
+                "value": {
+                  "gainCents": 0,
+                  "adjustedBasisAtSaleCents": 45000000,
+                  "disposalDepreciationCents": 0,
+                  "ordinaryRecaptureCents": 0,
+                  "ordinary1231Cents": 0,
+                  "shortTermGainCents": 0,
+                  "unrecaptured1250GainCents": 0,
+                  "longTerm1231GainCents": 0,
+                  "recognizedLossCents": 10000000,
+                  "nonDeductiblePersonalLossCents": 0,
+                  "excluded121GainCents": 0,
+                  "passiveDispositionIncomeCents": 0
+                }
+              }
+            },
+            "releasesEntireActivity": {
+              "status": "available",
+              "value": true
+            }
+          },
+          "provenance": {
+            "ruleVersion": "retirement-property-disposition.1",
+            "sources": [
+              "https://www.irs.gov/publications/p523",
+              "https://www.irs.gov/publications/p544",
+              "https://www.irs.gov/publications/p925",
+              "https://www.irs.gov/publications/p527"
+            ],
+            "assumptions": [],
+            "ownershipUseOrigin": "entered-history",
+            "basisOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            },
+            "depreciationOriginByBook": {
+              "federal": "entered-history",
+              "california": "entered-history",
+              "federal-amt": "entered-history",
+              "california-amt": "entered-history"
+            }
+          }
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-property-disposition.1",
+        "IRS-P523-2025",
+        "IRS-P544-2025",
+        "IRS-P925-2025"
+      ]
+    }
+  ]
+}

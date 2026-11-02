@@ -10,6 +10,8 @@ thresholds.forEach((upper, i) => {
 });
 const saltGrowth = { kind: 'statutory-growth', growthBps: 100, incrementCents: 1, rounding: 'nearest' } as const;
 Object.assign(values, {
+  'propertyDisposition.homeExclusionMaximumCents': {...rule(50000000, s.propertySales), reviewDate:'2026-11-01'},
+  'capitalGains.unrecaptured1250MaximumRateBps': {...rule(2500, s.propertyDispositions), reviewDate:'2026-11-01'},
   'capitalGains.method': rule('ordinary-long-term-gain-worksheet', [s.capitalGains, s.amtMethod]),
   'capitalGains.zeroRateMaximumCents': rule(9890000, [s.federal, s.federalIndex], indexed(5000)),
   'capitalGains.fifteenRateMaximumCents': rule(61370000, [s.federal, s.federalIndex], indexed(5000)),
@@ -73,4 +75,4 @@ Object.assign(values, {
   'rental.amtSameRecoveryFromDate': rule('1999-01-01', s.amtMethod),
   'rental.ordinaryMacrsFromDate': rule('1987-01-01', s.rental),
 });
-export const federal2026: RulePack = { jurisdiction: 'federal', version: 'federal-2026.1', baselineYear: 2026, values };
+export const federal2026: RulePack = { jurisdiction: 'federal', version: 'federal-2026.2', baselineYear: 2026, values };

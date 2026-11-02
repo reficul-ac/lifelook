@@ -92,7 +92,7 @@ export function prepareForecastYear(context:ForecastContext,checkpoint:ForecastC
   const priorMarketComplete=new Map(Object.entries(checkpoint.priorMarketComplete));
   const projects=getAduProjects(plan);
   const fundedAccountIds=new Set([...projects.flatMap(({project})=>project.ownerFunding?.kind==='taxable-brokerage'?[project.ownerFunding.accountId]:[]),...purchases.flatMap(property=>property.purchaseFunding?.kind==='taxable-brokerage'?[property.purchaseFunding.accountId]:[])]);
-  const brokerageBasis=new Map(Object.entries(checkpoint.brokerageBasis));
+  const brokerageBasis=new Map(Object.entries(checkpoint.brokerageBasis)),brokerageOpeningBasisSurvival=new Map(Object.entries(checkpoint.brokerageOpeningBasisSurvival));
   const propertyExact=decode(checkpoint.propertyExact);
   const declaredLoans=[...plan.properties.flatMap(p=>p.loans.map(loan=>({kind:'original' as const,loan,propertyId:p.id}))),...plan.debts.map(loan=>({kind:'original' as const,loan,...(loan.propertyId?{propertyId:loan.propertyId}:{})})),...projects.flatMap(({project,property})=>project.financing?[{kind:'adu-project' as const,loan:project.financing,propertyId:property.id,projectId:project.id}]:[])].sort((a,b)=>a.loan.id.localeCompare(b.loan.id));
   const loanClosing=new Map(Object.entries(checkpoint.loanClosing)),loanOrigin=new Map(Object.entries(checkpoint.loanOrigin));
@@ -328,11 +328,12 @@ export function prepareForecastYear(context:ForecastContext,checkpoint:ForecastC
         const previous=accountExact.get(account.id)!;
         if(fundedAccountIds.has(account.id)&&brokerage){
           if(brokerage.status!=='available'){
-            accountExact.set(account.id,brokerage);brokerageBasis.set(account.id,brokerage);
+            accountExact.set(account.id,brokerage);brokerageBasis.set(account.id,brokerage);if(policy.kind==='working')brokerageOpeningBasisSurvival.set(account.id,brokerage);
             return{accountId:account.id,openingCents:previous.status==='available'?available(settleCents(previous.value)):previous,contributionCents:brokerage,growthCents:brokerage,closingCents:brokerage,withdrawalCents:brokerage,realizedGainCents:brokerage,openingTaxableBasisCents:brokerage,closingTaxableBasisCents:brokerage,basisConsumedCents:brokerage};
           }
           const ledger=brokerage.value.accounts.find(a=>a.accountId===account.id)!.months[i]!;
           accountExact.set(account.id,available(ledger.closingExact));brokerageBasis.set(account.id,available(ledger.closingBasisCents));
+          if(policy.kind==='working'){const prior=brokerageOpeningBasisSurvival.get(account.id);if(prior?.status==='available'&&ledger.grossSaleCents>0){const retained=ledger.closingExact.minus(ledger.contributionCents),fraction=retained.lte(0)?new Decimal(0):retained.div(retained.plus(ledger.grossSaleCents));brokerageOpeningBasisSurvival.set(account.id,available(new Decimal(prior.value).times(fraction).toString()));}}
           return{accountId:account.id,openingCents:available(ledger.openingCents),contributionCents:available(ledger.contributionCents),growthCents:available(ledger.growthCents),closingCents:available(ledger.closingCents),withdrawalCents:available(ledger.grossSaleCents),realizedGainCents:available(ledger.realizedGainCents),basisConsumedCents:available(ledger.basisConsumedCents),openingTaxableBasisCents:available(ledger.openingBasisCents),closingTaxableBasisCents:available(ledger.closingBasisCents)};
         }
         const unresolved=[...plan.contributions.filter(c=>c.accountId===account.id).map(c=>requestResults.get(c.id)!),...allocationSources.filter(source=>source.destination.kind==='account'&&(source.destination.backdoorRoth?.traditionalIraAccountId??source.destination.accountId)===account.id).map(source=>requestResults.get(source.id)!)].filter(r=>r.status!=='available');
@@ -425,7 +426,7 @@ export function prepareForecastYear(context:ForecastContext,checkpoint:ForecastC
     const annual=allocation?{...summary,cashFlowAllocation:allocation.status==='available'?available(allocation.value.report):allocation}:summary;years.push(annual);allIssues.push(...annual.issues);
   const issues=uniqueIssues(allIssues),coverage:Coverage={completeForModeledScope:years.every(y=>y.coverage.completeForModeledScope)&&!issues.some(i=>i.code==='monetary-overflow'),completeHouseholdLiability:years.every(y=>y.coverage.completeHouseholdLiability)&&!issues.some(i=>i.code==='monetary-overflow'),issues:uniqueIssues(years.flatMap(y=>y.coverage.issues))};
   const projection={planId:plan.id,inputRevision:plan.revision,months,years,contributions,contributionSchedules,taxStates,loanSchedules,cashSchedules,...(rsuAccounts.length?{rsuSchedules}:{}),openingTaxState,closingTaxState:taxState,provenance:uniqueProvenance(allProvenance),coverage,issues};
-  const closing:ForecastCheckpoint={...checkpoint,sourceIssues:policy.kind==='working'?uniqueIssues([...checkpoint.sourceIssues,...coverage.issues]):checkpoint.sourceIssues,year:year+1,...(retirementPosting?{retirementAccountBalances:retirementPosting.closingAccounts}:{}),rothHistoryByAccount,accountExact:encode(accountExact),propertyExact:encode(propertyExact),existingHomeExact:encode(existingHomeExact),brokerageBasis:Object.fromEntries(brokerageBasis),rsuState:rsuClosing,priorMarketComplete:Object.fromEntries(priorMarketComplete),loanClosing:Object.fromEntries(loanClosing),loanOrigin:Object.fromEntries(loanOrigin),taxState,reserve,conditionalOnGap,lastEarmarked};
+  const closing:ForecastCheckpoint={...checkpoint,sourceIssues:policy.kind==='working'?uniqueIssues([...checkpoint.sourceIssues,...coverage.issues]):checkpoint.sourceIssues,year:year+1,...(retirementPosting?{retirementAccountBalances:retirementPosting.closingAccounts}:{}),rothHistoryByAccount,accountExact:encode(accountExact),propertyExact:encode(propertyExact),existingHomeExact:encode(existingHomeExact),brokerageBasis:Object.fromEntries(brokerageBasis),brokerageOpeningBasisSurvival:Object.fromEntries(brokerageOpeningBasisSurvival),rsuState:rsuClosing,priorMarketComplete:Object.fromEntries(priorMarketComplete),loanClosing:Object.fromEntries(loanClosing),loanOrigin:Object.fromEntries(loanOrigin),taxState,reserve,conditionalOnGap,lastEarmarked};
   return {projection,closing};
   }};
 }

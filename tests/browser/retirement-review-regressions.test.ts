@@ -1,0 +1,17 @@
+import {afterEach,expect,it,vi} from 'vitest';
+import {within} from '@testing-library/dom';
+import {mountRetirementPortfolio} from '../../src/browser/views/retirement-portfolio';
+import {buildRetirementReportModel} from '../../src/browser/retirement-report-model';
+import {createRetirementDraft,toRetirementRaw} from '../../src/browser/retirement-draft';
+import {retirementReportFixture} from '../helpers/retirement-report';
+import {makeRetirementPlan,makeDrawnRetirementAduSource} from '../helpers/retirement';
+import {makeFuturePurchasePlan} from '../helpers/future-purchase';
+const cleanups:(()=>void)[]=[];afterEach(()=>{cleanups.splice(0).forEach(fn=>fn());document.body.replaceChildren();});
+function mount(model:ReturnType<typeof buildRetirementReportModel>,draft=createRetirementDraft(model.inputSourcePlan??model.snapshot.sourcePlan)){const root=document.createElement('div');document.body.append(root);const view=mountRetirementPortfolio(root,model,draft,{edit:vi.fn(),addProperty:vi.fn(),removeTarget:vi.fn(),moveTarget:vi.fn(),selectProperty:vi.fn(),apply:vi.fn(),discard:vi.fn()});cleanups.push(view.dispose);return {root,view};}
+it('shows the effective untouched commitment defaults and locks started/completed source schedules',()=>{
+ const {report,selection}=retirementReportFixture(),source=makeRetirementPlan(makeDrawnRetirementAduSource()),draft={...createRetirementDraft(source),value:{...toRetirementRaw(report.definition),newProperties:[],existingProperties:[],commitments:[]}},model={...buildRetirementReportModel(report,2099),inputSourcePlan:source,selectedYear:2027,selection:{...selection,candidateYear:2027}},h=mount(model,draft),project=within(h.root).getByLabelText('Commitment Synthetic new ADU');expect(project).toHaveValue('exclude');expect(project).not.toBeDisabled();h.view.update({...model,selectedYear:2028,selection:{...selection,candidateYear:2028}},draft);expect(project).toHaveValue('continue');expect(project).toBeDisabled();expect(h.root).toHaveTextContent('In-progress');h.view.update({...model,selectedYear:2029,selection:{...selection,candidateYear:2029}},draft);expect(project).toBeDisabled();expect(h.root).toHaveTextContent('Completed');
+ const purchase=makeRetirementPlan(makeFuturePurchasePlan()),p=mount({...model,inputSourcePlan:purchase,selectedYear:2026,selection:{...selection,candidateYear:2026}}, {...createRetirementDraft(purchase),value:{...draft.value}});expect(within(p.root).getByLabelText('Commitment Purchase Future home')).toHaveValue('exclude');
+});
+it('shows a completed current selected allocation during a pending comparison but keeps Apply disabled and masks retained results',()=>{
+ const {report,selection}=retirementReportFixture(),draft={...createRetirementDraft(report.sourcePlan),value:toRetirementRaw(report.definition)},snapshot={...report,status:'pending' as const,partial:true,comparison:{...report.comparison!,candidates:[report.comparison!.candidates[0]!]}},model=buildRetirementReportModel(snapshot,2099,selection),h=mount(model,draft);expect(model.allocation.status).toBe('ready');expect(h.root).toHaveTextContent('Stock remainder: $868,000.00');expect(h.root).toHaveTextContent('Gross positive assets: $1,468,000.00');expect(within(h.root).getByRole('button',{name:'Apply retirement changes'})).toBeDisabled();h.view.update(buildRetirementReportModel({...snapshot,partial:false},2099,selection),draft);expect(h.root).toHaveTextContent('Stock remainder: Updating');expect(h.root).not.toHaveTextContent('Stock remainder: $868,000.00');
+});

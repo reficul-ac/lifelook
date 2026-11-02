@@ -11,6 +11,7 @@ export function initializeForecast(context:ForecastContext):ForecastCheckpoint {
   rothHistoryByAccount:Object.fromEntries(plan.accounts.filter(a=>a.type==='roth-ira'||a.type==='roth-401k').map(a=>[a.id,{openingContributionBasis:{known:false},contributionsSinceStartCents:available(0),conversionLayers:[]}])),
   accountExact:Object.fromEntries(plan.accounts.map(a=>[a.id,available(a.type==='rsu'?a.rsu!.grants.reduce((n,g)=>n.plus(g.openingHeldShares),new Decimal(0)).times(rsuPriceAt(plan.startYear,a)(plan.startYear,1)).toString():String(a.openingBalanceCents))])),
   brokerageBasis:Object.fromEntries(plan.accounts.filter(a=>a.type==='taxable-brokerage').map(a=>[a.id,available(a.openingTaxableBasis?.known?a.openingTaxableBasis.value:0)])),
+  brokerageOpeningBasisSurvival:Object.fromEntries(plan.accounts.filter(a=>a.type==='taxable-brokerage').map(a=>[a.id,available('1')])),
   brokerageBasisHistory:Object.fromEntries(plan.accounts.filter(a=>a.type==='taxable-brokerage').map(a=>[a.id,a.openingTaxableBasis??{known:false}])),
   rsuState:Object.fromEntries(plan.accounts.filter(a=>a.type==='rsu').map(a=>[a.id,available(projectRsuAccounts({...plan,accounts:[a]},{startYear:plan.startYear,endYear:plan.startYear-1}).closingState!)])),
   propertyExact:Object.fromEntries(plan.properties.map(p=>[p.id,available(String(purchases.has(p.id)?0:p.openingValueCents))])),existingHomeExact:Object.fromEntries(plan.properties.map(p=>[p.id,available(String(purchases.has(p.id)?0:p.openingValueCents))])),priorMarketComplete:Object.fromEntries(plan.properties.map(p=>[p.id,true])),
@@ -38,6 +39,7 @@ export function restoreForecastCheckpoint(context:ForecastContext,json:string):A
   }
   const expectedAccounts=[...new Set([...Object.keys(initial.accountExact),...(c.retirementAccounts??[]).map(a=>a.id)])],expectedProperties=[...new Set([...Object.keys(initial.propertyExact),...(c.retirementInventory?.properties??[]).map(p=>p.id)])];
   for(const key of ['accountExact','propertyExact','existingHomeExact'] as const){if(!obj(c[key])||JSON.stringify(Object.keys(c[key]).sort())!==JSON.stringify((key==='accountExact'?expectedAccounts:expectedProperties).sort())||!Object.values(c[key]).every(v=>availableValue(v,decimal)))return failed();}
+  if(!obj(c.brokerageOpeningBasisSurvival)||JSON.stringify(Object.keys(c.brokerageOpeningBasisSurvival).sort())!==JSON.stringify(Object.keys(initial.brokerageOpeningBasisSurvival).sort())||!Object.values(c.brokerageOpeningBasisSurvival).every(v=>availableValue(v,n=>decimal(n)&&new Decimal(n).lte(1))))return failed();
   for(const key of ['brokerageBasis','loanClosing'] as const)if(!obj(c[key])||!Object.values(c[key]).every(v=>availableValue(v,cents)))return failed();
   for(const key of ['brokerageBasisHistory','rsuState','priorMarketComplete','loanOrigin','rothHistoryByAccount'] as const)if(!obj(c[key]))return failed();
   if(!availableValue(c.reserve,cents)||!availableValue(c.lastEarmarked,cents)||!obj(c.taxState)||c.taxState.year!==c.year-1||!obj(c.taxState.rentals)||!obj(c.taxState.iraBasisByOwner)||!obj(c.taxState.minimumTaxCreditCoverage))return failed();

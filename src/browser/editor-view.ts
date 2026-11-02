@@ -41,7 +41,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   let route:WorkspaceRoute={destination:session.view.selections.destination??'overview',editor:null,surface:'edit'};
   const context:IssueViewContext={editorView:session.view,disclosures,readState:controller.getState,review:target=>{
     if(!isCurrent())return;
-    if(target.field?.startsWith('retirementAnalysis')){navigate('retirement');shell.retirement.querySelector('[data-retirement-workspace]')?.dispatchEvent(new CustomEvent('retirement-review-input',{bubbles:true,detail:target.field}));return;}
+    if(target.field?.startsWith('retirementAnalysis')){navigate('retirement');shell.retirement.querySelector('[data-retirement-workspace]')?.dispatchEvent(new CustomEvent('retirement-review-input',{bubbles:true,detail:{field:target.field,recordId:target.recordId}}));return;}
     const snapshot=selectReportSnapshot(controller.getState(),coordinator.getState());
     const edit=targetForReview(target,controller.getState(),snapshot.plan);
     if(!edit)return;

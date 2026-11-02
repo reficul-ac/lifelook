@@ -20,6 +20,8 @@ export interface ForecastCheckpoint {
  readonly sourceIssues:readonly Issue[];
  readonly schemaVersion:1;readonly year:number;readonly sourceBinding:string;readonly ruleBinding:string;
  readonly accountExact:Readonly<Record<string,Available<string>>>;readonly brokerageBasis:Readonly<Record<string,Available<Cents>>>;
+ /** Fraction of the original brokerage position surviving accepted working-period sales. */
+ readonly brokerageOpeningBasisSurvival:Readonly<Record<string,Available<string>>>;
  readonly brokerageBasisHistory:Readonly<Record<string,History<Cents>>>;
  readonly rsuState:Readonly<Record<string,Available<readonly RsuExactState[]>>>;
  readonly propertyExact:Readonly<Record<string,Available<string>>>;readonly existingHomeExact:Readonly<Record<string,Available<string>>>;readonly priorMarketComplete:Readonly<Record<string,boolean>>;

@@ -22,11 +22,13 @@ export function retirementOpeningAccounts(snapshot:RetirementSnapshot,opening:Fo
  const values:Available<DistributionAccountState>[]=accounts.map(a=>{
   const carried=opening.retirementAccountBalances?.find(c=>c.accountId===a.id),balance=opening.accountExact[a.id]??av(String(a.openingBalanceCents));if(balance.status!=='available')return balance;if(carried){if(new Decimal(carried.balanceExact).eq(balance.value))return av(carried);return {status:'needs-data',issues:[{code:'retirement-account-ledger-mismatch',recordId:a.id,field:'balanceExact',severity:'warning',explanation:'The carried account ledger differs from its accepted market balance.',resolution:'Restore a matching retirement checkpoint.'}]};}
   const override=snapshot.definition.assumptions.accounts.find(o=>o.accountId===a.id),sourceKnown=opening.brokerageBasisHistory[a.id]?.known;
+  const surviving=(originalCents:Cents):Available<Cents>=>{if(!originalCents)return av(0);const fraction=opening.brokerageOpeningBasisSurvival[a.id];if(!fraction)return {status:'needs-data',issues:[{code:'required-retirement-basis-survival',recordId:a.id,field:'openingTaxableBasis',severity:'warning',explanation:'The surviving original brokerage basis cannot be reconstructed from this checkpoint.',resolution:'Recalculate the working forecast from its original opening inputs.'}]};return fraction.status==='available'?av(settleCents(new Decimal(originalCents).times(fraction.value))):fraction;};
+  let laterBrokerageBasis=0;
   let basis:History<Cents>=a.type==='taxable-brokerage'?opening.brokerageBasisHistory[a.id]??{known:false}:a.type==='traditional-401k'||a.type==='roth-401k'?{known:false}:{known:true,value:0},estimate=0;
   if(a.type==='taxable-brokerage'){
    const b=opening.brokerageBasis[a.id];if(b&&b.status!=='available')return b;
    const amount=b?.status==='available'?b.value:0;
-   if(sourceKnown)basis={known:true,value:amount};else {estimate=sumCents([amount,override?.taxableBasisCents?.known?override.taxableBasisCents.value:0]);basis={known:false};}
+   if(sourceKnown){basis={known:true,value:amount};if(override?.californiaBasisCents?.known){const original=snapshot.context.source.accounts.find(source=>source.id===a.id)?.openingTaxableBasis,remaining=surviving(original?.known?original.value:0);if(remaining.status!=='available')return remaining;laterBrokerageBasis=Math.max(0,amount-remaining.value);}}else {const remaining=surviving(override?.taxableBasisCents?.known?override.taxableBasisCents.value:0);if(remaining.status!=='available')return remaining;estimate=sumCents([amount,remaining.value]);laterBrokerageBasis=amount;basis={known:false};}
    if(!snapshot.context.source.accounts.some(s=>s.id===a.id))basis={known:true,value:0};
   }
   if(a.type==='rsu'){
@@ -35,7 +37,7 @@ export function retirementOpeningAccounts(snapshot:RetirementSnapshot,opening:Fo
    basis=known?{known:true,value:amount}:{known:false};estimate=known?0:sumCents([amount,override?.taxableBasisCents?.known?override.taxableBasisCents.value:0]);
   }
   if((a.type==='traditional-401k'||a.type==='roth-401k')&&override?.taxableBasisCents?.known)basis=override.taxableBasisCents;
-  const californiaBasis=override?.californiaBasisCents??basis;
+  let californiaBasis=override?.californiaBasisCents??basis;if(a.type==='taxable-brokerage'&&override?.californiaBasisCents?.known){const remaining=surviving(override.californiaBasisCents.value);if(remaining.status!=='available')return remaining;californiaBasis={known:true,value:sumCents([laterBrokerageBasis,remaining.value])};}
   return av({accountId:a.id,ownerId:a.ownerId,type:a.type,balanceExact:balance.value,basis,...(!basis.known?{estimatedBasisCents:estimate}:{}),californiaBasis,...(!californiaBasis.known?{estimatedCaliforniaBasisCents:estimate}:{})});
  });
  const missing=values.filter(v=>v.status!=='available');return missing.length?{status:missing.some(v=>v.status==='unsupported-case')?'unsupported-case':'needs-data',issues:[...new Map(missing.flatMap(v=>v.issues).map(i=>[JSON.stringify(i),i])).values()]}:av(values.map(v=>{if(v.status!=='available')throw Error('account');return v.value;}));

@@ -1,4 +1,4 @@
-import type {ForecastCheckpoint,ForecastContext,PreparedForecastYear} from './types';
+import type {ForecastCheckpoint,ForecastContext,ForecastYearPolicy,PreparedForecastYear} from './types';
 import type { Cents, Debt, PlanDocument, PropertyLoan, ValidatedPlan } from '../model/plan';
 import type { Available, Coverage, Issue, RuleProvenance } from '../model/results';
 import { initialTaxState, type HouseholdTaxState } from '../model/tax-state';
@@ -65,12 +65,12 @@ function interruptedTaxState(opening:HouseholdTaxState,year:number,reason:Availa
 }
 
 /** Pure monthly scenario. Eligibility precedes deposits; residual cash remains a signed reserve. */
-export function prepareForecastYear(context:ForecastContext,checkpoint:ForecastCheckpoint):PreparedForecastYear {
+export function prepareForecastYear(context:ForecastContext,checkpoint:ForecastCheckpoint,policy:ForecastYearPolicy):PreparedForecastYear {
   const plan=context.plan,ruleSet=context.rules;
   const decode=(values:Readonly<Record<string,Available<string>>>)=>new Map(Object.entries(values).map(([id,v])=>[id,v.status==='available'?available(new Decimal(v.value)):v]));
   const encode=(values:ReadonlyMap<string,Available<Decimal>>)=>Object.fromEntries([...values].map(([id,v])=>[id,v.status==='available'?available(v.value.toString()):v]));
   const estimates=plan.properties.some(property=>property.aduProject?.taxEstimation?.mode==='simple');
-  const months:MonthlyProjection[]=[],years:ProjectionResult['years'][number][]=[],contributions:ContributionRecord[]=[],contributionSchedules:ProjectionResult['contributionSchedules'][number][]=[],taxStates:ProjectionResult['taxStates'][number][]=[],loanSchedules:ProjectionResult['loanSchedules'][number][]=[],cashSchedules:ProjectionResult['cashSchedules'][number][]=[],allIssues:Issue[]=[],allProvenance:RuleProvenance[]=[];
+  const months:MonthlyProjection[]=[],years:ProjectionResult['years'][number][]=[],contributions:ContributionRecord[]=[],contributionSchedules:ProjectionResult['contributionSchedules'][number][]=[],taxStates:ProjectionResult['taxStates'][number][]=[],loanSchedules:ProjectionResult['loanSchedules'][number][]=[],cashSchedules:ProjectionResult['cashSchedules'][number][]=[],allIssues:Issue[]=policy.kind==='retired'?[...policy.inheritedIssues]:[],allProvenance:RuleProvenance[]=[];
   const range=<T>(recordId:string,year:number,field:string,calculate:()=>T):Available<T>=>{
     try{return available(calculate());}catch(error){
       if(!(error instanceof CalculationRangeError))throw error;
@@ -100,7 +100,7 @@ export function prepareForecastYear(context:ForecastContext,checkpoint:ForecastC
   const streamDefinitions=[...plan.salaries.map(s=>({id:s.id,kind:'salary' as const})),...plan.otherIncome.map(s=>({id:s.id,kind:'other-income' as const})),...plan.expenses.map(s=>({id:s.id,kind:'expense' as const,...(s.propertyId?{propertyId:s.propertyId}:{})})),...(plan.children??[]).map(child=>({id:child.id,kind:'expense' as const})),...purchases.map(property=>({id:property.id,kind:'expense' as const,propertyId:property.id})),...plan.rentals.map(s=>({id:s.id,kind:'rent' as const})),...projects.flatMap(({project,property})=>[...project.costs.map(c=>({id:c.id,kind:'expense' as const,propertyId:property.id})),...project.propertyTax.paymentYears.flatMap(y=>y.payments.map(p=>({id:p.id,kind:'expense' as const,propertyId:property.id})))])].sort((a,b)=>a.kind.localeCompare(b.kind)||a.id.localeCompare(b.id));
   const year=checkpoint.year;
     const issueStart=allIssues.length,opening=taxState;
-    const aduContext=resolveAduYear(plan,year);
+    const aduContext=resolveAduYear(plan,year,policy.kind==='retired'?policy.calendar:undefined);
     const brokerageEvents:BrokerageFundingEvent[]=[...projects.flatMap(({project,property})=>{
       if(project.ownerFunding?.kind!=='taxable-brokerage')return[];
       const accountId=project.ownerFunding.accountId;
@@ -115,7 +115,7 @@ export function prepareForecastYear(context:ForecastContext,checkpoint:ForecastC
     const rsuByAccount=new Map<string,Available<readonly RsuGrantMonth[]>>();
     for(const account of rsuAccounts) {
       const prior=checkpoint.rsuState[account.id];
-      const projected=prior&&prior.status!=='available'?prior:range(account.id,year,'rsu',()=>projectRsuAccounts({...plan,accounts:[account]},{startYear:year,endYear:year,...(prior?.status==='available'?{openingState:prior.value}:{})}));
+      const projected=prior&&prior.status!=='available'?prior:range(account.id,year,'rsu',()=>projectRsuAccounts({...plan,accounts:[account]},{startYear:year,endYear:year,...(prior?.status==='available'?{openingState:prior.value}:{}),...(policy.kind==='retired'?{employmentEndDate:policy.employmentEndDate}:{})}));
       rsuClosing[account.id]=projected.status==='available'?available(projected.value.closingState!):projected;
       const schedule=projected.status==='available'?available(projected.value.months.filter(m=>m.year===year)):projected;
       if(projected.status==='available')allIssues.push(...projected.value.issues.filter(issue=>issue.year===undefined||issue.year===year));
@@ -409,7 +409,7 @@ export function prepareForecastYear(context:ForecastContext,checkpoint:ForecastC
     const annual=allocation?{...summary,cashFlowAllocation:allocation.status==='available'?available(allocation.value.report):allocation}:summary;years.push(annual);allIssues.push(...annual.issues);
   const issues=uniqueIssues(allIssues),coverage:Coverage={completeForModeledScope:years.every(y=>y.coverage.completeForModeledScope)&&!issues.some(i=>i.code==='monetary-overflow'),completeHouseholdLiability:years.every(y=>y.coverage.completeHouseholdLiability)&&!issues.some(i=>i.code==='monetary-overflow'),issues:uniqueIssues(years.flatMap(y=>y.coverage.issues))};
   const projection={planId:plan.id,inputRevision:plan.revision,months,years,contributions,contributionSchedules,taxStates,loanSchedules,cashSchedules,...(rsuAccounts.length?{rsuSchedules}:{}),openingTaxState,closingTaxState:taxState,provenance:uniqueProvenance(allProvenance),coverage,issues};
-  const closing:ForecastCheckpoint={...checkpoint,year:year+1,rothHistoryByAccount,accountExact:encode(accountExact),propertyExact:encode(propertyExact),existingHomeExact:encode(existingHomeExact),brokerageBasis:Object.fromEntries(brokerageBasis),rsuState:rsuClosing,priorMarketComplete:Object.fromEntries(priorMarketComplete),loanClosing:Object.fromEntries(loanClosing),loanOrigin:Object.fromEntries(loanOrigin),taxState,reserve,conditionalOnGap,lastEarmarked};
+  const closing:ForecastCheckpoint={...checkpoint,sourceIssues:policy.kind==='working'?uniqueIssues([...checkpoint.sourceIssues,...coverage.issues]):checkpoint.sourceIssues,year:year+1,rothHistoryByAccount,accountExact:encode(accountExact),propertyExact:encode(propertyExact),existingHomeExact:encode(existingHomeExact),brokerageBasis:Object.fromEntries(brokerageBasis),rsuState:rsuClosing,priorMarketComplete:Object.fromEntries(priorMarketComplete),loanClosing:Object.fromEntries(loanClosing),loanOrigin:Object.fromEntries(loanOrigin),taxState,reserve,conditionalOnGap,lastEarmarked};
   return {projection,closing};
   }};
 }

@@ -33,7 +33,7 @@ export interface RsuGrantMonth {
 export interface RsuExactState {
  readonly accountId:string;readonly grantId:string;readonly eventIndex:number;readonly serviceVested:string;readonly held:string;readonly basisExact?:string;readonly vestedValueExact:string;readonly withholdingExact:string;readonly priorVestedValueRounded:string;readonly priorWithholdingRounded:string;
 }
-export interface RsuRuntimeOptions {readonly startYear:number;readonly endYear:number;readonly openingState?:readonly RsuExactState[]}
+export interface RsuRuntimeOptions {readonly startYear:number;readonly endYear:number;readonly openingState?:readonly RsuExactState[];readonly employmentEndDate?:ISODate}
 export interface RsuProjection {
   readonly closingState?:readonly RsuExactState[];
   readonly months: readonly RsuGrantMonth[];
@@ -156,6 +156,7 @@ export function projectRsuAccounts(plan: PlanDocument, options?:RsuRuntimeOption
         let vested = new Decimal(0), withheld = new Decimal(0);
         while (events[eventIndex] && events[eventIndex]!.date <= monthEnd) {
           const event = events[eventIndex]!, date = parseISODate(event.date);
+          if(options?.employmentEndDate&&event.date>=options.employmentEndDate){eventIndex++;continue;}
           const value = event.shares.mul(priceAt(date.year, date.month, date.day));
           assertMonetaryRange(value);
           serviceVested = serviceVested.plus(event.shares);

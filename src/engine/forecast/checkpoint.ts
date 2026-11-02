@@ -6,7 +6,7 @@ import type {ForecastCheckpoint,ForecastContext} from './types';
 const available=<T>(value:T):Available<T>=>({status:'available',value});
 export function initializeForecast(context:ForecastContext):ForecastCheckpoint {
  const plan=context.plan,purchases=new Set(plan.properties.filter(p=>p.purchaseDate>`${plan.startYear}-01-01`).map(p=>p.id));
- return {schemaVersion:1,year:plan.startYear,sourceBinding:context.sourceBinding,ruleBinding:context.ruleBinding,
+ return {sourceIssues:[],schemaVersion:1,year:plan.startYear,sourceBinding:context.sourceBinding,ruleBinding:context.ruleBinding,
   rothHistoryByAccount:Object.fromEntries(plan.accounts.filter(a=>a.type==='roth-ira'||a.type==='roth-401k').map(a=>[a.id,{openingContributionBasis:{known:false},contributionsSinceStartCents:available(0),conversionLayers:[]}])),
   accountExact:Object.fromEntries(plan.accounts.map(a=>[a.id,available(String(a.openingBalanceCents))])),
   brokerageBasis:Object.fromEntries(plan.accounts.filter(a=>a.type==='taxable-brokerage').map(a=>[a.id,available(a.openingTaxableBasis?.known?a.openingTaxableBasis.value:0)])),

@@ -1,3 +1,5 @@
+import type {ValidatedRetirementCalendar} from '../retirement/calendar';
+interface EstimateRuntime {readonly year:number;readonly calendar:ValidatedRetirementCalendar}
 import {calendarDate} from '../dates';
 import {CalculationRangeError,Decimal,settleCents} from '../money';
 import type {AduBookTreatments,AduFinancing,AduProject,AduTaxPayment,AduTaxSplit,Cents,History,PlanDocument,Property,RentalUnit,TaxBook,ValidatedPlan} from '../model/plan';
@@ -78,10 +80,10 @@ function nextId(ids:Set<string>,base:string):string {
   ids.add(result);return result;
 }
 
-function estimatedTaxSchedule(project:AduProject,unit:RentalUnit,plan:ValidatedPlan,ids:Set<string>):AduProject['propertyTax']['paymentYears'] {
+function estimatedTaxSchedule(project:AduProject,unit:RentalUnit,plan:ValidatedPlan,ids:Set<string>,runtime?:EstimateRuntime):AduProject['propertyTax']['paymentYears'] {
   const existing=project.propertyTax.paymentYears.map(row=>({...row,payments:row.payments.map(payment=>existingPayment(payment,unit))}));
   const rows=new Map(existing.map(row=>[row.year,row]));
-  for(let year=plan.startYear;year<plan.startYear+plan.horizonYears;year++){
+  for(let year=plan.startYear;year<=Math.max(plan.startYear+plan.horizonYears-1,runtime?.year??0);year++){
     const row=rows.get(year);
     // A confirmed zero, explicit incomplete schedule, or entered bill is independent evidence.
     if(row&&(row.complete.known||row.payments.length))continue;
@@ -94,14 +96,14 @@ function estimatedTaxSchedule(project:AduProject,unit:RentalUnit,plan:ValidatedP
   return [...rows.values()].sort((a,b)=>a.year-b.year);
 }
 
-function estimatedFinancing(property:Property,unit:RentalUnit,plan:ValidatedPlan,ids:Set<string>):AduProject {
+function estimatedFinancing(property:Property,unit:RentalUnit,plan:ValidatedPlan,ids:Set<string>,runtime?:EstimateRuntime):AduProject {
   const project=property.aduProject!,original=project.financing;
   if(!original)return project;
   let financing:AduFinancing={...original,proceedsHistoryComplete:known(original.proceedsHistoryComplete,true),rentalInterestQualified:known(original.rentalInterestQualified,true),financingAtRiskQualification:known(original.financingAtRiskQualification,true)};
   const resolved={...project,financing};
   if(project.costs.some(cost=>cost.category!=='building')||!financing.proceedsHistoryComplete.known||!financing.proceedsHistoryComplete.value||!financing.rentalInterestQualified.known||!financing.rentalInterestQualified.value)return resolved;
-  const horizon=Math.min(plan.horizonYears,Math.max(1,Number(unit.availableDate.slice(0,4))-plan.startYear+1));
-  const schedule=calculateAduLoanSchedule({...property,aduProject:resolved},plan.startYear,horizon);
+  const horizon=Math.min(runtime?runtime.year-plan.startYear+1:plan.horizonYears,Math.max(1,Number(unit.availableDate.slice(0,4))-plan.startYear+1));
+  const schedule=calculateAduLoanSchedule({...property,aduProject:resolved},plan.startYear,horizon,runtime?.calendar);
   if(schedule.status!=='available')return resolved;
   let period=project.productionPeriod;
   const candidatePeriod=period.known?period.value:{startDate:project.constructionStartDate,endDate:project.completionDate,uninterrupted:true};
@@ -119,7 +121,7 @@ function estimatedFinancing(property:Property,unit:RentalUnit,plan:ValidatedPlan
 }
 
 /** Derive disposable calculation inputs; saved facts and unrelated unknown history are never changed. */
-export function resolveAduPlanningEstimates(plan:ValidatedPlan):ValidatedPlan {
+export function resolveAduPlanningEstimates(plan:ValidatedPlan,runtime?:EstimateRuntime):ValidatedPlan {
   const ids=identifiers(plan),units=new Map(plan.rentals.map(unit=>[unit.id,unit]));
   let changed=false;
   const properties=plan.properties.map(property=>{
@@ -136,8 +138,8 @@ export function resolveAduPlanningEstimates(plan:ValidatedPlan):ValidatedPlan {
       taxQualifications:Object.fromEntries(books.map(book=>[book,known(project.taxQualifications[book],true)])) as AduProject['taxQualifications'],supportOperatingDeficits:known(project.supportOperatingDeficits,true),
       propertyTax:{...project.propertyTax,addedAssessedValueCents:independentAssessment(project),completedValueEnrollmentYear:project.propertyTax.addedAssessedValueCents.known?project.propertyTax.completedValueEnrollmentYear:Math.min(9999,Number(project.completionDate.slice(0,4))+1),marginalRateBps:known(project.propertyTax.marginalRateBps,estimation.propertyTaxRateBps),originalExpenseExcludesAdu:known(project.propertyTax.originalExpenseExcludesAdu,true)},
     };
-    derived={...derived,propertyTax:{...derived.propertyTax,paymentYears:estimatedTaxSchedule(derived,unit,plan,ids)}};
-    derived=estimatedFinancing({...property,aduProject:derived},unit,plan,ids);
+    derived={...derived,propertyTax:{...derived.propertyTax,paymentYears:estimatedTaxSchedule(derived,unit,plan,ids,runtime)}};
+    derived=estimatedFinancing({...property,aduProject:derived},unit,plan,ids,runtime);
     return {...property,aduProject:derived};
   });
   if(!changed)return plan;

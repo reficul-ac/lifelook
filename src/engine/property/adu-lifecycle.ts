@@ -1,3 +1,4 @@
+import type {ValidatedRetirementCalendar} from '../retirement/calendar';
 import {calendarDate} from '../dates';
 import {CalculationRangeError,Decimal,settleCents} from '../money';
 import type {AduProject,Cents,Property,ValidatedPlan} from '../model/plan';
@@ -35,10 +36,10 @@ export function aduActivityStartDate(plan:ValidatedPlan,property:Property):strin
 function issue(project:AduProject,year:number,code:string,field:string,explanation:string):Issue {
   return {code,recordId:project.id,year,field,severity:'warning',explanation,resolution:'Confirm the complete incremental paid-tax schedule and original-property-only bill, or correct the affected amount.'};
 }
-export function resolveAduYear(plan:ValidatedPlan,year:number):AduYear {
+export function resolveAduYear(plan:ValidatedPlan,year:number,calendar?:ValidatedRetirementCalendar):AduYear {
   const projects:AduProjectYear[]=getAduProjects(plan).map(({property,project,rental})=>{
-    const prefix=year-plan.startYear+1,funding=resolveAduFunding(property,plan.startYear,prefix);
-    const loan=project.financing?calculateAduLoanSchedule(property,plan.startYear,prefix):undefined;
+    const prefix=year-plan.startYear+1,funding=resolveAduFunding(property,plan.startYear,prefix,calendar);
+    const loan=project.financing?calculateAduLoanSchedule(property,plan.startYear,prefix,calendar):undefined;
     const activity=aduActivityStartDate(plan,property),taxYear=project.propertyTax.paymentYears.find(row=>row.year===year);
     const value=calculateAduValueAdded(property),completionMonth=project.completionDate.slice(0,7);
     const wipStart=[project.constructionStartDate,...project.costs.filter(c=>c.amountCents>0).map(c=>c.paymentDate)].sort()[0]!;

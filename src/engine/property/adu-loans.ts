@@ -1,3 +1,4 @@
+import type {ValidatedRetirementCalendar} from '../retirement/calendar';
 import {calendarDate,isValidISODate,isValidYearMonth,yearMonth} from '../dates';
 import {CalculationRangeError,Decimal,MAX_CENTS,settleCents} from '../money';
 import type {Cents,Property} from '../model/plan';
@@ -28,8 +29,8 @@ function requireContract(condition:boolean,message:string):void {if(!condition)t
 function validMoney(value:number):boolean{return Number.isSafeInteger(value)&&value>=0&&value<=MAX_CENTS;}
 function add(map:Map<string,Decimal>,key:string,amount:number|Decimal):void {map.set(key,(map.get(key)??new Decimal(0)).plus(amount));}
 /** Validate the whole declaration, without calculating future cash/debt prefixes. */
-function contract(property:Property,startYear:number,horizonYears:number):ContractMovements {
-  requireContract(Number.isInteger(startYear)&&startYear>=2026&&startYear<=9999&&Number.isInteger(horizonYears)&&horizonYears>=1&&horizonYears<=40&&startYear+horizonYears-1<=9999,'Invalid forecast calendar.');
+function contract(property:Property,startYear:number,horizonYears:number,calendar?:ValidatedRetirementCalendar):ContractMovements {
+  requireContract(Number.isInteger(startYear)&&startYear>=2026&&startYear<=9999&&Number.isInteger(horizonYears)&&horizonYears>=1&&(horizonYears<=40||calendar?.endYear===2100&&startYear+horizonYears-1<=2100)&&startYear+horizonYears-1<=9999,'Invalid forecast calendar.');
   const project=property.aduProject;requireContract(!!project,'A property-owned ADU project is required.');
   requireContract(isValidISODate(project!.completionDate),'Enter a valid completion date.');
   const costs=new Map<string,Decimal>(),draws=new Map<string,Decimal>(),financed=new Map<string,Decimal>();
@@ -70,9 +71,9 @@ function reportError(property:Property,error:unknown,startYear:number):Available
   if(error instanceof ContractError)return unavailable(property,'invalid-adu-financing',error.message,startYear);
   throw error;
 }
-export function resolveAduFunding(property:Property,startYear:number,horizonYears:number):Available<readonly AduFundingMonth[]> {
+export function resolveAduFunding(property:Property,startYear:number,horizonYears:number,calendar?:ValidatedRetirementCalendar):Available<readonly AduFundingMonth[]> {
   try{
-    const movements=contract(property,startYear,horizonYears);let earmarked=0;
+    const movements=contract(property,startYear,horizonYears,calendar);let earmarked=0;
     const months=Array.from({length:horizonYears*12},(_,offset)=>{
       const year=startYear+Math.floor(offset/12),month=offset%12+1,key=yearMonth(year,month);
       const drawCents=settleCents(movements.draws.get(key)??new Decimal(0));
@@ -85,11 +86,11 @@ export function resolveAduFunding(property:Property,startYear:number,horizonYear
     return {status:'available',value:months};
   }catch(error){return reportError(property,error,startYear);}
 }
-export function calculateAduLoanSchedule(property:Property,startYear:number,horizonYears:number):Available<AduLoanSchedule> {
+export function calculateAduLoanSchedule(property:Property,startYear:number,horizonYears:number,calendar?:ValidatedRetirementCalendar):Available<AduLoanSchedule> {
   const project=property.aduProject,loan=project?.financing;
   if(!project||!loan)return unavailable(property,'required-adu-financing','This project has no dedicated financing contract.');
   try{
-    const movements=contract(property,startYear,horizonYears),first=index(loan.firstAmortizingPaymentMonth);
+    const movements=contract(property,startYear,horizonYears,calendar),first=index(loan.firstAmortizingPaymentMonth);
     let balance=0,earmarked=0,payment:number|undefined;
     const months:AduLoanMonth[]=[];
     for(let offset=0;offset<horizonYears*12;offset++){

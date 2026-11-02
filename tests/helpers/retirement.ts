@@ -15,3 +15,17 @@ export function makeRetirementDefinition(overrides: Partial<RetirementAnalysisDe
 export function makeRetirementTarget(overrides: Partial<NewRetirementProperty> = {}): NewRetirementProperty {
   return {id:`target-${++targetId}`,name:'Synthetic rental',use:'rental',purchasePriceCents:60_000_000,appreciationBps:0,annualOperatingCostsCents:720_000,monthlyRentCents:280_000,vacancyBps:0,rentGrowthBps:0,financing:{kind:'cash'},...overrides};
 }
+
+import {createForecastContext} from '../../src/engine/forecast/context';
+import {projectWithCheckpoints} from '../../src/engine/forecast/step-year';
+import {loadRuleSet} from '../../src/engine/rules/registry';
+import {validateRetirementCalendar} from '../../src/engine/retirement/calendar';
+import {createRetirementSnapshot,type RetirementSnapshot} from '../../src/engine/retirement/snapshot';
+export function makeRetirementSnapshot(source:ValidatedPlan=makeRetirementPlan(),definition:ValidatedRetirementAnalysis=makeRetirementDefinition({},source),year:number=source.startYear):RetirementSnapshot {
+ const rules=loadRuleSet(),context=createForecastContext(source,rules),calendar=validateRetirementCalendar(source,year);
+ if(calendar.status!=='available')throw Error(JSON.stringify(calendar.issues));
+ const opening=projectWithCheckpoints(source,rules).checkpoints.find(c=>c.year===year)!;
+ const snapshot=createRetirementSnapshot(context,opening,definition,calendar.value);
+ if(snapshot.status!=='available')throw Error(JSON.stringify(snapshot.issues));
+ return snapshot.value;
+}

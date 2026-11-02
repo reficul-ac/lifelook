@@ -9,8 +9,9 @@ import {postForecastMonths} from './post-month';
 import type {ForecastContext,ForecastCheckpoint,ForecastYearPolicy,ForecastYearStep,ForecastTrace} from './types';
 export function stepForecastYear(context:ForecastContext,opening:ForecastCheckpoint,policy:ForecastYearPolicy):ForecastYearStep {
  if(opening.sourceBinding!==context.sourceBinding||opening.ruleBinding!==context.ruleBinding)throw new RangeError('Forecast checkpoint binding mismatch.');
- if(policy.kind!=='working'||opening.year<context.source.startYear||opening.year>=context.source.startYear+context.source.horizonYears)throw new RangeError('Year is outside the validated working calendar.');
- return postForecastMonths(prepareForecastYear(context,opening));
+ if(policy.kind==='working'&&(opening.year<context.source.startYear||opening.year>=context.source.startYear+context.source.horizonYears))throw new RangeError('Year is outside the validated working calendar.');
+ if(policy.kind==='retired'&&(policy.year!==opening.year||opening.year<policy.calendar.startYear||opening.year>policy.calendar.endYear))throw new RangeError('Year is outside the validated retirement calendar.');
+ return postForecastMonths(prepareForecastYear(policy.kind==='retired'?{...context,plan:policy.plan}:context,opening,policy));
 }
 const unique=<T>(values:readonly T[]):T[]=>[...new Map(values.map(v=>[JSON.stringify(v),v])).values()];
 export function projectWithCheckpoints(source:ValidatedPlan,rules:RuleSet):ForecastTrace {

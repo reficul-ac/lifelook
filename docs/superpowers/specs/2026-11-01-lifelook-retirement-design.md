@@ -2,7 +2,7 @@
 
 Date: 2026-11-01
 
-Status: builder-reviewed design, awaiting user approval; not approved for implementation.
+Status: builder-reviewed design accepted as the planning basis when the user invoked `superpowers:writing-plans` on 2026-11-01. Implementation awaits implementation-plan review and execution-method selection.
 
 ## Intent
 
@@ -56,7 +56,7 @@ Ordinary residential rentals and whole-property transactions are the initial tax
 
 ## Designer calls for review
 
-These make the design concrete; they are proposals rather than previously agreed details:
+These calls made the design concrete and were included in the version presented for approval. They originated as designer proposals rather than the user's initial requirements:
 
 1. Retirement starts on **January 1**. The first candidate uses the plan's opening state; later candidates use the preceding December closing checkpoint.
 2. The annual gross stock target is the chosen percentage of that year's opening stock value **after any retirement transition**, recalculated each year and spread across 12 monthly withdrawals.
@@ -302,4 +302,4 @@ Before presenting this document for approval, check particularly:
 
 Resolve already-answered and minor engineering questions in the document. Bring only material user-owned choices back in one review round, then update the design before requesting approval.
 
-Builder-check outcome: a fresh independent software-engineer reviewer reported **“nothing important left”**. The remaining designer calls are stated above for the user's approval; no implementation plan or product code has been started.
+Builder-check outcome: a fresh independent software-engineer reviewer reported **“nothing important left”**. The user then invoked the writing-plans skill to proceed from this design. Product implementation has not started.

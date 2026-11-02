@@ -28,3 +28,4 @@
 .growth-chart[data-animation="none"] .growth-chart-ghost{display:none}
 @media(max-width:480px){.growth-chart-controls{gap:.5rem}.growth-chart-controls>label{flex:1}.growth-chart-controls>div:last-child{flex-basis:100%}.growth-chart-readout dl{gap:.75rem 1.25rem}}
 @media(prefers-reduced-motion:reduce){.growth-chart *{transition:none!important;animation:none!important}}
+.annual-series-axis-label{color:var(--text-muted,#aab5ae);font-size:.875rem;text-align:center;margin:.25rem 0 .75rem}

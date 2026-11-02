@@ -147,3 +147,6 @@ describe('persistent growth chart',()=>{
   fork.growthChart.showComparison=true;expect(view.growthChart.showComparison).toBe(false);expect(plan).not.toHaveProperty('growthChart');
  });
 });
+it('normalizes an unavailable saved window preference on initial mount',()=>{
+ const value=snapshot([amount(100)]),{root,context}=mountPresentation(value.plan),view:GrowthChartViewState={horizon:5,showComparison:true},binding=mountGrowthChart(root,buildGrowthChartModel(value,2026,view.horizon),{view,context,onSelectYear:()=>{},onViewChange:()=>{}});cleanups.push(binding.dispose,()=>context.disclosures.dispose());expect(view.horizon).toBe('all');expect(within(root).getByRole('button',{name:'All'})).toHaveAttribute('aria-pressed','true');
+});

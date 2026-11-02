@@ -59,13 +59,14 @@ export function resolveDistributionAccess(input:DistributionAccessInput):Availab
  const roth=input.accountKind==='roth-ira'||input.accountKind==='roth-401k';
  if(roth){
   const h=input.rothHistory??{contributionBasis:{known:false},firstContributionYear:{known:false},conversionLayers:[]};
-  qualified=ageQualified&&h.firstContributionYear.known&&year>=h.firstContributionYear.value+rates.rothQualificationYears;
+  const guaranteedClock=h.firstKnownContributionYear!==undefined&&year>=h.firstKnownContributionYear+rates.rothQualificationYears;
+  qualified=ageQualified&&(h.firstContributionYear.known&&year>=h.firstContributionYear.value+rates.rothQualificationYears||guaranteedClock);
   estimated=!!input.rothHistoryEstimated||!h.contributionBasis.known||!h.firstContributionYear.known;
   if(input.rothHistoryEstimated)assumptions.push('Unanswered additional owner Roth contribution basis assumes zero while known contribution basis is preserved.');
-  if(!h.firstContributionYear.known)assumptions.push('Roth five-year qualification is unconfirmed; no qualified-distribution benefit assumed.');
+  if(!h.firstContributionYear.known&&!guaranteedClock)assumptions.push('Roth five-year qualification is unconfirmed; no qualified-distribution benefit assumed.');
   if(!h.contributionBasis.known)assumptions.push('No unestablished recoverable Roth contribution basis assumed.');
   if(input.accountKind==='roth-ira'){
-   let left=gross;const contribution=h.contributionBasis.known?h.contributionBasis.value:0,regular=Math.min(left,contribution);left-=regular;
+   let left=gross;const contribution=h.contributionBasis.known?h.contributionBasis.value:h.estimatedContributionBasisCents??0,regular=Math.min(left,contribution);left-=regular;
    const layers=[...h.conversionLayers].sort((a,b)=>a.year-b.year).map(layer=>({...layer}));
    for(const conversionYear of [...new Set(layers.map(l=>l.year))]){
     if(conversionYear>year)continue;
@@ -79,13 +80,13 @@ export function resolveDistributionAccess(input:DistributionAccessInput):Availab
    }
 
    federal=av(qualified?0:left);california=federal;basisRecovered=av(gross-left);caRecovered=basisRecovered;
-   closingRothHistory={...h,contributionBasis:h.contributionBasis.known?{known:true,value:contribution-regular}:{known:false},conversionLayers:layers};
+   closingRothHistory={...h,contributionBasis:h.contributionBasis.known?{known:true,value:contribution-regular}:{known:false},...(!h.contributionBasis.known?{estimatedContributionBasisCents:contribution-regular}:{}),conversionLayers:layers};
   }else{
    if(input.accountBalanceCents===undefined||input.accountBalanceCents<gross||input.accountBalanceCents<=0)return fail('accountBalanceCents','Designated-Roth pro-rata recovery requires its distribution-date account value.');
    if(h.conversionLayers.some(l=>l.taxableCents>0||l.nontaxableCents>0))return fail('conversionLayers','Designated-Roth in-plan rollover recapture requires a separately supported layer worksheet.');
-   const basis=input.basis?.known?input.basis:h.contributionBasis.known?h.contributionBasis:input.basis??h.contributionBasis,caBasis=input.californiaBasis?.known?input.californiaBasis:basis,proportion=(b:History<Cents>)=>b.known?Math.min(gross,settleCents(new Decimal(b.value).times(gross).div(input.accountBalanceCents!))):0;
+   const basis=input.basis?.known?input.basis:h.contributionBasis.known?h.contributionBasis:input.basis??h.contributionBasis,caBasis=input.californiaBasis?.known?input.californiaBasis:basis,proportion=(b:History<Cents>)=>Math.min(gross,settleCents(new Decimal(b.known?b.value:h.estimatedContributionBasisCents??0).times(gross).div(input.accountBalanceCents!)));
    const recovered=proportion(basis),ca=proportion(caBasis);basisRecovered=av(recovered);caRecovered=av(ca);federal=av(qualified?0:gross-recovered);california=av(qualified?0:gross-ca);
-   closingRothHistory={...h,contributionBasis:basis.known?{known:true,value:basis.value-recovered}:{known:false}};
+   closingRothHistory={...h,contributionBasis:basis.known?{known:true,value:basis.value-recovered}:{known:false},...(!basis.known?{estimatedContributionBasisCents:Math.max(0,(h.estimatedContributionBasisCents??0)-recovered)}:{})};
   }
  }
  const multiply=(amount:Available<Cents>,rate:number,extra:number):Available<Cents>=>!early?av(0):amount.status==='available'?av(settleCents(new Decimal(amount.value).plus(extra).times(rate).div(10000))):amount;

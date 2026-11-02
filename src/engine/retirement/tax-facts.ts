@@ -18,7 +18,7 @@ import {prepareRetirementDispositions} from './disposition-losses';
 export interface RetirementTaxYearInput {
  readonly plan:ValidatedPlan;readonly cash:CashYear;readonly property:PropertyYearFacts;readonly loans:readonly LoanSchedule[];readonly opening:HouseholdTaxState;readonly rules:YearRules;
  readonly distributions:DistributionYearResult;readonly dispositions?:readonly PropertyDispositionTaxFacts[];readonly disposedRentalUnits?:readonly RentalUnit[];readonly scope:'recurring'|'mandatory-excess'|'transition';
- readonly noFederalSaltBenefitForCaliforniaAdditionalTax:boolean;
+ readonly includedTransitionEventIds?:readonly string[];readonly noFederalSaltBenefitForCaliforniaAdditionalTax:boolean;
  readonly generatedRetirementCoverage?:Readonly<{rmdSatisfiedOwnerIds:readonly string[]}>;
 }
 export interface ResolvedRetirementTaxYear extends FixedHouseholdTaxYearInput {readonly acceptedDistributions:DistributionYearResult;readonly taxScope:RetirementTaxYearInput['scope'];readonly facts:ResolvedTaxFacts;readonly assumptions:readonly string[];readonly issues:readonly Issue[]}
@@ -28,9 +28,9 @@ const fields={federal:'federal',california:'california','federal-amt':'federalAm
 /** Generated income precedes eligibility. Accepted distribution basis is never recomputed here. */
 export function buildRetirementTaxFacts(input:RetirementTaxYearInput):ResolvedRetirementTaxYear {
  const {plan,cash,property,rules}=input,workplace=resolveWorkplaceContributions(plan,cash,[],rules),payroll=calculatePayroll(cash,workplace,rules),base=buildPreIraFacts(cash,workplace,property);
- const order={recurring:0,'mandatory-excess':1,transition:2},legs=input.distributions.taxFacts.filter(f=>order[f.purpose]<=order[input.scope]);
+ const order={recurring:0,'mandatory-excess':1,transition:2},legs=input.distributions.taxFacts.filter(f=>order[f.purpose]<=order[input.scope]&&(f.purpose!=='transition'||!input.includedTransitionEventIds||input.includedTransitionEventIds.includes(f.eventId)));
  const distributionAmount=(jurisdiction:'federal'|'california',onlyGains=false)=>combineAvailableCents(legs.filter(f=>!onlyGains||f.incomeCharacter==='long-term-gain').map(f=>mapAvailableCents(f[jurisdiction==='federal'?'federalTaxableCents':'californiaTaxableCents'],v=>f.incomeCharacter==='long-term-gain'?Math.max(0,v):v)));
- const disposals=input.scope==='transition'?input.dispositions??[]:[],prepared=prepareRetirementDispositions(disposals,input.opening,cash.year,rules,new Set(property.rentals.map(r=>r.rentalId)),input.disposedRentalUnits??plan.rentals);
+ const disposals=input.scope==='transition'?(input.dispositions??[]).filter(d=>!input.includedTransitionEventIds||input.includedTransitionEventIds.includes(d.eventId)):[],prepared=prepareRetirementDispositions(disposals,property.adu?.opening??input.opening,cash.year,rules,new Set(property.rentals.map(r=>r.rentalId)),input.disposedRentalUnits??plan.rentals);
  const accepted=input.distributions.closingTaxState,opening:HouseholdTaxState={...prepared.opening,iraBasisByOwner:accepted.iraBasisByOwner,...(accepted.retirementAccountState?{retirementAccountState:accepted.retirementAccountState}:{})};
  const byBook=prepared.income,add=(value:Available<Cents>,book:TaxBook)=>combineAvailableCents([value,distributionAmount(book.startsWith('california')?'california':'federal'),mapIncome(book,'totalCents')]);
  const magiByBook=Object.fromEntries(books.map(book=>[book,combineAvailableCents([add(base.nonRentalFederalAgiCents,book),mapIncome(book,'passiveSignedCents')],v=>sumCents([v[0]!,-v[1]!]))])) as Record<TaxBook,Available<Cents>>;

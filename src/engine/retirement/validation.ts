@@ -28,7 +28,7 @@ export function validateRetirementAnalysis(raw:unknown,source:PlanDocument):{ok:
  const unique=(rows:unknown[],path:string,key:string,visit:(o:Obj,p:string)=>void,keys:readonly string[])=>{const seen=new Set<unknown>();rows.forEach((value,i)=>{const p=`${path}[${i}]`,o=obj(value,p,keys);if(seen.has(o[key]))issue(`${p}.${key}`,'Duplicate record references are not permitted.','duplicate-id');seen.add(o[key]);visit(o,p);});};
  unique(arr(root.existingProperties,'existingProperties'),'existingProperties','propertyId',(o,p)=>{
   ref(o.propertyId,`${p}.propertyId`,propertyIds);choice(o.action,`${p}.action`,['keep','convert-to-rental','sell']);
-  const loans=new Set(source.properties.find(s=>s.id===o.propertyId)?.loans.map(l=>l.id)??[]),seen=new Set<unknown>();
+  const selected=source.properties.find(s=>s.id===o.propertyId),loans=new Set([...(selected?.loans.map(l=>l.id)??[]),...(selected?.aduProject?.financing?[selected.aduProject.financing.id]:[]),...source.debts.filter(d=>d.propertyId===o.propertyId).map(d=>d.id)]),seen=new Set<unknown>();
   arr(o.payoffLoanIds,`${p}.payoffLoanIds`).forEach((id,i)=>{ref(id,`${p}.payoffLoanIds[${i}]`,loans);if(seen.has(id))issue(`${p}.payoffLoanIds`,'A loan can be paid off only once.','duplicate-id');seen.add(id);});
   for(const k of ['payoffFeesCents','salePriceCents'])if(o[k]!==undefined)integer(o[k],`${p}.${k}`);
   if(o.sellingCostBps!==undefined)percent(o.sellingCostBps,`${p}.sellingCostBps`);
@@ -54,11 +54,12 @@ export function validateRetirementAnalysis(raw:unknown,source:PlanDocument):{ok:
  },['propertyId','buildingShareBps','improvementsCents','adjustedBasisByBook','priorDepreciationByBook','homeExclusionEligible','activityId','zero1231Lookback']);
  unique(arr(assumptions.accounts,'assumptions.accounts'),'assumptions.accounts','accountId',(o,p)=>{
   ref(o.accountId,`${p}.accountId`,accountIds);
+  for(const k of ['soleSpouseBeneficiary','inherited'])if(o[k]!==undefined)history(o[k],`${p}.${k}`,bool);
   for(const k of ['taxableBasisCents','californiaBasisCents','rothContributionBasisCents'])if(o[k]!==undefined)history(o[k],`${p}.${k}`,integer);
   if(o.rothFirstContributionYear!==undefined)history(o.rothFirstContributionYear,`${p}.rothFirstContributionYear`,(v,path)=>integer(v,path,1900,9999));
   if(o.separationDate!==undefined)history(o.separationDate,`${p}.separationDate`,date);
   if(o.conversionLayers!==undefined)unique(arr(o.conversionLayers,`${p}.conversionLayers`),`${p}.conversionLayers`,'year',(l,path)=>{integer(l.year,`${path}.year`,1900,9999);integer(l.taxableCents,`${path}.taxableCents`);integer(l.nontaxableCents,`${path}.nontaxableCents`);if(l.californiaTaxableCents!==undefined)integer(l.californiaTaxableCents,`${path}.californiaTaxableCents`,0,typeof l.taxableCents==='number'&&typeof l.nontaxableCents==='number'?l.taxableCents+l.nontaxableCents:MAX_CENTS);},['year','taxableCents','nontaxableCents','californiaTaxableCents']);
- },['accountId','taxableBasisCents','californiaBasisCents','rothContributionBasisCents','rothFirstContributionYear','conversionLayers','separationDate']);
+ },['accountId','soleSpouseBeneficiary','inherited','taxableBasisCents','californiaBasisCents','rothContributionBasisCents','rothFirstContributionYear','conversionLayers','separationDate']);
  unique(arr(assumptions.owners,'assumptions.owners'),'assumptions.owners','ownerId',(o,p)=>{ref(o.ownerId,`${p}.ownerId`,ownerIds);if(o.birthDate!==undefined)history(o.birthDate,`${p}.birthDate`,date);if(o.rmdAgeAssumption!==undefined)history(o.rmdAgeAssumption,`${p}.rmdAgeAssumption`,(v,p)=>choice(v,p,[73,75]));for(const k of ['federalIraBasisCents','californiaIraBasisCents','californiaPre1987BasisCents'])if(o[k]!==undefined)history(o[k],`${p}.${k}`,integer);},['ownerId','birthDate','federalIraBasisCents','californiaIraBasisCents','californiaPre1987BasisCents','rmdAgeAssumption']);
  const commitments=new Set(source.properties.flatMap(p=>[p.id,...(p.aduProject?[p.aduProject.id]:[])]));
  unique(arr(root.commitments,'commitments'),'commitments','recordId',(o,p)=>{ref(o.recordId,`${p}.recordId`,commitments);choice(o.action,`${p}.action`,['continue','exclude']);},['recordId','action']);

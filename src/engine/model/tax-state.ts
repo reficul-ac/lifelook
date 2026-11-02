@@ -7,8 +7,8 @@ export interface AduCapitalBookState {
   readonly nondepreciableBasisCents:Cents;
   readonly recoveryActivated:boolean;
 }
-export interface RetirementIraBasis {readonly federal:History<Cents>;readonly california:History<Cents>;readonly californiaPre1987Basis?:History<Cents>}
-export interface RetirementRothHistory {readonly contributionBasis:History<Cents>;readonly firstContributionYear:History<number>;readonly conversionLayers:readonly {readonly year:number;readonly taxableCents:Cents;readonly nontaxableCents:Cents;readonly californiaTaxableCents?:Cents}[]}
+export interface RetirementIraBasis {readonly estimatedFederalCents?:Cents;readonly estimatedCaliforniaCents?:Cents;readonly federal:History<Cents>;readonly california:History<Cents>;readonly californiaPre1987Basis?:History<Cents>}
+export interface RetirementRothHistory {readonly estimatedContributionBasisCents?:Cents;readonly firstKnownContributionYear?:number;readonly contributionBasis:History<Cents>;readonly firstContributionYear:History<number>;readonly conversionLayers:readonly {readonly year:number;readonly taxableCents:Cents;readonly nontaxableCents:Cents;readonly californiaTaxableCents?:Cents}[]}
 export interface HouseholdTaxState {
   readonly retirementSection1231?:Readonly<Partial<Record<TaxBook,{readonly asOfYear:number;readonly lossVintages:readonly {readonly year:number;readonly amountCents:Cents}[];readonly undatedPriorLossCents:Cents}>>>;
   readonly retirementAccountState?:{readonly iraBasisByOwner:Readonly<Record<string,RetirementIraBasis>>;readonly rothByAccount:Readonly<Record<string,RetirementRothHistory>>};

@@ -13,7 +13,7 @@ export function stepForecastYear(context:ForecastContext,opening:ForecastCheckpo
  if(policy.kind==='working'&&(opening.year<context.source.startYear||opening.year>=context.source.startYear+context.source.horizonYears))throw new RangeError('Year is outside the validated working calendar.');
  if(policy.kind==='retired'&&(policy.year!==opening.year||opening.year<policy.calendar.startYear||opening.year>policy.calendar.endYear))throw new RangeError('Year is outside the validated retirement calendar.');
  let runtime=policy.kind==='retired'?{...context,plan:policy.plan}:context;
- if(policy.kind==='retired'&&opening.retirementInventory){const result=validatePlan({...runtime.plan,...opening.retirementInventory});if(!result.ok)throw new Error(`Invalid active retirement inventory: ${JSON.stringify(result.issues)}`);runtime={...runtime,plan:result.plan};}
+ if(policy.kind==='retired'&&(opening.retirementInventory||opening.retirementAccounts)){const result=validatePlan({...runtime.plan,...opening.retirementInventory,...(opening.retirementAccounts?{accounts:opening.retirementAccounts}:{})});if(!result.ok)throw new Error(`Invalid active retirement inventory: ${JSON.stringify(result.issues)}`);runtime={...runtime,plan:result.plan};}
  return postForecastMonths(prepareForecastYear(runtime,opening,policy));
 }
 const unique=<T>(values:readonly T[]):T[]=>[...new Map(values.map(v=>[JSON.stringify(v),v])).values()];

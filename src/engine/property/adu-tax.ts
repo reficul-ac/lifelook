@@ -46,8 +46,8 @@ function unitQualification(project:AduProject,unit:RentalUnit,year:number):Avail
     const answer=unit.qualifications[key];return qualification(project,year,`qualifications.${key}`,key==='advancedBasisAdjustments'&&answer.known?{known:true,value:!answer.value}:answer);
   });return combine(checks,()=>true as const);
 }
-interface OperatingCash {readonly paid:readonly Cents[];readonly deductible:readonly Cents[];readonly nondeductible:readonly Cents[];readonly capital:readonly Cents[];readonly rent:readonly Cents[]}
-function operatingCash(plan:ValidatedPlan,property:Property,unit:RentalUnit,year:number):Available<OperatingCash>{
+export interface OperatingCash {readonly paid:readonly Cents[];readonly deductible:readonly Cents[];readonly nondeductible:readonly Cents[];readonly capital:readonly Cents[];readonly rent:readonly Cents[]}
+export function resolveAduOperatingCash(plan:ValidatedPlan,property:Property,unit:RentalUnit,year:number):Available<OperatingCash>{
   const project=property.aduProject!,originalIds=new Set(project.sharedExpenseOverrides.map(o=>o.expenseId));
   const expenses=plan.expenses.filter(e=>e.rentalId===unit.id||unit.availableDate<=`${year}-12-31`&&originalIds.has(e.id));
   let cash:CashYear;
@@ -166,7 +166,7 @@ export function prepareAduTaxYear(plan:ValidatedPlan,context:AduYear,opening:Hou
   for(const {property,project,rental:unit} of getAduProjects(plan)){
     if(!aduTaxActivityStarted(plan,property,rules.year))continue;
     const projectContext=context.projects.find(p=>p.projectId===project.id)!;
-    const operating=operatingCash(plan,property,unit,rules.year);
+    const operating=resolveAduOperatingCash(plan,property,unit,rules.year);
     const resolved=Object.fromEntries(books.map(book=>{
       let result:BookPrepared;
       try{result=prepareBook(plan,project,unit,projectContext,book,opening,rules,operating);}catch(error){if(!(error instanceof CalculationRangeError))throw error;const missing=failure(project,rules.year,`aduProjects.${book}`,'monetary-overflow',error.message);result={capital:missing,opening:missing,depreciation:missing,facts:missing,risk:missing,eligibleInterest:missing};}

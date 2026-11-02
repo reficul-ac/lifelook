@@ -18,7 +18,7 @@ export interface RetirementPropertyAssumption {
  readonly homeExclusionEligible?:History<boolean>;readonly activityId?:string;readonly zero1231Lookback?:History<boolean>;
 }
 export interface RetirementAccountAssumption {
- readonly accountId:string;readonly taxableBasisCents?:History<Cents>;readonly californiaBasisCents?:History<Cents>;
+ readonly accountId:string;readonly soleSpouseBeneficiary?:History<boolean>;readonly inherited?:History<boolean>;readonly taxableBasisCents?:History<Cents>;readonly californiaBasisCents?:History<Cents>;
  readonly rothContributionBasisCents?:History<Cents>;readonly rothFirstContributionYear?:History<number>;
  readonly conversionLayers?:readonly Readonly<{year:number;taxableCents:Cents;nontaxableCents:Cents}>[];
  readonly separationDate?:History<ISODate>;

@@ -29,3 +29,8 @@ export function makeRetirementSnapshot(source:ValidatedPlan=makeRetirementPlan()
  if(snapshot.status!=='available')throw Error(JSON.stringify(snapshot.issues));
  return snapshot.value;
 }
+import {makeAduPlan,makeAduTreatments} from './adu';
+export function makeDrawnRetirementAduSource(overrides:Partial<PlanDocument>={}):ValidatedPlan {
+ const base=makeAduPlan({horizonYears:4,openingCashCents:0,accounts:makeRetirementPlan().accounts,...overrides},{completionDate:'2028-01-31',ownerFunding:{kind:'taxable-brokerage',accountId:'stocks'},costs:[{id:'stage',name:'Stage',paymentDate:'2028-01-15',amountCents:15_000_000,category:'building',treatments:makeAduTreatments(15_000_000)}],financing:{id:'construction-loan',name:'Construction loan',aprBps:0,firstAmortizingPaymentMonth:'2028-02',termMonths:120,collateralPropertyId:'home',draws:[{id:'advance',month:'2027-12',amountCents:10_000_000,costAllocations:[{costId:'stage',amountCents:10_000_000}]}],interestTaxRows:[],proceedsHistoryComplete:{known:true,value:true},rentalInterestQualified:{known:true,value:true},financingAtRiskQualification:{known:true,value:true}}});
+ return mustValidate({...base,properties:base.properties.map(p=>({...p,aduProject:{...p.aduProject!,propertyTax:{...p.aduProject!.propertyTax,paymentYears:[2026,2027,2028,2029,2030].map(year=>({year,complete:{known:true as const,value:true},payments:[]}))}}})),rentals:base.rentals.map(r=>({...r,availableDate:'2028-02-01',rentStartDate:'2028-03-01'}))});
+}

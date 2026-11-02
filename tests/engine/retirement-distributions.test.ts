@@ -79,3 +79,12 @@ it('keeps gross cash but locates an invalid year-end IRA value',()=>{
  const fact=resolveRetirementDistributions(setup).taxFacts[0]!;
  expect(fact.grossCents).toEqual({status:'available',value:3000000});expect(fact.federalTaxableCents.status).toBe('needs-data');
 });
+it('uses monthly growth before accepted withdrawals and keeps reinvestment basis separate',()=>{
+ const result=resolveRetirementDistributions({...input([broker()],[leg('broker',1_000_000)]),growthFactorsByAccount:{broker:['1.1',...Array(11).fill('1')]},taxableDeposits:[{accountId:'broker',date:'2026-01-01',amountCents:1_000_000}]});
+ expect(result.taxFacts[0]!.basisConsumedCents).toEqual({status:'available',value:578_512});expect(result.closingAccounts[0]).toMatchObject({balanceExact:'11100000',basis:{known:true,value:6_421_488}});
+ expect(result.accountMonths?.[0]?.find(a=>a.accountId==='broker')).toMatchObject({openingCents:{status:'available',value:10_000_000},contributionCents:{status:'available',value:1_000_000},growthCents:{status:'available',value:1_100_000},withdrawalCents:{status:'available',value:1_000_000},closingCents:{status:'available',value:11_100_000}});
+});
+it('uses the accepted growth-adjusted year-end IRA denominator when resolving the complete inventory',()=>{
+ const result=resolveRetirementDistributions({...input([broker({accountId:'ira',type:'traditional-ira',balanceExact:'12000000',basis:{known:false}})],[leg('ira',3_000_000)]),growthFactorsByAccount:{ira:['1.1',...Array(11).fill('1')]},resolveCompleteIraInventory:true,iraBasisByOwner:{'owner-a':{federal:{known:true,value:1_500_000},california:{known:true,value:1_500_000}}}});
+ expect(result.taxFacts[0]!.basisRecoveredCents).toEqual({status:'available',value:340_909});expect(result.closingAccounts[0]!.balanceExact).toBe('10200000');
+});

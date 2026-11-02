@@ -1,7 +1,7 @@
 import { calendarDate, daysInMonth, parseISODate } from '../dates';
 import { effectiveMonthlyRate } from '../growth';
 import { CalculationRangeError, Decimal, assertMonetaryRange, settleCents } from '../money';
-import type { Cents, History, ISODate, PlanDocument, RsuGrant } from '../model/plan';
+import type { Account, Cents, History, ISODate, PlanDocument, RsuGrant } from '../model/plan';
 import type { Issue } from '../model/results';
 
 export interface RsuVestingEvent {
@@ -31,7 +31,7 @@ export interface RsuGrantMonth {
 }
 
 export interface RsuExactState {
- readonly accountId:string;readonly grantId:string;readonly eventIndex:number;readonly serviceVested:string;readonly held:string;readonly basisExact?:string;readonly vestedValueExact:string;readonly withholdingExact:string;readonly priorVestedValueRounded:string;readonly priorWithholdingRounded:string;
+ readonly accountId:string;readonly grantId:string;readonly eventIndex:number;readonly serviceVested:string;readonly held:string;readonly basisExact?:string;readonly estimatedBasisExact?:string;readonly vestedValueExact:string;readonly withholdingExact:string;readonly priorVestedValueRounded:string;readonly priorWithholdingRounded:string;
 }
 export interface RsuRuntimeOptions {readonly startYear:number;readonly endYear:number;readonly openingState?:readonly RsuExactState[];readonly employmentEndDate?:ISODate}
 export interface RsuProjection {
@@ -81,21 +81,13 @@ export function rsuVestingEvents(grant: RsuGrant): readonly RsuVestingEvent[] {
   return exactVestingEvents(grant).map(event => ({ date: event.date, shares: event.shares.toNumber() }));
 }
 
-/** Independent service vesting and held assets; deferred tax timing stays explicit. */
-export function projectRsuAccounts(plan: PlanDocument, options?:RsuRuntimeOptions): RsuProjection {
-  const startYear=options?.startYear??plan.startYear,endYear=options?.endYear??plan.startYear+plan.horizonYears-1;
-  const closingState:RsuExactState[]=[];
-  const months: RsuGrantMonth[] = [], issues: Issue[] = [];
-  const paperOverflowIssues = new Map<string, Issue>();
-  const forecastStart = calendarDate(plan.startYear, 1, 1);
-  for (const account of plan.accounts) {
-    if (account.type !== 'rsu' || !account.rsu) continue;
-    // Validate the same effective-growth range as other investment accounts.
-    effectiveMonthlyRate(account.annualGrowthBps);
+/** Reuse the anchored per-share price path when retired held shares are sold. */
+export function rsuPriceAt(startYear:number,account:Account):(year:number,month:number,day?:number)=>Decimal {
+ if(!account.rsu)throw new RangeError('RSU price history is required.');
     const annualFactor = new Decimal(1).plus(new Decimal(account.annualGrowthBps).div(10000));
     const openingPrice = new Decimal(account.rsu.currentSharePriceCents);
     const elapsedMonthsAt = (year: number, month: number, day = 1): Decimal =>
-      new Decimal((year - plan.startYear) * 12 + month - 1)
+      new Decimal((year - startYear) * 12 + month - 1)
         .plus(day === 1 ? 0 : new Decimal(day - 1).div(daysInMonth(year, month)));
     const priceTargets = (account.rsu.priceTargets ?? []).map(target => {
       const date = parseISODate(target.date);
@@ -122,6 +114,22 @@ export function projectRsuAccounts(plan: PlanDocument, options?:RsuRuntimeOption
       return segmentStartPrice.mul(annualFactor.pow(elapsedMonths.minus(segmentStartMonths).div(12)));
     };
 
+ return priceAt;
+}
+
+/** Independent service vesting and held assets; deferred tax timing stays explicit. */
+export function projectRsuAccounts(plan: PlanDocument, options?:RsuRuntimeOptions): RsuProjection {
+  const startYear=options?.startYear??plan.startYear,endYear=options?.endYear??plan.startYear+plan.horizonYears-1;
+  const closingState:RsuExactState[]=[];
+  const months: RsuGrantMonth[] = [], issues: Issue[] = [];
+  const paperOverflowIssues = new Map<string, Issue>();
+  const forecastStart = calendarDate(plan.startYear, 1, 1);
+  for (const account of plan.accounts) {
+    if (account.type !== 'rsu' || !account.rsu) continue;
+    // Validate the same effective-growth range as other investment accounts.
+    effectiveMonthlyRate(account.annualGrowthBps);
+    const priceAt=rsuPriceAt(plan.startYear,account);
+
     for (const [grantIndex, grant] of account.rsu.grants.entries()) {
       const deferred = grant.taxTreatment === 'deferred';
       const total = awardedShares(grant), events = exactVestingEvents(grant);
@@ -142,13 +150,13 @@ export function projectRsuAccounts(plan: PlanDocument, options?:RsuRuntimeOption
         eventIndex++;
       }
       let held = new Decimal(grant.openingHeldShares);
-      let basisExact = grant.openingBasis.known ? new Decimal(grant.openingBasis.value) : undefined;
+      let basisExact = grant.openingBasis.known ? new Decimal(grant.openingBasis.value) : undefined,estimatedBasisExact=new Decimal(0);
       let vestedValueExact = new Decimal(0), withholdingExact = new Decimal(0);
       let priorVestedValueRounded = new Decimal(0), priorWithholdingRounded = new Decimal(0);
       const withholdingFraction = new Decimal(grant.withholdingBps).div(10000);
 
       const carried=options?.openingState?.find(s=>s.accountId===account.id&&s.grantId===grant.id);
-      if(carried){eventIndex=carried.eventIndex;serviceVested=new Decimal(carried.serviceVested);held=new Decimal(carried.held);basisExact=carried.basisExact===undefined?undefined:new Decimal(carried.basisExact);vestedValueExact=new Decimal(carried.vestedValueExact);withholdingExact=new Decimal(carried.withholdingExact);priorVestedValueRounded=new Decimal(carried.priorVestedValueRounded);priorWithholdingRounded=new Decimal(carried.priorWithholdingRounded);}
+      if(carried){eventIndex=carried.eventIndex;serviceVested=new Decimal(carried.serviceVested);held=new Decimal(carried.held);basisExact=carried.basisExact===undefined?undefined:new Decimal(carried.basisExact);estimatedBasisExact=new Decimal(carried.estimatedBasisExact??0);vestedValueExact=new Decimal(carried.vestedValueExact);withholdingExact=new Decimal(carried.withholdingExact);priorVestedValueRounded=new Decimal(carried.priorVestedValueRounded);priorWithholdingRounded=new Decimal(carried.priorWithholdingRounded);}
       for (let offset = 0; offset < (endYear-startYear+1) * 12; offset++) {
         const year = startYear + Math.floor(offset / 12), month = offset % 12 + 1;
         const monthEnd = calendarDate(year, month, daysInMonth(year, month));
@@ -168,7 +176,7 @@ export function projectRsuAccounts(plan: PlanDocument, options?:RsuRuntimeOption
             withheld = withheld.plus(sold);
             held = held.plus(retained);
             withholdingExact = withholdingExact.plus(value.mul(withholdingFraction));
-            if (basisExact !== undefined) basisExact = basisExact.plus(value.mul(new Decimal(1).minus(withholdingFraction)));
+            if (basisExact !== undefined) basisExact = basisExact.plus(value.mul(new Decimal(1).minus(withholdingFraction)));else estimatedBasisExact=estimatedBasisExact.plus(value.mul(new Decimal(1).minus(withholdingFraction)));
           }
           eventIndex++;
         }
@@ -217,7 +225,7 @@ export function projectRsuAccounts(plan: PlanDocument, options?:RsuRuntimeOption
           basis: basisExact === undefined ? { known: false } : { known: true, value: settleCents(basisExact) },
         });
       }
-      closingState.push({accountId:account.id,grantId:grant.id,eventIndex,serviceVested:serviceVested.toString(),held:held.toString(),...(basisExact===undefined?{}:{basisExact:basisExact.toString()}),vestedValueExact:vestedValueExact.toString(),withholdingExact:withholdingExact.toString(),priorVestedValueRounded:priorVestedValueRounded.toString(),priorWithholdingRounded:priorWithholdingRounded.toString()});
+      closingState.push({accountId:account.id,grantId:grant.id,eventIndex,serviceVested:serviceVested.toString(),held:held.toString(),...(basisExact===undefined?{estimatedBasisExact:estimatedBasisExact.toString()}:{basisExact:basisExact.toString()}),vestedValueExact:vestedValueExact.toString(),withholdingExact:withholdingExact.toString(),priorVestedValueRounded:priorVestedValueRounded.toString(),priorWithholdingRounded:priorWithholdingRounded.toString()});
     }
   }
   return { months, issues,...(options?{closingState}:{}) };

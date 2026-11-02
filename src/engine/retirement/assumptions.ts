@@ -8,6 +8,10 @@ export function resolveRetirementAssumptions(source:ValidatedPlan,definition:Val
  const facts:RetirementAssumptionFact[]=[];
  for(const account of source.accounts){
   const override=definition.assumptions.accounts.find(a=>a.accountId===account.id);
+  if(account.type==='traditional-ira'||account.type==='traditional-401k'){
+   const sole=override?.soleSpouseBeneficiary;facts.push({recordId:account.id,field:'soleSpouseBeneficiary',value:sole?.known?sole.value:false,origin:'estimate',explanation:'RMDs use the Uniform Lifetime Table unless an eligible younger sole-spouse beneficiary is explicitly modeled.'});
+   const inherited=override?.inherited;facts.push({recordId:account.id,field:'inherited',value:inherited?.known?inherited.value:false,origin:'estimate',explanation:'Original-owner lifetime distribution rules assumed; inherited accounts need a separate model.'});
+  }
   if(account.type==='taxable-brokerage'){
    const history=account.openingTaxableBasis,estimate=override?.taxableBasisCents;
    facts.push({recordId:account.id,field:'taxableBasisCents',value:history?.known?history.value:estimate?.known?estimate.value:0,origin:history?.known?'entered-history':'estimate',explanation:history?.known?'Entered opening investment basis.':'Unanswered investment basis uses the retirement override or conservative zero-basis estimate.'});

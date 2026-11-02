@@ -52,3 +52,8 @@ it('carries known new Roth contributions separately from unanswered opening hist
  const trace=projectWithCheckpoints(source,rules);
  expect(trace.checkpoints[1]!.rothHistoryByAccount.roth).toMatchObject({openingContributionBasis:{known:false},contributionsSinceStartCents:{status:'available',value:1200},conversionLayers:[]});
 });
+it('rejects malformed retirement account, basis and known-clock records before resuming',()=>{
+ const source=makeRetirementPlan(),context=createForecastContext(source,rules),opening=initializeForecast(context);
+ const invalid=[{...opening,retirementAccountBalances:[{accountId:'stocks',ownerId:'other-owner',type:'traditional-ira',balanceExact:'Infinity',basis:{known:true,value:-1}}]}, {...opening,taxState:{...opening.taxState,retirementAccountState:{iraBasisByOwner:{'owner-a':{federal:{known:true,value:-1},california:{known:false}}},rothByAccount:{}}}}, {...opening,rothHistoryByAccount:{stocks:{openingContributionBasis:{known:false},contributionsSinceStartCents:{status:'available',value:-1},conversionLayers:[],firstKnownContributionYear:99999}}}];
+ for(const checkpoint of invalid)expect(restoreForecastCheckpoint(context,JSON.stringify(checkpoint)).status).toBe('unsupported-case');
+});

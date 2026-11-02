@@ -4,7 +4,7 @@ import {element,formatCents} from './issues';
 import '../styles/growth-chart.css';
 
 export type AnnualChartWindow=5|10|15|'all';
-export interface AnnualSeriesChartPoint {readonly year:number;readonly values:Readonly<Record<string,Available<Cents>>>}
+export interface AnnualSeriesChartPoint {readonly year:number;readonly values:Readonly<Record<string,Available<Cents>>>;readonly note?:string}
 export interface AnnualSeriesChartModel {
  readonly title:string;readonly ariaLabel:string;readonly help:string;readonly description:string;readonly xAxisLabel:string;readonly yearLabel:string;readonly windowLabel:string;readonly comparisonLabel:string;readonly emptyLabel:string;readonly sourceLabel:string;
  readonly availableYears:readonly number[];readonly selectedYear:number;readonly window:AnnualChartWindow;readonly availableWindows:readonly AnnualChartWindow[];readonly showComparison:boolean;readonly canCompare:boolean;readonly status:'complete'|'pending';
@@ -60,7 +60,7 @@ export function mountAnnualSeriesChart(root:HTMLElement,initial:AnnualSeriesChar
 
  function syncControls():void {
   for(const [horizon,button]of horizonButtons){button.hidden=!model.availableWindows.includes(horizon);button.setAttribute('aria-pressed',String(selectedWindow===horizon));}
-  comparisonSwitch.update(showComparison);comparisonSwitch.input.disabled=!model.canCompare;
+  switchHost.hidden=!model.comparisonLabel;const caption=switchHost.querySelector('label > span');if(caption)caption.textContent=model.comparisonLabel;comparisonSwitch.input.dataset.fieldLabel=model.comparisonLabel;comparisonSwitch.update(showComparison);comparisonSwitch.input.disabled=!model.canCompare;
   for(const series of model.series){const node=seriesNodes.get(series.id)!;node.group.setAttribute('visibility',series.lineStyle==='solid'||model.canCompare&&showComparison?'visible':'hidden');node.label.hidden=series.lineStyle==='dashed'&&(!model.canCompare||!showComparison);}
  }
  function syncModelControls():void {
@@ -129,9 +129,9 @@ export function mountAnnualSeriesChart(root:HTMLElement,initial:AnnualSeriesChar
   for(const series of model.series){const dot=seriesNodes.get(series.id)!.dot,value=point.values[series.id];dot.setAttribute('visibility',value?.status==='available'&&(series.lineStyle==='solid'||model.canCompare&&showComparison)?'visible':'hidden');if(value?.status==='available'){dot.setAttribute('cx',String(geometry.x(point.year)));dot.setAttribute('cy',String(geometry.y(value.value)));}}
   const selectedGeneration=generation,isCurrent=()=>!disposed&&generation===selectedGeneration;
   if(options.renderReadout){options.renderReadout(readout,point,isCurrent);return;}
-  const list=element('dl');for(const series of model.series){if(series.lineStyle==='dashed'&&(!model.canCompare||!showComparison))continue;const row=element('div'),value=point.values[series.id];row.append(element('dt',`${series.label} · ${point.year}`),element('dd',value?.status==='available'?formatCents(value.value):value?.status==='unsupported-case'?'Unsupported':'Needs data'));list.append(row);}readout.append(list);
+  const list=element('dl');for(const series of model.series){if(series.lineStyle==='dashed'&&(!model.canCompare||!showComparison))continue;const row=element('div'),value=point.values[series.id];row.append(element('dt',`${series.label} · ${point.year}`),element('dd',value?.status==='available'?formatCents(value.value):value?.status==='unsupported-case'?'Unsupported':'Needs data'));list.append(row);}readout.append(list);if(point.note)readout.append(element('p',point.note));
  }
- function announce():void {const point=model.points.find(point=>point.year===selectedYear),value=point?.values[model.series[0]?.id??''];if(point)live.textContent=`${point.year}: ${value?.status==='available'?formatCents(value.value):value?.status==='unsupported-case'?'Unsupported':'Needs data'}. ${model.sourceLabel}`;}
+ function announce():void {const point=model.points.find(point=>point.year===selectedYear),value=point?.values[model.series[0]?.id??''];if(point)live.textContent=`${point.year}: ${value?.status==='available'?formatCents(value.value):value?.status==='unsupported-case'?'Unsupported':'Needs data'}. ${model.sourceLabel}${point.note?` · ${point.note}`:''}`;}
  function choose(year:number,committed:boolean):void {
   if(disposed||!model.points.length)return;
   const point=model.points.reduce((best,point)=>Math.abs(point.year-year)<Math.abs(best.year-year)?point:best,model.points[0]!);

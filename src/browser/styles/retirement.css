@@ -1,0 +1,16 @@
+.retirement-report,.retirement-allocation,.retirement-report>div{min-width:0}
+.retirement-report{display:grid;gap:1.5rem}
+.retirement-report h2,.retirement-report h3{font-weight:500}
+.retirement-totals dl,.retirement-allocation>dl{display:flex;flex-wrap:wrap;gap:1rem 2rem}
+.retirement-report dt{color:var(--text-muted);font-size:.875rem}
+.retirement-report dd{margin:.25rem 0 .75rem;font-variant-numeric:tabular-nums}
+.retirement-totals dl>dt:first-child+dd{font-size:2rem}
+.retirement-allocation-bar{display:flex;min-height:1rem;border-radius:.5rem;overflow:hidden;gap:2px}
+.retirement-allocation-bar>span{min-width:0;flex-basis:0}
+.retirement-allocation figure{margin:1rem 0}
+.retirement-allocation figcaption{font-size:.875rem;color:var(--text-muted);margin-top:.5rem}
+.retirement-asset-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr));gap:1rem}
+.retirement-asset-cards article{min-width:0;padding:1rem;border:1px solid var(--border);border-radius:.75rem}
+.retirement-report .projection-table-wrap{max-width:100%;overflow:auto}
+.retirement-report [data-selected="true"]{background:var(--surface-raised,var(--surface))}
+.retirement-report summary{cursor:pointer;min-height:44px;align-content:center}

@@ -1,0 +1,16 @@
+import {afterEach,expect,it,vi} from 'vitest';
+import {fireEvent,within} from '@testing-library/dom';
+import {mountRetirementReport} from '../../src/browser/views/retirement-report';
+import {buildRetirementReportModel} from '../../src/browser/retirement-report-model';
+import {retirementReportFixture} from '../helpers/retirement-report';
+const cleanups:(()=>void)[]=[];afterEach(()=>{cleanups.splice(0).forEach(fn=>fn());document.body.replaceChildren();vi.unstubAllGlobals();});
+function mount(){const {report,selection}=retirementReportFixture(),root=document.createElement('div');document.body.append(root);const binding=mountRetirementReport(root,buildRetirementReportModel(report,2099,selection));cleanups.push(binding.dispose);return {root,binding,report,selection};}
+it('renders distinct accessible candidate and calendar charts, exact totals and matching selected allocation',()=>{
+ const {root}=mount();expect(within(root).getByRole('img',{name:'Annual after-tax income by candidate retirement year'})).toBeVisible();expect(root.querySelector('[data-retirement-path]')).toHaveTextContent('Income after retiring in 2099, through 2100');expect(root.querySelector('[data-retirement-calendar-year="2100"]')).not.toBeNull();expect(root.querySelector('[data-retirement-totals]')).toHaveTextContent('$26,040.00');expect(root.querySelector('[data-retirement-allocation]')).toHaveTextContent('$600,000.00');expect(root.querySelector('[data-retirement-allocation]')).toHaveTextContent('$480,000.00');expect(root).toHaveTextContent('Planning estimates');expect(root).toHaveTextContent('Best of modeled strategies');
+});
+it('emits view-only candidate selection and retains chart focus on cached model updates',()=>{
+ const {root,binding,report,selection}=mount(),chosen=vi.fn();root.addEventListener('retirement-select-year',chosen);const chart=within(root).getByRole('img',{name:'Annual after-tax income by candidate retirement year'});chart.focus();fireEvent.keyDown(chart,{key:'End'});expect(chosen.mock.calls[0]![0].detail).toEqual({kind:'candidate',year:2100});binding.update(buildRetirementReportModel(report,2100,{...selection,candidateYear:2100,calendarYear:2100}));expect(chart).toHaveFocus();expect(root.querySelector('[data-retirement-allocation]')).toHaveTextContent('Allocation updating');expect(root.querySelector('[data-retirement-selected-year]')).toHaveTextContent('2100');
+});
+it('keeps tax and calendar disclosures open across updates and makes detached handlers inert',()=>{
+ const {root,binding,report,selection}=mount(),path=root.querySelector<HTMLDetailsElement>('[data-retirement-path]')!;path.open=true;const tax=root.querySelector<HTMLDetailsElement>('[data-report-key="retirement-tax"]')!;tax.open=true;const select=within(root).getByLabelText('Retirement year');select.focus();binding.update(buildRetirementReportModel(report,2099,selection));expect(root.querySelector('[data-retirement-path]')).toBe(path);expect(path.open).toBe(true);expect(root.querySelector('[data-report-key="retirement-tax"]')).toBe(tax);expect(tax.open).toBe(true);expect(select).toHaveFocus();const chosen=vi.fn();root.addEventListener('retirement-select-year',chosen);binding.dispose();fireEvent.keyDown(within(root).getByRole('img',{name:'Annual after-tax income by candidate retirement year'}),{key:'End'});expect(chosen).not.toHaveBeenCalled();
+});

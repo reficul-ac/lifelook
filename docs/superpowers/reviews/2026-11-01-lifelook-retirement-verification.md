@@ -21,8 +21,11 @@ Initial Chromium145.0.7632.6 run:40 candidate years2061–2100, input feedback32
 - Initial real Chromium acceptance:7/10 passed. Two test-only selector/disclosure mistakes were corrected; the third failure was the reproduced320px text overflow fixed above. Six UI appearance snapshots were refreshed after comparing the intentional Retirement navigation addition; no financial reference expectation changed.
 - `CI=1 TZ=UTC npm run check`: typecheck,139 files/2,171 tests and production build passed. Browser phase78/83 passed initially: two intentional navigation snapshot differences plus three WebKit startup failures from inherited Snap GIO libraries. Both themes' six snapshots were inspected/refreshed; the paused endpoint differed only by a few rasterized marker pixels in addition to navigation.
 - `CI=1 env -u GIO_MODULE_DIR TZ=UTC npm run test:e2e -- tests/e2e/ui-appearance.spec.ts tests/e2e/date-controls.spec.ts --project=chromium --project=webkit-controls`:8/8 passed without snapshot-update mode. This reconciles all five UTC failures. No runtime code changed after the full UTC test/build run.
-- Final America/Los_Angeles full checks and fresh whole-branch review are recorded below when complete.
+- `CI=1 env -u GIO_MODULE_DIR` with `TZ=America/Los_Angeles npm run check && git diff --check`: passed in full:139 files/2,171 tests, typecheck, production build,83/83 Chromium/targeted-WebKit browser cases, clean whitespace. Task17 completion records `a87d6e5..da0da0e`.
+- Fresh whole-branch review is recorded below when complete.
 
 ## Platform scope
 
 Playwright uses desktop Chromium with touch emulation and the repository's targeted WebKit date-controls project. This does not claim physical-device or full Safari retirement-workflow certification. Local preview/browser execution needs sandbox escalation. The inherited VS Code Snap `GIO_MODULE_DIR` makes WebKit load an incompatible Snap `libpthread` (`__libc_pthread_init`, `GLIBC_PRIVATE`); an isolated HTML/date-input probe reproduces it. Removing only that variable for the test process fixes WebKit. No libraries, system configuration or application code were changed for this workaround. The production build reports its existing chunk-size advisory; it is not a failed check.
+
+Final Los Angeles observation: input feedback 21.3ms; comparison 105342.2ms; selected detail 2085ms; Chromium145.0.7632.6;40 candidates through2100; navigation cancellation verified.

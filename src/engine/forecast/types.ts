@@ -1,4 +1,4 @@
-import type {Cents,History,ValidatedPlan} from '../model/plan';
+import type {Cents,History,ValidatedPlan,PlanDocument} from '../model/plan';
 import type {ValidatedRetirementCalendar} from '../retirement/calendar';
 import type {Available,Issue} from '../model/results';
 import type {HouseholdTaxState} from '../model/tax-state';
@@ -8,7 +8,9 @@ import type {OpeningLoanProvenance} from '../property/loans';
 import type {RuleSet} from '../rules/types';
 export interface ForecastContext {readonly source:ValidatedPlan;readonly plan:ValidatedPlan;readonly rules:RuleSet;readonly sourceBinding:string;readonly ruleBinding:string}
 export interface ForecastRothHistory {readonly openingContributionBasis:History<Cents>;readonly contributionsSinceStartCents:Available<Cents>;readonly conversionLayers:readonly {readonly year:number;readonly taxableCents:Available<Cents>;readonly nontaxableCents:Available<Cents>}[]}
+export type RetirementInventory=Pick<PlanDocument,'properties'|'rentals'|'expenses'|'debts'>;
 export interface ForecastCheckpoint {
+ readonly retirementInventory?:RetirementInventory;readonly retirementPurchaseYears?:Readonly<Record<string,number>>;readonly appliedTransitionIds?:readonly string[];
  readonly rothHistoryByAccount:Readonly<Record<string,ForecastRothHistory>>;
  readonly sourceIssues:readonly Issue[];
  readonly schemaVersion:1;readonly year:number;readonly sourceBinding:string;readonly ruleBinding:string;

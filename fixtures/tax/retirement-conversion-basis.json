@@ -1,0 +1,33 @@
+{
+  "cases": [
+    {
+      "id": "conversion-lesser-fmv-preserves-gain-basis",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/publications/p527",
+        "https://www.irs.gov/publications/p544"
+      ],
+      "input": {
+        "adjustedBuildingBasisCents": 40000000,
+        "buildingFmvCents": 32000000
+      },
+      "worksheetSteps": [
+        "Historical $500,000 total adjusted basis \u00d780% building = $400,000 gain building basis.",
+        "$400,000 conversion FMV \u00d780% building = $320,000. Depreciation basis is min($400,000,$320,000).",
+        "Full subsequent year: $320,000/27.5 = $11,636.36."
+      ],
+      "expected": {
+        "status": "available",
+        "value": {
+          "gainBuildingBasisCents": 40000000,
+          "depreciationBuildingBasisCents": 32000000
+        }
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-planning-v1",
+        "IRS-P527-2025"
+      ]
+    }
+  ]
+}

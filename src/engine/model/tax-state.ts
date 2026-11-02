@@ -8,6 +8,7 @@ export interface AduCapitalBookState {
   readonly recoveryActivated:boolean;
 }
 export interface HouseholdTaxState {
+  readonly retirementPropertyHistory?:{readonly gainBuildingBasisByRental:Readonly<Record<string,Readonly<Record<TaxBook,Available<Cents>>>>>;readonly disposedPropertyIds:readonly string[]};
   readonly aduProjects?:Readonly<Record<string,Readonly<Record<TaxBook,Available<AduCapitalBookState>>>>>;
   readonly year: number;
   readonly rentals: Readonly<Record<string, Readonly<Record<TaxBook, Available<RentalBookState>>>>>;

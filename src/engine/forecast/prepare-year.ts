@@ -87,7 +87,7 @@ export function prepareForecastYear(context:ForecastContext,checkpoint:ForecastC
   const rothHistoryByAccount={...checkpoint.rothHistoryByAccount};
   const rsuClosing:Record<string,Available<readonly RsuExactState[]>>={...checkpoint.rsuState};
   const accountExact=decode(checkpoint.accountExact);
-  const purchases=plan.properties.filter(p=>p.purchaseDate>`${plan.startYear}-01-01`),purchaseIds=new Set(purchases.map(p=>p.id));
+  const purchases=plan.properties.filter(p=>p.purchaseDate>`${plan.startYear}-01-01`&&checkpoint.retirementPurchaseYears?.[p.id]===undefined),purchaseIds=new Set(purchases.map(p=>p.id));
   const existingHomeExact=decode(checkpoint.existingHomeExact);
   const priorMarketComplete=new Map(Object.entries(checkpoint.priorMarketComplete));
   const projects=getAduProjects(plan);
@@ -136,7 +136,8 @@ export function prepareForecastYear(context:ForecastContext,checkpoint:ForecastC
         yearLoans.push(schedule);loanSchedules.push({loanId:descriptor.loan.id,year,schedule});continue;
       }
       const {loan}=descriptor;
-      const plannedOrigination=descriptor.propertyId!==undefined&&purchaseIds.has(descriptor.propertyId)&&'originationDate' in loan;
+      const retirementOrigination=descriptor.propertyId!==undefined&&checkpoint.retirementPurchaseYears?.[descriptor.propertyId]===year;
+      const plannedOrigination=descriptor.propertyId!==undefined&&(purchaseIds.has(descriptor.propertyId)||retirementOrigination)&&'originationDate' in loan;
       const previous=plannedOrigination&&year<=Number(loan.originationDate.slice(0,4))?undefined:loanClosing.get(loan.id);let schedule:Available<LoanSchedule>;
       if(previous&&previous.status!=='available')schedule=previous;
       else {
@@ -355,8 +356,9 @@ export function prepareForecastYear(context:ForecastContext,checkpoint:ForecastC
       });
       const properties:PropertyProjection[]=[...plan.properties].sort((a,b)=>a.id.localeCompare(b.id)).map(property=>{
         const previous=propertyExact.get(property.id)!,knownHome=existingHomeExact.get(property.id)!;
-        const growth=previous.status==='available'?range(property.id,year,'propertyGrowthCents',()=>growMonth(previous.value,propertyRate(property,year,plan.growthAssumptions),0)):previous;
-        const existingGrowth=knownHome.status==='available'?range(property.id,year,'knownExistingHomeValueCents',()=>growMonth(knownHome.value,propertyRate(property,year,plan.growthAssumptions),0)):knownHome;
+        const acquisitionMonth=checkpoint.retirementPurchaseYears?.[property.id]===year&&month===1;
+        const growth=previous.status==='available'?range(property.id,year,'propertyGrowthCents',()=>acquisitionMonth?{closingExact:previous.value,closingCents:settleCents(previous.value),growthCents:0}:growMonth(previous.value,propertyRate(property,year,plan.growthAssumptions),0)):previous;
+        const existingGrowth=knownHome.status==='available'?range(property.id,year,'knownExistingHomeValueCents',()=>acquisitionMonth?{closingExact:knownHome.value,closingCents:settleCents(knownHome.value),growthCents:0}:growMonth(knownHome.value,propertyRate(property,year,plan.growthAssumptions),0)):knownHome;
         existingHomeExact.set(property.id,existingGrowth.status==='available'?available(existingGrowth.value.closingExact):existingGrowth);
         const projectContext=aduContext.projects.find(p=>p.propertyId===property.id),lifecycle=projectContext?.months[i];
         const purchaseValueCents=purchaseIds.has(property.id)&&property.purchaseDate.slice(0,7)===`${year}-${String(month).padStart(2,'0')}`?property.openingValueCents:0;

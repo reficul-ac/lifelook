@@ -711,6 +711,16 @@
       "retrievedOn": "2026-11-01",
       "sha256": "e259a34b35737f10649b944d88052c57e4a054690e4677340e4d08242eef1ace",
       "bytes": 30524
+    },
+    {
+      "id": "irs-p575-2025",
+      "url": "https://www.irs.gov/publications/p575",
+      "snapshot": "2025-reference/irs-p575.html",
+      "publicationYear": 2025,
+      "publicationDate": null,
+      "retrievedOn": "2026-11-01",
+      "sha256": "1801056ef1943ee91b2033d5e57c946445a4d6b8425cdef5bf86747de9aef5f1",
+      "bytes": 568047
     }
   ]
 }

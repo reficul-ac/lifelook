@@ -28,7 +28,10 @@ describe('sourced rule packs', () => {
     const result = resolveYearRules(loadRuleSet(), c.taxYear, c.input);
     expect(result.status).toBe('available');
     if (result.status !== 'available') return;
-    for (const [path, expected] of Object.entries(c.expected)) assertReference(at(result.value, path), expected, c.toleranceCents);
+    for (const [path, expected] of Object.entries(c.expected)) {
+      if(path==='retirement'&&expected!==null&&typeof expected==='object')for(const [key,value] of Object.entries(expected))assertReference(at(result.value,`retirement.${key}`),value,c.toleranceCents);
+      else assertReference(at(result.value,path),expected,c.toleranceCents);
+    }
   });
   it('keeps published and provisional California fields separate', () => {
     const r = rules();

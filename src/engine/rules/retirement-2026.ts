@@ -1,6 +1,8 @@
 import type { RulePack } from './types.js';
 import { indexed, rule, SOURCES as s } from './values.js';
-export const retirement2026: RulePack = { jurisdiction: 'retirement', version: 'retirement-2026.1', baselineYear: 2026, values: {
+export const retirement2026: RulePack = { jurisdiction: 'retirement', version: 'retirement-2026.2', baselineYear: 2026, values: {
+  'distributions.qualifiedPlanBasisMethod': {...rule('nonannuity-ratable-account-basis', s.qualifiedPlanDistributions), reviewDate:'2026-11-01'},
+  'distributions.iraProRataMethod': {...rule('owner-year-end-aggregate', s.iraBasis), reviewDate:'2026-11-01'},
   electiveDeferralLimitCents: rule(2450000, [s.retirement, s.deferralIndex], indexed(50000, 'floor', true)),
   regularCatchupCents: rule(800000, [s.retirement, s.catchupIndex], indexed(50000, 'floor', true)),
   enhancedCatchupCents: rule(1125000, [s.retirement, s.catchupIndex], indexed(50000, 'floor', true)),

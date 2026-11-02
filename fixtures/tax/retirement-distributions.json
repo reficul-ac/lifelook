@@ -1,0 +1,407 @@
+{
+  "cases": [
+    {
+      "id": "brokerage-proportional-basis",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/publications/p550"
+      ],
+      "input": {
+        "year": 2026,
+        "openingAccounts": [
+          {
+            "accountId": "broker",
+            "ownerId": "owner-a",
+            "type": "taxable-brokerage",
+            "balanceExact": "10000000",
+            "basis": {
+              "known": true,
+              "value": 6000000
+            }
+          }
+        ],
+        "proposedLegs": [
+          {
+            "eventId": "draw",
+            "accountId": "broker",
+            "date": "2026-01-31",
+            "grossCents": 1000000,
+            "purpose": "recurring"
+          }
+        ],
+        "openingTaxState": {
+          "year": 2025,
+          "rentals": {},
+          "qbiLossVintages": {},
+          "iraBasisByOwner": {
+            "owner-a": {
+              "known": true,
+              "value": 0
+            },
+            "owner-b": {
+              "known": true,
+              "value": 0
+            }
+          },
+          "minimumTaxCreditCoverage": {
+            "federal": {
+              "known": true,
+              "value": false
+            },
+            "california": {
+              "known": true,
+              "value": false
+            }
+          }
+        },
+        "iraBasisByOwner": {},
+        "yearEndIraValuesByOwner": {},
+        "ownerBirthDates": {
+          "owner-a": {
+            "known": true,
+            "value": "1960-01-01"
+          }
+        }
+      },
+      "worksheetSteps": [
+        "$100,000 account with $60,000 aggregate basis.",
+        "$10,000 sale consumes $60,000 \u00d7 $10,000/$100,000 = $6,000 basis.",
+        "$4,000 long-term gain; $90,000 closing value and $54,000 closing basis."
+      ],
+      "expected": {
+        "acceptedSchedule": {
+          "year": 2026,
+          "legs": [
+            {
+              "eventId": "draw",
+              "accountId": "broker",
+              "date": "2026-01-31",
+              "grossCents": 1000000,
+              "purpose": "recurring",
+              "acceptedGrossCents": 1000000,
+              "shortfallCents": 0
+            }
+          ]
+        },
+        "closingAccounts": [
+          {
+            "accountId": "broker",
+            "ownerId": "owner-a",
+            "type": "taxable-brokerage",
+            "balanceExact": "9000000",
+            "basis": {
+              "known": true,
+              "value": 5400000
+            }
+          }
+        ],
+        "closingTaxState": {
+          "year": 2026,
+          "rentals": {},
+          "qbiLossVintages": {},
+          "iraBasisByOwner": {
+            "owner-a": {
+              "known": true,
+              "value": 0
+            },
+            "owner-b": {
+              "known": true,
+              "value": 0
+            }
+          },
+          "minimumTaxCreditCoverage": {
+            "federal": {
+              "known": true,
+              "value": false
+            },
+            "california": {
+              "known": true,
+              "value": false
+            }
+          },
+          "retirementAccountState": {
+            "iraBasisByOwner": {},
+            "rothByAccount": {}
+          }
+        },
+        "taxFacts": [
+          {
+            "eventId": "draw",
+            "accountId": "broker",
+            "ownerId": "owner-a",
+            "date": "2026-01-31",
+            "purpose": "recurring",
+            "incomeCharacter": "long-term-gain",
+            "grossCents": {
+              "status": "available",
+              "value": 1000000
+            },
+            "federalTaxableCents": {
+              "status": "available",
+              "value": 400000
+            },
+            "californiaTaxableCents": {
+              "status": "available",
+              "value": 400000
+            },
+            "basisRecoveredCents": {
+              "status": "available",
+              "value": 600000
+            },
+            "californiaBasisRecoveredCents": {
+              "status": "available",
+              "value": 600000
+            },
+            "basisConsumedCents": {
+              "status": "available",
+              "value": 600000
+            },
+            "realizedGainCents": {
+              "status": "available",
+              "value": 400000
+            },
+            "additionalFederalTaxCents": {
+              "status": "available",
+              "value": 0
+            },
+            "additionalCaliforniaTaxCents": {
+              "status": "available",
+              "value": 0
+            },
+            "rmdEligibleCents": {
+              "status": "available",
+              "value": 0
+            },
+            "estimated": false
+          }
+        ],
+        "issues": [],
+        "assumptions": []
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-distributions.1",
+        "us-ca-2026.6"
+      ]
+    },
+    {
+      "id": "owner-ira-year-end-pro-rata",
+      "taxYear": 2026,
+      "sources": [
+        "https://www.irs.gov/instructions/i8606",
+        "https://www.ftb.ca.gov/forms/2025/2025-1005-publication.pdf"
+      ],
+      "input": {
+        "year": 2026,
+        "openingAccounts": [
+          {
+            "accountId": "ira",
+            "ownerId": "owner-a",
+            "type": "traditional-ira",
+            "balanceExact": "12000000",
+            "basis": {
+              "known": false
+            }
+          }
+        ],
+        "proposedLegs": [
+          {
+            "eventId": "draw",
+            "accountId": "ira",
+            "date": "2026-01-31",
+            "grossCents": 3000000,
+            "purpose": "recurring"
+          }
+        ],
+        "openingTaxState": {
+          "year": 2025,
+          "rentals": {},
+          "qbiLossVintages": {},
+          "iraBasisByOwner": {
+            "owner-a": {
+              "known": true,
+              "value": 0
+            },
+            "owner-b": {
+              "known": true,
+              "value": 0
+            }
+          },
+          "minimumTaxCreditCoverage": {
+            "federal": {
+              "known": true,
+              "value": false
+            },
+            "california": {
+              "known": true,
+              "value": false
+            }
+          }
+        },
+        "iraBasisByOwner": {
+          "owner-a": {
+            "federal": {
+              "known": true,
+              "value": 1500000
+            },
+            "california": {
+              "known": true,
+              "value": 1500000
+            },
+            "californiaPre1987Basis": {
+              "known": true,
+              "value": 0
+            }
+          }
+        },
+        "yearEndIraValuesByOwner": {
+          "owner-a": {
+            "status": "available",
+            "value": 9000000
+          }
+        },
+        "ownerBirthDates": {
+          "owner-a": {
+            "known": true,
+            "value": "1960-01-01"
+          }
+        }
+      },
+      "worksheetSteps": [
+        "Owner basis $15,000; accepted gross $30,000; accepted year-end aggregate IRA value $90,000.",
+        "$15,000 \u00d7 $30,000/($90,000 + $30,000) = $3,750 basis recovered.",
+        "$26,250 taxable, $11,250 closing basis; confirmed no pre1987 CA-only basis."
+      ],
+      "expected": {
+        "acceptedSchedule": {
+          "year": 2026,
+          "legs": [
+            {
+              "eventId": "draw",
+              "accountId": "ira",
+              "date": "2026-01-31",
+              "grossCents": 3000000,
+              "purpose": "recurring",
+              "acceptedGrossCents": 3000000,
+              "shortfallCents": 0
+            }
+          ]
+        },
+        "closingAccounts": [
+          {
+            "accountId": "ira",
+            "ownerId": "owner-a",
+            "type": "traditional-ira",
+            "balanceExact": "9000000",
+            "basis": {
+              "known": false
+            }
+          }
+        ],
+        "closingTaxState": {
+          "year": 2026,
+          "rentals": {},
+          "qbiLossVintages": {},
+          "iraBasisByOwner": {
+            "owner-a": {
+              "known": true,
+              "value": 1125000
+            },
+            "owner-b": {
+              "known": true,
+              "value": 0
+            }
+          },
+          "minimumTaxCreditCoverage": {
+            "federal": {
+              "known": true,
+              "value": false
+            },
+            "california": {
+              "known": true,
+              "value": false
+            }
+          },
+          "retirementAccountState": {
+            "iraBasisByOwner": {
+              "owner-a": {
+                "federal": {
+                  "known": true,
+                  "value": 1125000
+                },
+                "california": {
+                  "known": true,
+                  "value": 1125000
+                },
+                "californiaPre1987Basis": {
+                  "known": true,
+                  "value": 0
+                }
+              }
+            },
+            "rothByAccount": {}
+          }
+        },
+        "taxFacts": [
+          {
+            "eventId": "draw",
+            "accountId": "ira",
+            "ownerId": "owner-a",
+            "date": "2026-01-31",
+            "purpose": "recurring",
+            "incomeCharacter": "ordinary",
+            "grossCents": {
+              "status": "available",
+              "value": 3000000
+            },
+            "federalTaxableCents": {
+              "status": "available",
+              "value": 2625000
+            },
+            "californiaTaxableCents": {
+              "status": "available",
+              "value": 2625000
+            },
+            "basisRecoveredCents": {
+              "status": "available",
+              "value": 375000
+            },
+            "californiaBasisRecoveredCents": {
+              "status": "available",
+              "value": 375000
+            },
+            "basisConsumedCents": {
+              "status": "available",
+              "value": 0
+            },
+            "realizedGainCents": {
+              "status": "available",
+              "value": 0
+            },
+            "additionalFederalTaxCents": {
+              "status": "available",
+              "value": 0
+            },
+            "additionalCaliforniaTaxCents": {
+              "status": "available",
+              "value": 0
+            },
+            "rmdEligibleCents": {
+              "status": "available",
+              "value": 3000000
+            },
+            "estimated": false
+          }
+        ],
+        "issues": [],
+        "assumptions": []
+      },
+      "toleranceCents": 0,
+      "ruleVersions": [
+        "retirement-distributions.1",
+        "retirement-2026.2",
+        "IRS-8606-2025"
+      ]
+    }
+  ]
+}

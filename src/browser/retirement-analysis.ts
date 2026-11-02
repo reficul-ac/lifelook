@@ -24,6 +24,7 @@ const problem=(code:string,text:string):readonly Issue[]=>[{code,field:'retireme
 export function createRetirementAnalysisScheduler(controller:WorkspaceController,publish:(state:RetirementAnalysisViewState)=>void,ownership:RetirementBindingOwnership):RetirementAnalysisScheduler {
  let state:RetirementAnalysisViewState={status:'inactive',candidates:[],detailStatus:'inactive',issues:[]},scope:'applied'|'draft'='applied',disposed=false,requestGeneration=0,detailGeneration=0,comparisonWorker:Worker|undefined,detailWorker:Worker|undefined,timer:ReturnType<typeof setTimeout>|undefined,selected:number|undefined;
  let previous=controller.getState(),active:Extract<PreparedRetirementWorkspace,{status:'ready'}>|undefined,base:ValidatedPlan|undefined,activeOwner:RetirementRequestOwner|undefined,cache:Cache|undefined;
+ let candidates=new Map<number,RetirementCandidateSummary>();
  const live=()=>!disposed&&ownership.isCurrent(ownership.owner),emit=(value:RetirementAnalysisViewState)=>{state=value;if(live())publish(value);};
  const retained=():RetirementOwnedComparison|undefined=>state.comparison&&state.owner?{owner:state.owner,scope:state.scope??scope,comparison:state.comparison}:state.retained;
  const cancelDetail=()=>{detailGeneration++;if(timer!==undefined){clearTimeout(timer);timer=undefined;}detailWorker?.terminate();detailWorker=undefined;};
@@ -55,12 +56,12 @@ export function createRetirementAnalysisScheduler(controller:WorkspaceController
    const failed=(issues=problem('retirement-detail-failed','The selected retirement path could not be calculated.'))=>{if(settled)return;finish();if(matches())emit({...state,detailStatus:'failed',issues});};
    try{running=new Worker(new URL('./retirement-analysis-worker.ts',import.meta.url),{type:'module'});detailWorker=running;running.onerror=()=>failed();running.onmessageerror=()=>failed();running.onmessage=(event:MessageEvent<RetirementWorkerReply>)=>{
     const reply=event.data;if(settled||!same(reply.owner,owner)||!matches())return;if(reply.kind==='failed'){failed(reply.issues);return;}if(reply.kind!=='detail'||reply.path.retirementYear!==year||reply.path.years[0]?.year!==year||strategy&&reply.path.strategyId!==strategy)return;
-    finish();cache!.paths.delete(year);cache!.paths.set(year,reply.path);while(cache!.paths.size>2)cache!.paths.delete(cache!.paths.keys().next().value!);emit({...state,detailStatus:'calculated',detail:{owner,path:reply.path}});
+    finish();if(reply.candidate&&state.status==='pending'&&reply.candidate.retirementYear===year&&reply.candidate.strategyId===reply.path.strategyId){candidates.set(year,reply.candidate);state={...state,candidates:[...candidates.values()].sort((a,b)=>a.retirementYear-b.retirementYear),progress:{completed:candidates.size,total:state.progress!.total}};}cache!.paths.delete(year);cache!.paths.set(year,reply.path);while(cache!.paths.size>2)cache!.paths.delete(cache!.paths.keys().next().value!);emit({...state,detailStatus:'calculated',detail:{owner,path:reply.path}});
    };running.postMessage(message);}catch{failed();}
   },150);
  };
  const request=(requested=scope)=>{
-  if(!live())return;const old=retained();scope=requested;cancel();active=undefined;activeOwner=undefined;base=undefined;cache=undefined;
+  if(!live())return;const old=retained();scope=requested;cancel();candidates=new Map();active=undefined;activeOwner=undefined;base=undefined;cache=undefined;
   const prepared=prepareRetirementWorkspace(controller,scope);if(prepared.status!=='ready'){emit({status:prepared.status,...(old?{retained:old}:{}),candidates:[],detailStatus:'inactive',issues:prepared.issues});return;}
   const source=controller.getState().savedPlan as ValidatedPlan,owner:RetirementRequestOwner={...ownership.owner,sourceBinding:JSON.stringify(source),candidateBinding:JSON.stringify(prepared.plan),inputRevision:prepared.plan.revision,definitionFingerprint:prepared.definitionFingerprint,definitionGeneration:prepared.draftGeneration,ruleVersion:prepared.ruleSet.version,ruleBinding:JSON.stringify(prepared.ruleSet),requestGeneration,detailGeneration};active=prepared;activeOwner=owner;base=source;
   const key=JSON.stringify([owner.candidateBinding,owner.definitionFingerprint,owner.ruleVersion,owner.ruleBinding]),existing=caches.get(controller);cache=existing?.base===source&&existing.rules===prepared.ruleSet&&existing.key===key?existing:{base:source,rules:prepared.ruleSet,key,paths:new Map()};caches.set(controller,cache);
@@ -68,7 +69,7 @@ export function createRetirementAnalysisScheduler(controller:WorkspaceController
   const applied=controller.getState().retirementResult;if(!prepared.edit&&applied&&validComparison(applied.comparison,prepared)){cache.comparison=applied.comparison;cache.projection=applied.projection;}
   if(cache.comparison&&(!prepared.edit||cache.projection)){acceptComparison(cache.comparison,cache.projection,[],owner,prepared,source);return;}
   if(typeof Worker==='undefined'){empty('failed',problem('retirement-calculation-unavailable','This browser cannot start the retirement calculation worker.'));return;}
-  const message:RetirementWorkerRequest={kind:'comparison',owner,plan:prepared.plan,ruleSet:prepared.ruleSet,definition:prepared.definition,needsProjection:!!prepared.edit},candidates=new Map<number,RetirementCandidateSummary>();let running:Worker|undefined,settled=false;
+  const message:RetirementWorkerRequest={kind:'comparison',owner,plan:prepared.plan,ruleSet:prepared.ruleSet,definition:prepared.definition,needsProjection:!!prepared.edit};let running:Worker|undefined,settled=false;
   const finish=()=>{settled=true;running?.terminate();if(comparisonWorker===running)comparisonWorker=undefined;};
   const failed=(issues=problem('retirement-calculation-failed','The retirement comparison stopped before completion.'))=>{if(settled)return;finish();if(current(owner,prepared,source))empty('failed',issues);};
   try{running=new Worker(new URL('./retirement-analysis-worker.ts',import.meta.url),{type:'module'});comparisonWorker=running;running.onerror=()=>failed();running.onmessageerror=()=>failed();running.onmessage=(event:MessageEvent<RetirementWorkerReply>)=>{

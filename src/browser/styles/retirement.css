@@ -29,3 +29,5 @@
 .retirement-portfolio [data-retirement-purchase-summary] dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:.5rem 1rem}
 .retirement-portfolio [data-retirement-purchase-summary] dd{margin:0;font-variant-numeric:tabular-nums}
 @media(max-width:640px){.retirement-property-fields{grid-template-columns:minmax(0,1fr)}.retirement-property-fields>*{min-width:0}.retirement-portfolio [data-retirement-purchase-summary] dl{grid-template-columns:minmax(0,1fr)}.retirement-controls{width:100%}}
+
+.retirement-workspace{min-width:0}.retirement-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(16rem,21rem);gap:1.25rem;align-items:start}.retirement-rail{min-width:0;padding:1rem;border:1px solid var(--border);border-radius:.75rem}.retirement-top>[data-retirement-candidate-chart]{min-width:0}.retirement-workspace [data-retirement-portfolio]{width:100%}@media(max-width:900px){.retirement-top{grid-template-columns:minmax(0,1fr)}}

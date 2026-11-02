@@ -1,3 +1,5 @@
+import {mountRetirementWorkspace} from './views/retirement';
+import {captureRetirementBindingOwnership} from './retirement-analysis';
 import {createAduComparisonScheduler} from './adu-comparison';
 import {renderAduComparison} from './views/adu-comparison';
 import {mountGrowthAssumptions} from './growth-assumptions-view';
@@ -23,6 +25,7 @@ import type {ScenarioEditorSession} from './scenario-session';
 import type {ScenarioManager} from './scenario-manager';
 import type {EditTarget,FocusedEditTarget} from './edit-types';
 
+let retirementActivationSequence=0;
 export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,manager:ScenarioManager,activationGeneration:number):{dispose():void}{
   root.replaceChildren();const controller=session.controller;let disposed=false;
   const owner=manager.captureTarget(session.scenarioId)!;
@@ -46,20 +49,22 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
     route.destination=destinationForSection(target.section);open(edit,null);if(route.editor)route.editor.returnTo=returnTo;
     if(target.field)focused?.reveal(target.field);
   }};
-  const collection=()=>renderRecordCollection(shell.collection,controller.getState(),route.destination,open,section=>{const recordId=controller.beginAdd(section);open({kind:'record',section,recordId},null);});
+  let retirement:ReturnType<typeof mountRetirementWorkspace>|undefined,retirementOwnership:ReturnType<typeof captureRetirementBindingOwnership>|undefined;
+  function syncRetirement(){if(route.destination==='retirement'&&!route.editor){if(!retirement){retirementOwnership=captureRetirementBindingOwnership(manager,session,++retirementActivationSequence);retirement=mountRetirementWorkspace(shell.retirement,session,retirementOwnership);}}else {retirement?.dispose();retirement=undefined;retirementOwnership?.dispose();retirementOwnership=undefined;}}
+  const collection=()=>route.destination==='retirement'?undefined:renderRecordCollection(shell.collection,controller.getState(),route.destination,open,section=>{const recordId=controller.beginAdd(section);open({kind:'record',section,recordId},null);});
   const close=(returnFocus=true)=>{
     const previous=route.editor;if(!previous)return;
     focused?.dispose();focused=undefined;coordinator.select(null);shell.editor.replaceChildren();
     prerequisite.dispose();origins.length=0;prerequisite=createFlow();
     route={destination:previous.returnTo,editor:null,surface:'edit'};session.view.selections.destination=route.destination;
-    shell.update(route);collection();updateReport();
+    shell.update(route);syncRetirement();collection();updateReport();
     if(returnFocus){const origin=previous.origin;if(origin?.isConnected)origin.focus();else {const replacement=[...shell.collection.querySelectorAll<HTMLElement>('[data-open-target]')].find(node=>node.dataset.openTarget===origin?.dataset.openTarget);(replacement??shell.collection.querySelector<HTMLElement>('h2'))?.focus();}}
   };
-  const navigate=(destination:Destination)=>{close(false);coordinator.select(null);route={destination,editor:null,surface:'edit'};session.view.selections.destination=destination;shell.update(route);collection();growth?.update();updateReport();paintGrowthImpact();};
+  const navigate=(destination:Destination)=>{close(false);coordinator.select(null);route={destination,editor:null,surface:'edit'};session.view.selections.destination=destination;shell.update(route);syncRetirement();collection();growth?.update();updateReport();paintGrowthImpact();};
   const activateGrowth=()=>{
     if(!isCurrent())return false;
     if(route.editor){focused?.dispose();focused=undefined;shell.editor.replaceChildren();prerequisite.dispose();origins.length=0;prerequisite=createFlow();}
-    route={destination:'overview',editor:null,surface:'edit'};session.view.selections.destination='overview';shell.update(route);collection();
+    route={destination:'overview',editor:null,surface:'edit'};session.view.selections.destination='overview';shell.update(route);syncRetirement();collection();
     if(coordinator.getState().target?.kind!=='growth-assumptions')coordinator.select({kind:'growth-assumptions'});
     growth?.update();paintGrowthImpact();return true;
   };
@@ -69,7 +74,7 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
     focused?.dispose();focused=undefined;disclosures.closeWithin(root,false);coordinator.select(null);
     const returnTo=route.editor?.returnTo??route.destination;
     route={destination:route.destination,editor:{target,returnTo,origin},surface:'edit'};
-    shell.update(route);coordinator.select(target);focused=mountFocusedEditor(shell.editor,session,target,context,coordinator,{
+    shell.update(route);syncRetirement();coordinator.select(target);focused=mountFocusedEditor(shell.editor,session,target,context,coordinator,{
       requestPrerequisite:(request:PrerequisiteRequest)=>{if(!isCurrent()||route.editor?.target!==target)return;origins.push(target);prerequisite.begin(target,request);},
       applied:(applied,result)=>prerequisite.applied(applied,result),
       ...(origins.length?{cancelPrerequisite:()=>prerequisite.cancel()}:{}),
@@ -135,19 +140,21 @@ export function mountEditorView(root:HTMLElement,session:ScenarioEditorSession,m
   const unsubscribe=controller.subscribe(operation=>{
     if(!isCurrent())return;
     if(operation)root.dispatchEvent(new CustomEvent('editor-operation',{bubbles:true,detail:operation}));
-    if(!route.editor)collection();updateReport();if(comparisonPlan!==controller.getState().savedPlan)syncComparisonSelection();
+    if(!route.editor)collection();retirement?.update();updateReport();if(comparisonPlan!==controller.getState().savedPlan)syncComparisonSelection();
   });
   const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'&&!document.querySelector('[data-disclosure-panel]:not([hidden]),[data-disclosure-preview]:not([hidden])')){event.preventDefault();close();}};
   const discarded=()=>{const target=route.editor?.target;if(target?.kind==='record'&&target.section!=='household'&&!(controller.getState().savedPlan[target.section]??[]).some(record=>record.id===target.recordId)){close();return;}if(target){const origin=route.editor?.origin??null;open(target,origin);}};
   const removed=()=>close();
   const review=(event:Event)=>{const request=(event as CustomEvent<{target:import('./issue-presentation').ReviewTarget;handled:boolean}>).detail;if(!isCurrent()||!targetForReview(request.target,controller.getState(),shownReport.plan))return;request.handled=true;context.review(request.target);};
+  const retirementReview=(event:Event)=>{if(isCurrent())context.review((event as CustomEvent<import('./issue-presentation').ReviewTarget>).detail);};
+  root.addEventListener('retirement-review-source',retirementReview);
   const addContribution=(event:Event)=>{const recordId=controller.beginAdd('contributions'),draft=controller.getDraft('contributions',recordId);controller.editDraft(recordId,{...draft,value:{...draft.value,accountId:(event as CustomEvent<string>).detail}});open({kind:'record',section:'contributions',recordId},null);};
   root.addEventListener('keydown',escape);root.addEventListener('editor-discarded',discarded);root.addEventListener('editor-removed',removed);
   root.addEventListener('editor-add-contribution',addContribution);
   const workspaceRoot=root.closest<HTMLElement>('.workspace')??root;workspaceRoot.addEventListener('financial-review',review);
-  shell.update(route);collection();syncComparisonSelection();paintComparison();
+  shell.update(route);syncRetirement();collection();syncComparisonSelection();paintComparison();
   attention.update(shownReport,[]);
   const reportYearChanged=()=>{paintImpact();paintGrowthImpact();paintComparison();for(const summary of shell.editor.querySelectorAll<HTMLElement>('[data-property-growth-summary]'))summary.dispatchEvent(new Event('forecast-year-selected'));};
   paintImpact();reportRoot.addEventListener('change',reportYearChanged);reportRoot.addEventListener('forecast-year-selected',reportYearChanged);
-  return {dispose(){if(disposed)return;disposed=true;focused?.dispose();prerequisite.dispose();unsubscribePreview();unsubscribe();growth?.dispose();coordinator.dispose();adu.dispose();overview.dispose();attention.dispose();disclosures.dispose();shell.dispose();reportRoot.removeEventListener('change',reportYearChanged);reportRoot.removeEventListener('forecast-year-selected',reportYearChanged);root.removeEventListener('keydown',escape);root.removeEventListener('editor-discarded',discarded);root.removeEventListener('editor-removed',removed);root.removeEventListener('editor-add-contribution',addContribution);workspaceRoot.removeEventListener('financial-review',review);}};
+  return {dispose(){if(disposed)return;disposed=true;retirement?.dispose();retirementOwnership?.dispose();root.removeEventListener('retirement-review-source',retirementReview);focused?.dispose();prerequisite.dispose();unsubscribePreview();unsubscribe();growth?.dispose();coordinator.dispose();adu.dispose();overview.dispose();attention.dispose();disclosures.dispose();shell.dispose();reportRoot.removeEventListener('change',reportYearChanged);reportRoot.removeEventListener('forecast-year-selected',reportYearChanged);root.removeEventListener('keydown',escape);root.removeEventListener('editor-discarded',discarded);root.removeEventListener('editor-removed',removed);root.removeEventListener('editor-add-contribution',addContribution);workspaceRoot.removeEventListener('financial-review',review);}};
 }

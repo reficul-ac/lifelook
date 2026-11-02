@@ -125,7 +125,7 @@ export function collectRecords(state: WorkspaceState, destination: Destination):
 }
 export function renderRecordCollection(root: HTMLElement, state: WorkspaceState, destination: Destination, open: (target: EditTarget, origin: HTMLElement | null) => void, add: (section: EditableSection) => void): void {
   root.replaceChildren();
-  const names = {overview: 'Overview', income: 'Income', accounts: 'Accounts', properties: 'Properties', spending: 'Spending & debts', household: 'Household'};
+  const names = {retirement:'Retirement',overview: 'Overview', income: 'Income', accounts: 'Accounts', properties: 'Properties', spending: 'Spending & debts', household: 'Household'};
   const heading = element('h2', names[destination]); heading.tabIndex = -1; root.append(heading);
   const actions = element('div'); actions.className = 'collection-actions';
   for (const [section, label] of collectionSections[destination] ?? []) if (section !== 'household') actions.append(button(`Add ${label}`, () => add(section)));

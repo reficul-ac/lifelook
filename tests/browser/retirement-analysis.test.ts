@@ -62,3 +62,6 @@ it.each(['restore','dispose','away back'])('rejects queued detail work after %s'
 it('uses the applied scope for unchanged raw drafts and handles worker construction failure',()=>{
  const h=setup();h.run(h.requests[0]!);const draft=h.controller.getRetirementDraft();h.controller.editRetirementDraft({...draft,value:{...draft.value,withdrawalBps:'3.0'}});h.scheduler.request('draft');expect(h.publications.at(-1)).toMatchObject({status:'calculated',scope:'applied'});expect(h.publications.at(-1)?.receipt).toBeUndefined();h.scheduler.invalidate();vi.stubGlobal('Worker',class{constructor(){throw Error('worker unavailable');}});h.scheduler.request();expect(h.publications.at(-1)?.status).toBe('failed');
 });
+it('streams a fully solved selected candidate from detail while the overall comparison remains pending',()=>{
+ vi.useFakeTimers();const h=setup();h.scheduler.selectYear(2100);vi.advanceTimersByTime(150);const request=h.requests.at(-1)!;h.run(request);expect(h.publications.at(-1)?.status).toBe('pending');expect(h.publications.at(-1)?.candidates.map(c=>c.retirementYear)).toContain(2100);expect(h.publications.at(-1)?.detail?.path.retirementYear).toBe(2100);expect(h.publications.at(-1)?.comparison).toBeUndefined();expect(h.publications.at(-1)?.receipt).toBeUndefined();
+});

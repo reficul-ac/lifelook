@@ -29,12 +29,12 @@ it('round-trips only the applied retirement definition in plan and workspace bac
  const {makeRetirementPlan,makeRetirementDefinition,makeRetirementTarget}=await import('../helpers/retirement');
  const source=makeRetirementPlan(),definition=makeRetirementDefinition({mode:'reallocate',stockGrowthBps:0,newProperties:[makeRetirementTarget({id:'applied-rental'})]},source);
  const plan=mustValidate({...source,retirementAnalysis:definition}),{manager}=setup(makeScenarioWorkspace(plan));
- edit(manager.getActiveSession().controller,'1.234');
+ edit(manager.getActiveSession().controller,'1.234');const retirementDraft=manager.getActiveSession().controller.getRetirementDraft();manager.getActiveSession().controller.editRetirementDraft({...retirementDraft,value:{...retirementDraft.value,withdrawalBps:'unfinished retirement rate'}});
  const plain=manager.exportScenario('master');
  expect(JSON.parse(plain).retirementAnalysis).toEqual(definition);
  expect(parseBackup(plain,'plan')).toMatchObject({ok:true,payload:{plan:{retirementAnalysis:definition}}});
  expect(parseBackup(manager.exportWorkspace(),'workspace')).toMatchObject({ok:true,payload:{document:{scenarios:[{plan:{retirementAnalysis:definition}}]}}});
- expect(manager.exportWorkspace()).not.toContain('1.234');
+ expect(manager.exportWorkspace()).not.toContain('1.234');expect(manager.exportWorkspace()).not.toContain('unfinished retirement rate');
  manager.forkScenario(manager.captureTarget('master')!,'Retirement alternative');
- expect(manager.getActiveSession().controller.getState().savedPlan.retirementAnalysis).toEqual(definition);
+ expect(manager.getActiveSession().controller.getState().savedPlan.retirementAnalysis).toEqual(definition);expect(manager.getActiveSession().controller.getState().retirementDraft).toBeUndefined();
 });

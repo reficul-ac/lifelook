@@ -20,7 +20,7 @@ export interface RetirementPropertyAssumption {
 export interface RetirementAccountAssumption {
  readonly accountId:string;readonly soleSpouseBeneficiary?:History<boolean>;readonly inherited?:History<boolean>;readonly taxableBasisCents?:History<Cents>;readonly californiaBasisCents?:History<Cents>;
  readonly rothContributionBasisCents?:History<Cents>;readonly rothFirstContributionYear?:History<number>;
- readonly conversionLayers?:readonly Readonly<{year:number;taxableCents:Cents;nontaxableCents:Cents}>[];
+ readonly conversionLayers?:readonly Readonly<{year:number;taxableCents:Cents;nontaxableCents:Cents;californiaTaxableCents?:Cents}>[];
  readonly separationDate?:History<ISODate>;
 }
 export interface RetirementOwnerAssumption {readonly ownerId:string;readonly birthDate?:History<ISODate>;readonly federalIraBasisCents?:History<Cents>;readonly californiaIraBasisCents?:History<Cents>;readonly californiaPre1987BasisCents?:History<Cents>;readonly rmdAgeAssumption?:History<73|75>}

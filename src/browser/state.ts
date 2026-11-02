@@ -1,3 +1,5 @@
+import {createRetirementState,registerRetirementState,type RetirementCompletedCalculation} from './retirement-state';
+import type {RetirementDraft} from './retirement-draft';
 import { calculateProjection,loadRuleSet,validatePlan,type Issue,type PlanDocument,type ProjectionResult,type RuleSet,type ValidatedPlan } from '../engine';
 import { exportPlan,savePlan,type StoragePort } from './storage';
 import {fromDraftValue,toDraftValue} from './draft-codec';
@@ -10,11 +12,14 @@ export type EditableSection='household'|'salaries'|'otherIncome'|'expenses'|'chi
 export type RawObject=Record<string,unknown>;
 export interface RecordDraft {readonly recordId:string;readonly section:EditableSection;readonly value:RawObject;readonly baseSnapshot?:string}
 export interface CashFlowAllocationDraft {readonly recordId:string;readonly value:RawObject;readonly baseSnapshot:string}
-export interface WorkspaceState {readonly growthDraft?:GrowthAssumptionsDraft;readonly allocationDraft?:CashFlowAllocationDraft;readonly savedPlan:PlanDocument;readonly drafts:Readonly<Record<string,RecordDraft>>;readonly projection:ProjectionResult;readonly persisted:boolean;readonly issues:readonly Issue[];readonly persistenceIssues:readonly Issue[]}
+export interface WorkspaceState {readonly retirementDraft?:RetirementDraft;readonly retirementResult?:RetirementCompletedCalculation;readonly growthDraft?:GrowthAssumptionsDraft;readonly allocationDraft?:CashFlowAllocationDraft;readonly savedPlan:PlanDocument;readonly drafts:Readonly<Record<string,RecordDraft>>;readonly projection:ProjectionResult;readonly persisted:boolean;readonly issues:readonly Issue[];readonly persistenceIssues:readonly Issue[]}
 export interface SaveRecordResult {readonly accepted:boolean;readonly persisted:boolean;readonly issues:readonly Issue[];readonly persistenceIssues:readonly Issue[]}
 export type CashFlowAllocationPreview=Readonly<{status:'calculated';projection:ProjectionResult;inputRevision:number}>|Readonly<{status:'invalid'|'failed';issues:readonly Issue[];inputRevision:number}>;
 export interface WorkspaceController {
   getState():WorkspaceState;
+  getRetirementDraft():RetirementDraft;
+  editRetirementDraft(draft:RetirementDraft):void;
+  discardRetirementDraft():void;
   getGrowthDraft():GrowthAssumptionsDraft;
   editGrowthDraft(draft:GrowthAssumptionsDraft):void;
   discardGrowthDraft():void;
@@ -74,8 +79,8 @@ function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort
   const operate=(kind:'save'|'remove',recordId:string,action:()=>SaveRecordResult):SaveRecordResult=>{operationDepth++;let outcome:SaveRecordResult;try{outcome=action();}finally{operationDepth--;}if(operationDepth===0)notify({kind,recordId,result:outcome});return outcome;};
   const persistence=():WorkspaceInitialization=>port?.readPersistence()??{persisted,persistenceIssues};
   const result=(accepted:boolean):SaveRecordResult=>({accepted,...persistence(),issues});
-  const commitProjection=(candidate:ValidatedPlan,candidateProjection:ProjectionResult,clear:readonly string[],clearAllocation=false,clearGrowth=false):SaveRecordResult=>{
-    const commit=()=>{savedPlan=candidate;projection=candidateProjection;issues=[];
+  const commitProjection=(candidate:ValidatedPlan,candidateProjection:ProjectionResult,clear:readonly string[],clearAllocation=false,clearGrowth=false,afterCommit?:()=>void):SaveRecordResult=>{
+    const commit=()=>{savedPlan=candidate;projection=candidateProjection;issues=[];retirement.sourceChanged();afterCommit?.();
       drafts=Object.fromEntries(Object.entries(drafts).filter(([id])=>!clear.includes(id)));clear.forEach(id=>bases.delete(id));
       if(clearGrowth){growthDraft=undefined;growthBase=undefined;}
       if(clearAllocation){allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;allocationEpoch++;}
@@ -161,8 +166,10 @@ function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort
     try {const receipt=complete(prepared,calculateProjection(prepared.plan,prepared.ruleSet));return receipt?commitCalculated(receipt):result(false);}
     catch {issues=[{code:'calculation-failed',field:'plan',severity:'error',explanation:'These inputs could not be calculated. The saved plan and projection have been retained.',resolution:'Correct the draft inputs before saving again.'}];notify();return result(false);}
   };
+  const retirement=createRetirementState({plan:()=>savedPlan,rules:ruleSet,epoch:()=>controllerEpoch,notify:()=>{issues=[];notify();},commit:(candidate,calculated,accepted)=>operate('save','retirementAnalysis',()=>commitProjection(candidate,calculated,[],false,false,accepted)),reject:reasons=>{issues=reasons;notify();return result(false);}});
   const controller:WorkspaceController={
-    getState:()=>({savedPlan,drafts,projection,...persistence(),issues,...(allocationDraft?{allocationDraft}:{}),...(growthDraft?{growthDraft}:{})}),getDraft,getAllocationDraft,getGrowthDraft,
+    getRetirementDraft:()=>retirement.getDraft(),editRetirementDraft:draft=>retirement.edit(draft),discardRetirementDraft:()=>retirement.discard(),
+    getState:()=>({...(retirement.readDraft()?{retirementDraft:retirement.readDraft()!}:{}),...(retirement.readResult()?{retirementResult:retirement.readResult()!}:{}),savedPlan,drafts,projection,...persistence(),issues,...(allocationDraft?{allocationDraft}:{}),...(growthDraft?{growthDraft}:{})}),getDraft,getAllocationDraft,getGrowthDraft,
     editGrowthDraft(draft){changed({kind:'growth-assumptions'});growthBase??=draft.baseSnapshot;growthDraft={...structuredClone(draft),baseSnapshot:growthBase};issues=[];notify();},
     discardGrowthDraft(){changed({kind:'growth-assumptions'});growthDraft=undefined;growthBase=undefined;issues=[];notify();},
     editAllocationDraft(draft){changed({kind:'allocation'});if(allocationDraft&&allocationDraft.recordId!==draft.recordId)throw new Error('Allocation draft identity must remain stable.');if(allocationBase===undefined)allocationBase=draft.baseSnapshot;allocationDraft={...structuredClone(draft),baseSnapshot:allocationBase};issues=[];notify();},
@@ -185,6 +192,6 @@ function createController(plan:PlanDocument,ruleSet:RuleSet,storage?:StoragePort
       bases.set(id,snapshot(section,id));drafts={...drafts,[id]:{recordId:id,section,value:toDraftValue(value??(section==='household'?householdValue():defaults[section]))}};issues=[];notify();return id;
     },
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},exportBackup:()=>exportPlan(savedPlan),
-    resetPlan(next,initial={persisted:true,persistenceIssues:[]}){if(port)throw new Error('Managed editors require a scenario replacement.');const validated=requiredPlan(next),calculated=calculateProjection(validated,ruleSet);allocationEpoch++;controllerEpoch++;draftGenerations.clear();savedPlan=validated;projection=calculated;drafts={};bases.clear();growthDraft=undefined;growthBase=undefined;allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;persisted=initial.persisted;persistenceIssues=initial.persistenceIssues;issues=[];notify({kind:'restore',persisted});},
-  };editBridges.set(controller,{prepare,complete,apply(calculated){const target=calculated.prepared.target;if(target.kind==='growth-assumptions')return commitCalculated(calculated);const id=target.kind==='record'?target.recordId:getAllocationDraft().recordId;return operate('save',id,()=>commitCalculated(calculated));}});allocationBridges.set(controller,{prepare:prepareAllocation,epoch:()=>allocationEpoch,adu(projectId){if(!savedPlan.properties.some(p=>p.aduProject?.id===projectId))return{status:'invalid',issues:[{code:'required-adu-project',recordId:projectId,field:'aduComparison',severity:'warning',explanation:'This project is absent from the applied scenario.',resolution:'Select an applied ADU project.'}]};return{status:'ready',plan:savedPlan,ruleSet,projection,inputRevision:savedPlan.revision};}});return controller;
+    resetPlan(next,initial={persisted:true,persistenceIssues:[]}){if(port)throw new Error('Managed editors require a scenario replacement.');const validated=requiredPlan(next),calculated=calculateProjection(validated,ruleSet);allocationEpoch++;controllerEpoch++;retirement.reset();draftGenerations.clear();savedPlan=validated;projection=calculated;drafts={};bases.clear();growthDraft=undefined;growthBase=undefined;allocationDraft=undefined;allocationDefault=undefined;allocationBase=undefined;persisted=initial.persisted;persistenceIssues=initial.persistenceIssues;issues=[];notify({kind:'restore',persisted});},
+  };registerRetirementState(controller,retirement);editBridges.set(controller,{prepare,complete,apply(calculated){const target=calculated.prepared.target;if(target.kind==='growth-assumptions')return commitCalculated(calculated);const id=target.kind==='record'?target.recordId:getAllocationDraft().recordId;return operate('save',id,()=>commitCalculated(calculated));}});allocationBridges.set(controller,{prepare:prepareAllocation,epoch:()=>allocationEpoch,adu(projectId){if(!savedPlan.properties.some(p=>p.aduProject?.id===projectId))return{status:'invalid',issues:[{code:'required-adu-project',recordId:projectId,field:'aduComparison',severity:'warning',explanation:'This project is absent from the applied scenario.',resolution:'Select an applied ADU project.'}]};return{status:'ready',plan:savedPlan,ruleSet,projection,inputRevision:savedPlan.revision};}});return controller;
 }

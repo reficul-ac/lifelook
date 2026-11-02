@@ -45,3 +45,7 @@ export * from './retirement/definition';
 export {validateRetirementAnalysis} from './retirement/validation';
 export {resolveRetirementAssumptions} from './retirement/assumptions';
 export type * from './retirement/assumptions';
+export {prepareRetirementAnalysis,calculateRetirementPath,calculateRetirementCandidate,calculateRetirementDetails,calculateRetirementComparison} from './retirement/analysis';
+export type {RetirementAnalysisContext} from './retirement/analysis';
+export type * from './retirement/results';
+export type {WithdrawalStrategyId} from './retirement/distributions';

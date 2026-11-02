@@ -20,8 +20,7 @@ export function retirementAccountInventory(snapshot:RetirementSnapshot,opening:F
 }
 export function retirementOpeningAccounts(snapshot:RetirementSnapshot,opening:ForecastCheckpoint,accounts:readonly Account[]):Available<readonly DistributionAccountState[]> {
  const values:Available<DistributionAccountState>[]=accounts.map(a=>{
-  const carried=opening.retirementAccountBalances?.find(c=>c.accountId===a.id);if(carried)return av(carried);
-  const balance=opening.accountExact[a.id]??av(String(a.openingBalanceCents));if(balance.status!=='available')return balance;
+  const carried=opening.retirementAccountBalances?.find(c=>c.accountId===a.id),balance=opening.accountExact[a.id]??av(String(a.openingBalanceCents));if(balance.status!=='available')return balance;if(carried){if(new Decimal(carried.balanceExact).eq(balance.value))return av(carried);return {status:'needs-data',issues:[{code:'retirement-account-ledger-mismatch',recordId:a.id,field:'balanceExact',severity:'warning',explanation:'The carried account ledger differs from its accepted market balance.',resolution:'Restore a matching retirement checkpoint.'}]};}
   const override=snapshot.definition.assumptions.accounts.find(o=>o.accountId===a.id),sourceKnown=opening.brokerageBasisHistory[a.id]?.known;
   let basis:History<Cents>=a.type==='taxable-brokerage'?opening.brokerageBasisHistory[a.id]??{known:false}:a.type==='traditional-401k'||a.type==='roth-401k'?{known:false}:{known:true,value:0},estimate=0;
   if(a.type==='taxable-brokerage'){
@@ -39,7 +38,7 @@ export function retirementOpeningAccounts(snapshot:RetirementSnapshot,opening:Fo
   const californiaBasis=override?.californiaBasisCents??basis;
   return av({accountId:a.id,ownerId:a.ownerId,type:a.type,balanceExact:balance.value,basis,...(!basis.known?{estimatedBasisCents:estimate}:{}),californiaBasis,...(!californiaBasis.known?{estimatedCaliforniaBasisCents:estimate}:{})});
  });
- const missing=values.filter(v=>v.status!=='available');return missing.length?{status:missing.some(v=>v.status==='unsupported-case')?'unsupported-case':'needs-data',issues:missing.flatMap(v=>v.issues)}:av(values.map(v=>{if(v.status!=='available')throw Error('account');return v.value;}));
+ const missing=values.filter(v=>v.status!=='available');return missing.length?{status:missing.some(v=>v.status==='unsupported-case')?'unsupported-case':'needs-data',issues:[...new Map(missing.flatMap(v=>v.issues).map(i=>[JSON.stringify(i),i])).values()]}:av(values.map(v=>{if(v.status!=='available')throw Error('account');return v.value;}));
 }
 /** Characterize January sales from the pre-disposition books, independently of mortgage cash settlement. */
 export function retirementSaleFacts(snapshot:RetirementSnapshot,opening:ForecastCheckpoint,events:readonly PropertyTransitionEvent[],rules:YearRules):readonly PropertyDispositionTaxFacts[] {

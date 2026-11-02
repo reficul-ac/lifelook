@@ -19,7 +19,7 @@ it('funds only mortgage down payment and buying cost at the transition',()=>{
 it('cent-reconciles the annual gross target and caps depletion without negative investments',()=>{
  expect(splitRetirementWithdrawal(100)).toEqual([8,9,8,8,9,8,8,9,8,8,9,8]);
  const source=makeRetirementPlan({accounts:[{id:'stocks',name:'Stocks',ownerId:'owner-a',type:'taxable-brokerage',openingBalanceCents:100,openingTaxableBasis:{known:true,value:100},openingIraBasis:{known:true,value:0},annualGrowthBps:-5000}]}),definition=makeRetirementDefinition({withdrawalBps:10000},source),snapshot=makeRetirementSnapshot(source,definition),r=settleRetirementYear(snapshot,snapshot.opening,'taxable-first');
- expect(r.year.stockBalanceCents).toEqual(av(0));expect(r.year.withdrawalShortfallCents.status).toBe('available');if(r.year.withdrawalShortfallCents.status==='available')expect(r.year.withdrawalShortfallCents.value).toBeGreaterThan(0);
+ expect(r.year.stockBalanceCents).toEqual(av(0));expect(r.year.fundingStatus).toBe('conditional-on-gap');expect(r.year.withdrawalShortfallCents.status).toBe('available');if(r.year.withdrawalShortfallCents.status==='available')expect(r.year.withdrawalShortfallCents.value).toBeGreaterThan(0);
 });
 it('does not repeat property transitions in a later retired year',()=>{
  const source=makeRetirementPlan(),definition=makeRetirementDefinition({mode:'reallocate',stockGrowthBps:0,withdrawalBps:0,newProperties:[makeRetirementTarget({id:'home',use:'personal',annualOperatingCostsCents:0})]},source),snapshot=makeRetirementSnapshot(source,definition),first=settleRetirementYear(snapshot,snapshot.opening,'taxable-first'),next=settleRetirementYear(snapshot,first.closing,'taxable-first');
@@ -155,4 +155,9 @@ it('isolates stock-growth overflow while retaining zero-rate income, cash and an
 it('keeps independent zero-rate income and investments when a personal budget exceeds annual reporting range',()=>{
  const source=makeRetirementPlan({expenses:[{id:'large-budget',name:'Large budget',amountCents:60_000_000_000_000,frequency:'monthly',startDate:'2026-01-01',annualGrowthBps:0,use:'personal',taxCategory:'personal'}],otherIncome:[{id:'support',name:'Support',amountCents:1000,frequency:'monthly',startDate:'2026-01-01',annualGrowthBps:0,classification:'non-taxable'}]}),snapshot=makeRetirementSnapshot(source,makeRetirementDefinition({withdrawalBps:0},source)),r=settleRetirementYear(snapshot,snapshot.opening,'taxable-first');
  expect(r.year.personalExpensesCents.status).toBe('unsupported-case');expect(r.year.otherCashIncomeCents).toEqual(av(12_000));expect(r.year.afterTaxIncomeCents).toEqual(av(12_000));expect(r.year.stockBalanceCents).toEqual(av(100_000_000));expect(r.year.propertyValueCents).toEqual(av(0));
+});
+
+it('does not resurrect a prior accepted account ledger after its carried market becomes unavailable',()=>{
+ const snapshot=makeRetirementSnapshot(),first=settleRetirementYear(snapshot,snapshot.opening,'taxable-first'),missing={status:'needs-data' as const,issues:[{code:'missing-market',field:'stockBalanceCents',severity:'warning' as const,explanation:'The carried market is unavailable.',resolution:'Restore its market history.'}]},next=settleRetirementYear(snapshot,{...first.closing,accountExact:{...first.closing.accountExact,stocks:missing}},'taxable-first');
+ expect(next.year.stockBalanceCents.status).toBe('needs-data');expect(next.closing.accountExact.stocks?.status).toBe('needs-data');expect(next.closing.retirementAccountBalances).toBeUndefined();
 });

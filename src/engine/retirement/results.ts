@@ -15,3 +15,17 @@ export interface RetirementMonth extends RetirementAmounts {readonly year:number
 export interface RetirementYear extends RetirementAmounts {readonly year:number;readonly strategy:WithdrawalStrategyId;readonly funding:RetirementFundingResult;readonly months:readonly RetirementMonth[];readonly tax:RetirementTaxAttribution;readonly distributions:DistributionYearResult;readonly fundingStatus:'funded'|'conditional-on-gap'|'unavailable';readonly openingAllocation:RetirementAllocationSnapshot;readonly coverage:Coverage;readonly provenance:readonly RuleProvenance[];readonly assumptions:readonly string[];readonly issues:readonly Issue[]}
 export interface RetirementTransitionReport {readonly year:number;readonly events:readonly PropertyTransitionEvent[];readonly openingAllocation:RetirementAllocationSnapshot;readonly funding:RetirementFundingResult;readonly taxCents:Available<Cents>;readonly buyingCostsCents:Available<Cents>;readonly sellingCostsCents:Available<Cents>;readonly issues:readonly Issue[]}
 export interface RetirementYearSettlement {readonly year:RetirementYear;readonly closing:ForecastCheckpoint;readonly projection:ProjectionResult;readonly transition?:RetirementTransitionReport;readonly issues:readonly Issue[]}
+
+export interface RetirementPath {
+ readonly retirementYear:number;readonly strategyId:import('./distributions').WithdrawalStrategyId;
+ readonly years:readonly RetirementYear[];readonly months:readonly RetirementMonth[];readonly openingAllocation:RetirementAllocationSnapshot;readonly transition?:RetirementTransitionReport;
+ readonly closing:ForecastCheckpoint;readonly completion:'complete'|'conditional'|'unavailable';readonly totalAfterTaxIncomeCents:Available<Cents>;readonly endingNetWorthCents:Available<Cents>;readonly additionalDistributionTaxCents:Available<Cents>;
+ readonly issues:readonly Issue[];readonly provenance:readonly RuleProvenance[];
+}
+export interface RetirementCandidateSummary {
+ readonly retirementYear:number;readonly strategyId:import('./distributions').WithdrawalStrategyId;readonly firstYear:RetirementYear;
+ readonly totalAfterTaxIncomeCents:Available<Cents>;readonly endingNetWorthCents:Available<Cents>;readonly additionalDistributionTaxCents:Available<Cents>;
+ readonly completion:RetirementPath['completion'];readonly fundingStatus:RetirementYear['fundingStatus'];readonly ranked:boolean;readonly issues:readonly Issue[];readonly provenance:readonly RuleProvenance[];
+ readonly projectedComparison:Readonly<{firstYear:RetirementYear;strategyId:import('./distributions').WithdrawalStrategyId;completion:RetirementPath['completion'];issues:readonly Issue[]}>;
+}
+export interface RetirementComparison {readonly planId:string;readonly inputRevision:number;readonly definitionFingerprint:string;readonly candidates:readonly RetirementCandidateSummary[]}
